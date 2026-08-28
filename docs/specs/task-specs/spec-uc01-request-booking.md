@@ -42,7 +42,7 @@ As a Renter, when entering the detail page of a specific boat, I want to view th
 
 ---
 
-### User Story 3 - Price transparency and warnings (Priority: P1)
+### User Story 3 - Price transparency and warnings (Priority: P3)
 
 As a Renter, when viewing any quote, I want to receive a very clear visual warning that the displayed price is an estimate based on the base rate and NOT the final value, to avoid surprises with possible security deposits or extra charges at the time of payment.
 
@@ -58,7 +58,7 @@ As a Renter, when viewing any quote, I want to receive a very clear visual warni
 
 ---
 
-### User Story 5 - Delegation of calculations (Module 2) (Priority: P1)
+### User Story 4 - Delegation of calculations (Module 2) (Priority: P2)
 
 As Module 2 (Booking Management), I want to be able to send quote requests (bulk or individual) to Module 3, to fully delegate the responsibility of financial calculations and keep my own logic focused solely on booking availability and status.
 
@@ -74,7 +74,7 @@ As Module 2 (Booking Management), I want to be able to send quote requests (bulk
 
 ---
 
-### User Story 6 - Provision of base rate (Module 1) (Priority: P1)
+### User Story 5 - Provision of base rate (Module 1) (Priority: P2)
 
 As Module 1 (Inventory and Rates), I want to provide the "base rate" per boat, so that Module 3 can consume it in bulk without creating bottlenecks or degrading my performance.
 
@@ -100,28 +100,23 @@ As Module 1 (Inventory and Rates), I want to provide the "base rate" per boat, s
 
 ## Requirements *(mandatory)*
 
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right functional requirements.
--->
-
 ### Functional Requirements
 
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
+- **FR-001**: Module 3 MUST return accurate quotes to Module 2 based on the requested list of boat identifiers.
+- **FR-002**: The system MUST calculate bulk quotes using the established pricing formula: `(boat base rate * duration in days) + (insurance fee * number of passengers)`. *(Note: Default duration is 1 day; default passenger count is 1).*
+- **FR-003**: The system MUST calculate individual quotes using the same pricing formula as bulk quotes, applied to a single boat.
+- **FR-004**: Module 3 MUST expose an endpoint to receive quote requests from Module 2 and process them successfully.
+- **FR-005**: Module 3 MUST query Module 1 by sending a list of boat IDs to retrieve their respective base rates.
 
-*Example of marking unclear requirements:*
+### Non-Functional Requirements
 
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+- **NFR-001**: The system MUST use DTOs (Data Transfer Objects) for inter-module communication, mapping only the essential data attributes from Module 1 and Module 2 payloads.
+- **NFR-002**: The system MUST use `BigDecimal` for all monetary calculations to guarantee precision and avoid rounding errors.
+- **NFR-003**: The system MUST implement robust error handling (e.g., timeouts, fallbacks) to gracefully manage API communication failures between Modules 1, 2, and 3.
 
 ### Key Entities *(include if feature involves data)*
 
-- **[Entity 1]**: [What it represents, key attributes without implementation]
-- **[Entity 2]**: [What it represents, relationships to other entities]
+- **[Boat]**: Represents a physical watercraft available for booking. For this specific use case, its key attributes are a unique identifier (`id` of type Long) and a pricing rate (`baseRate` of type BigDecimal).
 
 ## Success Criteria *(mandatory)*
 
@@ -136,4 +131,3 @@ As Module 1 (Inventory and Rates), I want to provide the "base rate" per boat, s
 - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
 - **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
 - **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
-
