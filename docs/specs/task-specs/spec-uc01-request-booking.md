@@ -127,7 +127,7 @@ As Module 1 (Inventory and Rates), I want to provide the "base rate" per boat, s
 
 ### Measurable Outcomes
 
-- **SC-001**: [Measurable metric, e.g., "Users can complete account creation in under 2 minutes"]
-- **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
-- **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
-- **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+- **SC-001**: [Financial accuracy, "100% calculation precision with zero (0) penny/rounding errors detected across 100 automated transaction tests, validating the correct implementation of BigDecimal and the pricing formula"]
+- **SC-002**: [Architectural Compliance, "0 mathematical or calculation operations related to pricing exist in the Module 2 codebase, ensuring 100% of price rendering is a direct mapping from Module 3 API responses"]
+- **SC-003**: [Business / Transparency, "Customer support tickets and disputes related to "unexpected fees" or "security deposits" represent less than 2% of total bookings within the first 60 days of release"]
+- **SC-004**: [System Resilience, "100% of simulated network failures (e.g., Module 1 timeouts or unavailable rates) trigger graceful fallbacks in Module 2 without causing application crashes, infinite loading states, or blank screens for the user"]
