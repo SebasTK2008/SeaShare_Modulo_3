@@ -75,6 +75,7 @@ Como Módulo de Gestión de Flota (Inventario y Tarifas), quiero proporcionar la
 - **RF-003**: El sistema DEBE calcular cotizaciones individuales utilizando la misma fórmula de precios que las cotizaciones en lote, aplicada a un solo bote.
 - **RF-004**: El módulo de Finanzas DEBE exponer un *endpoint* para recibir solicitudes de cotización del Módulo de Reservas y procesarlas exitosamente.
 - **RF-005**: El módulo de Finanzas DEBE consultar al Módulo de Gestión de Flota enviando una lista de IDs de botes para recuperar sus respectivas tarifas base.
+- **RF-006**: El módulo de Finanzas DEBE establecer un límite máximo estricto de identificadores por cada solicitud de cotización en lote (por ejemplo, máximo 50 o 100 botes por *payload*), rechazando con un error adecuado aquellas peticiones que superen este umbral para proteger la memoria y evitar sobrecargas en el sistema.
 
 ### Requisitos No Funcionales
 
