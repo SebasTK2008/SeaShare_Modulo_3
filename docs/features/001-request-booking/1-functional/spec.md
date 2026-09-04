@@ -1,133 +1,96 @@
-# Feature Specification: UC01 - Request Booking Quote
+# Especificación de Funcionalidad: UC01 - Solicitar Cotización de Reserva
 
-**Created**: 2026-08-27
+**Creado**: 2026-08-27
 
-## User Scenarios & Testing *(mandatory)*
+## Escenarios de Usuario y Pruebas *(obligatorio)*
 
-### User Story 1 - Calculate bulk quotes for boat listing (Priority: P1)
+### Historia de Usuario 1 - Calcular cotizaciones en lote delegando cálculos al módulo de Finanzas (Prioridad: P1)
 
-As a Renter, when viewing the list of booking options in Booking Module, I want to see the estimated cost (quote) for each boat in the list, so that I can compare options based on price before proceeding with the booking.
+Como Módulo de Reservas (Gestión de Reservas), al necesitar listar opciones de reserva, quiero enviar solicitudes de cotización en lote al módulo de Finanzas delegándole completamente la responsabilidad matemática, de manera que, si no se especifican fechas exactas, se asuma una duración por defecto de 1 día para calcular el costo estimado.
 
-**System Context (Flow)**: 
-1. Booking Module (Bookings and Operations) loads the booking options.
-2. Booking Module triggers this use case by sending a list of identifiers (`boat_ids`) along with the dates to Finance module.
-3. Finance module invokes the sub-case "Provide base rate" by querying Fleet Management Module for each boat's rate.
-4. Finance module performs the calculations and returns the quotes to Booking Module.
+**Contexto del Sistema (Flujo)**: 
+1. El Módulo de Reservas carga las opciones de reserva.
+2. El Módulo de Reservas activa este caso de uso enviando una lista de identificadores (`boat_ids`) al módulo de Finanzas. Si aún no hay fechas seleccionadas, envía esta información vacía.
+3. El módulo de Finanzas invoca el sub-caso "Proveer tarifa base" consultando la tarifa de cada bote al Módulo de Gestión de Flota.
+4. El módulo de Finanzas realiza los cálculos asumiendo 1 día de duración por defecto y devuelve las cotizaciones, permitiendo que el Módulo de Reservas actúe únicamente como consumidor de la API sin hacer operaciones locales.
 
-**Why this priority**: It is essential to show estimated prices from the initial search to capture the customer's attention and allow quick comparison of options, directly impacting conversion.
+**Por qué esta prioridad**: Mantiene la arquitectura limpia y la separación de responsabilidades, al mismo tiempo que es fundamental mostrar precios estimados desde la búsqueda inicial para la conversión.
 
-**Independent Test**: Send a simulated payload from Booking Module with a list of IDs to Finance module, validating that it returns the array of quotes after querying Fleet Management Module.
+**Prueba Independiente**: Enviar un *payload* simulado desde el Módulo de Reservas con una lista de IDs y sin fechas al módulo de Finanzas, validando que asuma el valor por defecto (1 día) en la fórmula matemática, consulte al Módulo de Gestión de Flota y devuelva el arreglo de cotizaciones.
 
-**Acceptance Scenarios**:
-1. **Scenario**: Successful calculation of multiple quotes.
-   - **Given** a list of 10 boats on the screen.
-   - **When** Booking Module sends the list to Finance module.
-   - **Then** Finance module successfully calculates and returns all 10 quotes.
-
----
-
-### User Story 2 - Individual quote on the boat detail page (Priority: P1)
-
-As a Renter, when entering the detail page of a specific boat, I want to view the exact quote for my trip dates, to evaluate if it fits my budget before starting the formal booking process.
-
-**Why this priority**: It is the mandatory previous step before confirming any individual booking.
-
-**Independent Test**: Verify that upon selecting dates in the detail view, Booking Module sends a single ID to Finance module and it returns the corresponding quote.
-
-**Acceptance Scenarios**:
-1. **Scenario**: Quote for a single boat
-   - **Given** the user is on the detail view of a boat
-   - **When** they select the start and end dates
-   - **Then** Finance module calculates the value only for that boat and returns it to Booking Module to be displayed on screen.
+**Escenarios de Aceptación**:
+1. **Escenario**: Cálculo delegado exitoso de múltiples cotizaciones con fecha por defecto.
+   - **Dado** que el Módulo de Reservas necesita mostrar precios para 10 botes en pantalla.
+   - **Cuando** envía la lista al módulo de Finanzas sin un rango de fechas definido.
+   - **Entonces** el módulo de Finanzas asume 1 día de duración y 1 pasajero por defecto, calcula con éxito las cotizaciones para los 10 botes y las devuelve.
 
 ---
 
-### User Story 3 - Price transparency and warnings (Priority: P3)
+### Historia de Usuario 2 - Cotización individual delegada y advertencia de estimación (Prioridad: P1)
 
-As a Renter, when viewing any quote, I want to receive a very clear visual warning that the displayed price is an estimate based on the base rate and NOT the final value, to avoid surprises with possible security deposits or extra charges at the time of payment.
+Como Módulo de Reservas (Gestión de Reservas), al solicitar los detalles de un bote específico, quiero delegar el cálculo exacto enviando el ID y el rango de fechas al módulo de Finanzas, y que este me devuelva tanto el valor total como una bandera obligatoria de advertencia (*warning*) sobre el estimado, para yo simplemente renderizarla sin manejar lógica financiera ni de reglas de negocio.
 
-**Why this priority**: Critical business requirement to avoid friction and user complaints.
+**Por qué esta prioridad**: Mantiene el código del Módulo de Reservas libre de multiplicaciones de tarifas, y atiende un requisito crítico de negocio para evitar fricciones y quejas de los usuarios por posibles recargos.
 
-**Independent Test**: Check that all responses from Finance module include a "warning" flag or text and that the frontend (Booking Module) renders it obligatorily.
+**Prueba Independiente**: Verificar que al enviar fechas de inicio y fin desde el Módulo de Reservas, el módulo de Finanzas devuelve la cotización exacta calculando los días de diferencia y adjunta un texto/flag de advertencia sobre la naturaleza del estimado.
 
-**Acceptance Scenarios**:
-1. **Scenario**: Display of the warning
-   - **Given** a successfully calculated quote
-   - **When** it is shown in the user interface
-   - **Then** a visible disclaimer must appear (e.g., info icon or small print text) indicating "Estimated value. Does not include additional charges or security deposit".
-
----
-
-### User Story 4 - Delegation of calculations (Booking Module) (Priority: P2)
-
-As Booking Module (Booking Management), I want to be able to send quote requests (bulk or individual) to Finance module, to fully delegate the responsibility of financial calculations and keep my own logic focused solely on booking availability and status.
-
-**Why this priority**: Keeps the architecture clean, modular, and the separation of responsibilities between contexts.
-
-**Independent Test**: Ensure that there are no rate multiplications in the Booking Module code, limiting it to being a client of the Finance module API.
-
-**Acceptance Scenarios**:
-1. **Scenario**: Booking Module requests quote delegating the calculations
-   - **Given** Booking Module needs to present prices to the user
-   - **When** it requests costs for one or several boats
-   - **Then** it sends the request to Finance module and consumes the result without performing mathematical operations on the base rate locally.
+**Escenarios de Aceptación**:
+1. **Escenario**: Cotización delegada para un solo bote y retorno de aviso legal.
+   - **Dado** que el Módulo de Reservas necesita la cotización exacta para las fechas de un viaje.
+   - **Cuando** envía las fechas de inicio y fin junto con el ID del bote al módulo de Finanzas.
+   - **Entonces** el módulo de Finanzas calcula el valor delegadamente a partir de las fechas enviadas y devuelve el precio junto con una advertencia visible obligatoria que indica: "Valor estimado. No incluye cargos adicionales ni depósito de seguridad".
 
 ---
 
-### User Story 5 - Provision of base rate (Fleet Management Module) (Priority: P2)
+### Historia de Usuario 3 - Provisión de tarifa base (Módulo de Gestión de Flota) (Prioridad: P2)
 
-As Fleet Management Module (Inventory and Rates), I want to provide the "base rate" per boat, so that Finance module can consume it in bulk without creating bottlenecks or degrading my performance.
+Como Módulo de Gestión de Flota (Inventario y Tarifas), quiero proporcionar la "tarifa base" por bote, para que el módulo de Finanzas pueda consumirla en lote sin crear cuellos de botella ni degradar mi rendimiento.
 
-**Why this priority**: Fleet Management Module is the source of truth for prices. If its response is slow, the entire flow of quotes from Finance module and display in Booking Module will be heavily affected.
+**Por qué esta prioridad**: El Módulo de Gestión de Flota es la fuente de la verdad para los precios. Si su respuesta es lenta, todo el flujo de cotizaciones del módulo de Finanzas y la visualización en el Módulo de Reservas se verán gravemente afectados.
 
-**Independent Test**: Perform load tests requesting rates for 50 concurrent boats from Finance module to Fleet Management Module, expecting response times under 500ms.
+**Prueba Independiente**: Realizar pruebas de carga solicitando tarifas para 50 botes concurrentes desde el módulo de Finanzas al Módulo de Gestión de Flota, esperando tiempos de respuesta menores a 500ms.
 
-**Acceptance Scenarios**:
-1. **Scenario**: Fleet Management Module returns the base rate in optimal time
-   - **Given** a request from Finance module to query the base rate of multiple boats
-   - **When** Fleet Management Module processes the request
-   - **Then** it correctly returns the base rate for the requested boats in under 500ms.
+**Escenarios de Aceptación**:
+1. **Escenario**: El Módulo de Gestión de Flota devuelve la tarifa base en un tiempo óptimo
+   - **Dado** una solicitud del módulo de Finanzas para consultar la tarifa base de múltiples botes
+   - **Cuando** el Módulo de Gestión de Flota procesa la solicitud
+   - **Entonces** devuelve correctamente la tarifa base para los botes solicitados en menos de 500ms.
 
-### Edge Cases
+### Casos Extremos (Edge Cases)
 
-- What happens when Fleet Management Module is down, times out, or is unreachable when Finance module requests base rates?
-- What happens when the dates requested by Booking Module include invalid formats, past dates, or end dates that occur before start dates?
-- How does the system handle quotes for a boat that currently has no base rate configured (null or missing) in Fleet Management Module?
-- What happens if the `boat_ids` list sent by Booking Module is empty or contains non-existent IDs?
-- How is the system expected to handle unusually large payloads (e.g., requesting quotes for 1,000 boats at once)?
-- How does the calculation behave if the requested booking duration is 0 days?
+- ¿Qué sucede cuando el Módulo de Gestión de Flota está caído, agota el tiempo de espera (*timeout*) o es inalcanzable cuando el módulo de Finanzas solicita las tarifas base?
+- ¿Qué sucede cuando las fechas solicitadas por el Módulo de Reservas incluyen formatos inválidos, fechas pasadas o fechas de fin que ocurren antes de las fechas de inicio?
+- ¿Cómo maneja el sistema las cotizaciones para un bote que actualmente no tiene una tarifa base configurada (nula o faltante) en el Módulo de Gestión de Flota?
+- ¿Qué sucede si la lista `boat_ids` enviada por el Módulo de Reservas está vacía o contiene IDs inexistentes?
+- ¿Cómo se espera que el sistema maneje payloads inusualmente grandes (ej. solicitar cotizaciones para 1,000 botes a la vez)?
+- ¿Cómo se comporta el cálculo si la duración de reserva solicitada es de 0 días?
 
 
-## Requirements *(mandatory)*
+## Requisitos *(obligatorio)*
 
-### Functional Requirements
+### Requisitos Funcionales
 
-- **FR-001**: Finance module MUST return accurate quotes to Booking Module based on the requested list of boat identifiers.
-- **FR-002**: The system MUST calculate bulk quotes using the established pricing formula: `(boat base rate * duration in days) + (insurance fee * number of passengers)`. *(Note: Default duration is 1 day; default passenger count is 1).*
-- **FR-003**: The system MUST calculate individual quotes using the same pricing formula as bulk quotes, applied to a single boat.
-- **FR-004**: Finance module MUST expose an endpoint to receive quote requests from Booking Module and process them successfully.
-- **FR-005**: Finance module MUST query Fleet Management Module by sending a list of boat IDs to retrieve their respective base rates.
+- **RF-001**: El módulo de Finanzas DEBE devolver cotizaciones precisas al Módulo de Reservas basándose en la lista solicitada de identificadores de botes.
+- **RF-002**: El sistema DEBE calcular cotizaciones en lote utilizando la fórmula de precios establecida: `(tarifa base del bote * duración en días) + (tarifa de seguro * número de pasajeros)`. *(Nota: La duración por defecto es de 1 día; la cantidad de pasajeros por defecto es 1).*
+- **RF-003**: El sistema DEBE calcular cotizaciones individuales utilizando la misma fórmula de precios que las cotizaciones en lote, aplicada a un solo bote.
+- **RF-004**: El módulo de Finanzas DEBE exponer un *endpoint* para recibir solicitudes de cotización del Módulo de Reservas y procesarlas exitosamente.
+- **RF-005**: El módulo de Finanzas DEBE consultar al Módulo de Gestión de Flota enviando una lista de IDs de botes para recuperar sus respectivas tarifas base.
 
-### Non-Functional Requirements
+### Requisitos No Funcionales
 
-- **NFR-001**: The system MUST use DTOs (Data Transfer Objects) for inter-module communication, mapping only the essential data attributes from Fleet Management Module and Booking Module payloads.
-- **NFR-002**: The system MUST use `BigDecimal` for all monetary calculations to guarantee precision and avoid rounding errors.
-- **NFR-003**: The system MUST implement robust error handling (e.g., timeouts, fallbacks) to gracefully manage API communication failures between Modules 1, 2, and 3.
+- **RNF-001**: El sistema DEBE utilizar DTOs (Data Transfer Objects) para la comunicación entre módulos, mapeando únicamente los atributos de datos esenciales de los *payloads* del Módulo de Gestión de Flota y el Módulo de Reservas.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para todos los cálculos monetarios para garantizar la precisión y evitar errores de redondeo.
+- **RNF-003**: El sistema DEBE implementar un manejo de errores robusto (ej. *timeouts*, *fallbacks*) para gestionar de manera elegante las fallas de comunicación de las APIs entre los Módulos 1, 2 y 3.
 
-### Key Entities *(include if feature involves data)*
+### Entidades Clave *(incluir si la funcionalidad involucra datos)*
 
-- **[Boat]**: Represents a physical watercraft available for booking. For this specific use case, its key attributes are a unique identifier (`id` of type Long) and a pricing rate (`baseRate` of type BigDecimal).
+- **[Boat / Bote]**: Representa una embarcación física disponible para reserva. Para este caso de uso específico, sus atributos clave son un identificador único (`id` de tipo Long) y una tarifa de precio (`baseRate` de tipo BigDecimal).
 
-## Success Criteria *(mandatory)*
+## Criterios de Éxito *(obligatorio)*
 
-<!--
-  ACTION REQUIRED: Define measurable success criteria.
-  These must be technology-agnostic and measurable.
--->
+### Resultados Medibles
 
-### Measurable Outcomes
-
-- **SC-001**: [Financial accuracy, "100% calculation precision with zero (0) penny/rounding errors detected across 100 automated transaction tests, validating the correct implementation of BigDecimal and the pricing formula"]
-- **SC-002**: [Architectural Compliance, "0 mathematical or calculation operations related to pricing exist in the Booking Module codebase, ensuring 100% of price rendering is a direct mapping from Finance module API responses"]
-- **SC-003**: [Business / Transparency, "Customer support tickets and disputes related to "unexpected fees" or "security deposits" represent less than 2% of total bookings within the first 60 days of release"]
-- **SC-004**: [System Resilience, "100% of simulated network failures (e.g., Fleet Management Module timeouts or unavailable rates) trigger graceful fallbacks in Booking Module without causing application crashes, infinite loading states, or blank screens for the user"]
+- **CE-001**: Precisión Financiera, "100% de precisión en el cálculo con cero (0) errores de centavos/redondeo detectados en 100 pruebas de transacciones automatizadas, validando la correcta implementación de BigDecimal y la fórmula de precios".
+- **CE-002**: Cumplimiento Arquitectónico, "Existen 0 operaciones matemáticas o de cálculo relacionadas con los precios en el código fuente del Módulo de Reservas, asegurando que el 100% de la renderización de precios es un mapeo directo de las respuestas de la API del módulo de Finanzas".
+- **CE-003**: Negocio / Transparencia, "Los tickets de soporte al cliente y las disputas relacionadas con 'tarifas inesperadas' o 'depósitos de seguridad' representan menos del 2% del total de reservas dentro de los primeros 60 días del lanzamiento".
+- **CE-004**: Resiliencia del Sistema, "El 100% de las fallas de red simuladas (ej. timeouts del Módulo de Gestión de Flota o tarifas no disponibles) desencadenan fallbacks elegantes en el Módulo de Reservas sin causar caídas de la aplicación, estados de carga infinitos o pantallas en blanco para el usuario".
