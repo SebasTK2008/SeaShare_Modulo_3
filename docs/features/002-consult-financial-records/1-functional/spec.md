@@ -27,26 +27,26 @@ Como Administrador Financiero, al ingresar al panel de finanzas en el Módulo 3,
 
 ### Historia de Usuario 2 - Visualización detallada de la Matriz de Liquidación (Prioridad: P1)
 
-Como Administrador Financiero, al seleccionar un registro financiero, quiero ver el desglose detallado de la Matriz de Liquidación, incluyendo Valor Alquiler Bruto, Comisión Plataforma y Pago al Propietario[cite: 6]. Esto es necesario para auditar cómo se dividieron los fondos de un ingreso, o cuánto se devolvió exactamente en un registro de egreso.
+Como Administrador Financiero, al seleccionar un registro financiero, quiero ver el desglose detallado de la Matriz de Liquidación, incluyendo Valor Alquiler Bruto, Comisión Plataforma y Pago al Propietario. Esto es necesario para auditar cómo se dividieron los fondos de un ingreso, o cuánto se devolvió exactamente en un registro de egreso.
 
 **Por qué esta prioridad**: Fundamental para dar soporte ante quejas de anfitriones sobre pagos o retenciones y garantizar la transparencia del reparto.
 
-**Prueba Independiente**: Solicitar al Módulo 3 los detalles de un registro por su ID y validar que el JSON incluya todos los campos de la matriz de liquidación, cuadrando matemáticamente según si es un ingreso o un egreso[cite: 6].
+**Prueba Independiente**: Solicitar al Módulo 3 los detalles de un registro por su ID y validar que el JSON incluya todos los campos de la matriz de liquidación, cuadrando matemáticamente según si es un ingreso o un egreso.
 
 **Escenarios de Aceptación**:
 1. **Escenario**: Visualización del desglose de un ingreso.
    - **Dado** que el administrador visualiza un registro de tipo Ingreso.
    - **Cuando** el sistema solicita los detalles al Módulo 3.
-   - **Entonces** se devuelve el valor bruto cobrado, deducción de comisión de plataforma, seguro náutico y el pago neto al propietario[cite: 6].
+   - **Entonces** se devuelve el valor bruto cobrado, deducción de comisión de plataforma, seguro náutico y el pago neto al propietario.
 
 ---
 
 ### Casos Extremos (Edge Cases)
 
 - ¿Qué sucede si el Administrador Financiero solicita un rango de fechas demasiado amplio que podría saturar la base de datos?
-- ¿Cómo se vincula visualmente un registro de **Egreso** (reembolso parcial) derivado de una cancelación moderada que implica una penalidad del 50% con su respectivo **Ingreso** original[cite: 6]?
+- ¿Cómo se vincula visualmente un registro de **Egreso** (reembolso parcial) derivado de una cancelación moderada que implica una penalidad del 50% con su respectivo **Ingreso** original.
 - ¿Qué pasa si se consulta un registro asociado a una reserva cuyo cobro está "Procesando" y aún no se consolida en el ledger?
-- ¿Cómo se refleja el movimiento financiero si una disputa por un Depósito de Garantía resulta a favor del propietario, transformando un monto retenido temporalmente en un pago efectivo[cite: 6]?
+- ¿Cómo se refleja el movimiento financiero si una disputa por un Depósito de Garantía resulta a favor del propietario, transformando un monto retenido temporalmente en un pago efectivo.
 
 ## Requisitos *(obligatorio)*
 
@@ -54,7 +54,7 @@ Como Administrador Financiero, al seleccionar un registro financiero, quiero ver
 
 - **RF-001**: El Módulo 3 DEBE exponer un *endpoint* seguro para listar registros, requiriendo paginación obligatoria.
 - **RF-002**: El sistema DEBE permitir filtrar por rango de fechas, estado, y tipo de operación (`INGRESO`, `EGRESO`).
-- **RF-003**: El Módulo 3 DEBE devolver el desglose de la Matriz de Liquidación para cada transacción, donde los valores de un `EGRESO` deben representar salidas de dinero, tales como el reembolso del 100% por una cancelación flexible[cite: 6].
+- **RF-003**: El Módulo 3 DEBE devolver el desglose de la Matriz de Liquidación para cada transacción, donde los valores de un `EGRESO` deben representar salidas de dinero, tales como el reembolso del 100% por una cancelación flexible.
 - **RF-004**: Todo registro de tipo `EGRESO` DEBE contener una referencia (ID) al registro de `INGRESO` original que está balanceando.
 
 ### Requisitos No Funcionales

@@ -46,9 +46,9 @@ Como Módulo de Operación (Módulo 2), necesito validar con el Módulo de Finan
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE exponer un *endpoint* para consultar el estado actual de una reserva (Módulo 2).
-- **RF-002**: El sistema DEBE exponer un *endpoint* para verificar el estado de pago asociado a un ID de reserva (Módulo 3).
-- **RF-003**: El Módulo 2 DEBE aplicar la regla de TTL de 15 minutos para retornar un activo a "Disponible" si no hay confirmación financiera.
+
+- **RF-001**: El sistema DEBE exponer un *endpoint* para verificar el estado de pago asociado a un ID de reserva (Módulo 3).
+
 
 ### Entidades Clave *(incluir si la funcionalidad involucra datos)*
 
