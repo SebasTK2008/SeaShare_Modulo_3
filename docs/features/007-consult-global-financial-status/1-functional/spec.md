@@ -1,4 +1,4 @@
-# Especificación de Funcionalidad: UC03 - Consultar Estado Financiero Global
+# Especificación de Funcionalidad: UC07 - Consultar Estado Financiero Global
 
 **Creado**: 2026-09-04
 
