@@ -1,4 +1,4 @@
-# Especificación de Funcionalidad: Establecer Parámetros Iniciales Globales
+# Especificación de Funcionalidad: UC05 - Conigurar parametros financieros globales
 
 **Creado**: 2026-09-04
 
