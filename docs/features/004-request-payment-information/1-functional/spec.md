@@ -1,4 +1,4 @@
-# Especificación de Funcionalidad: Solicitar Información de Pago
+# Especificación de Funcionalidad: UC04 - Solicitar Información de Pago
 
 **Creado**: 2026-09-04
 

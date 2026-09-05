@@ -1,4 +1,4 @@
-# Especificación de Funcionalidad: Resolver una Disputa de Garantía
+# Especificación de Funcionalidad: UC06 - resolver disputa de garantía
 
 **Creado**: 2026-09-04
 
