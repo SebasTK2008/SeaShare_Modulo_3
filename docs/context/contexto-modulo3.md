@@ -142,7 +142,7 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 #### Configurar parámetros financieros globales
 - **Actores:** Administrador Financiero.
-- **Flujo:** El administrador define o ajusta los parámetros que rigen los cálculos del sistema: porcentaje de comisión de la plataforma, tarifa del seguro náutico por pasajero, reglas del depósito de garantía y umbrales de cancelación.
+- **Flujo:** El administrador define o ajusta los parámetros que rigen los cálculos del sistema: porcentaje de comisión de la plataforma, tarifa del seguro náutico por pasajero, reglas del depósito de garantía, fechas de inicio y finalizacion de las tarifas dinamicas y umbrales de cancelación.
 - **Regla de negocio asociada:** Matriz de Liquidación — Comisión Plataforma (3.2); Reglas de Cobro (3.1).
 
 #### Consultar registros financieros
