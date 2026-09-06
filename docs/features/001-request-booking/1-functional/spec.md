@@ -85,7 +85,7 @@ Como Módulo de Gestión de Flota (Inventario y Tarifas), quiero proporcionar la
 
 ### Entidades Clave *(incluir si la funcionalidad involucra datos)*
 
-- **[Boat / Bote]**: Representa una embarcación física disponible para reserva. Para este caso de uso específico, sus atributos clave son un identificador único (`id` de tipo Long) y una tarifa de precio (`baseRate` de tipo BigDecimal).
+- **[Boat / Embarcacion]**: Representa una embarcación física disponible para reserva. Para este caso de uso específico, sus atributos clave son un identificador único (`id` de tipo Long) y una tarifa de precio (`baseRate` de tipo BigDecimal).
 
 ## Criterios de Éxito *(obligatorio)*
 
