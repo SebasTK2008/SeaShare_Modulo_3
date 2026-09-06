@@ -83,7 +83,7 @@ Es el **resumen consolidado de ingresos y egresos de la plataforma en un periodo
 > En otras palabras: cuando se hable de "consultar balance financiero", siempre debe entenderse como **cuántos ingresos y egresos hubo en un rango de fechas específico**, nunca como el saldo de una sola transacción.
 
 ### Tarifa Dinámica
-Ajuste al alza o a la baja de la Tarifa Base según temporada o día de la semana (fines de semana). Se aplica **antes** de calcular el Alquiler Bruto.
+Ajuste al alza o a la baja de la Tarifa Base según temporada o día de la semana (fines de semana). Se aplica **despues** de calcular el Alquiler Bruto.
 
 ### Ingreso vs. Egreso (uso consistente en los 3 módulos)
 - **Ingreso:** cualquier movimiento de dinero que entra a la plataforma (ej. Procesar cobro).

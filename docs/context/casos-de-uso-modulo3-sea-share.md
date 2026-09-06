@@ -32,7 +32,7 @@ A continuación, cada caso de uso se describe agrupado según la **etapa del flu
 *(Todavía no hay movimiento de dinero; se prepara la información para poder cobrarlo correctamente).*
 
 ### Solicitar cotización para reserva
-- **Iniciado por:** Arrendatario (a través del flujo de reserva del Módulo 2).
+- **Iniciado por:** Modulo 2
 - **Incluye:** Brindar tarifa base.
 - **Descripción:** Antes de bloquear una reserva, se le pide al Módulo 3 cuánto costaría el alquiler.
 - **Rol en el flujo de caja:** Ninguno todavía — es el paso que **calcula** el futuro valor bruto (Tarifa base × Duración), pero no mueve dinero.
