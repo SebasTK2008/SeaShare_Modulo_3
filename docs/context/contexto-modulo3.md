@@ -53,7 +53,7 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 5. **Confirmación hacia Reservas.** El sistema de Reservas solicita *"Solicitar confirmación de pago"| para saber si el cobro fue exitoso. Si no hay confirmación dentro del estado de espera (pendiente), la reserva vuelve a "Disponible" del lado de Reservas; si se confirma, el sistema retiene internamente el depósito de garantía y el monto del seguro como parte del cobro ya procesado.
 
-6. **Actualización de estado financiero.** El sistema informa el estado (financiero) de la reserva mediante *"Brindar el estado de la reserva"*, para que el sistema de Reservas actualice el ciclo de vida operativo de la embarcación/reserva.
+6. **Actualización de estado de la reserva** El sistema de reservas informa el estado de la reserva mediante *"Brindar el estado de la reserva"*, para que el sistema de finanzas dispare cierto caso de uso dependiendo del estado actual de una reserva.
 
 7. **Cancelación (si aplica).** Si el arrendatario cancela, el sistema de Reservas recalcula el escenario mediante *"Solicitar el valor calculado de la reserva"* y, según la ventana de tiempo:
    - **Cancelacion flexible: >72h:** el sistema ejecuta *"Reembolsar dinero a arrendatario"* por el 100% (menos costos transaccionales).
@@ -110,7 +110,8 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 #### Brindar el estado de la reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** El sistema informa el estado financiero de una reserva (disponible, reservado, en navegación, pendiente y cancelado ) para que Reservas mantenga sincronizado el ciclo de vida operativo de la reserva y de la embarcación.
+- **Flujo:** El sistema de reservas informa el estado de una reserva (disponible, reservado, en navegación, pendiente,cancelado flexiblemente, cancelado tardiamente, cancelado moderadamente, completado con incidentes y completado sin incidentes) para que el sistema financiero mantenga sincronizado el ciclo de vida operativo de la reserva y la operacion del pago y dispersion de fondos.
+cualquier tipo de estado cancelado dispara el caso de uso reembolsar dinero a arrendatario. El estado completado sin incidentes dispara el caso de uso dispersar fondos y reembolsar dinero. El estado completado con incidentes dispara el caso de uso resolver disputa.
 - **Regla de negocio asociada:** Transversal a Matriz de Liquidación (3.2) y Cancelaciones (Módulo 2, 2.2).
 
 ---
