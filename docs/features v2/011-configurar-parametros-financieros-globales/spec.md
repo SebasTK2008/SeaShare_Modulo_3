@@ -1,115 +1,124 @@
-# Especificación de Funcionalidad: UC12 - Consultar Registros Financieros
+# Especificación de Funcionalidad: UC11 - Configurar Parámetros Financieros Globales
 
-**Creado**: 2026-09-06 (v2 — corregido para que la entrega de registros sea siempre paginada; el sistema ya no retorna el conjunto completo de registros en una única respuesta)
+**Creado**: 2026-09-06
 
-> **Nota de trazabilidad**: Este caso de uso es invocado directamente por el Propietario y por el Administrador Financiero para consultar, de solo lectura y de forma paginada, el historial de transacciones (cobros, reembolsos y dispersiones) registrado por "Procesar cobro" (SPEC 5), "Reembolsar dinero a arrendatario" (SPEC 9) y "Dispersar fondos de alquiler" (SPEC 10). El alcance de la consulta difiere según el actor: el **Propietario** únicamente accede a los registros asociados a las reservas de las embarcaciones que le pertenecen (consultando dicha pertenencia al Sistema de Gestión de Flota), mientras que el **Administrador Financiero** accede al histórico global de la plataforma, sin restricción. En ambos casos, el sistema entrega los registros divididos en páginas: en ningún caso responde con el conjunto completo de registros en una sola respuesta. Las **penalidades por cancelación no constituyen un tipo de registro independiente**: se identifican mediante el origen (cancelación flexible, moderada, o tardía/No-Show) registrado dentro de `RegistroDeReembolso` o `RegistroDeDispersión`, según corresponda.
+> **Nota de trazabilidad**: Este caso de uso es ejecutado directamente por el Administrador Financiero para definir o ajustar los parámetros financieros globales que rigen los cálculos del sistema: el **porcentaje de comisión de la plataforma**, la **tarifa del seguro náutico por pasajero**, el **monto fijo del depósito de garantía**, y los **porcentajes de incremento de tarifa dinámica** aplicables a fin de semana y a temporada alta, junto con la **vigencia (fecha de inicio y fin)** de esta última. Los valores aquí configurados son consumidos por "Brindar tarifa base" (SPEC 2), "Solicitar el valor calculado de la reserva" (SPEC 4) y "Dispersar fondos de alquiler" (SPEC 10). Los **umbrales que determinan el tipo de cancelación** (flexible, moderada, tardía/No-Show) **no** forman parte de los parámetros configurados por este caso de uso: dicha clasificación es determinada y gestionada por el Sistema de Reservas y Operaciones (Módulo 2), y el sistema únicamente recibe el resultado ya clasificado (el tipo de cancelación) a través de "Brindar el estado de la reserva" (SPEC 7), sin necesitar ni configurar los umbrales de tiempo que la originan.
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
-### Historia de Usuario 1 - Consultar de forma paginada el historial de transacciones financieras de las embarcaciones propias (Prioridad: P1)
+### Historia de Usuario 1 - Configurar el porcentaje de comisión de la plataforma y la tarifa del seguro náutico por pasajero (Prioridad: P1)
 
-Como el sistema, al recibir del Propietario una solicitud paginada de consulta del historial de transacciones financieras, quiero identificar las embarcaciones que le pertenecen consultando al Sistema de Gestión de Flota, y devolver, página por página, únicamente los registros de cobro, reembolso y dispersión asociados a las reservas de dichas embarcaciones, de manera que el Propietario pueda revisar el historial correspondiente exclusivamente a su propio alcance, sin recibir el conjunto completo de registros en una única respuesta.
+Como el sistema, al recibir del Administrador Financiero el porcentaje de comisión de la plataforma y/o la tarifa del seguro náutico por pasajero, quiero persistir dichos valores como parámetros financieros globales vigentes, de manera que "Solicitar el valor calculado de la reserva" y "Dispersar fondos de alquiler" puedan utilizarlos en sus cálculos.
 
-**Por qué esta prioridad**: Es el mecanismo con el que los propietarios verifican que los cobros, reembolsos y dispersiones asociados a sus embarcaciones se hayan procesado correctamente, sin necesitar ni obtener acceso a información financiera de otros propietarios. La paginación evita respuestas de tamaño no controlado a medida que el historial de un propietario crece.
+**Por qué esta prioridad**: Son la base de la liquidación estándar (Valor Bruto − Comisión − Seguro) utilizada por múltiples casos de uso del sistema; sin estos valores configurados, ningún cálculo financiero definitivo puede completarse.
 
-**Prueba Independiente**: Con registros de cobro, reembolso y dispersión previamente creados para reservas de embarcaciones de varios propietarios distintos, enviar al sistema una solicitud de consulta paginada desde un Propietario específico y validar que el sistema retorna únicamente los registros de esa página, correspondientes a las embarcaciones que le pertenecen, junto con los metadatos de paginación correctos.
+**Prueba Independiente**: Enviar al sistema, como Administrador Financiero, un nuevo porcentaje de comisión de la plataforma y una nueva tarifa de seguro náutico, y validar que ambos quedan persistidos como valores vigentes, reemplazando cualquier valor previamente configurado.
 
 **Escenarios de Aceptación**:
 
-1. **Escenario**: Consulta paginada exitosa del historial de transacciones de las embarcaciones propias.
-   - **Dado** que un Propietario cuenta con más registros de cobro, reembolso y/o dispersión que los que caben en una página.
-   - **Cuando** el Propietario solicita al sistema una página de su historial de transacciones financieras.
-   - **Entonces** el sistema consulta al Sistema de Gestión de Flota las embarcaciones asociadas a ese Propietario y devuelve únicamente los registros correspondientes a la página solicitada, junto con el número de página, el tamaño de página, el total de registros dentro de su alcance y el total de páginas.
+1. **Escenario**: Configuración o ajuste del porcentaje de comisión de la plataforma.
+   - **Dado** que el Administrador Financiero determina el porcentaje de comisión que debe regir los cálculos de liquidación.
+   - **Cuando** configura dicho porcentaje en el sistema.
+   - **Entonces** el sistema persiste el nuevo porcentaje como el valor vigente, sobrescribiendo cualquier valor previamente configurado.
 
-2. **Escenario**: Consulta de una página posterior del historial propio.
-   - **Dado** que el historial del Propietario abarca varias páginas.
-   - **Cuando** el Propietario solicita una página distinta a la primera.
-   - **Entonces** el sistema devuelve los registros correspondientes exclusivamente a esa página, sin repetir ni omitir registros respecto a las demás páginas de su historial.
+2. **Escenario**: Configuración o ajuste de la tarifa del seguro náutico por pasajero.
+   - **Dado** que el Administrador Financiero determina la tarifa de seguro náutico que debe regir los cálculos del valor de reserva.
+   - **Cuando** configura dicha tarifa en el sistema.
+   - **Entonces** el sistema persiste la nueva tarifa como el valor vigente, sobrescribiendo cualquier valor previamente configurado.
 
 ---
 
-### Historia de Usuario 2 - Consultar de forma paginada el historial global de transacciones financieras (Prioridad: P1)
+### Historia de Usuario 2 - Configurar el monto del depósito de garantía (Prioridad: P1)
 
-Como el sistema, al recibir del Administrador Financiero una solicitud paginada de consulta del historial de transacciones financieras, quiero devolver, página por página, el conjunto completo de registros de cobro, reembolso y dispersión existentes en el sistema, sin restricción de alcance por propietario o embarcación, de manera que el Administrador Financiero pueda supervisar el histórico global de la plataforma sin recibir todos los registros en una sola respuesta.
+Como el sistema, al recibir del Administrador Financiero el monto fijo del depósito de garantía, quiero persistir dicho valor como parámetro financiero global vigente, de manera que "Solicitar el valor calculado de la reserva" pueda utilizarlo al calcular el desglose de valor de una reserva.
 
-**Por qué esta prioridad**: Es el mecanismo con el que el Administrador Financiero supervisa la totalidad de las transacciones de la plataforma, necesario para su labor de supervisión financiera transversal. La paginación es indispensable dado que el histórico global no tiene restricción de alcance y puede crecer sin límite.
+**Por qué esta prioridad**: Sin un depósito de garantía configurado, ninguna reserva puede completar su valor calculado definitivo, ya que este monto es obligatorio en el desglose devuelto por "Solicitar el valor calculado de la reserva".
 
-**Prueba Independiente**: Con registros de cobro, reembolso y dispersión previamente creados para reservas de múltiples propietarios, enviar al sistema una solicitud de consulta paginada desde el Administrador Financiero y validar que el sistema retorna únicamente los registros de la página solicitada, sin aplicar ningún filtro por propietario, junto con los metadatos de paginación correctos.
+**Prueba Independiente**: Enviar al sistema, como Administrador Financiero, un nuevo monto de depósito de garantía y validar que queda persistido como el valor vigente, reemplazando cualquier monto previamente configurado.
 
 **Escenarios de Aceptación**:
 
-1. **Escenario**: Consulta paginada exitosa del historial global de transacciones.
-   - **Dado** que existen más registros de cobro, reembolso y/o dispersión para reservas de distintos propietarios que los que caben en una página.
-   - **Cuando** el Administrador Financiero solicita al sistema una página del historial de transacciones financieras.
-   - **Entonces** el sistema devuelve únicamente los registros correspondientes a esa página, sin aplicar ningún filtro de alcance por propietario o embarcación, junto con el número de página, el tamaño de página, el total de registros existentes y el total de páginas.
+1. **Escenario**: Configuración o ajuste del monto del depósito de garantía.
+   - **Dado** que el Administrador Financiero determina el monto fijo del depósito de garantía aplicable a las reservas.
+   - **Cuando** configura dicho monto en el sistema.
+   - **Entonces** el sistema persiste el nuevo monto como el valor vigente, sobrescribiendo cualquier monto previamente configurado.
 
-2. **Escenario**: Consulta de una página posterior del historial global.
-   - **Dado** que el historial global abarca varias páginas.
-   - **Cuando** el Administrador Financiero solicita una página distinta a la primera.
-   - **Entonces** el sistema devuelve los registros correspondientes exclusivamente a esa página, sin repetir ni omitir registros respecto a las demás páginas del historial global.
+---
+
+### Historia de Usuario 3 - Configurar los porcentajes de tarifa dinámica y la vigencia de la temporada alta (Prioridad: P1)
+
+Como el sistema, al recibir del Administrador Financiero el porcentaje de incremento por fin de semana, el porcentaje de incremento por temporada alta, y las fechas de inicio y fin de vigencia de la temporada alta, quiero persistir dichos valores como parámetros financieros globales vigentes, de manera que "Brindar tarifa base" pueda aplicarlos al calcular la tarifa dinámica de una embarcación.
+
+**Por qué esta prioridad**: Es la única fuente de los porcentajes y del intervalo de vigencia que "Brindar tarifa base" necesita para aplicar la tarifa dinámica; sin esta configuración, dicho caso de uso no podría determinar cuándo ni cuánto ajustar la tarifa base de una embarcación.
+
+**Prueba Independiente**: Enviar al sistema, como Administrador Financiero, ambos porcentajes de tarifa dinámica y un rango de fechas para la temporada alta, y validar que quedan persistidos como los valores vigentes, reemplazando cualquier configuración previa.
+
+**Escenarios de Aceptación**:
+
+1. **Escenario**: Configuración o ajuste del porcentaje de incremento por fin de semana.
+   - **Dado** que el Administrador Financiero determina el porcentaje de incremento aplicable a la tarifa base durante los fines de semana.
+   - **Cuando** configura dicho porcentaje en el sistema.
+   - **Entonces** el sistema persiste el nuevo porcentaje como el valor vigente, sobrescribiendo cualquier valor previamente configurado.
+
+2. **Escenario**: Configuración o ajuste del porcentaje de incremento por temporada alta.
+   - **Dado** que el Administrador Financiero determina el porcentaje de incremento aplicable a la tarifa base durante la temporada alta.
+   - **Cuando** configura dicho porcentaje en el sistema.
+   - **Entonces** el sistema persiste el nuevo porcentaje como el valor vigente, sobrescribiendo cualquier valor previamente configurado.
+
+3. **Escenario**: Configuración de la vigencia (fecha de inicio y fin) de la temporada alta.
+   - **Dado** que el Administrador Financiero determina el periodo en el que estará vigente la temporada alta.
+   - **Cuando** configura las fechas de inicio y fin correspondientes en el sistema.
+   - **Entonces** el sistema persiste dicho rango de fechas como la vigencia vigente de la temporada alta, sobrescribiendo cualquier vigencia previamente configurada.
 
 ### Casos Extremos (Edge Cases)
 
-- **¿Qué sucede si el Sistema de Gestión de Flota está caído, agota el tiempo de espera (*timeout*) o es inalcanzable al momento en que el sistema necesita determinar las embarcaciones que pertenecen al Propietario solicitante?**
-  El sistema no puede determinar correctamente el alcance de la consulta sin esta información. Aplica un manejo de errores controlado y responde al Propietario indicando que la consulta no pudo completarse, sin asumir un alcance parcial ni exponer registros de embarcaciones no confirmadas como propias.
+- **¿Qué sucede si el Administrador Financiero configura un nuevo valor para un parámetro que ya contaba con un valor previamente vigente (por ejemplo, actualizar el porcentaje de comisión ya configurado)?**
+  El sistema sobrescribe el valor previamente vigente con el nuevo valor configurado; este caso de uso no conserva un historial de valores anteriores.
 
-- **¿Qué sucede si no existen registros de cobro, reembolso o dispersión dentro del alcance de la consulta (por ejemplo, un Propietario sin transacciones aún, o una consulta del Administrador Financiero en un momento sin transacciones registradas)?**
-  El sistema devuelve una página vacía, sin error; la ausencia de transacciones dentro del alcance consultado no constituye una condición de error.
+- **¿Qué sucede con las reservas cuyo valor ya fue calculado por "Solicitar el valor calculado de la reserva" antes de que el Administrador Financiero actualice un parámetro financiero global (por ejemplo, el porcentaje de comisión, la tarifa de seguro náutico o el monto del depósito de garantía)?**
+  Dado que dichos casos de uso registran internamente, en la información de la reserva, los valores efectivamente utilizados al momento del cálculo, la actualización posterior de un parámetro financiero global no modifica los montos ya registrados para esas reservas; el nuevo valor aplica únicamente a los cálculos que se realicen después de la actualización.
 
-- **¿Qué sucede si el número de página solicitado excede el total de páginas disponibles dentro del alcance de la consulta?**
-  El sistema devuelve una página vacía junto con los metadatos de paginación correspondientes (total de registros y total de páginas), sin considerar esto una condición de error.
+- **¿Cómo se determina y actualiza la vigencia exacta (fecha de inicio y fin) de la temporada alta?**
+  Mediante este caso de uso: el Administrador Financiero configura directamente el rango de fechas vigente para la temporada alta, el cual "Brindar tarifa base" utiliza para determinar si una fecha evaluada corresponde o no a dicha condición.
 
-- **¿Qué sucede si el número de página o el tamaño de página indicado por el solicitante es inválido (por ejemplo, negativo, cero o no numérico)?**
-  El sistema responde con un error controlado indicando que los parámetros de paginación no son válidos, sin ejecutar la consulta.
+- **¿Qué sucede si "Brindar tarifa base", "Solicitar el valor calculado de la reserva" o "Dispersar fondos de alquiler" necesitan un parámetro financiero global que aún no ha sido configurado por el Administrador Financiero?**
+  Este caso de uso no define dicho tratamiento: cada caso de uso consumidor gestiona por sí mismo la ausencia del parámetro que necesita (por ejemplo, tratándola como información incompleta y registrando o respondiendo con un error controlado, según lo definido en sus propios requisitos).
 
-- **¿Qué sucede si el Propietario intenta consultar transacciones asociadas a una embarcación que no le pertenece?**
-  El sistema excluye dichos registros del resultado devuelto, dado que el alcance de la consulta está limitado exclusivamente a las embarcaciones que el Sistema de Gestión de Flota confirma como propias de ese Propietario.
-
-- **¿Se incluyen en el historial las transacciones cuyo resultado aún se encuentra en curso (por ejemplo, un cobro o un reembolso a la espera del resultado de la Pasarela de Pago)?**
-  Sí. El sistema devuelve cada registro con su estado vigente al momento de la consulta (en curso, éxito o fallo, según corresponda al tipo de registro), sin omitir las transacciones que aún no tienen un resultado definitivo.
-
-- **¿Se distinguen las penalidades por cancelación de las liquidaciones estándar dentro del historial devuelto?**
-  El sistema no gestiona un tipo de registro separado para "penalidades": estas se identifican mediante el origen (cancelación flexible, moderada o tardía/No-Show) registrado dentro de `RegistroDeReembolso` o `RegistroDeDispersión`, visible como parte del detalle de cada registro consultado.
+- **¿Los umbrales que determinan el tipo de cancelación (flexible, moderada, tardía/No-Show) se configuran mediante este caso de uso?**
+  No. Dichos umbrales son determinados y gestionados por el Sistema de Reservas y Operaciones (Módulo 2); el sistema únicamente recibe el resultado ya clasificado (el tipo de cancelación) a través de "Brindar el estado de la reserva", sin necesitar ni configurar los umbrales de tiempo que originan dicha clasificación.
 
 ## Requisitos *(obligatorio)*
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir del Propietario o del Administrador Financiero una solicitud de consulta del historial de transacciones financieras, incluyendo el número de página y, opcionalmente, el tamaño de página deseado.
-- **RF-002**: El sistema DEBE, cuando el solicitante sea el Propietario, consultar al Sistema de Gestión de Flota las embarcaciones que le pertenecen, y limitar el resultado devuelto exclusivamente a los registros de cobro, reembolso y dispersión asociados a las reservas de dichas embarcaciones.
-- **RF-003**: El sistema DEBE, cuando el solicitante sea el Administrador Financiero, calcular el conjunto completo de registros de cobro, reembolso y dispersión existentes en el sistema, sin restricción de alcance, y entregarlo paginado conforme a los parámetros de paginación recibidos en la solicitud.
-- **RF-004**: El sistema DEBE recuperar, dentro del alcance correspondiente al solicitante, los registros de cobro (definidos en "Procesar cobro"), reembolso (definidos en "Reembolsar dinero a arrendatario") y dispersión (definidos en "Dispersar fondos de alquiler") asociados a las reservas dentro de dicho alcance.
-- **RF-005**: El sistema DEBE incluir, en cada registro devuelto, el tipo de transacción (cobro, reembolso o dispersión), la reserva asociada, el monto, el estado de la transacción (en curso, éxito o fallo) y, cuando estén disponibles, la referencia externa provista por la Pasarela de Pago y el origen de la transacción (por ejemplo, cancelación flexible, cancelación moderada, cancelación tardía/No-Show, finalización sin incidentes, o el resultado correspondiente de una disputa de garantía).
-- **RF-006**: El sistema DEBE devolver una página vacía, sin error, cuando no existan registros dentro del alcance de la consulta o cuando el número de página solicitado no contenga registros dentro de dicho alcance.
-- **RF-007**: El sistema DEBE exponer este caso de uso exclusivamente al Propietario y al Administrador Financiero.
-- **RF-008**: El sistema NO DEBE crear, modificar ni eliminar ningún registro de cobro, reembolso o dispersión como parte de la ejecución de este caso de uso, al tratarse de una operación exclusivamente de consulta.
-- **RF-009**: El sistema DEBE entregar los registros de este caso de uso exclusivamente de forma paginada, sin exponer en ninguna respuesta el conjunto completo de registros dentro del alcance de una sola vez.
-- **RF-010**: El sistema DEBE aplicar un tamaño de página por defecto (por ejemplo, 20 registros) cuando el solicitante no indique explícitamente un tamaño de página, y DEBE responder con un error controlado cuando el número de página o el tamaño de página indicados sean inválidos (por ejemplo, negativos, cero o no numéricos).
-- **RF-011**: El sistema DEBE incluir en cada respuesta, junto con los registros correspondientes a la página solicitada, los metadatos de paginación: número de página actual, tamaño de página utilizado, total de registros dentro del alcance de la consulta y total de páginas resultantes.
+- **RF-001**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) el porcentaje de comisión de la plataforma aplicado sobre el monto de alquiler en la liquidación estándar.
+- **RF-002**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) la tarifa del seguro náutico por pasajero.
+- **RF-003**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) el monto fijo del depósito de garantía aplicable a las reservas.
+- **RF-004**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) el porcentaje de incremento de tarifa dinámica aplicable a los fines de semana.
+- **RF-005**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) el porcentaje de incremento de tarifa dinámica aplicable a la temporada alta.
+- **RF-006**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) la vigencia (fecha de inicio y fecha de fin) de la temporada alta.
+- **RF-007**: El sistema DEBE persistir cada parámetro financiero global configurado, sobrescribiendo el valor previamente vigente cuando el Administrador Financiero lo ajuste.
+- **RF-008**: El sistema DEBE exponer los parámetros financieros globales vigentes para su consumo por "Brindar tarifa base" (porcentajes de tarifa dinámica y vigencia de la temporada alta), "Solicitar el valor calculado de la reserva" (tarifa de seguro náutico y monto del depósito de garantía) y "Dispersar fondos de alquiler" (porcentaje de comisión de la plataforma).
+- **RF-009**: El sistema NO DEBE modificar los valores ya registrados en reservas previamente calculadas cuando se actualice un parámetro financiero global; los nuevos valores configurados aplican únicamente a los cálculos que se realicen después de la actualización.
+- **RF-010**: El sistema DEBE exponer este caso de uso exclusivamente al Administrador Financiero.
 
 ### Requisitos No Funcionales
 
-- **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con el Propietario y el Administrador Financiero, tanto para recibir la solicitud de consulta (incluyendo los parámetros de paginación) como para devolver cada página del historial junto con sus metadatos.
-- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar el monto incluido en cada registro devuelto.
-- **RNF-003**: El sistema DEBE implementar un manejo de errores robusto (*timeouts*, *fallbacks*) ante fallas de comunicación con el Sistema de Gestión de Flota al determinar el alcance de la consulta de un Propietario.
-- **RNF-004**: El sistema DEBE garantizar la consistencia de la paginación (sin omitir ni duplicar registros entre páginas consecutivas) para un mismo conjunto de datos dentro del alcance correspondiente a cada solicitante.
+- **RNF-001**: El sistema DEBE utilizar DTOs para recibir del Administrador Financiero la solicitud de configuración, mapeando únicamente los atributos esenciales de cada grupo de parámetros (comisión y seguro; depósito de garantía; tarifas dinámicas y vigencia de temporada alta).
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el porcentaje de comisión de la plataforma, la tarifa del seguro náutico, el monto del depósito de garantía y los porcentajes de incremento de tarifa dinámica.
+- **RNF-003**: El sistema DEBE persistir de forma consistente cada parámetro configurado, de manera que "Brindar tarifa base", "Solicitar el valor calculado de la reserva" y "Dispersar fondos de alquiler" recuperen siempre el valor vigente más reciente al momento de su consulta.
 
 ### Entidades Clave
 
-- **RegistroDeCobro (Entidad, definida en SPEC 5)**: En este caso de uso es únicamente consultada, no creada ni modificada.
-- **RegistroDeReembolso (Entidad, definida en SPEC 9)**: En este caso de uso es únicamente consultada, no creada ni modificada.
-- **RegistroDeDispersión (Entidad, definida en SPEC 10)**: En este caso de uso es únicamente consultada, no creada ni modificada.
-- **SolicitudConsultaRegistrosFinancieros (DTO)**: Información recibida desde el Propietario o el Administrador Financiero para esta operación. Contiene el número de página y, opcionalmente, el tamaño de página deseado. Su alcance de resolución depende del actor que la origina.
-- **EmbarcacionesDelPropietario (DTO)**: Información recibida desde el Sistema de Gestión de Flota, utilizada únicamente para determinar el alcance de una consulta realizada por un Propietario. Contiene la lista de identificadores de las embarcaciones que le pertenecen. No se persiste dentro del sistema.
-- **RegistroFinancieroResultado (DTO)**: Representa, de forma unificada, cada transacción (cobro, reembolso o dispersión) dentro del alcance de la consulta. Contiene el tipo de transacción, la reserva asociada, el monto, el estado, la referencia externa y el origen, cuando corresponda. No representa una entidad persistida.
-- **PáginaDeRegistrosFinancierosResultado (DTO)**: Resultado que el sistema devuelve al solicitante para cada solicitud. Contiene la lista de `RegistroFinancieroResultado` correspondiente a la página solicitada, junto con el número de página actual, el tamaño de página utilizado, el total de registros dentro del alcance y el total de páginas. No representa una entidad persistida, sino el valor de retorno de esta operación.
+- **ParámetrosFinancierosGlobales (Entidad)**: Estructura única gestionada y persistida internamente por el sistema para representar la configuración financiera vigente de la plataforma. Contiene el porcentaje de comisión de la plataforma, la tarifa del seguro náutico por pasajero, el monto fijo del depósito de garantía, el porcentaje de incremento de tarifa dinámica por fin de semana, el porcentaje de incremento de tarifa dinámica por temporada alta, y la vigencia (fecha de inicio y fecha de fin) de la temporada alta. Es creada y actualizada exclusivamente por este caso de uso, y consultada por "Brindar tarifa base", "Solicitar el valor calculado de la reserva" y "Dispersar fondos de alquiler".
+- **SolicitudConfiguraciónComisiónYSeguro (DTO)**: Información recibida desde el Administrador Financiero para la Historia de Usuario 1. Contiene el porcentaje de comisión de la plataforma y/o la tarifa del seguro náutico por pasajero. No se persiste tal cual; sus datos se utilizan para actualizar la entidad ParámetrosFinancierosGlobales.
+- **SolicitudConfiguraciónDepósitoGarantía (DTO)**: Información recibida desde el Administrador Financiero para la Historia de Usuario 2. Contiene el monto fijo del depósito de garantía. No se persiste tal cual; sus datos se utilizan para actualizar la entidad ParámetrosFinancierosGlobales.
+- **SolicitudConfiguraciónTarifaDinámica (DTO)**: Información recibida desde el Administrador Financiero para la Historia de Usuario 3. Contiene el porcentaje de incremento por fin de semana, el porcentaje de incremento por temporada alta, y/o la fecha de inicio y fin de vigencia de la temporada alta. No se persiste tal cual; sus datos se utilizan para actualizar la entidad ParámetrosFinancierosGlobales.
 
 ## Criterios de Éxito *(obligatorio)*
 
 ### Resultados Medibles
 
-- **CE-001**: Alcance Correcto, "100% de las páginas consultadas por un Propietario contienen exclusivamente registros asociados a sus propias embarcaciones, con cero (0) registros de otros propietarios expuestos, en pruebas automatizadas".
-- **CE-002**: Cobertura Global, "100% de las páginas consultadas por el Administrador Financiero, reconstruidas en su conjunto, corresponden exactamente al total de registros de cobro, reembolso y dispersión existentes, con cero (0) omisiones ni duplicados detectados en pruebas automatizadas".
-- **CE-003**: Integridad de Solo Lectura, "0 modificaciones, creaciones o eliminaciones registradas sobre RegistroDeCobro, RegistroDeReembolso o RegistroDeDispersión como resultado de la ejecución de este caso de uso".
-- **CE-004**: Resiliencia del Sistema, "100% de las fallas de comunicación simuladas con el Sistema de Gestión de Flota, al determinar el alcance de una consulta realizada por un Propietario, son manejadas mediante fallbacks controlados, sin exponer registros fuera de alcance ni provocar fallos inconsistentes en la consulta".
-- **CE-005**: Consistencia de Paginación, "100% de las respuestas de este caso de uso se entregan paginadas conforme a RF-009, sin que en ningún caso se exponga el conjunto completo de registros en una única respuesta, y 100% de los metadatos de paginación (total de registros y total de páginas) corresponden exactamente al alcance evaluado, con cero (0) discrepancias detectadas en pruebas automatizadas".
+- **CE-001**: Consistencia de Configuración, "100% de los parámetros financieros globales configurados por el Administrador Financiero quedan persistidos y disponibles para 'Brindar tarifa base', 'Solicitar el valor calculado de la reserva' y 'Dispersar fondos de alquiler', con cero (0) discrepancias detectadas en pruebas automatizadas".
+- **CE-002**: Cumplimiento Arquitectónico, "100% de las actualizaciones de un parámetro financiero global sobrescriben correctamente el valor previamente vigente, sin afectar los valores ya registrados en reservas previamente calculadas".
+- **CE-003**: Exclusividad de Acceso, "0 solicitudes de configuración de parámetros financieros globales aceptadas por el sistema provenientes de un actor distinto al Administrador Financiero, confirmando que la exposición de este caso de uso es exclusiva".
