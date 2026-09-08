@@ -1,6 +1,6 @@
 # Especificación de Funcionalidad: UC01 - Solicitar Cotización de Reserva
 
-**Creado**: 2026-08-27
+**Creado**: 2026-08-27 (v2 — respuestas integradas a los casos extremos)
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
@@ -58,12 +58,23 @@ Como Módulo de Gestión de Flota (Inventario y Tarifas), quiero proporcionar la
 
 ### Casos Extremos (Edge Cases)
 
-- ¿Qué sucede cuando el Módulo de Gestión de Flota está caído, agota el tiempo de espera (*timeout*) o es inalcanzable cuando el módulo de Finanzas solicita las tarifas base?
-- ¿Qué sucede cuando las fechas solicitadas por el Módulo de Reservas incluyen formatos inválidos, fechas pasadas o fechas de fin que ocurren antes de las fechas de inicio?
-- ¿Cómo maneja el sistema las cotizaciones para un bote que actualmente no tiene una tarifa base configurada (nula o faltante) en el Módulo de Gestión de Flota?
-- ¿Qué sucede si la lista `boat_ids` enviada por el Módulo de Reservas está vacía o contiene IDs inexistentes?
-- ¿Cómo se espera que el sistema maneje payloads inusualmente grandes (ej. solicitar cotizaciones para 1,000 botes a la vez)?
-- ¿Cómo se comporta el cálculo si la duración de reserva solicitada es de 0 días?
+- **¿Qué sucede cuando el Módulo de Gestión de Flota está caído, agota el tiempo de espera (*timeout*) o es inalcanzable cuando el módulo de Finanzas solicita las tarifas base?**
+  Conforme a RNF-003 y CE-004, sin las tarifas base provistas por Gestión de Flota el sistema no puede calcular ninguna cotización. No asume tarifas ni devuelve cotizaciones parciales o inventadas: aplica un manejo de errores controlado (reintentos/*fallbacks*) y responde al Módulo de Reservas con un error controlado que indica que la cotización no pudo completarse en ese momento, evitando estados de carga infinitos o pantallas en blanco.
+
+- **¿Qué sucede cuando las fechas solicitadas por el Módulo de Reservas incluyen formatos inválidos, fechas pasadas o fechas de fin que ocurren antes de las fechas de inicio?**
+  El sistema valida el rango de fechas antes de calcular en la modalidad individual: un formato de fecha inválido, una fecha de inicio en el pasado o una fecha de fin anterior a la de inicio se tratan como solicitud inválida y el sistema responde con un error controlado, sin ejecutar ningún cálculo. En la modalidad en lote (sin fechas, pantalla principal) esta validación de rango no aplica, dado que se usan la duración por defecto (1 día) y la fecha por defecto descritas en el SPEC 2.
+
+- **¿Cómo maneja el sistema las cotizaciones para un bote que actualmente no tiene una tarifa base configurada (nula o faltante) en el Módulo de Gestión de Flota?**
+  Dado que Gestión de Flota es la fuente autoritativa de la tarifa, el sistema no puede cotizar ese bote sin su valor. Lo excluye del resultado de la cotización en lote (o lo marca como "sin cotización disponible"), de modo que el resto del lote se devuelve correctamente y el usuario nunca visualiza un precio asumido. Si la solicitud es individual para un bote sin tarifa, el sistema responde con un error controlado.
+
+- **¿Qué sucede si la lista `boat_ids` enviada por el Módulo de Reservas está vacía o contiene IDs inexistentes?**
+  Si la lista está vacía, el sistema devuelve un arreglo vacío de cotizaciones, sin error (no existen elementos que cotizar). Si contiene identificadores inexistentes, el sistema omite aquellos que Gestión de Flota no confirma como existentes y devuelve cotizaciones únicamente para los botes reconocidos con tarifa base disponible.
+
+- **¿Cómo se espera que el sistema maneje payloads inusualmente grandes (ej. solicitar cotizaciones para 1,000 botes a la vez)?**
+  Conforme a RF-006, el sistema aplica un límite máximo estricto de identificadores por solicitud (por ejemplo, máximo 50 o 100 botes). Una solicitud de 1,000 botes supera el umbral y es rechazada con un error controlado sin procesar el lote; el Módulo de Reservas debe partir la solicitud en lotes que respeten el límite.
+
+- **¿Cómo se comporta el cálculo si la duración de reserva solicitada es de 0 días?**
+  La modalidad en lote asume una duración por defecto de 1 día (RF-002) únicamente cuando el Módulo de Reservas no envía fechas. Si la solicitud individual envía explícitamente un rango de fechas cuya duración es de 0 días, dicha duración se considera inválida (el alquiler mínimo es de 1 día) y el sistema responde con un error controlado, sin ejecutar ningún cálculo.
 
 
 ## Requisitos *(obligatorio)*

@@ -1,8 +1,6 @@
 # Especificación de Funcionalidad: UC02 - Brindar Tarifa Base
 
-**Creado**: 2026-09-06
-
-> **Nota de trazabilidad**: Este caso de uso es invocado exclusivamente de forma interna, mediante relaciones `<<include>>`, por "Solicitar cotización para reserva" (SPEC 1) y por "Brindar información de reserva" (SPEC 3, pendiente). No es expuesto directamente a ningún actor externo del sistema de Reservas ni a los usuarios finales (Arrendatario, Propietario, Administrador Financiero).
+**Creado**: 2026-09-06 (v2 — respuestas integradas a los casos extremos)
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
@@ -33,11 +31,20 @@ Como el sistema, al ser invocado internamente (`<<include>>`) por "Solicitar cot
 
 ### Casos Extremos (Edge Cases)
 
-- ¿Qué sucede cuando el Sistema de Gestión de Flota está caído, agota el tiempo de espera (*timeout*) o es inalcanzable al momento en que el sistema solicita la tarifa base registrada para la embarcación?
-- ¿Cómo debe comportarse el sistema cuando la embarcación consultada no tiene una tarifa base configurada (nula o faltante) en el Sistema de Gestión de Flota?
-- ¿Qué tarifa dinámica debe prevalecer cuando una misma fecha coincide simultáneamente con más de una condición vigente (por ejemplo, fin de semana y temporada alta al mismo tiempo)?
-- ¿Sobre qué fecha debe evaluarse la tarifa dinámica cuando "Solicitar cotización para reserva" invoca este caso de uso en modo lote, sin fechas específicas (cotización general para la pantalla principal)?
-- ¿Cómo se determina y actualiza la vigencia exacta (fechas de inicio y fin) de la temporada alta dentro del sistema?
+- **¿Qué sucede cuando el Sistema de Gestión de Flota está caído, agota el tiempo de espera (*timeout*) o es inalcanzable al momento en que el sistema solicita la tarifa base registrada para la embarcación?**
+  Conforme a RNF-003, el sistema no asume ninguna tarifa base. Registra el fallo y propaga el error a la operación que lo invocó ("Solicitar cotización para reserva" o "Brindar información de reserva"), que aplica su propio manejo de *fallback* (según lo definido en los SPEC 1 y 3). En ningún caso se entrega una tarifa asumida ni un valor por defecto inventado.
+
+- **¿Cómo debe comportarse el sistema cuando la embarcación consultada no tiene una tarifa base configurada (nula o faltante) en el Sistema de Gestión de Flota?**
+  Dado que Gestión de Flota es la única fuente autoritativa de la tarifa base (RF-004), el sistema considera que no puede establecer la tarifa base final para esa embarcación. Registra el fallo y comunica a la operación invocante que la tarifa no está disponible, para que esta la excluya del resultado o la marque como "sin tarifa/cotización disponible", de forma consistente con el tratamiento definido en el SPEC 1, sin inventar un valor.
+
+- **¿Qué tarifa dinámica debe prevalecer cuando una misma fecha coincide simultáneamente con más de una condición vigente (por ejemplo, fin de semana y temporada alta al mismo tiempo)?**
+  Cuando más de una condición dinámica vigente coincide sobre la misma fecha, el sistema evalúa todas las condiciones aplicables y aplica aquella cuyo ajuste resulte en la tarifa más alta (la condición más favorable para la plataforma), de manera que el resultado sea siempre determinista y sin depender de un orden de evaluación arbitrario.
+
+- **¿Sobre qué fecha debe evaluarse la tarifa dinámica cuando "Solicitar cotización para reserva" invoca este caso de uso en modo lote, sin fechas específicas (cotización general para la pantalla principal)?**
+  En el modo lote sin fechas, la tarifa dinámica se evalúa sobre la fecha actual (el día en que se realiza la solicitud), reflejando las condiciones vigentes ese día. La cotización así obtenida es meramente informativa; al confirmar la reserva, "Solicitar el valor calculado de la reserva" recalcula con las fechas reales y su tarifa dinámica correspondiente.
+
+- **¿Cómo se determina y actualiza la vigencia exacta (fechas de inicio y fin) de la temporada alta dentro del sistema?**
+  Las fechas de inicio y fin de la temporada alta, y de cualquier otra condición dinámica, son parámetros financieros globales configurados por el Administrador Financiero mediante "Configurar parámetros financieros globales". El sistema las consulta de dicha configuración y NO las calcula ni las deriva de los datos de las reservas. Las modificaciones de estas fechas afectan únicamente los cálculos posteriores a su configuración y nunca los valores ya aplicados a reservas existentes.
 
 ## Requisitos *(obligatorio)*
 

@@ -73,6 +73,7 @@ Como el sistema, al recibir de la Pasarela de pago el resultado de una transacci
 - **RF-007**: El sistema DEBE dejar disponible el resultado registrado de la transacción para ser consultado mediante "Solicitar confirmación de pago".
 - **RF-008**: El sistema NO DEBE registrar ni reportar como exitosa una reserva cuya transacción fue rechazada o fallida según la Pasarela de pago.
 - **RF-009**: El sistema DEBE responder con un error controlado si se solicita procesar el cobro de una reserva para la cual no existe un valor total previamente calculado.
+- **RF-010**: El sistema DEBE registrar, como parte del `RegistroDeCobro`, el propietario y la embarcación asociados a la reserva (copiados de `InformaciónDeReserva`), de manera que dicho registro quede asociado a su propietario y pueda ser consultado en "Consultar registros financieros" (SPEC 12).
 
 ### Requisitos No Funcionales
 
@@ -82,7 +83,7 @@ Como el sistema, al recibir de la Pasarela de pago el resultado de una transacci
 
 ### Entidades Clave
 
-- **RegistroDeCobro (Entidad)**: Estructura gestionada y persistida internamente por el sistema para representar el ciclo de una transacción de cobro sobre una reserva. Es creada por la Historia de Usuario 1 con el estado de la solicitud en curso, y actualizada por la Historia de Usuario 2 con el monto cobrado, el estado final de la transacción (éxito o fallo) y la referencia externa provista por la Pasarela de pago. Es consumida posteriormente por "Solicitar confirmación de pago".
+- **RegistroDeCobro (Entidad)**: Estructura gestionada y persistida internamente por el sistema para representar el ciclo de una transacción de cobro sobre una reserva. Es creada por la Historia de Usuario 1 con el estado de la solicitud en curso, y actualizada por la Historia de Usuario 2 con el monto cobrado, el estado final de la transacción (éxito o fallo) y la referencia externa provista por la Pasarela de pago. Conserva también el propietario y la embarcación asociados a la reserva (copiados de `InformaciónDeReserva`), de manera que quede asociado a su propietario. Es consumida posteriormente por "Solicitar confirmación de pago" y por "Consultar registros financieros".
 - **SolicitudCobro (DTO)**: Información recibida para iniciar esta operación. Contiene el identificador de la reserva sobre la cual se debe procesar el cobro.
 - **SolicitudCobroPasarela (DTO)**: Información enviada a la Pasarela de pago. Contiene el monto total a cobrar y la referencia de la reserva asociada.
 - **ResultadoCobroPasarela (DTO)**: Información recibida desde la Pasarela de pago como resultado de una transacción previamente iniciada. Contiene el estado de la transacción (éxito o fallo) y la referencia externa asignada por la Pasarela de pago.
