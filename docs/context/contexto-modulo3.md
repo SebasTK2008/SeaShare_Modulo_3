@@ -8,15 +8,15 @@
 
 El sistema es responsable de traducir cada operación turística de SEA-SHARE en un movimiento financiero controlado. Sus funciones principales son:
 
-- **Calcular el valor de un alquiler** combinando la tarifa base de la embarcación (dinámica según temporada o fin de semana) con la duración solicitada, el seguro náutico por pasajero y el depósito de garantía aplicable.
+- **Calcular el valor de un alquiler** combinando la tarifa base de la embarcación (dinámica según temporada alta o fin de semana; la temporada alta se determina automáticamente por calendario) con la duración solicitada, el seguro náutico por pasajero y el depósito de garantía aplicable.
 - **Procesar el cobro** al arrendatario una vez la reserva ha sido iniciada, en coordinación con una pasarela de pago externa.
 - **Retener y arbitrar el depósito de garantía**, resolviendo disputas cuando se detectan daños al regreso de la embarcación.
 - **Dispersar los fondos** entre la plataforma (comisión) y el propietario, una vez descontados comisión y seguro.  
-- **Calcular cotizaciones** para que el usuario pueda visualizar cotizaciones o valores aproximados de cada reserva. 
+- **Calcular estimaciones** para que el usuario pueda visualizar estimaciones o valores aproximados de cada reserva. 
 -Aplicar las penalidades o reembolsos** que correspondan según la ventana de cancelación en la que se encuentre la reserva.
 - **Exponer información financiera** (balances, ingresos, registros históricos) a los roles interesados: Propietarios y Administración Financiera.
 - **Configurar los parámetros financieros globales** de la plataforma (porcentaje de comisión, tarifas de seguro, reglas de depósito, etc.).
-- **Colaborar con los otros sistemas de SEA-SHARE**: consume datos de la embarcación provistos por el sistema de Gestión de Flota, y responde a las solicitudes de cotización, confirmación de pago y estado financiero que le hace el sistema de Reservas y Operaciones.
+- **Colaborar con los otros sistemas de SEA-SHARE**: consume datos de la embarcación provistos por el sistema de Gestión de Flota, y responde a las solicitudes de estimación, confirmación de pago y estado financiero que le hace el sistema de Reservas y Operaciones.
 
 ### Actores que interactúan con el sistema
 
@@ -26,13 +26,13 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 | **Propietario** | Recibe la dispersión de fondos y consulta sus ingresos/registros. |
 | **Administrador Financiero** | Supervisa balances, resuelve disputas de garantía y configura parámetros globales. |
 | **Pasarela de Pago** | Sistema externo que ejecuta técnicamente cobros, reembolsos y dispersiones. |
-| **Sistema de Reservas y Operaciones** | Solicita cotizaciones, confirma pagos, consulta el estado financiero de una reserva y su valor calculado. |
+| **Sistema de Reservas y Operaciones** | Solicita estimaciones, confirma pagos, consulta el estado financiero de una reserva y su valor calculado. |
 | **Sistema de Gestión de Flota** | Provee la tarifa base de una  embarcación necesarios para calcular la tarifa dinamica de una reserva. |
 
 ### Supuestos de trazabilidad
 Dado que algunas reglas de negocio no tienen un caso de uso dedicado en el diagrama, se asumen las siguientes correspondencias:
 - El **seguro náutico** se calcula como parte de  "Solicitar el valor calculado de la reserva", no como un caso de uso independiente.
-- La **penalidad por cancelación** (regla del sistema de Reservas) se resuelve mediante la combinación de "Solicitar el valor calculado de la reserva", "Reembolsar dinero a arrendatario" y "Dispersar fondos de alquiler", según la ventana de tiempo en la que se solicitó la cancelación.
+- La **penalidad por cancelación** (regla del sistema de Reservas) se resuelve mediante la combinación de "Solicitar el valor calculado de la reserva", "Reembolsar dinero a arrendatario" y "Liquidar fondos de alquiler", según la ventana de tiempo en la que se solicitó la cancelación.
 
 - **En procesar cobro**  se tiene en cuenta que cuando el usuario hace efectivo el pago este se retiene en un escow en la pasarela de pago y se mantiene hasta que se termine la reserva y la disputa de la garantia..
 - Los **balances financieros** estaran dados por un periodo quincenal, mensual o trimestral. 
@@ -43,7 +43,7 @@ Dado que algunas reglas de negocio no tienen un caso de uso dedicado en el diagr
 
 El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del sistema de Reservas y Operaciones y a las acciones del arrendatario. Su participación en el ciclo de vida completo de una reserva es la siguiente:
 
-1. **Solicitud de cotización.** El sistema de Reservas pide una cotización para una posible reserva. El sistema ejecuta *"Solicitar cotización para reserva"*, que incluye obligatoriamente *"Brindar tarifa base"*, la cual a su vez consulta al sistema de Gestión de Flota el tipo y categoría de la embarcación para aplicar la tarifa dinámica correspondiente (temporada/fin de semana). Dicha cotizacion es meramente INFORMATIVA y puede verse reflejada para una unica embarcacion (con una fecha y cierto numero de pasajeros) o puede verse reflejada como una lista de cotizaciones (para la pantalla principal en donde se veran las embarcaciones) con una fecha y numero de pasajeros  predeterminados (1 dia y 1 pasajero)
+1. **Solicitud de estimación.** El sistema de Reservas pide una estimación para una posible reserva. El sistema ejecuta *"Solicitar estimación para reserva"*, que incluye obligatoriamente *"Brindar tarifa base"*, la cual a su vez consulta al sistema de Gestión de Flota el tipo y categoría de la embarcación para aplicar la tarifa dinámica correspondiente (temporada alta, determinada automáticamente por calendario, o fin de semana). Dicha estimación es meramente INFORMATIVA y puede verse reflejada para una unica embarcacion (con una fecha y cierto numero de pasajeros) o puede verse reflejada como una lista de estimaciones (para la pantalla principal en donde se veran las embarcaciones) con una fecha y numero de pasajeros  predeterminados (1 dia y 1 pasajero)
 
 2. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"* (que también incluye "Brindar tarifa base"), entregando el desglose de precio que el arrendatario verá antes de confirmar.
 
@@ -57,14 +57,14 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 7. **Cancelación (si aplica).** Si el arrendatario cancela, el sistema de Reservas recalcula el escenario mediante *"Solicitar el valor calculado de la reserva"* y, según la ventana de tiempo:
    - **Cancelacion flexible: >72h:** el sistema ejecuta *"Reembolsar dinero a arrendatario"* por el 100% (menos costos transaccionales).
-   - **Cancelacion moderada: 72h–24h:** el sistema reembolsa el 50% y dispersa el 50% restante como compensación al propietario vía *"Dispersar fondos de alquiler"*.
+   - **Cancelacion moderada: 72h–24h:** el sistema reembolsa el 50% y dispersa el 50% restante como compensación al propietario vía *"Liquidar fondos de alquiler"*.
    - **Cancelacion tardia: <24h / No-Show:** el sistema no reembolsa; dispersa el 100% como compensación al propietario.
 
 8. **Regreso de la embarcación y depósito de garantía.** Si al finalizar la navegación se detectan daños, el **Administrador Financiero** ejecuta *"Resolver disputa de garantía"*. Según el resultado:
    - Si no procede el reclamo, el sistema extiende hacia *"Reembolsar dinero a arrendatario"* liberando el depósito.
    - Si procede, el sistema retiene el monto correspondiente y lo dispersa al propietario junto con el resto del pago.
 
-9. **Liquidación final.** Superadas las etapas anteriores, el sistema ejecuta *"Dispersar fondos de alquiler"* vía la Pasarela de Pago: paga al propietario el valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación.
+9. **Liquidación final.** Superadas las etapas anteriores, el sistema ejecuta *"Liquidar fondos de alquiler"* vía la Pasarela de Pago: paga al propietario el valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación.
 
 10. **Supervisión continua.** En cualquier momento, el **Propietario** puede *"Consultar ingresos"* y *"Consultar registros financieros"*; el **Administrador Financiero** puede *"Consultar balance financiero"*, *"Consultar registros financieros"* y *"Configurar parámetros financieros globales"* (porcentaje de comisión, tarifa de seguro, reglas de depósito).
 
@@ -72,16 +72,28 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 ## 3. Casos de Uso del Sistema
 
-### 3.1 Cotización y Cálculo de Tarifas
+### 3.1 Estimación y Cálculo de Tarifas
+
+#### Definición de temporada alta (Regla de Negocio)
+
+La **temporada alta** comprende los periodos del año con mayor flujo de viajeros, precios más altos en vuelos y alojamiento y mayor ocupación en los destinos. Para el contexto colombiano de SEA-SHARE, el sistema deriva automáticamente la vigencia de la temporada alta aplicando la siguiente regla de calendario a cada año evaluado:
+
+- **Fin de año:** desde la segunda mitad de noviembre hasta mediados de enero del año siguiente.
+- **Mitad de año:** los meses de junio y julio (vacaciones escolares y fiestas locales).
+- **Semana Santa:** los días santos de marzo o abril.
+- **Semana de receso:** la semana de descanso escolar en octubre.
+- **Puentes festivos y fines de semana largos.**
+
+La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manualmente**: "Brindar tarifa base" determina si una fecha pertenece a temporada alta evaluando si cae dentro de alguna de estas ventanas. El Administrador Financiero únicamente configura el **porcentaje de incremento** de tarifa dinámica aplicable durante dicha condición, mediante "Configurar parámetros financieros globales". Los cambios derivados del calendario afectan únicamente los cálculos posteriores y nunca los valores ya aplicados a reservas existentes.
 
 #### Brindar tarifa base
-- **Actores:** Sistema de Gestión de Flota (provee datos de la embarcación); invocado internamente (`<<include>>`) por "Solicitar cotización para reserva" y "Brindar información de reserva".
-- **Flujo:** El sistema recibe el tipo/categoría de la embarcación desde Gestión de Flota y aplica la tarifa dinámica vigente (temporada alta, fin de semana, etc.) para obtener la tarifa base por unidad de tiempo.
+- **Actores:** Sistema de Gestión de Flota (provee datos de la embarcación); invocado internamente (`<<include>>`) por "Solicitar estimación para reserva" y "Brindar información de reserva".
+- **Flujo:** El sistema recibe el tipo/categoría de la embarcación desde Gestión de Flota y aplica la tarifa dinámica vigente (temporada alta —determinada automáticamente por la regla de calendario—, fin de semana, etc.) para obtener la tarifa base por unidad de tiempo.
 - **Regla de negocio asociada:** Tarifas Dinámicas (3.1).
 
-#### Solicitar cotización para reserva
+#### Solicitar estimación para reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** Ante una intención de reserva aún no confirmada, Reservas pide al sistema una cotización preliminar. El sistema incluye "Brindar tarifa base" y devuelve un estimado sin bloquear ningún activo.
+- **Flujo:** Ante una intención de reserva aún no confirmada, Reservas pide al sistema una estimación preliminar. El sistema incluye "Brindar tarifa base" y devuelve un estimado sin bloquear ningún activo.
 - **Regla de negocio asociada:** Tarifas Dinámicas (3.1).
 
 #### Brindar información de reserva
@@ -132,7 +144,7 @@ cualquier tipo de estado cancelado dispara el caso de uso reembolsar dinero a ar
 
 ### 3.4 Dispersión de Fondos
 
-#### Dispersar fondos de alquiler
+#### Liquidar fondos de alquiler
 - **Actores:** Pasarela de Pago (ejecuta la transferencia); beneficia al Propietario.
 - **Flujo:** Una vez liquidada la reserva (o resuelta una penalidad por cancelación tardía/no-show), el sistema calcula el pago al propietario como *Valor Bruto − Comisión de la Plataforma − Seguro* y ordena la transferencia mediante la Pasarela de Pago. Las penalidades por cancelación tardía se dispersan íntegramente como compensación al propietario.
 - **Regla de negocio asociada:** Matriz de Liquidación — Pago al Propietario y Penalidad por Cancelación (3.2).
@@ -143,7 +155,7 @@ cualquier tipo de estado cancelado dispara el caso de uso reembolsar dinero a ar
 
 #### Configurar parámetros financieros globales
 - **Actores:** Administrador Financiero.
-- **Flujo:** El administrador define o ajusta los parámetros que rigen los cálculos del sistema: porcentaje de comisión de la plataforma, tarifa del seguro náutico por pasajero, reglas del depósito de garantía, fechas de inicio y finalizacion de las tarifas dinamicas y umbrales de cancelación.
+- **Flujo:** El administrador define o ajusta los parámetros que rigen los cálculos del sistema: porcentaje de comisión de la plataforma, tarifa del seguro náutico por pasajero, reglas del depósito de garantía y porcentajes de incremento de tarifa dinámica por fin de semana y por temporada alta. La vigencia (fechas) de la temporada alta no se configura aquí: el sistema la determina automáticamente conforme a la regla de calendario definida en la sección 3.1.
 - **Regla de negocio asociada:** Matriz de Liquidación — Comisión Plataforma (3.2); Reglas de Cobro (3.1).
 
 #### Consultar registros financieros
@@ -167,10 +179,10 @@ cualquier tipo de estado cancelado dispara el caso de uso reembolsar dinero a ar
 
 | Regla de negocio (sea-share.md) | Caso(s) de uso del sistema |
 | :--- | :--- |
-| Tarifas Dinámicas | Brindar tarifa base, Solicitar cotización para reserva, Brindar información de reserva |
+| Tarifas Dinámicas | Brindar tarifa base, Solicitar estimación para reserva, Brindar información de reserva |
 | Depósito de Garantía | Resolver disputa de garantía, Reembolsar dinero a arrendatario |
 | Seguro Náutico | Brindar tarifa base, Solicitar el valor calculado de la reserva *(implícito)* |
 | Valor Alquiler Bruto | Solicitar el valor calculado de la reserva |
-| Comisión Plataforma | Configurar parámetros financieros globales, Dispersar fondos de alquiler |
-| Pago al Propietario | Dispersar fondos de alquiler, Consultar ingresos |
-| Penalidad por Cancelación | Solicitar el valor calculado de la reserva, Reembolsar dinero a arrendatario, Dispersar fondos de alquiler |
+| Comisión Plataforma | Configurar parámetros financieros globales, Liquidar fondos de alquiler |
+| Pago al Propietario | Liquidar fondos de alquiler, Consultar ingresos |
+| Penalidad por Cancelación | Solicitar el valor calculado de la reserva, Reembolsar dinero a arrendatario, Liquidar fondos de alquiler |

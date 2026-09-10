@@ -8,7 +8,7 @@
 
 Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud del valor calculado de una reserva específica (identificada por su identificador de reserva), quiero recuperar la información previamente registrada para esa reserva (tarifa base vigente, cantidad de días y número de pasajeros) y calcular sobre ella el monto de alquiler, el monto del seguro náutico y el monto del depósito de garantía, de manera que pueda devolver al Sistema de Reservas y Operaciones el desglose completo del valor de la reserva junto con su valor total, dejando además esta información disponible internamente para el proceso de cobro posterior.
 
-**Por qué esta prioridad**: Este caso de uso produce el valor financiero definitivo de la reserva —a diferencia de la cotización preliminar de "Solicitar cotización para reserva", que excluye explícitamente el depósito de garantía—, por lo que es el paso indispensable antes de que pueda ejecutarse cualquier cobro real al arrendatario.
+**Por qué esta prioridad**: Este caso de uso produce el valor financiero definitivo de la reserva —a diferencia de la estimación preliminar de "Solicitar estimación para reserva", que excluye explícitamente el depósito de garantía—, por lo que es el paso indispensable antes de que pueda ejecutarse cualquier cobro real al arrendatario.
 
 **Prueba Independiente**: Registrar previamente la información de una reserva mediante "Brindar información de reserva" y luego enviar, desde el Sistema de Reservas y Operaciones, una solicitud del valor calculado para esa misma reserva, validando que el sistema recupera la información registrada, calcula correctamente el monto de alquiler, el seguro náutico y el depósito de garantía, y devuelve el desglose completo junto con el valor total.
 

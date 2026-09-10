@@ -1,8 +1,6 @@
-# Especificación de Funcionalidad: UC10 - Dispersar Fondos de Alquiler
+# Especificación de Funcionalidad: UC10 - Liquidar Fondos de Alquiler
 
 **Creado**: 2026-09-06 
-
-> **Nota de trazabilidad**: Este caso de uso es invocado internamente por dos operaciones distintas del sistema: "Brindar el estado de la reserva" (SPEC 7), cuando el estado informado de una reserva corresponde a una **cancelación moderada**, a una **cancelación tardía/No-Show**, o a la **finalización de la reserva sin incidentes** ("completada sin incidentes"); y "Resolver disputa de garantía" (SPEC 8), en los **tres resultados posibles** de la disputa (liberación total, retención total o retención parcial), indicando en cada caso el monto del depósito de garantía retenido que corresponda (incluyendo el valor cero en la liberación total). El sistema no expone este caso de uso a ningún actor externo ni al Sistema de Reservas y Operaciones: es la Pasarela de Pago quien ejecuta técnicamente la transferencia de fondos al Propietario y reporta su resultado. El resultado registrado por este caso de uso queda disponible para "Consultar registros financieros" (SPEC 12), "Consultar ingresos" (SPEC 14, pendiente) y, a partir de esta versión, para "Consultar balance financiero" (SPEC 13), en lo relativo al monto de comisión efectivamente aplicado.
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
@@ -98,7 +96,7 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una transacci
 
 Como el sistema, al calcular la liquidación estándar del valor de alquiler al Propietario (orígenes "finalización sin incidentes" o resultado de disputa de garantía), quiero registrar, dentro del mismo `RegistroDeDispersión`, el monto de comisión de la plataforma efectivamente aplicado en ese cálculo, de manera que dicho valor quede disponible para "Consultar balance financiero" sin necesidad de recalcularlo posteriormente con el porcentaje de comisión que esté vigente en el momento de la consulta, el cual pudo haber cambiado desde entonces.
 
-**Por qué esta prioridad**: "Configurar parámetros financieros globales" (SPEC 11) permite modificar el porcentaje de comisión en cualquier momento, y dicha modificación no afecta los cálculos ya realizados (RF-009 de SPEC 11). Si la comisión aplicada no se conserva junto con la dispersión en la que fue calculada, no existiría ninguna fuente confiable para reconstruir cuánta comisión generó realmente cada transacción histórica.
+**Por qué esta prioridad**: "Configurar parámetros financieros globales" (SPEC 11) permite modificar el porcentaje de comisión en cualquier momento, y dicha modificación no afecta los cálculos ya realizados (RF-008 de SPEC 11). Si la comisión aplicada no se conserva junto con la dispersión en la que fue calculada, no existiría ninguna fuente confiable para reconstruir cuánta comisión generó realmente cada transacción histórica.
 
 **Prueba Independiente**: Ejecutar la liquidación estándar para una reserva con un porcentaje de comisión vigente determinado, modificar posteriormente dicho porcentaje mediante "Configurar parámetros financieros globales", y validar que el monto de comisión registrado en el `RegistroDeDispersión` original permanece igual al calculado en el momento original, sin verse afectado por el nuevo porcentaje vigente.
 

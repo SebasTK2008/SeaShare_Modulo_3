@@ -75,7 +75,7 @@
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="16" parent="1" style="ellipse;whiteSpace=wrap;html=1;" value="Solicitar cotizacion para reserva" vertex="1">
+        <mxCell id="16" parent="1" style="ellipse;whiteSpace=wrap;html=1;" value="Solicitar estimacion para reserva" vertex="1">
           <mxGeometry height="50" width="100" x="-254" y="190" as="geometry" />
         </mxCell>
         <mxCell id="17" edge="1" parent="1" source="19" style="edgeStyle=orthogonalEdgeStyle;shape=connector;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;dashed=1;strokeColor=default;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=default;labelBackgroundColor=default;endArrow=classic;" target="27">
@@ -89,7 +89,7 @@
         <mxCell id="19" parent="1" style="ellipse;whiteSpace=wrap;html=1;" value="Brindar informacion de reserva" vertex="1">
           <mxGeometry height="50" width="100" x="-254" y="247" as="geometry" />
         </mxCell>
-        <mxCell id="20" parent="1" style="ellipse;whiteSpace=wrap;html=1;" value="Dispersar fondos de alquiler" vertex="1">
+        <mxCell id="20" parent="1" style="ellipse;whiteSpace=wrap;html=1;" value="Liquidar fondos de alquiler" vertex="1">
           <mxGeometry height="50" width="128" x="-279" y="550" as="geometry" />
         </mxCell>
         <mxCell id="21" parent="1" style="ellipse;whiteSpace=wrap;html=1;" value="Resolver disputa de garantía" vertex="1">

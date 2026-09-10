@@ -1,42 +1,42 @@
-# Especificación de Funcionalidad: UC01 - Solicitar Cotización de Reserva
+# Especificación de Funcionalidad: UC01 - Solicitar Estimación de Reserva
 
 **Creado**: 2026-08-27 (v2 — respuestas integradas a los casos extremos)
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
-### Historia de Usuario 1 - Calcular cotizaciones en lote delegando cálculos al módulo de Finanzas (Prioridad: P1)
+### Historia de Usuario 1 - Calcular estimaciones en lote delegando cálculos al módulo de Finanzas (Prioridad: P1)
 
-Como Módulo de Reservas (Gestión de Reservas), al necesitar listar opciones de reserva, quiero enviar solicitudes de cotización en lote al módulo de Finanzas delegándole completamente la responsabilidad matemática, de manera que, si no se especifican fechas exactas, se asuma una duración por defecto de 1 día para calcular el costo estimado.
+Como Módulo de Reservas (Gestión de Reservas), al necesitar listar opciones de reserva, quiero enviar solicitudes de estimación en lote al módulo de Finanzas delegándole completamente la responsabilidad matemática, de manera que, si no se especifican fechas exactas, se asuma una duración por defecto de 1 día para calcular el costo estimado.
 
 **Contexto del Sistema (Flujo)**: 
 1. El Módulo de Reservas carga las opciones de reserva.
 2. El Módulo de Reservas activa este caso de uso enviando una lista de identificadores (`boat_ids`) al módulo de Finanzas. Si aún no hay fechas seleccionadas, envía esta información vacía.
 3. El módulo de Finanzas invoca el sub-caso "Proveer tarifa base" consultando la tarifa de cada bote al Módulo de Gestión de Flota.
-4. El módulo de Finanzas realiza los cálculos asumiendo 1 día de duración por defecto y devuelve las cotizaciones, permitiendo que el Módulo de Reservas actúe únicamente como consumidor de la API sin hacer operaciones locales.
+4. El módulo de Finanzas realiza los cálculos asumiendo 1 día de duración por defecto y devuelve las estimaciones, permitiendo que el Módulo de Reservas actúe únicamente como consumidor de la API sin hacer operaciones locales.
 
 **Por qué esta prioridad**: Mantiene la arquitectura limpia y la separación de responsabilidades, al mismo tiempo que es fundamental mostrar precios estimados desde la búsqueda inicial para la conversión.
 
-**Prueba Independiente**: Enviar un *payload* simulado desde el Módulo de Reservas con una lista de IDs y sin fechas al módulo de Finanzas, validando que asuma el valor por defecto (1 día) en la fórmula matemática, consulte al Módulo de Gestión de Flota y devuelva el arreglo de cotizaciones.
+**Prueba Independiente**: Enviar un *payload* simulado desde el Módulo de Reservas con una lista de IDs y sin fechas al módulo de Finanzas, validando que asuma el valor por defecto (1 día) en la fórmula matemática, consulte al Módulo de Gestión de Flota y devuelva el arreglo de estimaciones.
 
 **Escenarios de Aceptación**:
-1. **Escenario**: Cálculo delegado exitoso de múltiples cotizaciones con fecha por defecto.
+1. **Escenario**: Cálculo delegado exitoso de múltiples estimaciones con fecha por defecto.
    - **Dado** que el Módulo de Reservas necesita mostrar precios para 10 botes en pantalla.
    - **Cuando** envía la lista al módulo de Finanzas sin un rango de fechas definido.
-   - **Entonces** el módulo de Finanzas asume 1 día de duración y 1 pasajero por defecto, calcula con éxito las cotizaciones para los 10 botes y las devuelve.
+   - **Entonces** el módulo de Finanzas asume 1 día de duración y 1 pasajero por defecto, calcula con éxito las estimaciones para los 10 botes y las devuelve.
 
 ---
 
-### Historia de Usuario 2 - Cotización individual delegada y advertencia de estimación (Prioridad: P1)
+### Historia de Usuario 2 - Estimación individual delegada y advertencia de estimación (Prioridad: P1)
 
 Como Módulo de Reservas (Gestión de Reservas), al solicitar los detalles de un bote específico, quiero delegar el cálculo exacto enviando el ID y el rango de fechas al módulo de Finanzas, y que este me devuelva tanto el valor total como una bandera obligatoria de advertencia (*warning*) sobre el estimado, para yo simplemente renderizarla sin manejar lógica financiera ni de reglas de negocio.
 
 **Por qué esta prioridad**: Mantiene el código del Módulo de Reservas libre de multiplicaciones de tarifas, y atiende un requisito crítico de negocio para evitar fricciones y quejas de los usuarios por posibles recargos.
 
-**Prueba Independiente**: Verificar que al enviar fechas de inicio y fin desde el Módulo de Reservas, el módulo de Finanzas devuelve la cotización exacta calculando los días de diferencia y adjunta un texto/flag de advertencia sobre la naturaleza del estimado.
+**Prueba Independiente**: Verificar que al enviar fechas de inicio y fin desde el Módulo de Reservas, el módulo de Finanzas devuelve la estimación exacta calculando los días de diferencia y adjunta un texto/flag de advertencia sobre la naturaleza del estimado.
 
 **Escenarios de Aceptación**:
-1. **Escenario**: Cotización delegada para un solo bote y retorno de aviso legal.
-   - **Dado** que el Módulo de Reservas necesita la cotización exacta para las fechas de un viaje.
+1. **Escenario**: Estimación delegada para un solo bote y retorno de aviso legal.
+   - **Dado** que el Módulo de Reservas necesita la estimación exacta para las fechas de un viaje.
    - **Cuando** envía las fechas de inicio y fin junto con el ID del bote al módulo de Finanzas.
    - **Entonces** el módulo de Finanzas calcula el valor delegadamente a partir de las fechas enviadas y devuelve el precio junto con una advertencia visible obligatoria que indica: "Valor estimado. No incluye cargos adicionales ni depósito de seguridad".
 
@@ -46,7 +46,7 @@ Como Módulo de Reservas (Gestión de Reservas), al solicitar los detalles de un
 
 Como Módulo de Gestión de Flota (Inventario y Tarifas), quiero proporcionar la "tarifa base" por bote, para que el módulo de Finanzas pueda consumirla en lote sin crear cuellos de botella ni degradar mi rendimiento.
 
-**Por qué esta prioridad**: El Módulo de Gestión de Flota es la fuente de la verdad para los precios. Si su respuesta es lenta, todo el flujo de cotizaciones del módulo de Finanzas y la visualización en el Módulo de Reservas se verán gravemente afectados.
+**Por qué esta prioridad**: El Módulo de Gestión de Flota es la fuente de la verdad para los precios. Si su respuesta es lenta, todo el flujo de estimaciones del módulo de Finanzas y la visualización en el Módulo de Reservas se verán gravemente afectados.
 
 **Prueba Independiente**: Realizar pruebas de carga solicitando tarifas para 50 botes concurrentes desde el módulo de Finanzas al Módulo de Gestión de Flota, esperando tiempos de respuesta menores a 500ms.
 
@@ -59,18 +59,18 @@ Como Módulo de Gestión de Flota (Inventario y Tarifas), quiero proporcionar la
 ### Casos Extremos (Edge Cases)
 
 - **¿Qué sucede cuando el Módulo de Gestión de Flota está caído, agota el tiempo de espera (*timeout*) o es inalcanzable cuando el módulo de Finanzas solicita las tarifas base?**
-  Conforme a RNF-003 y CE-004, sin las tarifas base provistas por Gestión de Flota el sistema no puede calcular ninguna cotización. No asume tarifas ni devuelve cotizaciones parciales o inventadas: aplica un manejo de errores controlado (reintentos/*fallbacks*) y responde al Módulo de Reservas con un error controlado que indica que la cotización no pudo completarse en ese momento, evitando estados de carga infinitos o pantallas en blanco.
+  Conforme a RNF-003 y CE-004, sin las tarifas base provistas por Gestión de Flota el sistema no puede calcular ninguna estimación. No asume tarifas ni devuelve estimaciones parciales o inventadas: aplica un manejo de errores controlado (reintentos/*fallbacks*) y responde al Módulo de Reservas con un error controlado que indica que la estimación no pudo completarse en ese momento, evitando estados de carga infinitos o pantallas en blanco.
 
 - **¿Qué sucede cuando las fechas solicitadas por el Módulo de Reservas incluyen formatos inválidos, fechas pasadas o fechas de fin que ocurren antes de las fechas de inicio?**
   El sistema valida el rango de fechas antes de calcular en la modalidad individual: un formato de fecha inválido, una fecha de inicio en el pasado o una fecha de fin anterior a la de inicio se tratan como solicitud inválida y el sistema responde con un error controlado, sin ejecutar ningún cálculo. En la modalidad en lote (sin fechas, pantalla principal) esta validación de rango no aplica, dado que se usan la duración por defecto (1 día) y la fecha por defecto descritas en el SPEC 2.
 
-- **¿Cómo maneja el sistema las cotizaciones para un bote que actualmente no tiene una tarifa base configurada (nula o faltante) en el Módulo de Gestión de Flota?**
-  Dado que Gestión de Flota es la fuente autoritativa de la tarifa, el sistema no puede cotizar ese bote sin su valor. Lo excluye del resultado de la cotización en lote (o lo marca como "sin cotización disponible"), de modo que el resto del lote se devuelve correctamente y el usuario nunca visualiza un precio asumido. Si la solicitud es individual para un bote sin tarifa, el sistema responde con un error controlado.
+- **¿Cómo maneja el sistema las estimaciones para un bote que actualmente no tiene una tarifa base configurada (nula o faltante) en el Módulo de Gestión de Flota?**
+  Dado que Gestión de Flota es la fuente autoritativa de la tarifa, el sistema no puede estimar ese bote sin su valor. Lo excluye del resultado de la estimación en lote (o lo marca como "sin estimación disponible"), de modo que el resto del lote se devuelve correctamente y el usuario nunca visualiza un precio asumido. Si la solicitud es individual para un bote sin tarifa, el sistema responde con un error controlado.
 
 - **¿Qué sucede si la lista `boat_ids` enviada por el Módulo de Reservas está vacía o contiene IDs inexistentes?**
-  Si la lista está vacía, el sistema devuelve un arreglo vacío de cotizaciones, sin error (no existen elementos que cotizar). Si contiene identificadores inexistentes, el sistema omite aquellos que Gestión de Flota no confirma como existentes y devuelve cotizaciones únicamente para los botes reconocidos con tarifa base disponible.
+  Si la lista está vacía, el sistema devuelve un arreglo vacío de estimaciones, sin error (no existen elementos que estimar). Si contiene identificadores inexistentes, el sistema omite aquellos que Gestión de Flota no confirma como existentes y devuelve estimaciones únicamente para los botes reconocidos con tarifa base disponible.
 
-- **¿Cómo se espera que el sistema maneje payloads inusualmente grandes (ej. solicitar cotizaciones para 1,000 botes a la vez)?**
+- **¿Cómo se espera que el sistema maneje payloads inusualmente grandes (ej. solicitar estimaciones para 1,000 botes a la vez)?**
   Conforme a RF-006, el sistema aplica un límite máximo estricto de identificadores por solicitud (por ejemplo, máximo 50 o 100 botes). Una solicitud de 1,000 botes supera el umbral y es rechazada con un error controlado sin procesar el lote; el Módulo de Reservas debe partir la solicitud en lotes que respeten el límite.
 
 - **¿Cómo se comporta el cálculo si la duración de reserva solicitada es de 0 días?**
@@ -81,12 +81,12 @@ Como Módulo de Gestión de Flota (Inventario y Tarifas), quiero proporcionar la
 
 ### Requisitos Funcionales
 
-- **RF-001**: El módulo de Finanzas DEBE devolver cotizaciones precisas al Módulo de Reservas basándose en la lista solicitada de identificadores de botes.
-- **RF-002**: El sistema DEBE calcular cotizaciones en lote utilizando la fórmula de precios establecida: `(tarifa base del bote * duración en días) + (tarifa de seguro * número de pasajeros)`. *(Nota: La duración por defecto es de 1 día; la cantidad de pasajeros por defecto es 1).*
-- **RF-003**: El sistema DEBE calcular cotizaciones individuales utilizando la misma fórmula de precios que las cotizaciones en lote, aplicada a un solo bote.
-- **RF-004**: El módulo de Finanzas DEBE exponer un *endpoint* para recibir solicitudes de cotización del Módulo de Reservas y procesarlas exitosamente.
+- **RF-001**: El módulo de Finanzas DEBE devolver estimaciones precisas al Módulo de Reservas basándose en la lista solicitada de identificadores de botes.
+- **RF-002**: El sistema DEBE calcular estimaciones en lote utilizando la fórmula de precios establecida: `(tarifa base del bote * duración en días) + (tarifa de seguro * número de pasajeros)`. *(Nota: La duración por defecto es de 1 día; la cantidad de pasajeros por defecto es 1).*
+- **RF-003**: El sistema DEBE calcular estimaciones individuales utilizando la misma fórmula de precios que las estimaciones en lote, aplicada a un solo bote.
+- **RF-004**: El módulo de Finanzas DEBE exponer un *endpoint* para recibir solicitudes de estimación del Módulo de Reservas y procesarlas exitosamente.
 - **RF-005**: El módulo de Finanzas DEBE consultar al Módulo de Gestión de Flota enviando una lista de IDs de botes para recuperar sus respectivas tarifas base.
-- **RF-006**: El módulo de Finanzas DEBE establecer un límite máximo estricto de identificadores por cada solicitud de cotización en lote (por ejemplo, máximo 50 o 100 botes por *payload*), rechazando con un error adecuado aquellas peticiones que superen este umbral para proteger la memoria y evitar sobrecargas en el sistema.
+- **RF-006**: El módulo de Finanzas DEBE establecer un límite máximo estricto de identificadores por cada solicitud de estimación en lote (por ejemplo, máximo 50 o 100 botes por *payload*), rechazando con un error adecuado aquellas peticiones que superen este umbral para proteger la memoria y evitar sobrecargas en el sistema.
 
 ### Requisitos No Funcionales
 
