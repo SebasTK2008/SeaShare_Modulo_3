@@ -53,5 +53,5 @@ Traduce la operación turística en datos financieros y distribuye el recaudo en
 | **Valor Alquiler Bruto** | Tarifa base x Duración | Ingreso total pagado por el turista. |
 | **Comisión Plataforma** | - (Valor Bruto * % Comisión) | Ingreso neto para la empresa de software. |
 | **Pago al Propietario** | (Valor Bruto - Comisión - Seguro) | Monto final dispersado al dueño. |
-| **Penalidad por Cancelación**| Según regla del Módulo 2 | Se dispersa el porcentaje correspondiente al dueño. |
+| **Penalidad por Cancelación**| Según regla del Módulo 2 | Se dispersa el porcentaje correspondiente al dueño.  |
 ```
