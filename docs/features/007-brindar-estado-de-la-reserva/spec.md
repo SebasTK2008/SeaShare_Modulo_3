@@ -41,17 +41,17 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado de c
 1. **Escenario**: Cancelación flexible (>72h).
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "cancelado flexiblemente".
-   - **Entonces** el sistema ejecuta "Reembolsar dinero a arrendatario" por el 100% del valor del alquiler (menos costos transaccionales), sin ejecutar "Liquidar fondos de alquiler".
+  - **Entonces** el sistema solicita la liberación o el reembolso del 100% del valor del alquiler, según el estado del cobro original, sin ejecutar "Liquidar fondos de alquiler". El resultado queda pendiente de confirmación externa.
 
 2. **Escenario**: Cancelación moderada (72h–24h).
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "cancelado moderadamente".
-   - **Entonces** el sistema ejecuta "Reembolsar dinero a arrendatario" por el 50% del valor del alquiler y "Liquidar fondos de alquiler" por el 50% restante como compensación al propietario.
+  - **Entonces** el sistema solicita la liberación o el reembolso del 50% del valor del alquiler y solicita la liquidación del 50% restante como compensación al propietario. Cada operación conserva su propio estado y resultado.
 
 3. **Escenario**: Cancelación tardía / No-Show (<24h).
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "cancelado tardíamente" o "No-Show".
-   - **Entonces** el sistema ejecuta únicamente "Liquidar fondos de alquiler" por el 100% del valor del alquiler como compensación al propietario, sin ejecutar ningún reembolso.
+  - **Entonces** el sistema solicita únicamente la liquidación del 100% del valor del alquiler como compensación al propietario, sin solicitar reembolso. La solicitud no implica que los fondos ya hayan sido recibidos.
 
 ---
 
@@ -68,7 +68,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado "com
 1. **Escenario**: Liberación automática del depósito y liquidación del alquiler ante finalización sin incidentes.
    - **Dado** que existe información previamente registrada, incluyendo el depósito de garantía y el valor de alquiler, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "completada sin incidentes".
-   - **Entonces** el sistema ejecuta "Reembolsar dinero a arrendatario" y "Liquidar fondos de alquiler" indicando el origen "finalización sin incidentes", liberando el 100% del depósito de garantía registrado y liquidando al propietario el valor de alquiler correspondiente (Valor Bruto menos Comisión de la Plataforma menos Seguro), sin ejecutar "Resolver disputa de garantía".
+  - **Entonces** el sistema solicita la liberación o el reembolso del 100% del depósito y solicita la liquidación del valor correspondiente al propietario (Valor Bruto menos Comisión de la Plataforma menos Seguro), sin ejecutar "Resolver disputa de garantía". Ambas operaciones quedan sujetas a confirmación externa e idempotencia independiente.
 
 ---
 
@@ -116,14 +116,14 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones la notificaci�
 
 - **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones el estado vigente de una reserva específica, identificada mediante su identificador de reserva, correspondiente a uno de los siguientes estados: disponible, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show, completada sin incidentes o completada con incidentes.
 - **RF-002**: El sistema DEBE, al recibir la notificación de cualquiera de los estados operativos sin acción financiera (disponible, reservado, en navegación o pendiente), reconocer el estado recibido sin ejecutar ninguna operación de reembolso ni de dispersión de fondos. El estado "pendiente" indica el inicio del bloqueo temporal (estado de espera (pendiente)) de 15 minutos originado por la confirmación de pago iniciada por el arrendatario; el sistema lo reconoce como tal sin necesidad de persistir el estado operativo, cuya gestión corresponde al Módulo 2.
-- **RF-003**: El sistema DEBE, cuando el estado recibido sea "cancelado flexiblemente", ejecutar "Reembolsar dinero a arrendatario" indicando la ventana de cancelación flexible, correspondiente a un reembolso del 100% del valor del alquiler (menos costos transaccionales).
-- **RF-004**: El sistema DEBE, cuando el estado recibido sea "cancelado moderadamente", ejecutar "Reembolsar dinero a arrendatario" indicando la ventana de cancelación moderada (reembolso del 50%) y "Liquidar fondos de alquiler" indicando la misma ventana, para la dispersión del 50% restante como compensación al propietario.
-- **RF-005**: El sistema DEBE, cuando el estado recibido sea "cancelado tardíamente" o "No-Show", ejecutar únicamente "Liquidar fondos de alquiler" indicando dicha ventana, correspondiente a la dispersión del 100% del valor del alquiler como compensación al propietario, sin ejecutar ningún reembolso.
-- **RF-006**: El sistema DEBE, cuando el estado recibido sea "completada sin incidentes", ejecutar "Reembolsar dinero a arrendatario" indicando el origen "finalización sin incidentes" (correspondiente a la liberación del 100% del depósito de garantía previamente registrado) **y** ejecutar "Liquidar fondos de alquiler" indicando el mismo origen "finalización sin incidentes" (correspondiente a la liquidación estándar del valor de alquiler al propietario: Valor Bruto menos Comisión de la Plataforma menos Seguro), sin ejecutar "Resolver disputa de garantía".
+- **RF-003**: El sistema DEBE, cuando el estado recibido sea "cancelado flexiblemente", solicitar la liberación o el reembolso del 100% del valor del alquiler, según el estado del cobro original.
+- **RF-004**: El sistema DEBE, cuando el estado recibido sea "cancelado moderadamente", solicitar la liberación o el reembolso del 50% y la liquidación del 50% restante como compensación al propietario, manteniendo resultados independientes.
+- **RF-005**: El sistema DEBE, cuando el estado recibido sea "cancelado tardíamente" o "No-Show", solicitar únicamente la liquidación del 100% del valor del alquiler como compensación al propietario, sin solicitar reembolso.
+- **RF-006**: El sistema DEBE, cuando el estado recibido sea "completada sin incidentes", solicitar la liberación o el reembolso del 100% del depósito y solicitar la liquidación estándar del valor de alquiler al propietario, sin ejecutar "Resolver disputa de garantía". Cada operación debe ser idempotente y confirmarse por separado.
 - **RF-007**: El sistema DEBE, cuando el estado recibido sea "completada con incidentes", no ejecutar ninguna operación de reembolso ni de dispersión de fondos, dejando el registro financiero de la reserva disponible para que el Administrador Financiero ejecute "Resolver disputa de garantía".
 - **RF-008**: El sistema NO DEBE ejecutar "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler" cuando el estado recibido sea disponible, reservado, en navegación, pendiente o completada con incidentes.
 - **RF-009**: El sistema NO DEBE devolver ninguna respuesta al Sistema de Reservas y Operaciones dentro de este caso de uso.
-- **RF-010**: El sistema DEBE registrar internamente cualquier fallo ocurrido al intentar ejecutar "Reembolsar dinero a arrendatario" y/o "Liquidar fondos de alquiler" (por ejemplo, ausencia de registro financiero para la reserva, de valor total calculado o de depósito de garantía registrado), dado que este caso de uso no cuenta con un canal de respuesta hacia el Sistema de Reservas y Operaciones.
+- **RF-010**: El sistema DEBE registrar internamente cualquier fallo, estado pendiente o resultado no concluyente ocurrido al solicitar "Reembolsar dinero a arrendatario" y/o "Liquidar fondos de alquiler", dado que este caso de uso no cuenta con un canal de respuesta hacia el Sistema de Reservas y Operaciones.
 
 ### Requisitos No Funcionales
 

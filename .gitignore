@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Archivos de VS Code que si deben ser incluidos ###
+!.vscode/mcp.json

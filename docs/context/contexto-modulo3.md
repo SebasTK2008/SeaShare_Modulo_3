@@ -10,8 +10,8 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 
 - **Calcular el valor de un alquiler** combinando la tarifa base de la embarcación (dinámica según temporada alta o fin de semana; la temporada alta se determina automáticamente por calendario) con la duración solicitada, el seguro náutico por pasajero y el depósito de garantía aplicable.
 - **Procesar el cobro** al arrendatario una vez la reserva ha sido iniciada, en coordinación con una pasarela de pago externa.
-- **Retener y arbitrar el depósito de garantía**, resolviendo disputas cuando se detectan daños al regreso de la embarcación.
-- **Dispersar los fondos** entre la plataforma (comisión) y el propietario, una vez descontados comisión y seguro.  
+- **Retener y arbitrar lógicamente el depósito de garantía**, resolviendo disputas cuando se detectan daños al regreso de la embarcación.
+- **Solicitar la liquidación de fondos** entre la plataforma (comisión) y el propietario, una vez descontados comisión y seguro, dejando el resultado externo sujeto a las capacidades de la pasarela.  
 - **Calcular estimaciones** para que el usuario pueda visualizar estimaciones o valores aproximados de cada reserva. 
 -Aplicar las penalidades o reembolsos** que correspondan según la ventana de cancelación en la que se encuentre la reserva.
 - **Exponer información financiera** (balances, ingresos, registros históricos) a los roles interesados: Propietarios y Administración Financiera.
@@ -34,7 +34,9 @@ Dado que algunas reglas de negocio no tienen un caso de uso dedicado en el diagr
 - El **seguro náutico** se calcula como parte de  "Solicitar el valor calculado de la reserva", no como un caso de uso independiente.
 - La **penalidad por cancelación** (regla del sistema de Reservas) se resuelve mediante la combinación de "Solicitar el valor calculado de la reserva", "Reembolsar dinero a arrendatario" y "Liquidar fondos de alquiler", según la ventana de tiempo en la que se solicitó la cancelación.
 
-- **En procesar cobro**  se tiene en cuenta que cuando el usuario hace efectivo el pago este se retiene en un escow en la pasarela de pago y se mantiene hasta que se termine la reserva y la disputa de la garantia..
+- **En procesar cobro** se utiliza, cuando la pasarela lo admite, un flujo de autorización y captura: la autorización representa la retención lógica del importe del alquiler y de la garantía, y la captura se solicita cuando el negocio determina el importe definitivo. Esto no constituye un escrow jurídico ni supone que toda pasarela pueda mantener una autorización hasta el final de una reserva. La autorización tiene una vigencia limitada; si expira, el sistema registra el hecho y ejecuta el flujo de recuperación definido, sin asumir que los fondos siguen disponibles.
+- La pasarela es un ejecutor externo: puede aceptar una solicitud sin haber aprobado el pago, reportar estados posteriores, rechazar, cancelar o dejar una operación en proceso. El sistema conserva los estados externos y no marca una operación como completada hasta recibir una confirmación válida.
+- Las solicitudes de cobro, captura, reembolso y liquidación son idempotentes. Cada operación conserva una identidad propia, su referencia externa y la relación con el cobro original para evitar duplicaciones durante reintentos o notificaciones repetidas.
 - Los **balances financieros** estaran dados por un periodo quincenal, mensual o trimestral. 
 - 
 ---
@@ -49,14 +51,14 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 3. **Cálculo del valor total.** Una vez el arrendatario decide reservar, el sistema de Reservas solicita el valor definitivo mediante *"Solicitar el valor calculado de la reserva"*: tarifa base × duración + seguro náutico por pasajero + depósito de garantía.
 
-4. **Bloqueo temporal (estado de espera (pendiente)) y cobro.** Mientras la reserva está bloqueada por 15 minutos en el sistema de Reservas, el **Arrendatario** dispara *"Procesar cobro"*, que el sistema ejecuta junto con la **Pasarela de Pago**.
+4. **Bloqueo temporal (estado de espera (pendiente)) y cobro.** Mientras la reserva está bloqueada por 15 minutos en el sistema de Reservas, el **Arrendatario** dispara *"Procesar cobro"*. El sistema puede solicitar a la pasarela una autorización por el valor calculado; la aceptación técnica de la solicitud no equivale a aprobación del pago.
 
-5. **Confirmación hacia Reservas.** El sistema de Reservas solicita *"Solicitar confirmación de pago"| para saber si el cobro fue exitoso. Si no hay confirmación dentro del estado de espera (pendiente), la reserva vuelve a "Disponible" del lado de Reservas; si se confirma, el sistema retiene internamente el depósito de garantía y el monto del seguro como parte del cobro ya procesado.
+5. **Confirmación hacia Reservas.** El sistema de Reservas solicita *"Solicitar confirmación de pago"* para conocer el estado vigente de la autorización o del cobro. Solo un estado aprobado y verificable permite avanzar la reserva. Si no llega una confirmación dentro del estado de espera (pendiente), la reserva vuelve a "Disponible" del lado de Reservas, sin asumir que el pago falló: cualquier autorización pendiente debe cancelarse o quedar bajo conciliación.
 
 6. **Actualización de estado de la reserva** El sistema de reservas informa el estado de la reserva mediante *"Brindar el estado de la reserva"*, para que el sistema de finanzas dispare cierto caso de uso dependiendo del estado actual de una reserva.
 
 7. **Cancelación (si aplica).** Si el arrendatario cancela, el sistema de Reservas recalcula el escenario mediante *"Solicitar el valor calculado de la reserva"* y, según la ventana de tiempo:
-   - **Cancelacion flexible: >72h:** el sistema ejecuta *"Reembolsar dinero a arrendatario"* por el 100% (menos costos transaccionales).
+   - **Cancelacion flexible: >72h:** el sistema solicita la liberación o el reembolso del 100% según el estado del cobro y la política explícita de costos transaccionales.
    - **Cancelacion moderada: 72h–24h:** el sistema reembolsa el 50% y dispersa el 50% restante como compensación al propietario vía *"Liquidar fondos de alquiler"*.
    - **Cancelacion tardia: <24h / No-Show:** el sistema no reembolsa; dispersa el 100% como compensación al propietario.
 
@@ -64,7 +66,7 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
    - Si no procede el reclamo, el sistema extiende hacia *"Reembolsar dinero a arrendatario"* liberando el depósito.
    - Si procede, el sistema retiene el monto correspondiente y lo dispersa al propietario junto con el resto del pago.
 
-9. **Liquidación final.** Superadas las etapas anteriores, el sistema ejecuta *"Liquidar fondos de alquiler"* vía la Pasarela de Pago: paga al propietario el valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación.
+9. **Liquidación final.** Superadas las etapas anteriores, el sistema calcula y solicita la captura y/o liquidación correspondiente vía la Pasarela de Pago: valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación. La solicitud puede quedar pendiente o fallar; solo su confirmación externa permite informar que los fondos fueron efectivamente liquidados.
 
 10. **Supervisión continua.** En cualquier momento, el **Propietario** puede *"Consultar ingresos"* y *"Consultar registros financieros"*; el **Administrador Financiero** puede *"Consultar balance financiero"*, *"Consultar registros financieros"* y *"Configurar parámetros financieros globales"* (porcentaje de comisión, tarifa de seguro, reglas de depósito).
 

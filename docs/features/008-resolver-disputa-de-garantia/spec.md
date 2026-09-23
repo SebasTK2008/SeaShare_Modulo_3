@@ -10,7 +10,7 @@ Como el sistema, al recibir del Administrador Financiero el resultado de la eval
 
 **Por qué esta prioridad**: Sin la ejecución consolidada de esta liquidación, una reserva "completada con incidentes" quedaría sin ningún disparador que le pague al propietario el valor de alquiler que le corresponde, sin importar el resultado de la disputa sobre el depósito.
 
-**Prueba Independiente**: Con una reserva "completada con incidentes" que cuenta con un depósito de garantía previamente registrado, enviar al sistema cada uno de los tres resultados posibles de la disputa (liberación total, retención total, retención parcial) y validar que el sistema aplica el tratamiento correspondiente sobre el depósito y ejecuta exactamente una vez "Liquidar fondos de alquiler" en los tres casos, con el monto del depósito retenido correcto en cada uno.
+**Prueba Independiente**: Con una reserva "completada con incidentes" que cuenta con un depósito de garantía previamente registrado, enviar al sistema cada uno de los tres resultados posibles de la disputa (liberación total, retención total, retención parcial) y validar que el sistema aplica el tratamiento correspondiente sobre el depósito y crea como máximo una solicitud idempotente de "Liquidar fondos de alquiler" por resolución, con el monto del depósito retenido correcto.
 
 **Escenarios de Aceptación**:
 
@@ -38,7 +38,7 @@ Como el sistema, al recibir del Administrador Financiero el resultado de la eval
   De acuerdo con RF-001, el monto a retener en una retención parcial es determinado y provisto por el Administrador Financiero como parte de su evaluación; sin este monto el sistema no puede aplicar el tratamiento de retención parcial ni indicar correctamente el monto retenido a "Liquidar fondos de alquiler". El sistema trata esta solicitud como incompleta y responde con un error controlado, de forma equivalente al tratamiento definido para la ausencia de depósito registrado.
 
 - **¿Qué sucede si el Administrador Financiero resuelve más de una vez la disputa de garantía para la misma reserva?**
-  El contexto no define un mecanismo que impida una nueva resolución sobre la misma reserva. Ante una nueva solicitud, el sistema aplica el mismo tratamiento (RF-003 a RF-006) sobre el resultado más reciente informado, sobrescribiendo el resultado y los montos previamente registrados para esa reserva, y ejecutando nuevamente "Liquidar fondos de alquiler" y/o "Reembolsar dinero a arrendatario" según corresponda al nuevo resultado.
+  Una nueva solicitud para la misma reserva no debe sobrescribir silenciosamente la resolución anterior ni repetir operaciones monetarias. El sistema debe rechazarla como duplicada o tratarla como una nueva resolución explícitamente autorizada, con una nueva clave idempotente, validando el saldo de depósito todavía disponible y las operaciones ya completadas.
 
 ## Requisitos *(obligatorio)*
 
@@ -52,13 +52,13 @@ Como el sistema, al recibir del Administrador Financiero el resultado de la eval
 - **RF-006**: El sistema DEBE actualizar internamente la información previamente registrada de la reserva, incorporando el resultado de la disputa y el monto del depósito retenido (incluyendo el valor cero, cuando el resultado sea liberación total), previo a la ejecución de "Liquidar fondos de alquiler".
 - **RF-007**: El sistema DEBE responder con un error controlado cuando se solicite resolver la disputa de garantía de una reserva para la cual no existe un depósito de garantía previamente registrado.
 - **RF-008**: El sistema DEBE exponer este caso de uso exclusivamente al Administrador Financiero.
-- **RF-009**: El sistema DEBE ejecutar "Liquidar fondos de alquiler" exactamente una vez por cada resolución de disputa, en los tres resultados posibles (liberación total, retención total, retención parcial), indicando el monto del depósito de garantía retenido correspondiente en cada caso, de manera que la liquidación estándar del valor de alquiler al propietario quede consolidada, junto con el tratamiento del depósito de garantía, en una única operación de dispersión.
+- **RF-009**: El sistema DEBE crear como máximo una solicitud idempotente de "Liquidar fondos de alquiler" por cada resolución autorizada. La operación puede ser consolidada si la pasarela lo soporta; de lo contrario, debe coordinar operaciones relacionadas sin duplicar la liquidación ni el depósito retenido.
 
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar un DTO para recibir la solicitud del Administrador Financiero, mapeando únicamente los atributos esenciales (identificador de la reserva, resultado de la disputa y monto a retener cuando aplique).
 - **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el depósito de garantía registrado, el monto retenido y el monto liberado.
-- **RNF-003**: El sistema DEBE implementar un manejo de errores robusto ante solicitudes de resolución de disputa para reservas sin depósito de garantía previamente registrado, evitando retenciones, extensiones o ejecuciones de dispersión sobre información inexistente.
+- **RNF-003**: El sistema DEBE implementar un manejo de errores robusto, idempotencia y control de concurrencia ante solicitudes de resolución de disputa, evitando retenciones, extensiones o ejecuciones de dispersión duplicadas o sobre información inexistente.
 
 ### Entidades Clave
 
@@ -70,5 +70,5 @@ Como el sistema, al recibir del Administrador Financiero el resultado de la eval
 ### Resultados Medibles
 
 - **CE-001**: Precisión en el Manejo del Depósito, "100% de las resoluciones de disputa de garantía aplican exactamente el tratamiento correspondiente (liberación total, retención total o retención parcial) sobre el depósito previamente registrado, con cero (0) discrepancias de monto detectadas en pruebas automatizadas".
-- **CE-002**: Cumplimiento Arquitectónico y Consolidación de la Liquidación, "100% de las resoluciones de disputa de garantía, independientemente de su resultado (liberación total, retención total o retención parcial), ejecutan exactamente una vez 'Liquidar fondos de alquiler', indicando el monto del depósito retenido correspondiente (cero en el caso de liberación total), confirmando que la liquidación estándar del valor de alquiler para una reserva 'completada con incidentes' queda consolidada en esta única operación de dispersión, sin ejecuciones adicionales ni faltantes".
+- **CE-002**: Cumplimiento Arquitectónico y Consolidación de la Liquidación, "100% de las resoluciones de disputa de garantía, independientemente de su resultado, crean como máximo una solicitud idempotente de 'Liquidar fondos de alquiler' con el monto de depósito retenido correspondiente, confirmando que no existen ejecuciones adicionales ni faltantes".
 - **CE-003**: Resiliencia del Sistema, "100% de las solicitudes de resolución de disputa para reservas sin depósito de garantía previamente registrado son respondidas mediante un error controlado, sin provocar retenciones, extensiones ni ejecuciones de dispersión inconsistentes".
