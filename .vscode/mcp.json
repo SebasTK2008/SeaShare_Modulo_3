@@ -8,6 +8,11 @@
             "type": "stdio",
             "command": "npx",
             "args": ["-y", "@upstash/context7-mcp@latest"]
+        },
+        "figma": {
+            "url": "https://mcp.figma.com/mcp",
+            "type": "http"
         }
-    }
+    },
+    "inputs": []
 }
