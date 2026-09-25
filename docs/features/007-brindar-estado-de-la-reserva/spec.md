@@ -55,37 +55,20 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado de c
 
 ---
 
-### Historia de Usuario 3 - Ejecutar el reembolso del depósito de garantía y la liquidación del alquiler ante la finalización de una reserva sin incidentes (Prioridad: P1)
+### Historia de Usuario 3 - Liquidar el alquiler al completar la reserva y esperar el estado de la disputa de garantía (Prioridad: P1)
 
-Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado "completada sin incidentes" para una reserva específica, quiero ejecutar "Reembolsar dinero a arrendatario" y "Liquidar fondos de alquiler" indicando este origen, de manera que el depósito de garantía previamente registrado sea liberado íntegramente al arrendatario y el dinero correspondiente al propietario sea liquidado, sin requerir la intervención del Administrador Financiero.
+Como el sistema, al recibir del Sistema de Reservas y Operaciones el único estado de finalización "completada" para una reserva específica, quiero liquidar el valor correspondiente al alquiler y mantener pendiente únicamente el depósito de garantía, de manera que el Módulo 2 pueda informar posteriormente el estado de la disputa y el Módulo 3 ejecute su consecuencia financiera.
 
-**Por qué esta prioridad**: La mayoría de las reservas finalizan sin incidentes, por lo que liberar automáticamente el depósito y liquidar el alquiler ante este estado evita retener innecesariamente el dinero del arrendatario y del propietario, y evita someter al Administrador Financiero a evaluaciones de disputas inexistentes.
+**Por qué esta prioridad**: La finalización de la reserva no implica por sí misma que exista o no un daño. El alquiler puede liquidarse al completar la reserva, mientras que el depósito permanece pendiente hasta recibir el estado de disputa.
 
-**Prueba Independiente**: Con una reserva que cuenta con un depósito de garantía y un valor de alquiler previamente registrados, informar al sistema el estado "completada sin incidentes" y validar que el sistema ejecuta tanto "Reembolsar dinero a arrendatario" como "Liquidar fondos de alquiler" indicando el origen correspondiente, sin ejecutar "Resolver disputa de garantía".
-
-**Escenarios de Aceptación**:
-
-1. **Escenario**: Liberación automática del depósito y liquidación del alquiler ante finalización sin incidentes.
-   - **Dado** que existe información previamente registrada, incluyendo el depósito de garantía y el valor de alquiler, para una reserva.
-   - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "completada sin incidentes".
-  - **Entonces** el sistema solicita la liberación o el reembolso del 100% del depósito y solicita la liquidación del valor correspondiente al propietario (Valor Bruto menos Comisión de la Plataforma menos Seguro), sin ejecutar "Resolver disputa de garantía". Ambas operaciones quedan sujetas a confirmación externa e idempotencia independiente.
-
----
-
-### Historia de Usuario 4 - Reconocer la finalización de una reserva con incidentes sin ejecutar ninguna operación financiera automática (Prioridad: P1)
-
-Como el sistema, al recibir del Sistema de Reservas y Operaciones la notificación del estado "completada con incidentes" para una reserva específica, quiero reconocer dicho estado sin ejecutar ninguna operación de reembolso ni de dispersión de fondos, de manera que el registro financiero de la reserva (con el depósito de garantía registrado) quede disponible para que el Administrador Financiero lo consulte al ejecutar posteriormente "Resolver disputa de garantía".
-
-**Por qué esta prioridad**: Es la separación explícita entre el momento en que se reporta el incidente (notificado por el Módulo 2) y el momento en que el Administrador Financiero toma una decisión financiera. El Módulo 3 no anticipa ningún resultado: solo reconoce que no debe ejecutar ninguna operación financiera automática ante este estado.
-
-**Prueba Independiente**: Enviar al sistema la notificación del estado "completada con incidentes" para una reserva con registro financiero existente (incluyendo depósito de garantía registrado), y validar que el sistema no ejecuta "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler".
+**Prueba Independiente**: Informar el estado "completada" para una reserva con valor de alquiler, seguro y depósito registrados, y validar que el sistema ejecuta la liquidación estándar sin incluir el depósito, sin ejecutar aún el reembolso ni la liquidación del depósito.
 
 **Escenarios de Aceptación**:
 
-1. **Escenario**: Notificación de finalización con incidentes sin acción financiera automática.
-   - **Dado** que existe un registro financiero para una reserva, incluyendo el depósito de garantía registrado.
-   - **Cuando** el Sistema de Reservas y Operaciones notifica al sistema el estado "completada con incidentes".
-   - **Entonces** el sistema no ejecuta ninguna operación de reembolso ni de dispersión de fondos, dejando el registro financiero disponible para que el Administrador Financiero ejecute "Resolver disputa de garantía".
+1. **Escenario**: Finalización única de la reserva.
+  - **Dado** que existe información financiera registrada para una reserva.
+  - **Cuando** el Sistema de Reservas y Operaciones informa el estado "completada".
+  - **Entonces** el sistema solicita la liquidación estándar del alquiler al propietario (Valor Bruto menos Comisión de la Plataforma menos Seguro), mantiene el depósito pendiente y no ejecuta todavía ninguna operación sobre la garantía.
 
 ### Casos Extremos (Edge Cases)
 
@@ -95,33 +78,33 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones la notificaci�
 - **¿Qué sucede si el estado notificado corresponde a una cancelación (flexible, moderada o tardía/No-Show), pero el registro financiero de la reserva no contiene un valor total previamente calculado por "Solicitar el valor calculado de la reserva"?**
   De forma análoga al caso anterior, el sistema no ejecuta "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler" sin un monto de referencia. Al no existir canal de respuesta hacia el Sistema de Reservas y Operaciones, el sistema registra internamente el fallo.
 
-- **¿Qué sucede si el estado notificado es "completada sin incidentes" pero el registro financiero de la reserva no contiene un depósito de garantía y/o un valor de alquiler?**
+- **¿Qué sucede si el estado notificado es "completada" pero el registro financiero de la reserva no contiene un depósito y/o un valor de alquiler?**
   El sistema no ejecuta "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler" con montos asumidos. Dado que ambas operaciones se disparan de forma conjunta para este estado, la ausencia de cualquiera de los dos montos requeridos impide ejecutar la operación correspondiente sobre información incompleta. De forma análoga a los casos anteriores, y al no existir canal de respuesta hacia el Sistema de Reservas y Operaciones, el sistema registra internamente el fallo sin ejecutar liberaciones o liquidaciones parciales o inconsistentes.
 
-- **¿Qué sucede si, tras recibir la notificación "completada con incidentes", el Administrador Financiero nunca ejecuta "Resolver disputa de garantía"?**
-  El contexto no define un mecanismo de expiración ni de escalamiento automático para este caso. El registro financiero de la reserva permanece disponible para que el Administrador Financiero lo consulte cuando decida ejecutar la resolución de la disputa.
+- **¿Qué sucede si, tras recibir la notificación "completada", el Módulo 2 nunca informa el estado de la disputa?**
+  El depósito permanece pendiente y el sistema registra la ausencia del evento esperado para su conciliación o escalamiento, sin reembolsarlo ni liquidarlo automáticamente.
 
 - **¿Qué sucede si el Sistema de Reservas y Operaciones notifica el estado "pendiente" para una reserva que ya había recibido esa misma notificación (notificación repetida del inicio del bloqueo temporal)?**
   El contexto no define un mecanismo de deduplicación explícito para este caso de uso. Una notificación repetida con el mismo estado no desencadena ninguna operación financiera adicional, ya que el estado "pendiente" no dispara ninguna acción por sí mismo.
 
-- **¿Qué sucede si el Sistema de Reservas y Operaciones notifica más de una vez el mismo estado de cancelación, o de finalización ("completada sin incidentes"/"completada con incidentes"), para la misma reserva?**
-  El contexto no define un mecanismo de deduplicación explícito para este caso de uso. La notificación repetida de un estado de cancelación o de finalización sin incidentes no debe disparar nuevamente las operaciones financieras ya ejecutadas. Este comportamiento de idempotencia deberá ser abordado en la implementación, registrando internamente si las operaciones ya fueron ejecutadas para esa reserva.
+- **¿Qué sucede si el Sistema de Reservas y Operaciones notifica más de una vez el mismo estado de cancelación o de finalización ("completada") para la misma reserva?**
+  El contexto no define un mecanismo de deduplicación explícito para este caso de uso. La notificación repetida de un estado de cancelación o de finalización no debe disparar nuevamente las operaciones financieras ya ejecutadas. Este comportamiento de idempotencia deberá ser abordado en la implementación, registrando internamente si las operaciones ya fueron ejecutadas para esa reserva.
 
-- **¿Qué sucede si el Sistema de Reservas y Operaciones notifica un estado distinto a los nueve estados definidos en el contexto (disponible, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show, completada sin incidentes, completada con incidentes)?**
-  El sistema únicamente reconoce estos nueve estados como valores válidos. Ante un estado no reconocido, no ejecuta ninguna operación financiera asociada, registrando internamente la inconsistencia dado que no existe un canal de respuesta hacia el Sistema de Reservas y Operaciones.
+- **¿Qué sucede si el Sistema de Reservas y Operaciones notifica un estado distinto a los ocho estados definidos en el contexto (disponible, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show y completada)?**
+  El sistema no ejecuta ninguna operación financiera asociada y registra internamente la inconsistencia.
 
 ## Requisitos *(obligatorio)*
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones el estado vigente de una reserva específica, identificada mediante su identificador de reserva, correspondiente a uno de los siguientes estados: disponible, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show, completada sin incidentes o completada con incidentes.
+- **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones el estado vigente de una reserva específica, identificada mediante su identificador de reserva, correspondiente a uno de los siguientes estados: disponible, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show o completada.
 - **RF-002**: El sistema DEBE, al recibir la notificación de cualquiera de los estados operativos sin acción financiera (disponible, reservado, en navegación o pendiente), reconocer el estado recibido sin ejecutar ninguna operación de reembolso ni de dispersión de fondos. El estado "pendiente" indica el inicio del bloqueo temporal (estado de espera (pendiente)) de 15 minutos originado por la confirmación de pago iniciada por el arrendatario; el sistema lo reconoce como tal sin necesidad de persistir el estado operativo, cuya gestión corresponde al Módulo 2.
 - **RF-003**: El sistema DEBE, cuando el estado recibido sea "cancelado flexiblemente", solicitar la liberación o el reembolso del 100% del valor del alquiler, según el estado del cobro original.
 - **RF-004**: El sistema DEBE, cuando el estado recibido sea "cancelado moderadamente", solicitar la liberación o el reembolso del 50% y la liquidación del 50% restante como compensación al propietario, manteniendo resultados independientes.
 - **RF-005**: El sistema DEBE, cuando el estado recibido sea "cancelado tardíamente" o "No-Show", solicitar únicamente la liquidación del 100% del valor del alquiler como compensación al propietario, sin solicitar reembolso.
-- **RF-006**: El sistema DEBE, cuando el estado recibido sea "completada sin incidentes", solicitar la liberación o el reembolso del 100% del depósito y solicitar la liquidación estándar del valor de alquiler al propietario, sin ejecutar "Resolver disputa de garantía". Cada operación debe ser idempotente y confirmarse por separado.
-- **RF-007**: El sistema DEBE, cuando el estado recibido sea "completada con incidentes", no ejecutar ninguna operación de reembolso ni de dispersión de fondos, dejando el registro financiero de la reserva disponible para que el Administrador Financiero ejecute "Resolver disputa de garantía".
-- **RF-008**: El sistema NO DEBE ejecutar "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler" cuando el estado recibido sea disponible, reservado, en navegación, pendiente o completada con incidentes.
+- **RF-006**: El sistema DEBE, cuando el estado recibido sea "completada", solicitar la liquidación estándar del valor de alquiler al propietario, sin incluir el depósito, y dejar el depósito pendiente hasta recibir "Brindar información de disputa de garantía".
+- **RF-007**: El sistema NO DEBE ejecutar una operación sobre el depósito únicamente por recibir el estado "completada".
+- **RF-008**: El sistema NO DEBE ejecutar "Reembolsar dinero a arrendatario" ni una liquidación del depósito cuando el estado recibido sea disponible, reservado, en navegación, pendiente o completada.
 - **RF-009**: El sistema NO DEBE devolver ninguna respuesta al Sistema de Reservas y Operaciones dentro de este caso de uso.
 - **RF-010**: El sistema DEBE registrar internamente cualquier fallo, estado pendiente o resultado no concluyente ocurrido al solicitar "Reembolsar dinero a arrendatario" y/o "Liquidar fondos de alquiler", dado que este caso de uso no cuenta con un canal de respuesta hacia el Sistema de Reservas y Operaciones.
 
@@ -142,7 +125,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones la notificaci�
 
 - **CE-001**: Corrección de Decisión Financiera por Estado, "100% de las notificaciones de estado recibidas desde el Sistema de Reservas y Operaciones desencadenan exactamente la operación financiera esperada (o ninguna operación, en el caso de estados sin acción financiera), con cero (0) discrepancias detectadas en pruebas automatizadas".
 - **CE-002**: Cumplimiento de la Lógica de Cancelaciones, "100% de las reservas notificadas con un estado de cancelación (flexible, moderada o tardía/No-Show) disparan exactamente la combinación de operaciones de reembolso y/o dispersión correspondiente a su ventana, sin ejecuciones adicionales ni faltantes, en pruebas automatizadas".
-- **CE-003**: Cumplimiento Arquitectónico, "0 ejecuciones de 'Reembolsar dinero a arrendatario' o 'Liquidar fondos de alquiler' registradas para estados no relacionados con cancelación ni con finalización sin incidentes (disponible, reservado, en navegación, pendiente, completada con incidentes)".
+- **CE-003**: Cumplimiento Arquitectónico, "0 ejecuciones de operaciones sobre el depósito registradas por recibir el estado 'completada' o por estados operativos sin acción financiera".
 - **CE-004**: Resiliencia del Sistema, "100% de los fallos simulados por ausencia de información previamente registrada, de valor total calculado o de depósito de garantía registrado quedan registrados internamente mediante manejo de errores controlado, sin provocar ejecuciones parciales o inconsistentes hacia la Pasarela de pago".
-- **CE-005**: Automatización de Liquidación Sin Incidentes, "100% de las reservas informadas como 'completada sin incidentes' disparan exactamente la ejecución conjunta de 'Reembolsar dinero a arrendatario' (liberando el 100% del depósito de garantía registrado) y 'Liquidar fondos de alquiler' (liquidando el valor de alquiler correspondiente al propietario), sin intervención del Administrador Financiero, en pruebas automatizadas".
-- **CE-006**: Separación de Responsabilidades en Disputas, "0 ejecuciones de 'Reembolsar dinero a arrendatario' o de 'Liquidar fondos de alquiler' disparadas por este caso de uso para reservas informadas como 'completada con incidentes', confirmando que dicha decisión permanece exclusivamente a cargo del Administrador Financiero mediante 'Resolver disputa de garantía'".
+- **CE-005**: Liquidación al Completar, "100% de las reservas informadas como 'completada' disparan exactamente la liquidación estándar del alquiler, sin incluir el depósito de garantía".
+- **CE-006**: Separación de Responsabilidades en Disputas, "0 decisiones sobre daños o sobre el destino del depósito son tomadas por este caso de uso; todas dependen de la información posterior recibida mediante 'Brindar información de disputa de garantía'".

@@ -10,12 +10,12 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 
 - **Calcular el valor de un alquiler** combinando la tarifa base de la embarcación (dinámica según temporada alta o fin de semana; la temporada alta se determina automáticamente por calendario) con la duración solicitada, el seguro náutico por pasajero y el depósito de garantía aplicable.
 - **Procesar el cobro** al arrendatario una vez la reserva ha sido iniciada, en coordinación con una pasarela de pago externa.
-- **Retener y arbitrar lógicamente el depósito de garantía**, resolviendo disputas cuando se detectan daños al regreso de la embarcación.
+- **Registrar y aplicar financieramente el depósito de garantía**, consumiendo desde el Módulo 2 el estado de la disputa cuando se detectan daños al regreso de la embarcación.
 - **Solicitar la liquidación de fondos** entre la plataforma (comisión) y el propietario, una vez descontados comisión y seguro, dejando el resultado externo sujeto a las capacidades de la pasarela.  
 - **Calcular estimaciones** para que el usuario pueda visualizar estimaciones o valores aproximados de cada reserva. 
 -Aplicar las penalidades o reembolsos** que correspondan según la ventana de cancelación en la que se encuentre la reserva.
 - **Exponer información financiera** (balances, ingresos, registros históricos) a los roles interesados: Propietarios y Administración Financiera.
-- **Configurar los parámetros financieros globales** de la plataforma (porcentaje de comisión, tarifas de seguro, reglas de depósito, etc.).
+- **Configurar los parámetros financieros globales** de la plataforma (porcentaje de comisión, tarifas de seguro y porcentajes de tarifa dinámica).
 - **Colaborar con los otros sistemas de SEA-SHARE**: consume datos de la embarcación provistos por el sistema de Gestión de Flota, y responde a las solicitudes de estimación, confirmación de pago y estado financiero que le hace el sistema de Reservas y Operaciones.
 
 ### Actores que interactúan con el sistema
@@ -24,7 +24,7 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 | :--- | :--- |
 | **Arrendatario** | Origina el cobro de su reserva. |
 | **Propietario** | Recibe la dispersión de fondos y consulta sus ingresos/registros. |
-| **Administrador Financiero** | Supervisa balances, resuelve disputas de garantía y configura parámetros globales. |
+| **Administrador Financiero** | Supervisa balances y configura parámetros globales. La resolución operativa de disputas pertenece al Módulo 2. |
 | **Pasarela de Pago** | Sistema externo que ejecuta técnicamente cobros, reembolsos y dispersiones. |
 | **Sistema de Reservas y Operaciones** | Solicita estimaciones, confirma pagos, consulta el estado financiero de una reserva y su valor calculado. |
 | **Sistema de Gestión de Flota** | Provee la tarifa base de una  embarcación necesarios para calcular la tarifa dinamica de una reserva. |
@@ -49,7 +49,7 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 2. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"* (que también incluye "Brindar tarifa base"), entregando el desglose de precio que el arrendatario verá antes de confirmar.
 
-3. **Cálculo del valor total.** Una vez el arrendatario decide reservar, el sistema de Reservas solicita el valor definitivo mediante *"Solicitar el valor calculado de la reserva"*: tarifa base × duración + seguro náutico por pasajero + depósito de garantía.
+3. **Cálculo del valor total.** Una vez el arrendatario decide reservar, el sistema de Reservas solicita el valor definitivo mediante *"Solicitar el valor calculado de la reserva"*: tarifa base diaria × duración + seguro náutico por pasajero + depósito de garantía. El depósito corresponde al 10% de la tarifa base diaria de la embarcación y no depende de la duración ni del daño reportado.
 
 4. **Bloqueo temporal (estado de espera (pendiente)) y cobro.** Mientras la reserva está bloqueada por 15 minutos en el sistema de Reservas, el **Arrendatario** dispara *"Procesar cobro"*. El sistema puede solicitar a la pasarela una autorización por el valor calculado; la aceptación técnica de la solicitud no equivale a aprobación del pago.
 
@@ -62,13 +62,11 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
    - **Cancelacion moderada: 72h–24h:** el sistema reembolsa el 50% y dispersa el 50% restante como compensación al propietario vía *"Liquidar fondos de alquiler"*.
    - **Cancelacion tardia: <24h / No-Show:** el sistema no reembolsa; dispersa el 100% como compensación al propietario.
 
-8. **Regreso de la embarcación y depósito de garantía.** Si al finalizar la navegación se detectan daños, el **Administrador Financiero** ejecuta *"Resolver disputa de garantía"*. Según el resultado:
-   - Si no procede el reclamo, el sistema extiende hacia *"Reembolsar dinero a arrendatario"* liberando el depósito.
-   - Si procede, el sistema retiene el monto correspondiente y lo dispersa al propietario junto con el resto del pago.
+8. **Finalización y disputa de garantía.** El sistema de Reservas informa la finalización de la reserva con el único estado `completada`. Finanzas liquida el alquiler y el seguro, pero deja pendiente el depósito. El Módulo 2 crea y gestiona la disputa, concede al propietario una ventana de 24 horas para reportar daños y luego informa a Finanzas únicamente el estado de disputa. Si el estado es `rechazado`, Finanzas solicita el reembolso total al Arrendatario; si el estado es `completado`, solicita la liquidación total al Propietario.
 
 9. **Liquidación final.** Superadas las etapas anteriores, el sistema calcula y solicita la captura y/o liquidación correspondiente vía la Pasarela de Pago: valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación. La solicitud puede quedar pendiente o fallar; solo su confirmación externa permite informar que los fondos fueron efectivamente liquidados.
 
-10. **Supervisión continua.** En cualquier momento, el **Propietario** puede *"Consultar ingresos"* y *"Consultar registros financieros"*; el **Administrador Financiero** puede *"Consultar balance financiero"*, *"Consultar registros financieros"* y *"Configurar parámetros financieros globales"* (porcentaje de comisión, tarifa de seguro, reglas de depósito).
+10. **Supervisión continua.** En cualquier momento, el **Propietario** puede *"Consultar ingresos"* y *"Consultar registros financieros"*; el **Administrador Financiero** puede *"Consultar balance financiero"*, *"Consultar registros financieros"* y *"Configurar parámetros financieros globales"* (porcentaje de comisión, tarifa de seguro y porcentajes de tarifa dinámica).
 
 ---
 
@@ -105,7 +103,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Solicitar el valor calculado de la reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** Reservas solicita el valor definitivo a cobrar (tarifa × duración + seguro + depósito de garantía), usado tanto para el cobro inicial como para recalcular reembolsos/penalidades en caso de cancelación teniendo en cuenta la tarifa dinamica.
+   - **Flujo:** Reservas solicita el valor definitivo a cobrar (tarifa base diaria × duración + seguro + depósito de garantía). El depósito se calcula como el 10% de la tarifa base diaria de la embarcación y el valor calculado se congela para la reserva.
 - **Reglas de negocio asociadas:** Matriz de Liquidación (3.2); Lógica de Cancelaciones y Reembolsos (Módulo 2, 2.2).
 
 ---
@@ -124,22 +122,21 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar el estado de la reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** El sistema de reservas informa el estado de una reserva (disponible, reservado, en navegación, pendiente,cancelado flexiblemente, cancelado tardiamente, cancelado moderadamente, completado con incidentes y completado sin incidentes) para que el sistema financiero mantenga sincronizado el ciclo de vida operativo de la reserva y la operacion del pago y dispersion de fondos.
-cualquier tipo de estado cancelado dispara el caso de uso reembolsar dinero a arrendatario. El estado completado sin incidentes dispara el caso de uso dispersar fondos y reembolsar dinero. El estado completado con incidentes dispara el caso de uso resolver disputa.
+- **Flujo:** El sistema de Reservas informa el estado de una reserva (disponible, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado tardiamente, cancelado moderadamente o completada). El estado `completada` dispara la liquidación del alquiler y el seguro, sin incluir el depósito. El depósito queda pendiente hasta que Finanzas reciba el estado de disputa mediante "Brindar información de disputa de garantía".
 - **Regla de negocio asociada:** Transversal a Matriz de Liquidación (3.2) y Cancelaciones (Módulo 2, 2.2).
 
 ---
 
 ### 3.3 Depósito de Garantía y Disputas
 
-#### Resolver disputa de garantía
-- **Actores:** Administrador Financiero.
-- **Flujo:** Al detectarse posibles daños en la embarcación al finalizar la navegación, el Administrador Financiero evalúa la evidencia y determina si el depósito de garantía debe retenerse (total o parcialmente) o liberarse. Este caso de uso extiende (`<<extend>>`) hacia "Reembolsar dinero a arrendatario" cuando el resultado favorece al arrendatario.
+#### Brindar información de disputa de garantía
+- **Actores:** Sistema de Reservas y Operaciones.
+- **Flujo:** El Módulo 2 crea y gestiona la disputa después de la finalización de la reserva. El propietario dispone de 24 horas para reportar daños. El Módulo 2 informa a Finanzas únicamente el identificador de la reserva, el identificador de la disputa, el estado `pendiente`, `rechazado` o `completado`, una versión o clave idempotente y un motivo opcional cuando el estado sea `rechazado`. No envía montos ni ejecuta operaciones financieras. `Rechazado` implica devolver el depósito al Arrendatario y `completado` implica liquidarlo al Propietario.
 - **Regla de negocio asociada:** Depósito de Garantía (3.1).
 
 #### Reembolsar dinero a arrendatario
-- **Actores:** Pasarela de Pago (ejecuta la devolución); disparado como extensión de "Resolver disputa de garantía" o como consecuencia de una cancelación dentro de la ventana flexible/moderada.
-- **Flujo:** El sistema calcula el monto a devolver (100% del depósito si no hay daños; 100%, 50% o 0% del valor del alquiler según la ventana de cancelación) y ordena la devolución a través de la Pasarela de Pago.
+- **Actores:** Pasarela de Pago (ejecuta la devolución); disparado por cancelaciones aplicables o por "Brindar información de disputa de garantía" cuando el resultado sea liberar el depósito.
+- **Flujo:** El sistema recupera de sus registros el monto correspondiente y ordena la devolución a través de la Pasarela de Pago. Para la garantía, la devolución es siempre del 100% del depósito capturado; no existe retención parcial.
 - **Reglas de negocio asociadas:** Depósito de Garantía (3.1); Lógica de Cancelaciones y Reembolsos (Módulo 2, 2.2).
 
 ---
@@ -147,8 +144,8 @@ cualquier tipo de estado cancelado dispara el caso de uso reembolsar dinero a ar
 ### 3.4 Dispersión de Fondos
 
 #### Liquidar fondos de alquiler
-- **Actores:** Pasarela de Pago (ejecuta la transferencia); beneficia al Propietario.
-- **Flujo:** Una vez liquidada la reserva (o resuelta una penalidad por cancelación tardía/no-show), el sistema calcula el pago al propietario como *Valor Bruto − Comisión de la Plataforma − Seguro* y ordena la transferencia mediante la Pasarela de Pago. Las penalidades por cancelación tardía se dispersan íntegramente como compensación al propietario.
+- **Actores:** Pasarela de Pago (ejecuta la operación); beneficia al Propietario.
+- **Flujo:** Al recibir `completada`, el sistema calcula el pago estándar como *Valor Bruto − Comisión de la Plataforma − Seguro* y lo solicita sin incluir el depósito. Cuando "Brindar información de disputa de garantía" informa `completado`, el sistema recupera internamente el depósito fijo y solicita su liquidación total al Propietario. Esta liquidación es una consecuencia de negocio y puede ejecutarse mediante una operación consolidada o relacionada soportada por la integración, no necesariamente como una transferencia directa.
 - **Regla de negocio asociada:** Matriz de Liquidación — Pago al Propietario y Penalidad por Cancelación (3.2).
 
 ---
@@ -157,7 +154,7 @@ cualquier tipo de estado cancelado dispara el caso de uso reembolsar dinero a ar
 
 #### Configurar parámetros financieros globales
 - **Actores:** Administrador Financiero.
-- **Flujo:** El administrador define o ajusta los parámetros que rigen los cálculos del sistema: porcentaje de comisión de la plataforma, tarifa del seguro náutico por pasajero, reglas del depósito de garantía y porcentajes de incremento de tarifa dinámica por fin de semana y por temporada alta. La vigencia (fechas) de la temporada alta no se configura aquí: el sistema la determina automáticamente conforme a la regla de calendario definida en la sección 3.1.
+- **Flujo:** El administrador define o ajusta el porcentaje de comisión de la plataforma, la tarifa del seguro náutico por pasajero y los porcentajes de incremento de tarifa dinámica por fin de semana y temporada alta. El depósito no se configura aquí: se determina automáticamente como el 10% de la tarifa base diaria de la embarcación. La vigencia de la temporada alta se determina automáticamente conforme a la regla de calendario.
 - **Regla de negocio asociada:** Matriz de Liquidación — Comisión Plataforma (3.2); Reglas de Cobro (3.1).
 
 #### Consultar registros financieros
@@ -182,7 +179,7 @@ cualquier tipo de estado cancelado dispara el caso de uso reembolsar dinero a ar
 | Regla de negocio (sea-share.md) | Caso(s) de uso del sistema |
 | :--- | :--- |
 | Tarifas Dinámicas | Brindar tarifa base, Solicitar estimación para reserva, Brindar información de reserva |
-| Depósito de Garantía | Resolver disputa de garantía, Reembolsar dinero a arrendatario |
+| Depósito de Garantía | Brindar información de disputa de garantía, Reembolsar dinero a arrendatario, Liquidar fondos de alquiler |
 | Seguro Náutico | Brindar tarifa base, Solicitar el valor calculado de la reserva *(implícito)* |
 | Valor Alquiler Bruto | Solicitar el valor calculado de la reserva |
 | Comisión Plataforma | Configurar parámetros financieros globales, Liquidar fondos de alquiler |

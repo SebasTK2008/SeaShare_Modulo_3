@@ -26,47 +26,37 @@ Como el sistema, al ser invocado internamente por "Brindar el estado de la reser
 
 ---
 
-### Historia de Usuario 2 - Ejecutar la liquidación estándar del valor de alquiler ante la finalización de una reserva sin incidentes (Prioridad: P1)
+### Historia de Usuario 2 - Ejecutar la liquidación estándar del valor de alquiler ante la finalización de una reserva (Prioridad: P1)
 
-Como el sistema, al ser invocado internamente por "Brindar el estado de la reserva" cuando el estado informado de una reserva corresponde a "completada sin incidentes", quiero recuperar el monto de alquiler y el monto del seguro náutico previamente registrados para esa reserva, calcular la comisión de la plataforma aplicando el porcentaje configurado en los parámetros financieros globales, y determinar el pago que corresponde liquidar al Propietario, de manera que pueda solicitar dicho monto a la Pasarela de Pago.
+Como el sistema, al ser invocado internamente por "Brindar el estado de la reserva" cuando el estado informado corresponde a "completada", quiero recuperar el monto de alquiler y el monto del seguro náutico previamente registrados para esa reserva, calcular la comisión de la plataforma y determinar el pago que corresponde liquidar al Propietario, sin incluir el depósito de garantía.
 
-**Por qué esta prioridad**: La mayoría de las reservas finalizan sin incidentes, por lo que la liquidación oportuna y correcta del valor de alquiler al propietario es indispensable para el funcionamiento normal de la plataforma, sin depender de una evaluación del Administrador Financiero que en este caso no aplica.
+**Por qué esta prioridad**: La liquidación del alquiler ocurre al finalizar toda reserva completada; la disputa de garantía es un ciclo separado y no debe bloquear el pago correspondiente al alquiler.
 
-**Prueba Independiente**: Con una reserva que cuenta con un monto de alquiler y un monto de seguro náutico previamente registrados, invocar internamente la dispersión indicando que el estado de la reserva es "completada sin incidentes" y validar que el sistema calcula el pago al propietario como (monto de alquiler − comisión de la plataforma − monto de seguro náutico) y lo solicita a la Pasarela de Pago, sin incluir ningún monto de depósito de garantía.
+**Prueba Independiente**: Con una reserva que cuenta con un monto de alquiler y un monto de seguro náutico previamente registrados, invocar internamente la dispersión indicando que el estado de la reserva es "completada" y validar que el sistema calcula el pago al propietario como (monto de alquiler − comisión de la plataforma − monto de seguro náutico), sin incluir el depósito.
 
 **Escenarios de Aceptación**:
 
-1. **Escenario**: Liquidación estándar por finalización sin incidentes.
+1. **Escenario**: Liquidación estándar por reserva completada.
    - **Dado** que existe un monto de alquiler y un monto de seguro náutico previamente registrados para una reserva.
-   - **Cuando** "Brindar el estado de la reserva" invoca este caso de uso indicando el origen "finalización sin incidentes".
+   - **Cuando** "Brindar el estado de la reserva" invoca este caso de uso indicando el estado "completada".
    - **Entonces** el sistema calcula el pago al Propietario como el monto de alquiler registrado menos la comisión de la plataforma menos el monto del seguro náutico registrado, y solicita la captura y/o liquidación de dicho monto a la Pasarela de Pago, sin incluir el depósito de garantía. La liquidación queda pendiente hasta su confirmación externa.
 
 ---
 
-### Historia de Usuario 3 - Ejecutar la liquidación estándar consolidada con el tratamiento del depósito de garantía, ante la resolución de una disputa de garantía (Prioridad: P1)
+### Historia de Usuario 3 - Liquidar el depósito retenido tras una disputa completada (Prioridad: P1)
 
-Como el sistema, al ser invocado mediante la resolución de "Resolver disputa de garantía" para cualquiera de sus tres resultados posibles (liberación total, retención total o retención parcial), quiero recuperar el monto de alquiler y el monto del seguro náutico previamente registrados, calcular la comisión de la plataforma, determinar el pago estándar al Propietario y sumarle el monto del depósito de garantía retenido indicado (incluyendo el valor cero en la liberación total), de manera que pueda solicitar una operación consolidada cuando la capacidad configurada de la Pasarela de Pago lo permita.
+Como el sistema, al recibir desde "Brindar información de disputa de garantía" el estado `COMPLETADO`, quiero recuperar internamente el depósito fijo capturado y solicitar su liquidación total al Propietario, sin recibir montos ni instrucciones de pago desde el Módulo 2.
 
-**Por qué esta prioridad**: Sin esta ejecución consolidada, una reserva "completada con incidentes" quedaría sin ningún disparador que le pague al propietario el valor de alquiler que le corresponde, sin importar el resultado de la disputa sobre el depósito.
+**Por qué esta prioridad**: La liquidación del alquiler ya ocurre al completar la reserva; esta operación se limita a aplicar la retención total del depósito decidida por la disputa.
 
-**Prueba Independiente**: Con una reserva que cuenta con un monto de alquiler, un monto de seguro náutico y un depósito de garantía previamente registrados, invocar internamente la dispersión indicando cada uno de los tres resultados posibles de la disputa y validar que el sistema calcula el pago estándar al propietario, le suma el monto de depósito retenido correspondiente y crea una solicitud idempotente, consolidada o relacionada según la capacidad de la Pasarela de Pago.
+**Prueba Independiente**: Con una reserva completada que cuenta con un depósito capturado, recibir `COMPLETADO` desde la disputa y validar que el sistema solicita una liquidación idempotente por el depósito completo, vinculada al cobro original y a la disputa.
 
 **Escenarios de Aceptación**:
 
-1. **Escenario**: Liberación total del depósito (el reclamo no procede).
-   - **Dado** que "Resolver disputa de garantía" determinó la liberación total del depósito de garantía de una reserva.
-   - **Cuando** dicho caso de uso invoca la dispersión indicando un monto de depósito retenido igual a cero.
-   - **Entonces** el sistema solicita únicamente la captura y/o liquidación del pago estándar al Propietario, sin monto adicional por depósito. La liberación del depósito y la liquidación tienen resultados independientes.
-
-2. **Escenario**: Retención total del depósito (el reclamo procede totalmente).
-   - **Dado** que "Resolver disputa de garantía" determinó la retención total del depósito de garantía de una reserva.
-   - **Cuando** dicho caso de uso invoca la dispersión indicando el 100% del depósito de garantía registrado como monto retenido.
-   - **Entonces** el sistema solicita, si la pasarela soporta la operación consolidada, el pago estándar al Propietario más el 100% del depósito retenido. Si no lo soporta, registra operaciones relacionadas separadas sin duplicar importes.
-
-3. **Escenario**: Retención parcial del depósito (el reclamo procede parcialmente).
-   - **Dado** que "Resolver disputa de garantía" determinó la retención parcial del depósito de garantía de una reserva, indicando el monto a retener.
-   - **Cuando** dicho caso de uso invoca la dispersión indicando el monto parcial retenido.
-   - **Entonces** el sistema solicita, si la pasarela soporta la operación consolidada, el pago estándar al Propietario más el monto parcial retenido. Si no lo soporta, registra operaciones relacionadas separadas sin duplicar importes.
+1. **Escenario**: Retención total del depósito.
+   - **Dado** que una disputa fue completada.
+   - **Cuando** el sistema recibe la información de disputa.
+   - **Entonces** solicita la liquidación del depósito completo al Propietario mediante una operación soportada por la integración configurada, sin asumir que es una transferencia directa.
 
 ---
 
@@ -94,7 +84,7 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 
 ### Historia de Usuario 5 - Registrar el monto de comisión efectivamente aplicado en la liquidación estándar (Prioridad: P1) 
 
-Como el sistema, al calcular la liquidación estándar del valor de alquiler al Propietario (orígenes "finalización sin incidentes" o resultado de disputa de garantía), quiero registrar, dentro del mismo `RegistroDeDispersión`, el monto de comisión de la plataforma efectivamente aplicado en ese cálculo, de manera que dicho valor quede disponible para "Consultar balance financiero" sin necesidad de recalcularlo posteriormente con el porcentaje de comisión que esté vigente en el momento de la consulta, el cual pudo haber cambiado desde entonces.
+Como el sistema, al calcular la liquidación estándar del valor de alquiler al Propietario (estado "completada"), quiero registrar, dentro del mismo `RegistroDeDispersión`, el monto de comisión de la plataforma efectivamente aplicado en ese cálculo, de manera que dicho valor quede disponible para "Consultar balance financiero" sin necesidad de recalcularlo posteriormente con el porcentaje de comisión vigente.
 
 **Por qué esta prioridad**: "Configurar parámetros financieros globales" (SPEC 11) permite modificar el porcentaje de comisión en cualquier momento, y dicha modificación no afecta los cálculos ya realizados (RF-008 de SPEC 11). Si la comisión aplicada no se conserva junto con la dispersión en la que fue calculada, no existiría ninguna fuente confiable para reconstruir cuánta comisión generó realmente cada transacción histórica.
 
@@ -103,7 +93,7 @@ Como el sistema, al calcular la liquidación estándar del valor de alquiler al 
 **Escenarios de Aceptación**:
 
 1. **Escenario**: Registro de la comisión aplicada en una liquidación estándar.
-   - **Dado** que el sistema calculó la comisión de la plataforma como parte de una liquidación estándar (finalización sin incidentes o resultado de disputa de garantía).
+   - **Dado** que el sistema calculó la comisión de la plataforma como parte de una liquidación estándar por finalización de reserva.
    - **Cuando** el sistema registra el `RegistroDeDispersión` correspondiente.
    - **Entonces** el sistema incluye en dicho registro el monto de comisión efectivamente aplicado en ese cálculo, de forma inmutable frente a futuros cambios del porcentaje de comisión vigente.
 
@@ -115,16 +105,16 @@ Como el sistema, al calcular la liquidación estándar del valor de alquiler al 
 ### Casos Extremos (Edge Cases)
 
 - **¿Qué sucede si este caso de uso es invocado para una reserva que no cuenta con el monto de alquiler o el monto del seguro náutico previamente registrados?**
-  El sistema no ejecuta ningún cálculo parcial ni envía una solicitud a la Pasarela de Pago con un monto asumido; registra internamente un fallo, dado que la validación de existencia de dicha información corresponde previamente a "Brindar el estado de la reserva" o a "Resolver disputa de garantía", que son los casos de uso que invocan esta operación.
+   El sistema no ejecuta ningún cálculo parcial ni envía una solicitud a la Pasarela de Pago con un monto asumido; registra internamente un fallo, dado que la validación de existencia de dicha información corresponde previamente a "Brindar el estado de la reserva" o a "Brindar información de disputa de garantía".
 
-- **¿Qué sucede si el origen es un resultado de resolución de disputa de garantía pero no se indica el monto del depósito de garantía retenido (incluyendo el valor cero)?**
-  Sin este dato el sistema no puede consolidar correctamente la liquidación estándar con el tratamiento del depósito. Trata la solicitud como incompleta y registra el fallo internamente, de forma equivalente al caso anterior, sin enviar una solicitud a la Pasarela de Pago con un monto asumido.
+- **¿Qué sucede si el origen es una disputa `COMPLETADO` pero no existe un depósito capturado registrado internamente?**
+   El sistema trata la información como incompleta y registra el fallo sin enviar una solicitud a la Pasarela de Pago con un monto asumido.
 
 - **¿Por qué la dispersión por penalidad de cancelación (moderada o tardía/No-Show) no aplica el descuento de comisión de la plataforma ni de seguro náutico, a diferencia de la liquidación estándar?**
   La Matriz de Liquidación distingue "Penalidad por Cancelación" como un concepto propio, separado de "Pago al Propietario": el porcentaje correspondiente (50% o 100% del valor del alquiler) se dispersa íntegramente al propietario como compensación, sin pasar por el cálculo de comisión y seguro que sí aplica a la liquidación estándar de una reserva finalizada.
 
-- **¿Qué diferencia existe entre la liquidación estándar dispersada por "finalización sin incidentes" y la dispersada tras la resolución de una disputa de garantía con liberación total del depósito?**
-  En ambos casos el monto de depósito adicional es cero y el pago estándar al propietario se calcula de la misma manera, pero difieren en su origen: "finalización sin incidentes" es un disparo directo desde "Brindar el estado de la reserva", sin que exista evaluación alguna del Administrador Financiero ni ejecución de "Resolver disputa de garantía"; la liberación total, en cambio, es el resultado de una disputa evaluada por el Administrador Financiero sobre una reserva previamente informada como "completada con incidentes".
+- **¿Qué diferencia existe entre la liquidación estándar al completar y la liquidación del depósito retenido?**
+   La primera se ejecuta al recibir `completada` y calcula Valor Bruto menos Comisión menos Seguro, sin depósito. La segunda se ejecuta únicamente al recibir `COMPLETADO` desde la disputa y liquida el depósito fijo completo como una operación separada o relacionada.
 
 - **¿Qué sucede si el porcentaje de comisión de la plataforma configurado en los parámetros financieros globales no está disponible al momento de calcular la liquidación estándar?**
   Al no poder completar el cálculo de la comisión, el sistema considera la información necesaria para la liquidación como incompleta. No continúa el cálculo con un valor asumido o parcial; en su lugar, registra el fallo internamente, de la misma forma que ante la ausencia de monto de alquiler o de seguro náutico registrados.
@@ -135,8 +125,8 @@ Como el sistema, al calcular la liquidación estándar del valor de alquiler al 
 - **¿Qué sucede si la Pasarela de Pago reporta más de una vez el resultado de la misma operación de liquidación?**
    El sistema utiliza la clave idempotente y la referencia externa para deduplicar la notificación. Una repetición no crea otra liquidación ni altera un resultado ya confirmado.
 
-- **¿Qué sucede si "Resolver disputa de garantía" resuelve nuevamente la disputa de una misma reserva, invocando otra vez la dispersión con un monto de depósito retenido distinto al previamente registrado?**
-  Dado que dicho caso de uso aplica su tratamiento sobre el resultado más reciente informado, este caso de uso recalcula el monto total a dispersar a partir de la información vigente en ese momento (monto retenido actualizado) y registra una nueva solicitud de dispersión, solicitando nuevamente el monto correspondiente a la Pasarela de Pago. El monto de comisión aplicado se recalcula igualmente con el porcentaje vigente en ese nuevo momento y se registra en el nuevo `RegistroDeDispersión`, sin alterar el monto de comisión ya registrado en dispersiones previas de la misma reserva.
+- **¿Qué sucede si se recibe más de una notificación `COMPLETADO` desde la misma disputa?**
+   La clave idempotente y la asociación con la reserva impiden crear una segunda liquidación del depósito ya aplicado. La repetición se registra para conciliación.
 
 - **¿Por qué se registra explícitamente `comisiónAplicada = 0` en las dispersiones por penalidad de cancelación, en vez de dejar el campo vacío? 
   Porque RF-007 establece que estos orígenes no aplican comisión de la plataforma. Registrar explícitamente el valor cero, en lugar de dejarlo vacío o nulo, evita ambigüedad al sumar este campo en "Consultar balance financiero" (SPEC 13), que necesita agregar `comisiónAplicada` de todas las dispersiones exitosas dentro de un período sin distinguir su origen.
@@ -145,20 +135,20 @@ Como el sistema, al calcular la liquidación estándar del valor de alquiler al 
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir, mediante invocación interna desde "Brindar el estado de la reserva" o desde "Resolver disputa de garantía", una solicitud de dispersión de fondos para una reserva específica, identificada por su identificador de reserva, junto con el origen de la solicitud (cancelación moderada, cancelación tardía/No-Show, finalización sin incidentes, o resultado de disputa de garantía: liberación total, retención total o retención parcial) y, cuando el origen sea un resultado de disputa de garantía, el monto del depósito de garantía retenido correspondiente (incluyendo el valor cero).
+- **RF-001**: El sistema DEBE recibir, mediante invocación interna desde "Brindar el estado de la reserva" o desde "Brindar información de disputa de garantía", una solicitud de dispersión para una reserva específica, junto con el origen (cancelación moderada, cancelación tardía/No-Show, estado `completada` o disputa completada). No debe recibir montos financieros desde el Módulo 2.
 - **RF-002**: El sistema DEBE, cuando el origen sea cancelación moderada, calcular el 50% del monto de alquiler previamente registrado para la reserva y solicitar dicho monto a la Pasarela de Pago como compensación al Propietario.
 - **RF-003**: El sistema DEBE, cuando el origen sea cancelación tardía o No-Show, solicitar a la Pasarela de Pago el 100% del monto de alquiler previamente registrado como compensación al Propietario.
 - **RF-004**: El sistema DEBE calcular la comisión de la plataforma aplicando, sobre el monto de alquiler previamente registrado, el porcentaje de comisión configurado en los parámetros financieros globales, para su uso en el cálculo de la liquidación estándar (RF-005 y RF-006).
-- **RF-005**: El sistema DEBE, cuando el origen sea finalización sin incidentes, calcular la liquidación estándar del valor de alquiler al Propietario (monto de alquiler registrado menos la comisión de la plataforma menos el monto del seguro náutico registrado) y solicitar dicho monto a la Pasarela de Pago, sin incluir ningún monto de depósito de garantía.
-- **RF-006**: El sistema DEBE, cuando el origen sea un resultado de resolución de disputa de garantía, calcular la liquidación estándar del valor de alquiler al Propietario y sumarle el monto del depósito retenido indicado, solicitando una operación consolidada si la capacidad configurada de la Pasarela de Pago lo permite; en caso contrario, debe coordinar operaciones relacionadas sin duplicar importes.
+- **RF-005**: El sistema DEBE, cuando el estado de la reserva sea `completada`, calcular la liquidación estándar del alquiler al Propietario y solicitarla sin incluir el depósito.
+- **RF-006**: El sistema DEBE, cuando reciba `COMPLETADO` desde una disputa, recuperar internamente el depósito capturado y solicitar su liquidación total al Propietario mediante una operación consolidada o relacionada según la capacidad de la Pasarela de Pago.
 - **RF-007**: El sistema NO DEBE aplicar la comisión de la plataforma ni el descuento del monto de seguro náutico sobre los montos calculados por penalidad de cancelación (RF-002 y RF-003).
 - **RF-008**: El sistema DEBE enviar a la Pasarela de Pago la solicitud de captura y/o liquidación por el monto total calculado según el origen correspondiente, únicamente mediante una capacidad soportada por la integración configurada.
 - **RF-009**: El sistema DEBE registrar internamente la solicitud de dispersión en curso, indicando el origen, el monto, el cobro original, la capacidad utilizada y una clave idempotente, mientras se espera el resultado de la Pasarela de Pago.
 - **RF-010**: El sistema DEBE recibir de la Pasarela de Pago el resultado de la operación, registrando el monto confirmado, el estado externo, su detalle y la referencia externa provista. Solo un resultado confirmado permite informar que la liquidación fue completada.
 - **RF-011**: El sistema DEBE dejar disponible el resultado registrado de la dispersión para ser consultado mediante "Consultar registros financieros" y "Consultar ingresos".
 - **RF-012**: El sistema NO DEBE registrar ni reportar como completada una dispersión cuya operación fue rechazada, cancelada, expirada o quedó en proceso según la Pasarela de Pago.
-- **RF-013**: El sistema DEBE registrar internamente un fallo, sin ejecutar ningún cálculo parcial, cuando se invoque este caso de uso para una reserva sin el monto de alquiler, el monto de seguro náutico, o —cuando el origen sea disputa de garantía— el monto de depósito retenido previamente indicados, dado que este caso de uso no cuenta con un canal de respuesta hacia quien lo invoca.
-- **RF-014**  El sistema DEBE registrar, como parte de `RegistroDeDispersión`, el monto de comisión de la plataforma efectivamente aplicado (calculado según RF-004) cuando el origen sea finalización sin incidentes o resultado de disputa de garantía, dejando dicho valor disponible, de forma inmutable frente a cambios posteriores del porcentaje de comisión vigente, para "Consultar balance financiero" (SPEC 13). Para los orígenes de penalidad de cancelación (cancelación moderada o cancelación tardía/No-Show), en los que RF-007 no aplica comisión, este campo DEBE registrarse explícitamente con el valor cero.
+- **RF-013**: El sistema DEBE registrar internamente un fallo, sin ejecutar ningún cálculo parcial, cuando se invoque este caso de uso para una reserva sin el monto requerido en sus registros internos: alquiler, seguro o depósito capturado, según el origen.
+- **RF-014**  El sistema DEBE registrar, como parte de `RegistroDeDispersión`, el monto de comisión efectivamente aplicado cuando el estado de la reserva sea `completada`, dejando dicho valor disponible de forma inmutable para "Consultar balance financiero" (SPEC 13). Para los orígenes de penalidad de cancelación, este campo DEBE registrarse explícitamente con el valor cero.
 - **RF-015**: El sistema DEBE registrar, como parte del `RegistroDeDispersión`, el propietario y la embarcación asociados a la reserva (copiados de `InformaciónDeReserva`), de manera que dicho registro quede asociado a su propietario y pueda ser consultado en "Consultar registros financieros" (SPEC 12) y "Consultar ingresos" (SPEC 14).
 
 - **RF-016**: El sistema DEBE registrar, como parte de `RegistroDeDispersión` y de forma inmutable, el monto bruto de alquiler utilizado para el cálculo, el monto de seguro náutico aplicado, el monto de depósito de garantía retenido y el monto confirmado por la Pasarela de Pago. Estos valores deben conservarse aunque cambien posteriormente los parámetros financieros o el estado de la reserva, para permitir las consultas históricas de ingresos sin recalcular importes.
@@ -171,9 +161,9 @@ Como el sistema, al calcular la liquidación estándar del valor de alquiler al 
 
 ### Entidades Clave
 
-- **InformaciónDeReserva (Entidad, definida en SPEC 3, actualizada en SPEC 4, SPEC 7 y SPEC 8)**: En este caso de uso es únicamente consultada, para recuperar el monto de alquiler y el monto del seguro náutico registrados (todos los orígenes), y el monto del depósito de garantía retenido (cuando el origen sea un resultado de disputa de garantía).
+- **InformaciónDeReserva (Entidad, definida en SPEC 3 y actualizada en SPEC 4)**: En este caso de uso es únicamente consultada, para recuperar el monto de alquiler, el monto del seguro y el depósito fijo capturado cuando el origen sea una disputa completada.
 - **RegistroDeDispersión**: Estructura gestionada y persistida internamente por el sistema para representar el ciclo de una operación de captura o liquidación de fondos hacia el Propietario. Es creada con el origen, el monto solicitado, el monto bruto de alquiler, el monto de seguro náutico aplicado, el monto de depósito retenido, la comisión aplicada, el cobro original y la clave idempotente; y es actualizada con el monto confirmado, el estado externo, su detalle y la referencia externa. Los importes calculados y sus componentes deben conservarse inmutables una vez registrados. Conserva también el propietario y la embarcación asociados a la reserva. Es consumida posteriormente por "Consultar registros financieros", "Consultar ingresos" y, en lo relativo a `comisiónAplicada`, por "Consultar balance financiero" (SPEC 13).
-- **SolicitudDispersión (DTO)**: Información recibida internamente desde "Brindar el estado de la reserva" o "Resolver disputa de garantía" para esta operación. Contiene el identificador de la reserva, el origen de la solicitud y, cuando el origen sea un resultado de disputa de garantía, el monto del depósito de garantía retenido.
+- **SolicitudDispersión (DTO)**: Información recibida internamente desde "Brindar el estado de la reserva" o "Brindar información de disputa de garantía". Contiene el identificador de la reserva y el origen de la solicitud; no contiene monto de depósito enviado por el Módulo 2.
 - **SolicitudDispersiónPasarela (DTO)**: Información enviada a la Pasarela de Pago. Contiene el tipo de operación, el monto total, la referencia del cobro original, la referencia de la reserva y la clave idempotente.
 - **ResultadoDispersiónPasarela (DTO)**: Información recibida desde la Pasarela de Pago como resultado de una operación previamente iniciada. Contiene el estado externo, su detalle, el monto confirmado y la referencia externa asignada por la Pasarela de Pago.
 
@@ -181,9 +171,9 @@ Como el sistema, al calcular la liquidación estándar del valor de alquiler al 
 
 ### Resultados Medibles
 
-- **CE-001**: Precisión Financiera, "100% de los montos de dispersión solicitados a la Pasarela de Pago corresponden exactamente al monto que corresponde según el origen (50%/100% del monto de alquiler para penalidades, o liquidación estándar ± depósito retenido para finalización sin incidentes/disputa), con cero (0) errores de cálculo detectados en pruebas automatizadas, validando la correcta implementación de BigDecimal".
-- **CE-002**: Cumplimiento Arquitectónico, "0 aplicaciones de comisión de la plataforma o de descuento de seguro náutico registradas en dispersiones por penalidad de cancelación, y 100% de las liquidaciones estándar (finalización sin incidentes o disputa de garantía) descuentan exactamente la comisión y el seguro náutico correspondientes".
+- **CE-001**: Precisión Financiera, "100% de los montos de dispersión solicitados a la Pasarela de Pago corresponden exactamente al monto que corresponde según el origen (50%/100% del monto de alquiler para penalidades, liquidación estándar para estado completada o depósito completo para disputa completada), con cero (0) errores de cálculo detectados en pruebas automatizadas, validando la correcta implementación de BigDecimal".
+- **CE-002**: Cumplimiento Arquitectónico, "0 aplicaciones de comisión de la plataforma o de descuento de seguro náutico registradas en dispersiones por penalidad de cancelación, y 100% de las liquidaciones estándar por estado completada descuentan exactamente la comisión y el seguro correspondientes".
 - **CE-003**: Trazabilidad, "100% de las solicitudes de liquidación enviadas a la Pasarela de Pago quedan registradas internamente, y 100% de los resultados recibidos actualizan dicho registro, dejándolo disponible para 'Consultar registros financieros' y 'Consultar ingresos'".
 - **CE-004**: Resiliencia del Sistema, "100% de las fallas de comunicación simuladas con la Pasarela de Pago, tanto al enviar la solicitud de dispersión como al recibir su resultado, son manejadas mediante fallbacks controlados, sin dejar transacciones de dispersión en un estado indefinido".
 - **CE-005**: Integridad de la Dispersión, "0% de las transacciones rechazadas o fallidas reportadas por la Pasarela de Pago son registradas o reportadas como dispersiones exitosas".
-- **CE-006**: Trazabilidad de Comisión, "100% de las dispersiones con origen finalización sin incidentes o resultado de disputa de garantía registran el monto de comisión efectivamente aplicado (`comisiónAplicada`), coincidiendo exactamente con el valor calculado en RF-004 en el momento de esa dispersión, con cero (0) discrepancias detectadas en pruebas automatizadas frente a cambios posteriores del porcentaje de comisión vigente, quedando dicho valor disponible para 'Consultar balance financiero'".
+- **CE-006**: Trazabilidad de Comisión, "100% de las dispersiones asociadas al estado de reserva `completada` registran el monto de comisión efectivamente aplicado (`comisiónAplicada`), coincidiendo exactamente con el valor calculado en RF-004 en el momento de esa dispersión, con cero (0) discrepancias detectadas frente a cambios posteriores del porcentaje vigente".

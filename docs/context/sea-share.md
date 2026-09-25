@@ -44,7 +44,7 @@ Traduce la operación turística en datos financieros y distribuye el recaudo en
 #### 3.1. Reglas de Negocio para el Cobro
 *   **Tarifas Dinámicas:** Precios ajustados por **temporada alta** o fines de semana.
     *   **Temporada Alta:** Periodos del año con mayor flujo de viajeros, precios más altos en vuelos y alojamiento y mayor ocupación en los destinos. Para Colombia, el sistema deriva automáticamente la vigencia aplicando una regla de calendario con las siguientes ventanas: **fin de año** (desde la segunda mitad de noviembre hasta mediados de enero del año siguiente), **mitad de año** (junio y julio), **Semana Santa** (los días santos de marzo o abril), **semana de receso** (la semana de descanso escolar de octubre) y **puentes festivos y fines de semana largos**. La vigencia se determina automáticamente; el Administrador Financiero únicamente configura el porcentaje de incremento aplicable.
-*   **Depósito de Garantía:** Monto retenido temporalmente para cubrir posibles daños menores detectados al regreso.
+*   **Depósito de Garantía:** Corresponde al 10% de la tarifa base diaria de la embarcación, cobrado junto con el valor total y retenido temporalmente para cubrir únicamente daños menores detectados al regreso. Se entrega completo al Arrendatario o completo al Propietario; los daños mayores quedan fuera del alcance de este sistema y corresponden al seguro de la flota o a procesos legales externos.
 *   **Seguro Náutico:** Tarifa fija por pasajero para cobertura de accidentes.
 
 #### 3.2. Matriz de Liquidación (Reparto de Ingresos)
