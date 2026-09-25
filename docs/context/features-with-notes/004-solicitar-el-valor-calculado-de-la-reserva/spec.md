@@ -2,7 +2,7 @@
 
 **Creado**: 2026-09-06
 
-> **Nota de trazabilidad**: Este caso de uso es invocado por el Sistema de Reservas y Operaciones para obtener el desglose completo del valor de una reserva específica, previamente registrada mediante "Brindar información de reserva" (SPEC 3). El sistema **no vuelve a incluir** ("Brindar tarifa base" (SPEC 2) en este caso de uso: la tarifa base, ya ajustada dinámicamente, es reutilizada directamente desde la información registrada por SPEC 3. El desglose calculado aquí (monto de alquiler, seguro náutico y depósito de garantía) es el que queda disponible internamente para ser utilizado posteriormente por "Procesar cobro" (SPEC 5, pendiente).
+> **Nota de trazabilidad**: Este caso de uso es invocado por el Sistema de Reservas y Operaciones para obtener el desglose completo del valor de una reserva específica, previamente registrada mediante "Brindar información de reserva" (SPEC 3). El sistema **no vuelve a incluir** "Brindar tarifa base" (SPEC 2) en este caso de uso: la tarifa base, ya ajustada dinámicamente, es reutilizada directamente desde la información registrada por SPEC 3. El desglose calculado aquí (monto de alquiler, seguro náutico y depósito de garantía) es el que queda disponible internamente para ser utilizado posteriormente por "Procesar cobro" (SPEC 5, pendiente).
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
