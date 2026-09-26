@@ -47,28 +47,30 @@ El depósito se calcula como el 10% de la tarifa base diaria de la embarcación 
 
 El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del sistema de Reservas y Operaciones (modulo 2) y a las acciones del arrendatario. Su participación en el ciclo de vida completo de una reserva es la siguiente:
 
-1. **Solicitud de estimación.** El sistema de Reservas pide una estimación para una posible reserva. El sistema ejecuta *"Solicitar estimación para reserva"*, que incluye obligatoriamente *"Brindar tarifa base"*, la cual a su vez consulta al sistema de Gestión de Flota únicamente la tarifa base (el precio) de la embarcación, sin requerir su tipo ni categoría, para aplicar la tarifa dinámica correspondiente (temporada alta, determinada automáticamente por calendario, o fin de semana). Dicha estimación es meramente INFORMATIVA y puede verse reflejada para una unica embarcacion (con una fecha y cierto numero de pasajeros) o puede verse reflejada como una lista de estimaciones (para la pantalla principal en donde se veran las embarcaciones) con una fecha y numero de pasajeros  predeterminados (1 dia y 1 pasajero)
+1. **Solicitud de estimación.** El sistema de Reservas pide una estimación para una posible reserva. El sistema ejecuta *"Solicitar estimación para reserva"*, que incluye obligatoriamente *"Brindar tarifa base"*, la cual a su vez consulta al sistema de Gestión de Flota el tipo y categoría de la embarcación para aplicar la tarifa dinámica correspondiente (temporada alta, determinada automáticamente por calendario, o fin de semana). Dicha estimación es meramente INFORMATIVA y puede verse reflejada para una unica embarcacion (con una fecha y cierto numero de pasajeros) o puede verse reflejada como una lista de estimaciones (para la pantalla principal en donde se veran las embarcaciones) con una fecha y numero de pasajeros  predeterminados (1 dia y 1 pasajero)
 
-2. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"* (que también incluye "Brindar tarifa base"), esto para que el sistema financiero pueda realizar el calculo total y  entreganr el desglose de precio que el arrendatario verá antes de confirmar.
+2. **Inicio formal de la reserva.** El arrendatario selecciona la embarcación y oprime "Reservar". La reserva pasa al estado "Iniciada" (ver sea-share.md, Módulo 2, 2.1) y comienza el TTL de 15 minutos; desde este momento la embarcación deja de listarse como disponible.
 
-3. **Cálculo del valor total.** Una vez el arrendatario decide reservar, el sistema de Reservas solicita el valor definitivo mediante *"Solicitar el valor calculado de la reserva"*: tarifa base diaria × duración + seguro náutico por pasajero + depósito de garantía. El depósito corresponde al 10% de la tarifa base diaria de la embarcación y no depende de la duración ni del daño reportado.
+3. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"* (que también incluye "Brindar tarifa base"), esto para que el sistema financiero pueda realizar el calculo total y  entreganr el desglose de precio que el arrendatario verá antes de confirmar. Esto ocurre dentro del estado "Iniciada".
 
-4. **Bloqueo temporal (estado de espera (pendiente)) y cobro.** Mientras la reserva está bloqueada por 15 minutos en el sistema de Reservas, el **Arrendatario** dispara *"Procesar cobro"*. El sistema puede solicitar a la pasarela una autorización por el valor calculado; la aceptación técnica de la solicitud no equivale a aprobación del pago.
+4. **Cálculo del valor total.** Una vez el arrendatario decide reservar, el sistema de Reservas solicita el valor definitivo mediante *"Solicitar el valor calculado de la reserva"*: tarifa base diaria × duración + seguro náutico por pasajero + depósito de garantía. El depósito corresponde al 10% de la tarifa base diaria de la embarcación y no depende de la duración ni del daño reportado. Esto ocurre dentro del estado "Iniciada", antes de que el arrendatario oprima "Confirmar pago".
 
-5. **Confirmación hacia Reservas.** El sistema de Reservas solicita *"Solicitar confirmación de pago"* para conocer el estado vigente de la autorización o del cobro. Solo un estado aprobado y verificable permite avanzar la reserva. Si no llega una confirmación dentro del estado de espera (pendiente), la reserva vuelve a "Disponible" del lado de Reservas, sin asumir que el pago falló: cualquier autorización pendiente debe cancelarse o quedar bajo conciliación.
+5. **Confirmar pago y cobro.** El arrendatario oprime "Confirmar pago"; la reserva pasa al estado "Pendiente", lo cual habilita al sistema a ejecutar *"Procesar cobro"*. El TTL sigue corriendo desde que comenzó en "Iniciada" — esta transición no lo reinicia.
 
-6. **Actualización de estado de la reserva** El sistema de reservas informa el estado de la reserva mediante *"Brindar el estado de la reserva"*, para que el sistema de finanzas dispare cierto caso de uso dependiendo del estado actual de una reserva.
+6. **Confirmación hacia Reservas.** El sistema de Reservas solicita *"Solicitar confirmación de pago"* para conocer el estado vigente de la autorización o del cobro. Solo un estado aprobado y verificable permite avanzar la reserva a "Reservado". Si el TTL expira (iniciado en "Iniciada") sin una confirmación de pago exitosa, la reserva vuelve a "Disponible" del lado de Reservas, sin asumir que el pago falló: cualquier autorización pendiente debe cancelarse o quedar bajo conciliación.
 
-7. **Cancelación (si aplica).** Si el arrendatario cancela, el sistema de Reservas recalcula el escenario mediante *"Solicitar el valor calculado de la reserva"* y, según la ventana de tiempo:
+7. **Actualización de estado de la reserva** El sistema de reservas informa el estado de la reserva mediante *"Brindar el estado de la reserva"*, para que el sistema de finanzas dispare cierto caso de uso dependiendo del estado actual de una reserva.
+
+8. **Cancelación (si aplica).** Si el arrendatario cancela, el sistema de Reservas recalcula el escenario mediante *"Solicitar el valor calculado de la reserva"* y, según la ventana de tiempo:
    - **Cancelacion flexible: >72h:** el sistema solicita la liberación o el reembolso del 100% según el estado del cobro y la política explícita de costos transaccionales.
    - **Cancelacion moderada: 72h–24h:** el sistema reembolsa el 50% y dispersa el 50% restante como compensación al propietario vía *"Liquidar fondos de alquiler"*.
    - **Cancelacion tardia: <24h / No-Show:** el sistema no reembolsa; dispersa el 100% como compensación al propietario.
 
-8. **Finalización y disputa de garantía.** El sistema de Reservas informa la finalización de la reserva con el único estado `completada`. Finanzas liquida el alquiler y el seguro, pero deja pendiente el depósito. El Módulo 2 crea y gestiona la disputa, concede al propietario una ventana de 24 horas para reportar daños y luego informa a Finanzas únicamente el estado de disputa. Si el estado es `rechazado`, Finanzas solicita el reembolso total al Arrendatario; si el estado es `completado`, solicita la liquidación total al Propietario.
+9. **Finalización y disputa de garantía.** El sistema de Reservas informa la finalización de la reserva con el único estado `completada`. Finanzas liquida el alquiler y el seguro, pero deja pendiente el depósito. El Módulo 2 crea y gestiona la disputa, concede al propietario una ventana de 24 horas para reportar daños y luego informa a Finanzas únicamente el estado de disputa. Si el estado es `rechazado`, Finanzas solicita el reembolso total al Arrendatario; si el estado es `completado`, solicita la liquidación total al Propietario.
 
-9. **Liquidación final.** Superadas las etapas anteriores (una reserva ya fue completada), el sistema calcula y solicita la captura y/o liquidación correspondiente vía la Pasarela de Pago: valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación. La solicitud puede quedar pendiente o fallar; solo su confirmación externa permite informar que los fondos fueron efectivamente liquidados.
+10. **Liquidación final.** Superadas las etapas anteriores (una reserva ya fue completada), el sistema calcula y solicita la captura y/o liquidación correspondiente vía la Pasarela de Pago: valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación. La solicitud puede quedar pendiente o fallar; solo su confirmación externa permite informar que los fondos fueron efectivamente liquidados.
 
-10. **Supervisión continua.** En cualquier momento, el **Propietario** puede *"Consultar ingresos"* y *"Consultar registros financieros"*; el **Administrador Financiero** puede *"Consultar balance financiero"*, *"Consultar registros financieros"* y *"Configurar parámetros financieros globales"* (porcentaje de comisión, tarifa de seguro y porcentajes de tarifa dinámica).
+11. **Supervisión continua.** En cualquier momento, el **Propietario** puede *"Consultar ingresos"* y *"Consultar registros financieros"*; el **Administrador Financiero** puede *"Consultar balance financiero"*, *"Consultar registros financieros"* y *"Configurar parámetros financieros globales"* (porcentaje de comisión, tarifa de seguro y porcentajes de tarifa dinámica).
 
 ---
 
@@ -90,7 +92,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar tarifa base
 - **Actores:** Sistema de Gestión de Flota (provee datos de la embarcación); invocado internamente (`<<include>>`) por "Solicitar estimación para reserva" y "Brindar información de reserva".
-- **Flujo:** El sistema recibe el la tarifa base de la embarcación desde Gestión de Flota y aplica la tarifa dinámica vigente (temporada alta —determinada automáticamente por la regla de calendario—, fin de semana, etc.) para obtener la tarifa base por unidad de tiempo.
+- **Flujo:** El sistema recibe el tipo/categoría de la embarcación desde Gestión de Flota y aplica la tarifa dinámica vigente (temporada alta —determinada automáticamente por la regla de calendario—, fin de semana, etc.) para obtener la tarifa base por unidad de tiempo.
 - **Regla de negocio asociada:** Tarifas Dinámicas (3.1).
 
 #### Solicitar estimación para reserva
@@ -114,17 +116,17 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Procesar cobro
 - **Actores:** Arrendatario (origina la solicitud); Pasarela de Pago (ejecuta la transacción).
-- **Flujo:** El arrendatario confirma el pago dentro de la ventana de bloqueo temporal (estado de espera (pendiente)) de 15 minutos definida por Reservas). El sistema envía la orden de cobro a la Pasarela de Pago, reteniendo internamente el depósito de garantía y el seguro náutico como parte del monto cobrado.
-- **Regla de negocio asociada:** Bloqueo Temporal (estado de espera (pendiente)) (Módulo 2, 2.1); Depósito de Garantía y Seguro Náutico (3.1).
+- **Flujo:** El arrendatario confirma el pago (transición de la reserva a estado "Pendiente") dentro del TTL de 15 minutos que comenzó cuando la reserva pasó a estado "Iniciada" (Módulo 2, 2.1). El sistema puede solicitar a la pasarela una autorización por el valor calculado; la aceptación técnica de la solicitud no equivale a aprobación del pago.
+- **Regla de negocio asociada:** Bloqueo Temporal (Módulo 2, 2.1); Depósito de Garantía y Seguro Náutico (3.1).
 
 #### Solicitar confirmación de pago
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** Reservas consulta al sistema si el cobro fue confirmado, para decidir si la reserva avanza de estado o si, al expirar el estado de espera (pendiente) sin confirmación, el activo vuelve a "Disponible".
-- **Regla de negocio asociada:** Bloqueo Temporal estado de espera (pendiente) (Módulo 2, 2.1).
+- **Flujo:** Reservas consulta al sistema si el cobro fue confirmado, para decidir si la reserva avanza a "Reservado" o si, al expirar el TTL (iniciado en "Iniciada") sin una confirmación de pago exitosa, el activo vuelve a "Disponible".
+- **Regla de negocio asociada:** Bloqueo Temporal (Módulo 2, 2.1).
 
 #### Brindar el estado de la reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** El sistema de Reservas informa el estado de una reserva (disponible, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado tardiamente, cancelado moderadamente o completada). El estado `completada` dispara la liquidación del alquiler y el seguro, sin incluir el depósito de garantia. El depósito queda pendiente hasta que Finanzas reciba el estado de disputa mediante "Brindar información de disputa de garantía" o pasadas las 24 horas en caso de  no haber una disputa. 
+- **Flujo:** El sistema de Reservas informa el estado de una reserva (disponible, iniciada, pendiente, reservado, en navegación, completada, cancelado flexiblemente, cancelado moderadamente o cancelado tardíamente). El estado "iniciada" es puramente informativo para Finanzas (no dispara ninguna acción financiera), al igual que "pendiente" y "reservado". El estado `completada` dispara la liquidación del alquiler y el seguro, sin incluir el depósito de garantia. El depósito queda pendiente hasta que Finanzas reciba el estado de disputa mediante "Brindar información de disputa de garantía" o pasadas las 24 horas en caso de  no haber una disputa. 
 - **Regla de negocio asociada:** Transversal a Matriz de Liquidación (3.2) y Cancelaciones (Módulo 2, 2.2).
 
 ---
