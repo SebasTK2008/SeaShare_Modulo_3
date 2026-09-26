@@ -45,9 +45,10 @@ La vigencia de la temporada alta se deriva automáticamente aplicando, a cada a�
 - **Mitad de año**: desde el **1 de junio** hasta el **30 de julio** (inclusive).
 - **Semana Santa**: los días santos de marzo o abril, calculados mediante el **Algoritmo de Meeus/Jones/Butcher** para determinar el Domingo de Resurrección de cada año evaluado, y a partir de esa fecha derivar la ventana de días santos correspondiente (Jueves y Viernes Santo, y los días inmediatamente adyacentes que el negocio considere parte de la Semana Santa).
 - **Semana de receso**: del **5 de octubre** al **12 de octubre**.
-- **Puentes festivos y fines de semana largos**: se evalúan como condición adicional vigente, conforme al calendario oficial de festivos.
 
 Estas ventanas son fijas por calendario, se recalculan automáticamente cada año (incluyendo el cálculo de Semana Santa vía Meeus/Jones/Butcher) y no requieren configuración manual de fechas por parte del Administrador Financiero, quien únicamente configura el **porcentaje de incremento** aplicable.
+
+Los puentes festivos y los fines de semana largos **no** se categorizan como temporada alta; el fin de semana se evalúa exclusivamente como su propia condición dinámica independiente (ver "Regla de cálculo de la tarifa base final"), sin que la condición de puente festivo agregue ningún ajuste adicional.
 
 ### Casos Extremos (Edge Cases)
 
@@ -64,7 +65,7 @@ Estas ventanas son fijas por calendario, se recalculan automáticamente cada añ
   En el modo lote sin fechas, la tarifa dinámica se evalúa sobre la fecha actual (el día en que se realiza la solicitud), reflejando las condiciones vigentes ese día. La estimación así obtenida es meramente informativa; al confirmar la reserva, "Solicitar el valor calculado de la reserva" recalcula con las fechas reales y su tarifa dinámica correspondiente.
 
 - **¿Cómo determina el sistema si una fecha evaluada corresponde a temporada alta?**
-  El sistema evalúa la fecha contra las ventanas exactas de temporada alta definidas arriba (fin de año: 15 de noviembre–15 de enero; mitad de año: 1 de junio–30 de julio; Semana Santa: calculada mediante el Algoritmo de Meeus/Jones/Butcher; semana de receso: 5–12 de octubre; y puentes festivos y fines de semana largos). Si la fecha cae dentro de alguna de estas ventanas, aplica el porcentaje de incremento de temporada alta configurado por el Administrador Financiero mediante "Configurar parámetros financieros globales". La vigencia se deriva automáticamente de dicha regla de calendario —NO se configura manualmente ni se deriva de los datos de las reservas, del tipo de embarcación ni de su categoría— y los cambios derivados del calendario afectan únicamente los cálculos posteriores, nunca los valores ya aplicados a reservas existentes.
+  El sistema evalúa la fecha contra las ventanas exactas de temporada alta definidas arriba (fin de año: 15 de noviembre–15 de enero; mitad de año: 1 de junio–30 de julio; Semana Santa: calculada mediante el Algoritmo de Meeus/Jones/Butcher; y semana de receso: 5–12 de octubre). Si la fecha cae dentro de alguna de estas ventanas, aplica el porcentaje de incremento de temporada alta configurado por el Administrador Financiero mediante "Configurar parámetros financieros globales". La vigencia se deriva automáticamente de dicha regla de calendario —NO se configura manualmente ni se deriva de los datos de las reservas, del tipo de embarcación ni de su categoría— y los cambios derivados del calendario afectan únicamente los cálculos posteriores, nunca los valores ya aplicados a reservas existentes. Los puentes festivos y los fines de semana largos no forman parte de estas ventanas de temporada alta; únicamente el fin de semana se evalúa como su propia condición dinámica.
 
 - **¿La tarifa dinámica depende del tipo o la categoría de la embarcación (lancha, yate, catamarán)?**
   No. El tipo y la categoría de la embarcación no son un insumo de este caso de uso ni de la regla de tarifa dinámica. El único dato variable de la embarcación utilizado aquí es su propia tarifa base (el precio fijado por su propietario), consultada al Sistema de Gestión de Flota por identificador único. La tarifa dinámica se aplica exclusivamente en función de la fecha evaluada (fin de semana / temporada alta), de forma idéntica para cualquier tipo o categoría de embarcación.
@@ -83,9 +84,8 @@ Estas ventanas son fijas por calendario, se recalculan automáticamente cada añ
   - Mitad de año: 1 de junio – 30 de julio.
   - Semana Santa: calculada mediante el Algoritmo de Meeus/Jones/Butcher.
   - Semana de receso: 5 de octubre – 12 de octubre.
-  - Puentes festivos y fines de semana largos, conforme al calendario oficial de festivos.
 
-  sin requerir que el Administrador Financiero configure manualmente las fechas de inicio y fin de dicha condición.
+  sin requerir que el Administrador Financiero configure manualmente las fechas de inicio y fin de dicha condición. Los puentes festivos y los fines de semana largos NO forman parte de esta regla de temporada alta; únicamente el fin de semana constituye una condición dinámica adicional e independiente.
 - **RF-007**: El sistema NO DEBE utilizar el tipo, la categoría ni ningún otro atributo de clasificación de la embarcación como insumo para determinar la tarifa base final o la aplicación de la tarifa dinámica.
 
 ### Requisitos No Funcionales

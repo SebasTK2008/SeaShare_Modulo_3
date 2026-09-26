@@ -73,7 +73,7 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 ### Casos Extremos (Edge Cases)
 
 - **¿Quién aplica el descuento por costos transaccionales en una cancelación flexible (>72h)?**
-  *(Punto abierto — ver nota al inicio de este documento)*. El sistema no debe inferir cómo se aplican los costos transaccionales. Solicita el monto definido por la política de negocio y registra cualquier costo o monto neto reportado por la Pasarela de Pago, sin asumir que esta lo absorbe o lo descuenta automáticamente. Pendiente de confirmación explícita del negocio antes de cerrar este punto como definitivo.
+  El sistema no calcula ni aplica ningún descuento por costos transaccionales: solicita a la Pasarela de Pago la liberación del importe autorizado o, si ya fue capturado, el reembolso del 100% del valor de alquiler registrado (o el 50% correspondiente en cancelación moderada), y es la propia Pasarela de Pago quien, al ejecutar la operación, neta sus propios costos de procesamiento como una condición externa a este sistema, conforme a RF-012. El sistema únicamente registra cualquier costo o monto neto que la Pasarela de Pago reporte, sin asumir ni inferir cómo lo aplica.
 
 - **¿Qué diferencia existe entre el reembolso por ausencia de reclamo y el reembolso por una disputa con reclamo rechazado?**
   Ninguna en su tratamiento financiero: ambos son consecuencias del mismo estado `RECHAZADO` informado por "Brindar Información de Disputa de Garantía" (SPEC 8) y devuelven el 100% del depósito capturado. La diferencia es únicamente de origen operativo dentro del Módulo 2 (vencimiento de la ventana de 24 horas sin reporte, vs. evaluación explícita de un reclamo como improcedente); el Módulo 2 no distingue estos dos orígenes al informar el estado a Finanzas.
@@ -111,7 +111,8 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 - **RF-009**: El sistema NO DEBE registrar ni reportar como completado un reembolso rechazado, cancelado, expirado o en proceso según la Pasarela de Pago.
 - **RF-010**: El sistema DEBE registrar un error controlado cuando la reserva no tenga depósito capturado y registrado.
 - **RF-011**: El sistema DEBE distinguir el monto reembolsado del costo transaccional cobrado por la Pasarela de Pago.
-- **RF-012**: El sistema DEBE registrar, como parte del `RegistroDeReembolso`, el propietario, la embarcación y la disputa asociada, incluyendo si el `RECHAZADO` se originó por ausencia de reclamo o por un reclamo evaluado como improcedente (dato meramente informativo/de trazabilidad, sin que cambie el tratamiento financiero aplicado).
+- **RF-012**: El sistema NO DEBE calcular ni aplicar ningún descuento por costos transaccionales sobre los montos de reembolso; dicha deducción es aplicada exclusivamente por la Pasarela de Pago al ejecutar la operación, como una condición externa a este sistema. El sistema se limita a registrar el costo o monto neto que la Pasarela de Pago reporte, sin inferirlo ni asumirlo.
+- **RF-013**: El sistema DEBE registrar, como parte del `RegistroDeReembolso`, el propietario, la embarcación y la disputa asociada, incluyendo si el `RECHAZADO` se originó por ausencia de reclamo o por un reclamo evaluado como improcedente (dato meramente informativo/de trazabilidad, sin que cambie el tratamiento financiero aplicado).
 
 ### Requisitos No Funcionales
 
@@ -132,7 +133,7 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 ### Resultados Medibles
 
 - **CE-001**: Precisión Financiera, "100% de los reembolsos de depósito solicitados por un resultado `RECHAZADO` de la disputa corresponden exactamente al 100% del depósito capturado, independientemente de si el origen fue ausencia de reclamo o reclamo improcedente".
-- **CE-002**: Cumplimiento Arquitectónico, "0 decisiones sobre daños y 0 retenciones parciales son calculadas por este caso de uso".
+- **CE-002**: Cumplimiento Arquitectónico, "0 decisiones sobre daños y 0 retenciones parciales son calculadas por este caso de uso; 0 descuentos por costos transaccionales son calculados o aplicados por el sistema, confirmando que dicha deducción es exclusiva de la Pasarela de Pago".
 - **CE-003**: Trazabilidad, "100% de las solicitudes de liberación o reembolso enviadas a la Pasarela de Pago quedan registradas internamente, y 100% de los resultados recibidos actualizan dicho registro, dejándolo disponible para 'Consultar registros financieros'".
 - **CE-004**: Resiliencia del Sistema, "100% de las fallas de comunicación simuladas con la Pasarela de Pago, tanto al enviar la solicitud de reembolso como al recibir su resultado, son manejadas mediante fallbacks controlados, sin dejar transacciones de reembolso en un estado indefinido".
 - **CE-005**: Consolidación de Historias, "0 Historias de Usuario duplicadas o con disparadores solapados (`RECHAZADO`) coexisten en esta SPEC, confirmando que el tratamiento de ambos orígenes del depósito rechazado está unificado en la Historia de Usuario 2".
