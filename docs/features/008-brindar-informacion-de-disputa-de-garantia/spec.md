@@ -1,6 +1,6 @@
 # Especificación de Funcionalidad: UC08 - Brindar Información de Disputa de Garantía
 
-**Creado**: 2026-09-24
+**Creado**: 2026-09-24 
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
@@ -15,30 +15,30 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
 **Estados de la disputa**:
 
 - `PENDIENTE`: la disputa existe o continúa en revisión; no se ejecuta ninguna operación financiera.
-- `RECHAZADO`: el reclamo no procede; el depósito debe devolverse completamente al Arrendatario. El motivo, cuando exista, es opcional y no forma parte del estado.
+- `RECHAZADO`: el reclamo no procede (incluye la ausencia de reclamo al vencer la ventana de 24 horas); el depósito debe devolverse completamente al Arrendatario. El motivo, cuando exista, es opcional y no forma parte del estado.
 - `COMPLETADO`: el reclamo procede; el depósito debe liquidarse completamente al Propietario.
 
 ### Escenarios de Aceptación
 
 1. **Escenario**: Disputa pendiente.
-  - **Dado** que existe un depósito registrado para una reserva.
-  - **Cuando** el Módulo 2 informa `PENDIENTE`.
-  - **Entonces** el sistema registra la actualización sin reembolsar ni liquidar el depósito.
+   - **Dado** que existe un depósito registrado para una reserva.
+   - **Cuando** el Módulo 2 informa `PENDIENTE`.
+   - **Entonces** el sistema registra la actualización sin reembolsar ni liquidar el depósito.
 
 2. **Escenario**: Disputa rechazada y devolución al Arrendatario.
-  - **Dado** que el Módulo 2 informa `RECHAZADO`.
-  - **Cuando** el sistema recibe la notificación asociada a una reserva.
-  - **Entonces** registra el estado y el motivo opcional, y solicita el reembolso total del depósito al Arrendatario.
+   - **Dado** que el Módulo 2 informa `RECHAZADO`.
+   - **Cuando** el sistema recibe la notificación asociada a una reserva.
+   - **Entonces** registra el estado y el motivo opcional, y solicita el reembolso total del depósito al Arrendatario.
 
 3. **Escenario**: Disputa completada y liquidación al Propietario.
-  - **Dado** que existe un depósito capturado y registrado.
-  - **Cuando** el Módulo 2 informa `COMPLETADO`.
-  - **Entonces** el sistema solicita la liquidación total del depósito al Propietario mediante "Liquidar fondos de alquiler".
+   - **Dado** que existe un depósito capturado y registrado.
+   - **Cuando** el Módulo 2 informa `COMPLETADO`.
+   - **Entonces** el sistema solicita la liquidación total del depósito al Propietario mediante "Liquidar fondos de alquiler".
 
 4. **Escenario**: Ausencia de reclamo al vencer la ventana de 24 horas.
-  - **Dado** que el Módulo 2 cerró la ventana de reporte sin registrar un reclamo.
-  - **Cuando** informa `RECHAZADO`.
-  - **Entonces** el sistema solicita el reembolso total del depósito al Arrendatario.
+   - **Dado** que el Módulo 2 cerró la ventana de reporte sin registrar un reclamo.
+   - **Cuando** informa `RECHAZADO`.
+   - **Entonces** el sistema solicita el reembolso total del depósito al Arrendatario.
 
 ### Casos Extremos (Edge Cases)
 
@@ -51,7 +51,7 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir desde el Módulo 2 una notificación asociada a una reserva y una disputa, sin recibir montos ni instrucciones de operación financiera.
+- **RF-001**: El sistema DEBE recibir desde el Módulo 2, y únicamente, los siguientes datos por notificación: el identificador de la reserva, el identificador de la disputa, el estado (`PENDIENTE`, `RECHAZADO` o `COMPLETADO`), una versión o clave idempotente del evento y, cuando el estado sea `RECHAZADO`, un motivo opcional. El sistema NO DEBE recibir ni requerir ningún otro dato (por ejemplo, identificadores de embarcación, montos u otros atributos) que `contexto-modulo3.md` no enumere explícitamente para esta notificación.
 - **RF-002**: El sistema DEBE reconocer únicamente los estados `PENDIENTE`, `RECHAZADO` y `COMPLETADO`.
 - **RF-003**: `RECHAZADO` DEBE admitir un motivo opcional, sin hacer obligatorio dicho motivo ni asumir una causa única.
 - **RF-004**: `PENDIENTE` NO DEBE ejecutar reembolso ni liquidación de garantía.
@@ -60,6 +60,7 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
 - **RF-007**: El sistema NO DEBE recibir ni requerir desde el Módulo 2 el monto del depósito, el monto a reembolsar, el monto a liquidar ni una instrucción técnica de pasarela.
 - **RF-008**: El sistema DEBE aplicar idempotencia por reserva, disputa y versión o clave del evento.
 - **RF-009**: El sistema DEBE exponer este caso de uso como consumidor del Módulo 2 y no como un caso de uso mediante el cual el Administrador Financiero resuelva disputas dentro del Módulo 3.
+- **RF-010**: El sistema NO DEBE reconocer sub-resultados adicionales (por ejemplo, liberación o retención parcial) dentro de `COMPLETADO` o `RECHAZADO`; ambos estados son tratamientos totales sobre el 100% del depósito capturado, conforme a la regla de negocio vigente ("Se entrega completo al Arrendatario o completo al Propietario").
 
 ### Requisitos No Funcionales
 
@@ -71,7 +72,7 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
 
 - **InformaciónDeReserva**: Se consulta para recuperar el depósito fijo registrado y el estado financiero de la reserva.
 - **RegistroDeCobro**: Se consulta para confirmar que el pago que contiene el depósito fue capturado y para obtener la referencia original.
-- **SolicitudInformaciónDisputa (DTO)**: Contiene el identificador de la reserva, el identificador de la disputa, el estado, la versión o clave idempotente y el motivo opcional cuando sea `RECHAZADO`. No contiene resultados monetarios ni un campo adicional de decisión.
+- **SolicitudInformaciónDisputa (DTO)**: Contiene el identificador de la reserva, el identificador de la disputa, el estado, la versión o clave idempotente y el motivo opcional cuando sea `RECHAZADO`. No contiene resultados monetarios ni un campo adicional de decisión (no admite sub-resultados como `LIBERAR_DEPOSITO`/`RETENER_DEPOSITO`).
 
 ## Criterios de Éxito *(obligatorio)*
 
@@ -82,3 +83,7 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
 - **CE-003**: "100% de los estados `RECHAZADO` solicitan exactamente un reembolso total idempotente, y 100% de los estados `COMPLETADO` solicitan exactamente una liquidación total idempotente".
 - **CE-004**: "0 montos o instrucciones técnicas de pago son recibidos desde el Módulo 2, y 100% de los importes ejecutados provienen de registros financieros internos del Módulo 3".
 - **CE-005**: "100% de los eventos repetidos o concurrentes para una misma resolución evitan operaciones monetarias duplicadas".
+- **CE-006**: "0 sub-resultados de tipo `LIBERAR_DEPOSITO`/`RETENER_DEPOSITO` o cualquier retención parcial son procesados por este caso de uso, confirmando que es la única y canónica SPEC 8 vigente para la disputa de garantía".
+
+---
+**Nota editorial**: El archivo `008-resolver-disputa-de-garantia/spec.md` (título interno idéntico pero contenido incompatible: modelo `LIBERAR_DEPOSITO`/`RETENER_DEPOSITO`, retención parcial, y el Administrador Financiero como actor directo) queda **descartado**. Debe eliminarse o archivarse fuera del set vigente de SPECs para evitar ambigüedad futura.

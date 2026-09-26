@@ -90,7 +90,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar tarifa base
 - **Actores:** Sistema de Gestión de Flota (provee datos de la embarcación); invocado internamente (`<<include>>`) por "Solicitar estimación para reserva" y "Brindar información de reserva".
-- **Flujo:** El sistema recibe el tipo/categoría de la embarcación desde Gestión de Flota y aplica la tarifa dinámica vigente (temporada alta —determinada automáticamente por la regla de calendario—, fin de semana, etc.) para obtener la tarifa base por unidad de tiempo.
+- **Flujo:** El sistema recibe el la tarifa base de la embarcación desde Gestión de Flota y aplica la tarifa dinámica vigente (temporada alta —determinada automáticamente por la regla de calendario—, fin de semana, etc.) para obtener la tarifa base por unidad de tiempo.
 - **Regla de negocio asociada:** Tarifas Dinámicas (3.1).
 
 #### Solicitar estimación para reserva

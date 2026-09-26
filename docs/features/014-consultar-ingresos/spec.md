@@ -15,22 +15,22 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
 **Escenarios de Aceptación**:
 
 0. **Escenario**: Consulta por periodicidad y período financiero fijo.
-  - **Dado** que el sistema define períodos quincenales, mensuales y trimestrales mediante los mismos límites fijos de calendario establecidos en "Consultar balance financiero" (SPEC 13).
-  - **Cuando** el Propietario solicita sus ingresos indicando una de esas periodicidades y selecciona un período ofrecido.
-  - **Entonces** el sistema calcula los ingresos usando exclusivamente las dispersiones exitosas registradas dentro de las fechas de inicio y fin fijas del período seleccionado.
+   - **Dado** que el sistema define períodos quincenales, mensuales y trimestrales mediante los mismos límites fijos de calendario establecidos en "Consultar balance financiero" (SPEC 13).
+   - **Cuando** el Propietario solicita sus ingresos indicando una de esas periodicidades y selecciona un período ofrecido.
+   - **Entonces** el sistema calcula los ingresos usando exclusivamente las dispersiones exitosas registradas dentro de las fechas de inicio y fin fijas del período seleccionado.
 
-  - El período en curso puede consultarse como período parcial, siempre que el sistema lo identifique explícitamente como abierto y use como fecha de corte el momento de la consulta. No se lo debe tratar como un período cerrado ni comparar como si sus datos fueran definitivos.
-  - Para un período cerrado, el sistema ofrece una lista acotada de los períodos más recientes, identificados por sus fechas fijas, de forma consistente con SPEC 13. El período en curso se ofrece separadamente como período parcial cuando corresponda.
+   - El período en curso puede consultarse como período parcial, siempre que el sistema lo identifique explícitamente como abierto y use como fecha de corte el momento de la consulta. No se lo debe tratar como un período cerrado ni comparar como si sus datos fueran definitivos.
+   - Para un período cerrado, el sistema ofrece una lista acotada de los períodos más recientes, identificados por sus fechas fijas, de forma consistente con SPEC 13. El período en curso se ofrece separadamente como período parcial cuando corresponda.
 
 1. **Escenario**: Comparación con el período anterior equivalente.
-  - **Dado** que existe un período anterior de la misma periodicidad y con la misma duración calendario.
-  - **Cuando** el Propietario consulta sus ingresos para un período.
-  - **Entonces** el sistema devuelve también las métricas del período anterior equivalente y la variación absoluta y porcentual, sin mezclar registros entre períodos.
+   - **Dado** que existe un período anterior de la misma periodicidad y con la misma duración calendario.
+   - **Cuando** el Propietario consulta sus ingresos para un período.
+   - **Entonces** el sistema devuelve también las métricas del período anterior equivalente y la variación absoluta y porcentual, sin mezclar registros entre períodos.
 
 2. **Escenario**: Consulta de métricas brutas, netas y promedios.
-  - **Dado** que existen dispersiones exitosas dentro del período consultado.
-  - **Cuando** el Propietario consulta sus ingresos.
-  - **Entonces** el sistema devuelve el total bruto, el total neto y los promedios bruto y neto por reserva con al menos una dispersión exitosa dentro del período.
+   - **Dado** que existen dispersiones exitosas dentro del período consultado.
+   - **Cuando** el Propietario consulta sus ingresos.
+   - **Entonces** el sistema devuelve el total bruto, el total neto y los promedios bruto y neto por reserva con al menos una dispersión exitosa dentro del período.
 
 3. **Escenario**: Consulta del total agregado de ingresos propios (sin filtro).
    - **Dado** que un Propietario cuenta con dispersiones exitosas asociadas a reservas de varias de sus embarcaciones.
@@ -50,7 +50,7 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
 ### Casos Extremos (Edge Cases)
 
 - **¿Qué sucede si un registro de dispersión no tiene un propietario asociado (por ejemplo, un registro legado o inconsistente)?**
-  El sistema no puede atribuir dicho registro a ningún Propietario. Conforme a RF-009, lo excluye del cálculo de ingresos de todo Propietario, registrando la inconsistencia internamente sin alterar el total del resto de los registros.
+  El sistema no puede atribuir dicho registro a ningún Propietario. Conforme a RF-016, lo excluye del cálculo de ingresos de todo Propietario, registrando la inconsistencia internamente sin alterar el total del resto de los registros.
 
 - **¿Qué sucede si el Propietario indica, dentro del filtro, un identificador de embarcación que no le pertenece?**
   El sistema considera "propias" únicamente las embarcaciones asociadas a dispersiones cuyo propietario coincida con el del solicitante. Un identificador de embarcación sin dispersiones de ese propietario se excluye del cálculo del total agregado y no aporta ningún monto, sin generar error.
@@ -80,7 +80,7 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
 - **RF-007**: El sistema DEBE calcular el total neto como la suma de los montos confirmados de las dispersiones exitosas dentro del alcance y período consultados.
 - **RF-008**: El sistema DEBE calcular el total bruto a partir de los montos brutos de alquiler conservados en las dispersiones exitosas dentro del alcance y período consultados.
 - **RF-009**: El sistema DEBE calcular los promedios bruto y neto por reserva, considerando una sola vez cada reserva con al menos una dispersión exitosa dentro del período.
-- **RF-010**: El sistema DEBE devolver, junto con las métricas, un desglose por embarcación y por origen de la dispersión (liquidación estándar o compensación por penalidad de cancelación).
+- **RF-010**: El sistema DEBE devolver, junto con las métricas, un desglose por embarcación y por origen de la dispersión (liquidación estándar por reserva completada, o compensación por penalidad de cancelación).
 - **RF-011**: El sistema DEBE devolver, cuando exista un período anterior equivalente, sus métricas y la variación absoluta y porcentual respecto del período consultado. Si el valor anterior es cero, la variación porcentual debe indicarse como no calculable.
 - **RF-012**: El sistema DEBE devolver un resultado parcial con corte en el momento de la consulta cuando el período seleccionado sea el período en curso, identificándolo como abierto.
 - **RF-013**: El sistema DEBE devolver valores cero, sin error, cuando no existan dispersiones exitosas dentro del alcance de la consulta.
@@ -98,7 +98,7 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
 
 ### Entidades Clave
 
-- **RegistroDeDispersión (Entidad, definida en SPEC 10)**: En este caso de uso es únicamente consultada, para calcular el total agregado de ingresos del Propietario. Su atributo de propietario asociado y el identificador de la embarcación de la reserva determinan el alcance de la consulta.
+- **RegistroDeDispersión (Entidad, definida en SPEC 10)**: En este caso de uso es únicamente consultada, para calcular el total agregado de ingresos del Propietario. Su atributo de propietario asociado y el identificador de la embarcación de la reserva determinan el alcance de la consulta. El origen de cada dispersión se identifica como liquidación estándar por reserva completada, o compensación por penalidad de cancelación (moderada o tardía/No-Show).
 - **SolicitudConsultaIngresos (DTO)**: Información recibida desde el Propietario para esta operación. Contiene la periodicidad, el período fijo seleccionado y, opcionalmente, la lista de identificadores de embarcaciones a consultar; si se omite, el alcance es la totalidad de los registros del Propietario solicitante.
 - **IngresosResultado (DTO)**: Resultado que el sistema devuelve al Propietario. Contiene la periodicidad, el período y su estado (cerrado o en curso), los totales bruto y neto, los promedios bruto y neto por reserva, el desglose por embarcación y origen, y, cuando corresponda, las métricas y variaciones del período anterior equivalente. No representa una entidad persistida.
 
@@ -115,3 +115,4 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
 - **CE-007**: Exclusión de Estados No Exitosos, "100% de los resultados de ingresos excluyen dispersiones en curso, rechazadas, canceladas, expiradas o fallidas, sin importar que pertenezcan al propietario consultante".
 - **CE-008**: Exactitud de Métricas, "100% de los resultados devuelven totales y promedios bruto y neto que coinciden con los importes históricos conservados en las dispersiones exitosas, contando cada reserva una sola vez para los promedios".
 - **CE-009**: Comparación Equivalente, "100% de las comparaciones utilizan el período inmediatamente anterior de igual periodicidad y duración calendario, calculando correctamente la variación absoluta y evitando divisiones por cero en la variación porcentual".
+- **CE-010**: Consistencia Terminológica, "100% de las referencias al origen de una dispersión estándar usan el estado único 'completada', sin residuos de la terminología 'finalización sin incidentes'/'completada con incidentes' del modelo anterior".
