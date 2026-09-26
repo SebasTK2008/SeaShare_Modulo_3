@@ -13,7 +13,7 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 - **Registrar y aplicar financieramente el depósito de garantía**, consumiendo desde el Módulo 2 el estado de la disputa cuando se detectan daños al regreso de la embarcación.
 - **Solicitar la liquidación de fondos** entre la plataforma (comisión) y el propietario, una vez descontados comisión y seguro, dejando el resultado externo sujeto a las capacidades de la pasarela.  
 - **Calcular estimaciones** para que el usuario pueda visualizar estimaciones o valores aproximados de cada reserva. 
--Aplicar las penalidades o reembolsos** que correspondan según la ventana de cancelación en la que se encuentre la reserva.
+-**Aplicar las penalidades o reembolsos** que correspondan según la ventana de cancelación en la que se encuentre la reserva.
 - **Exponer información financiera** (balances, ingresos, registros históricos) a los roles interesados: Propietarios y Administración Financiera.
 - **Configurar los parámetros financieros globales** de la plataforma (porcentaje de comisión, tarifas de seguro y porcentajes de tarifa dinámica).
 - **Colaborar con los otros sistemas de SEA-SHARE**: consume datos de la embarcación provistos por el sistema de Gestión de Flota, y responde a las solicitudes de estimación, confirmación de pago y estado financiero que le hace el sistema de Reservas y Operaciones.
@@ -24,7 +24,7 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 | :--- | :--- |
 | **Arrendatario** | Origina el cobro de su reserva. |
 | **Propietario** | Recibe la dispersión de fondos y consulta sus ingresos/registros. |
-| **Administrador Financiero** | Supervisa balances y configura parámetros globales. La resolución operativa de disputas pertenece al Módulo 2. |
+| **Administrador Financiero** | Supervisa balances y configura parámetros globales. La resolución operativa y administrativa de disputas pertenece al Módulo 2. |
 | **Pasarela de Pago** | Sistema externo que ejecuta técnicamente cobros, reembolsos y dispersiones. |
 | **Sistema de Reservas y Operaciones** | Solicita estimaciones, confirma pagos, consulta el estado financiero de una reserva y su valor calculado. |
 | **Sistema de Gestión de Flota** | Provee la tarifa base de una  embarcación necesarios para calcular la tarifa dinamica de una reserva. |
@@ -32,22 +32,24 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 ### Supuestos de trazabilidad
 Dado que algunas reglas de negocio no tienen un caso de uso dedicado en el diagrama, se asumen las siguientes correspondencias:
 - El **seguro náutico** se calcula como parte de  "Solicitar el valor calculado de la reserva", no como un caso de uso independiente.
-- La **penalidad por cancelación** (regla del sistema de Reservas) se resuelve mediante la combinación de "Solicitar el valor calculado de la reserva", "Reembolsar dinero a arrendatario" y "Liquidar fondos de alquiler", según la ventana de tiempo en la que se solicitó la cancelación.
+- La **penalidad por cancelación** (regla del sistema de Reservas) se resuelve mediante la combinación de "Solicitar el valor calculado de la reserva", "Reembolsar dinero a arrendatario" y "Liquidar fondos de alquiler", según la ventana de tiempo en la que se solicitó la cancelación. La operacion financiera a realizar segun el caso depende de si la reserva pasa a estado: cancelado
 
 - **En procesar cobro** se utiliza, cuando la pasarela lo admite, un flujo de autorización y captura: la autorización representa la retención lógica del importe del alquiler y de la garantía, y la captura se solicita cuando el negocio determina el importe definitivo. Esto no constituye un escrow jurídico ni supone que toda pasarela pueda mantener una autorización hasta el final de una reserva. La autorización tiene una vigencia limitada; si expira, el sistema registra el hecho y ejecuta el flujo de recuperación definido, sin asumir que los fondos siguen disponibles.
 - La pasarela es un ejecutor externo: puede aceptar una solicitud sin haber aprobado el pago, reportar estados posteriores, rechazar, cancelar o dejar una operación en proceso. El sistema conserva los estados externos y no marca una operación como completada hasta recibir una confirmación válida.
 - Las solicitudes de cobro, captura, reembolso y liquidación son idempotentes. Cada operación conserva una identidad propia, su referencia externa y la relación con el cobro original para evitar duplicaciones durante reintentos o notificaciones repetidas.
 - Los **balances financieros** estaran dados por un periodo quincenal, mensual o trimestral. 
-- 
+- El **deposito de garantia** es manejado por el modulo 2 (reservas y operaciones) y funciona de la siguiente manera: Al terminarse una reserva, es decir, cuando el propietario recibe el barco este confirma que la reserva ya se completo y a partir de ese momento tiene un lapso de 24 horas para verificar que no hubo ningun daño. esto se traduce a que cuando una reserva pasa a estado "completada" automaticamente deberá entregarse el dinero correspondiente al propietario pero EL DEPOSITO DE GARANTIA SE DEBERÁ RETENER POR 24 HORAS. 
+
+El depósito se calcula como el 10% de la tarifa base diaria de la embarcación y el valor calculado se congela para la reserva.
 ---
 
 ## 2. Flujo Paso a Paso de una Reserva (Participación del Sistema)
 
-El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del sistema de Reservas y Operaciones y a las acciones del arrendatario. Su participación en el ciclo de vida completo de una reserva es la siguiente:
+El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del sistema de Reservas y Operaciones (modulo 2) y a las acciones del arrendatario. Su participación en el ciclo de vida completo de una reserva es la siguiente:
 
 1. **Solicitud de estimación.** El sistema de Reservas pide una estimación para una posible reserva. El sistema ejecuta *"Solicitar estimación para reserva"*, que incluye obligatoriamente *"Brindar tarifa base"*, la cual a su vez consulta al sistema de Gestión de Flota el tipo y categoría de la embarcación para aplicar la tarifa dinámica correspondiente (temporada alta, determinada automáticamente por calendario, o fin de semana). Dicha estimación es meramente INFORMATIVA y puede verse reflejada para una unica embarcacion (con una fecha y cierto numero de pasajeros) o puede verse reflejada como una lista de estimaciones (para la pantalla principal en donde se veran las embarcaciones) con una fecha y numero de pasajeros  predeterminados (1 dia y 1 pasajero)
 
-2. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"* (que también incluye "Brindar tarifa base"), entregando el desglose de precio que el arrendatario verá antes de confirmar.
+2. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"* (que también incluye "Brindar tarifa base"), esto para que el sistema financiero pueda realizar el calculo total y  entreganr el desglose de precio que el arrendatario verá antes de confirmar.
 
 3. **Cálculo del valor total.** Una vez el arrendatario decide reservar, el sistema de Reservas solicita el valor definitivo mediante *"Solicitar el valor calculado de la reserva"*: tarifa base diaria × duración + seguro náutico por pasajero + depósito de garantía. El depósito corresponde al 10% de la tarifa base diaria de la embarcación y no depende de la duración ni del daño reportado.
 
@@ -64,7 +66,7 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 8. **Finalización y disputa de garantía.** El sistema de Reservas informa la finalización de la reserva con el único estado `completada`. Finanzas liquida el alquiler y el seguro, pero deja pendiente el depósito. El Módulo 2 crea y gestiona la disputa, concede al propietario una ventana de 24 horas para reportar daños y luego informa a Finanzas únicamente el estado de disputa. Si el estado es `rechazado`, Finanzas solicita el reembolso total al Arrendatario; si el estado es `completado`, solicita la liquidación total al Propietario.
 
-9. **Liquidación final.** Superadas las etapas anteriores, el sistema calcula y solicita la captura y/o liquidación correspondiente vía la Pasarela de Pago: valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación. La solicitud puede quedar pendiente o fallar; solo su confirmación externa permite informar que los fondos fueron efectivamente liquidados.
+9. **Liquidación final.** Superadas las etapas anteriores (una reserva ya fue completada), el sistema calcula y solicita la captura y/o liquidación correspondiente vía la Pasarela de Pago: valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación. La solicitud puede quedar pendiente o fallar; solo su confirmación externa permite informar que los fondos fueron efectivamente liquidados.
 
 10. **Supervisión continua.** En cualquier momento, el **Propietario** puede *"Consultar ingresos"* y *"Consultar registros financieros"*; el **Administrador Financiero** puede *"Consultar balance financiero"*, *"Consultar registros financieros"* y *"Configurar parámetros financieros globales"* (porcentaje de comisión, tarifa de seguro y porcentajes de tarifa dinámica).
 
@@ -78,11 +80,11 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 La **temporada alta** comprende los periodos del año con mayor flujo de viajeros, precios más altos en vuelos y alojamiento y mayor ocupación en los destinos. Para el contexto colombiano de SEA-SHARE, el sistema deriva automáticamente la vigencia de la temporada alta aplicando la siguiente regla de calendario a cada año evaluado:
 
-- **Fin de año:** desde la segunda mitad de noviembre hasta mediados de enero del año siguiente.
-- **Mitad de año:** los meses de junio y julio (vacaciones escolares y fiestas locales).
-- **Semana Santa:** los días santos de marzo o abril.
-- **Semana de receso:** la semana de descanso escolar en octubre.
-- **Puentes festivos y fines de semana largos.**
+- **Fin de año:** desde el 15 de noviembre hasta el 15 de enero del año siguiente.
+- **Mitad de año:** desde el 1 de junio y al 30 de julio (vacaciones escolares y fiestas locales).
+- **Semana Santa:** los días santos de marzo o abril. (se deben calcular mediante el Algoritmo de Meeus/Jones/Butcher)
+- **Semana de receso:** Del 5 al 12 de octubre.
+
 
 La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manualmente**: "Brindar tarifa base" determina si una fecha pertenece a temporada alta evaluando si cae dentro de alguna de estas ventanas. El Administrador Financiero únicamente configura el **porcentaje de incremento** de tarifa dinámica aplicable durante dicha condición, mediante "Configurar parámetros financieros globales". Los cambios derivados del calendario afectan únicamente los cálculos posteriores y nunca los valores ya aplicados a reservas existentes.
 
@@ -93,12 +95,12 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Solicitar estimación para reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** Ante una intención de reserva aún no confirmada, Reservas pide al sistema una estimación preliminar. El sistema incluye "Brindar tarifa base" y devuelve un estimado sin bloquear ningún activo.
+- **Flujo:** Ante una intención de reserva aún no confirmada (el arrendatario esta observando opciones), Reservas pide al sistema una estimación preliminar. El sistema incluye "Brindar tarifa base" y devuelve un estimado sin bloquear ningún activo.
 - **Regla de negocio asociada:** Tarifas Dinámicas (3.1).
 
 #### Brindar información de reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** Cuando el arrendatario ingresa los datos  de una reserva específica, el sistema entrega el desglose completo de precio (incluyendo tarifa base vía `<<include>>`, numero de pasajeros y cantidad de dias  ).
+- **Flujo:** Cuando el arrendatario ingresa los datos  de una reserva específica, el sistema de reservas entrega (brinda) dicha informacion(identificador de la reserva,embarcacion, numero de pasajeros y cantidad de dias) luego el sistema financiero debera consultar la tarifa base de la embarcacion mediante un <<include>> a brindar tarifa base para poder realizar los calculos en otro caso de uso.
 - **Regla de negocio asociada:** Tarifas Dinámicas (3.1); Matriz de Liquidación (3.2).
 
 #### Solicitar el valor calculado de la reserva
@@ -122,7 +124,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar el estado de la reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** El sistema de Reservas informa el estado de una reserva (disponible, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado tardiamente, cancelado moderadamente o completada). El estado `completada` dispara la liquidación del alquiler y el seguro, sin incluir el depósito. El depósito queda pendiente hasta que Finanzas reciba el estado de disputa mediante "Brindar información de disputa de garantía".
+- **Flujo:** El sistema de Reservas informa el estado de una reserva (disponible, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado tardiamente, cancelado moderadamente o completada). El estado `completada` dispara la liquidación del alquiler y el seguro, sin incluir el depósito de garantia. El depósito queda pendiente hasta que Finanzas reciba el estado de disputa mediante "Brindar información de disputa de garantía" o pasadas las 24 horas en caso de  no haber una disputa. 
 - **Regla de negocio asociada:** Transversal a Matriz de Liquidación (3.2) y Cancelaciones (Módulo 2, 2.2).
 
 ---
@@ -131,7 +133,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar información de disputa de garantía
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** El Módulo 2 crea y gestiona la disputa después de la finalización de la reserva. El propietario dispone de 24 horas para reportar daños. El Módulo 2 informa a Finanzas únicamente el identificador de la reserva, el identificador de la disputa, el estado `pendiente`, `rechazado` o `completado`, una versión o clave idempotente y un motivo opcional cuando el estado sea `rechazado`. No envía montos ni ejecuta operaciones financieras. `Rechazado` implica devolver el depósito al Arrendatario y `completado` implica liquidarlo al Propietario.
+- **Flujo:** El Módulo 2 crea y gestiona la disputa después de la finalización de la reserva. El propietario dispone de 24 horas para reportar daños. El Módulo 2 informa a Finanzas únicamente el identificador de la reserva, el identificador de la disputa, el estado `pendiente`, `rechazado` o `completado`, una versión o clave idempotente y un motivo opcional cuando el estado sea `rechazado`. No envía montos ni ejecuta operaciones financieras. `Rechazado` implica devolver el depósito al Arrendatario y `completado` implica liquidarlo al Propietario. Si una reserva es completada pero pasadas 24 horas no se encuentra una disputa relacionada  con su id se da por hecho que no hubo ningun inconveniente con esta y por lo tanto tambien se liberará el deposito al arrendatario.
 - **Regla de negocio asociada:** Depósito de Garantía (3.1).
 
 #### Reembolsar dinero a arrendatario
