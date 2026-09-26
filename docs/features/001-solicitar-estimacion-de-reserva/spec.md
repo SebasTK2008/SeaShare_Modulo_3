@@ -1,6 +1,6 @@
 # Especificación de Funcionalidad: UC01 - Solicitar Estimación de Reserva
 
-**Creado**: 2026-08-27 (v2 — respuestas integradas a los casos extremos)
+**Creado**: 2026-08-27 
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
@@ -11,7 +11,7 @@ Como Módulo de Reservas (Gestión de Reservas), al necesitar listar opciones de
 **Contexto del Sistema (Flujo)**: 
 1. El Módulo de Reservas carga las opciones de reserva.
 2. El Módulo de Reservas activa este caso de uso enviando una lista de identificadores (`boat_ids`) al módulo de Finanzas. Si aún no hay fechas seleccionadas, envía esta información vacía.
-3. El módulo de Finanzas invoca el sub-caso "Proveer tarifa base" consultando la tarifa de cada bote al Módulo de Gestión de Flota.
+3. El módulo de Finanzas invoca el sub-caso "Brindar tarifa base" consultando la tarifa de cada bote al Módulo de Gestión de Flota.
 4. El módulo de Finanzas realiza los cálculos asumiendo 1 día de duración por defecto y devuelve las estimaciones, permitiendo que el Módulo de Reservas actúe únicamente como consumidor de la API sin hacer operaciones locales.
 
 **Por qué esta prioridad**: Mantiene la arquitectura limpia y la separación de responsabilidades, al mismo tiempo que es fundamental mostrar precios estimados desde la búsqueda inicial para la conversión.

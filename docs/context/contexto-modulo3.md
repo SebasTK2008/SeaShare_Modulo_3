@@ -26,8 +26,8 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 | **Propietario** | Recibe la dispersión de fondos y consulta sus ingresos/registros. |
 | **Administrador Financiero** | Supervisa balances y configura parámetros globales. La resolución operativa y administrativa de disputas pertenece al Módulo 2. |
 | **Pasarela de Pago** | Sistema externo que ejecuta técnicamente cobros, reembolsos y dispersiones. |
-| **Sistema de Reservas y Operaciones** | Solicita estimaciones, confirma pagos, consulta el estado financiero de una reserva y su valor calculado. |
-| **Sistema de Gestión de Flota** | Provee la tarifa base de una  embarcación necesarios para calcular la tarifa dinamica de una reserva. |
+| **Sistema de Reservas y Operaciones** | Solicita estimaciones, confirma pagos, consulta el estado financiero de una reserva y su valor calculado; también entrega al sistema el propietario y la capacidad máxima de pasajeros de la embarcación (obtenidos previamente por Reservas desde el Sistema de Gestión de Flota). |
+| **Sistema de Gestión de Flota** | Provee la tarifa base de una embarcación necesaria para calcular la tarifa dinámica de una reserva. El sistema (Módulo 3) no lo consulta directamente para obtener el propietario o la capacidad máxima de pasajeros de una embarcación; ese dato llega siempre a través del Sistema de Reservas y Operaciones. |
 
 ### Supuestos de trazabilidad
 Dado que algunas reglas de negocio no tienen un caso de uso dedicado en el diagrama, se asumen las siguientes correspondencias:
@@ -51,7 +51,7 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 2. **Inicio formal de la reserva.** El arrendatario selecciona la embarcación y oprime "Reservar". La reserva pasa al estado "Iniciada" (ver sea-share.md, Módulo 2, 2.1) y comienza el TTL de 15 minutos; desde este momento la embarcación deja de listarse como disponible.
 
-3. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"* (que también incluye "Brindar tarifa base"), esto para que el sistema financiero pueda realizar el calculo total y  entreganr el desglose de precio que el arrendatario verá antes de confirmar. Esto ocurre dentro del estado "Iniciada".
+3. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"*, enviando el identificador de la reserva, la embarcación, la cantidad de días, el número de pasajeros, y el propietario y la capacidad máxima de pasajeros de la embarcación (datos que el sistema de Reservas obtuvo previamente del Sistema de Gestión de Flota). El sistema financiero, a su vez, incluye *"Brindar tarifa base"* para obtener la tarifa vigente y registra internamente toda esta información — sin consultar directamente al Sistema de Gestión de Flota — de manera que quede disponible para que *"Solicitar el valor calculado de la reserva"* entregue posteriormente el desglose de precio que el arrendatario verá antes de confirmar. Esto ocurre dentro del estado "Iniciada".
 
 4. **Cálculo del valor total.** Una vez el arrendatario decide reservar, el sistema de Reservas solicita el valor definitivo mediante *"Solicitar el valor calculado de la reserva"*: tarifa base diaria × duración + seguro náutico por pasajero + depósito de garantía. El depósito corresponde al 10% de la tarifa base diaria de la embarcación y no depende de la duración ni del daño reportado. Esto ocurre dentro del estado "Iniciada", antes de que el arrendatario oprima "Confirmar pago".
 
@@ -66,7 +66,7 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
    - **Cancelacion moderada: 72h–24h:** el sistema reembolsa el 50% y dispersa el 50% restante como compensación al propietario vía *"Liquidar fondos de alquiler"*.
    - **Cancelacion tardia: <24h / No-Show:** el sistema no reembolsa; dispersa el 100% como compensación al propietario.
 
-9. **Finalización y disputa de garantía.** El sistema de Reservas informa la finalización de la reserva con el único estado `completada`. Finanzas liquida el alquiler y el seguro, pero deja pendiente el depósito. El Módulo 2 crea y gestiona la disputa, concede al propietario una ventana de 24 horas para reportar daños y luego informa a Finanzas únicamente el estado de disputa. Si el estado es `rechazado`, Finanzas solicita el reembolso total al Arrendatario; si el estado es `completado`, solicita la liquidación total al Propietario.
+9. **Finalización y disputa de garantía.** El sistema de Reservas informa la finalización de la reserva con el único estado `completada`. Finanzas liquida el alquiler y el seguro, pero deja pendiente el depósito. El Módulo 2 crea y gestiona la disputa, concede al propietario una ventana de 24 horas para reportar daños y luego informa a Finanzas únicamente el estado de disputa. Si el estado es `RECHAZADO`, Finanzas solicita el reembolso total al Arrendatario; si el estado es `COMPLETADO`, solicita la liquidación total al Propietario.
 
 10. **Liquidación final.** Superadas las etapas anteriores (una reserva ya fue completada), el sistema calcula y solicita la captura y/o liquidación correspondiente vía la Pasarela de Pago: valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación. La solicitud puede quedar pendiente o fallar; solo su confirmación externa permite informar que los fondos fueron efectivamente liquidados.
 
@@ -102,7 +102,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar información de reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** Cuando el arrendatario ingresa los datos  de una reserva específica, el sistema de reservas entrega (brinda) dicha informacion(identificador de la reserva,embarcacion, numero de pasajeros y cantidad de dias) luego el sistema financiero debera consultar la tarifa base de la embarcacion mediante un <<include>> a brindar tarifa base para poder realizar los calculos en otro caso de uso.
+- **Flujo:** Cuando el arrendatario ingresa los datos de una reserva específica, el sistema de Reservas entrega dicha información (identificador de la reserva, embarcación, número de pasajeros, cantidad de días, propietario y capacidad máxima de pasajeros de la embarcación — estos dos últimos ya obtenidos por Reservas desde el Sistema de Gestión de Flota) y el sistema financiero incluye (`<<include>>`) a "Brindar tarifa base" para obtener la tarifa vigente de la embarcación, sin consultar directamente al Sistema de Gestión de Flota para el propietario o la capacidad máxima, de manera que quede registrada internamente toda la información necesaria para los cálculos de otro caso de uso.
 - **Regla de negocio asociada:** Tarifas Dinámicas (3.1); Matriz de Liquidación (3.2).
 
 #### Solicitar el valor calculado de la reserva
@@ -135,7 +135,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar información de disputa de garantía
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** El Módulo 2 crea y gestiona la disputa después de la finalización de la reserva. El propietario dispone de 24 horas para reportar daños. El Módulo 2 informa a Finanzas únicamente el identificador de la reserva, el identificador de la disputa, el estado `pendiente`, `rechazado` o `completado`, una versión o clave idempotente y un motivo opcional cuando el estado sea `rechazado`. No envía montos ni ejecuta operaciones financieras. `Rechazado` implica devolver el depósito al Arrendatario y `completado` implica liquidarlo al Propietario. Si una reserva es completada pero pasadas 24 horas no se encuentra una disputa relacionada  con su id se da por hecho que no hubo ningun inconveniente con esta y por lo tanto tambien se liberará el deposito al arrendatario.
+- **Flujo:** El Módulo 2 crea y gestiona la disputa después de la finalización de la reserva. El propietario dispone de 24 horas para reportar daños. El Módulo 2 informa a Finanzas únicamente el identificador de la reserva, el identificador de la disputa, el estado `PENDIENTE`, `RECHAZADO` o `COMPLETADO`, una versión o clave idempotente y un motivo opcional cuando el estado sea `RECHAZADO`. No envía montos ni ejecuta operaciones financieras. `RECHAZADO` implica devolver el depósito al Arrendatario y `COMPLETADO` implica liquidarlo al Propietario. Si una reserva es completada pero pasadas 24 horas no se encuentra una disputa relacionada  con su id se da por hecho que no hubo ningun inconveniente con esta y por lo tanto tambien se liberará el deposito al arrendatario.
 - **Regla de negocio asociada:** Depósito de Garantía (3.1).
 
 #### Reembolsar dinero a arrendatario
@@ -149,7 +149,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Liquidar fondos de alquiler
 - **Actores:** Pasarela de Pago (ejecuta la operación); beneficia al Propietario.
-- **Flujo:** Al recibir `completada`, el sistema calcula el pago estándar como *Valor Bruto − Comisión de la Plataforma − Seguro* y lo solicita sin incluir el depósito. Cuando "Brindar información de disputa de garantía" informa `completado`, el sistema recupera internamente el depósito fijo y solicita su liquidación total al Propietario. Esta liquidación es una consecuencia de negocio y puede ejecutarse mediante una operación consolidada o relacionada soportada por la integración, no necesariamente como una transferencia directa.
+- **Flujo:** Al recibir `completada`, el sistema calcula el pago estándar como *Valor Bruto − Comisión de la Plataforma − Seguro* y lo solicita sin incluir el depósito. Cuando "Brindar información de disputa de garantía" informa `COMPLETADO`, el sistema recupera internamente el depósito fijo y solicita su liquidación total al Propietario. Esta liquidación es una consecuencia de negocio y puede ejecutarse mediante una operación consolidada o relacionada soportada por la integración, no necesariamente como una transferencia directa.
 - **Regla de negocio asociada:** Matriz de Liquidación — Pago al Propietario y Penalidad por Cancelación (3.2).
 
 ---
@@ -163,7 +163,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Consultar registros financieros
 - **Actores:** Administrador Financiero; Propietario.
-- **Flujo:** Ambos roles pueden revisar el historial de transacciones (cobros, reembolsos, dispersiones, penalidades) asociadas a las reservas, con distintos niveles de alcance (el propietario ve solo sus propias embarcaciones; el administrador ve el histórico global).
+- **Flujo:** Ambos roles pueden revisar el historial de transacciones (cobros, reembolsos y dispersiones) asociadas a las reservas, con distintos niveles de alcance (el propietario ve solo sus propias embarcaciones; el administrador ve el histórico global). Las compensaciones por penalidad de cancelación se identifican mediante el origen del reembolso o de la dispersión correspondiente, no como un tipo de transacción independiente.
 - **Regla de negocio asociada:** Transversal a la Matriz de Liquidación (3.2).
 
 #### Consultar balance financiero
@@ -184,8 +184,10 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 | :--- | :--- |
 | Tarifas Dinámicas | Brindar tarifa base, Solicitar estimación para reserva, Brindar información de reserva |
 | Depósito de Garantía | Brindar información de disputa de garantía, Reembolsar dinero a arrendatario, Liquidar fondos de alquiler |
-| Seguro Náutico | Brindar tarifa base, Solicitar el valor calculado de la reserva *(implícito)* |
+| Seguro Náutico | Solicitar el valor calculado de la reserva |
 | Valor Alquiler Bruto | Solicitar el valor calculado de la reserva |
 | Comisión Plataforma | Configurar parámetros financieros globales, Liquidar fondos de alquiler |
 | Pago al Propietario | Liquidar fondos de alquiler, Consultar ingresos |
 | Penalidad por Cancelación | Solicitar el valor calculado de la reserva, Reembolsar dinero a arrendatario, Liquidar fondos de alquiler |
+
+> **Nota**: "Penalidad por Cancelación" es un **origen** registrado dentro de un `RegistroDeReembolso` o de un `RegistroDeDispersión` (cancelación moderada o tardía/No-Show), no un tipo de transacción independiente. El modelo de transacciones se limita siempre a cobro, reembolso y dispersión.

@@ -1,12 +1,12 @@
 # Especificación de Funcionalidad: UC04 - Solicitar el Valor Calculado de la Reserva
 
-**Creado**: 2026-09-06
+**Creado**: 2026-09-06 
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
 ### Historia de Usuario 1 - Calcular y devolver el desglose completo del valor de una reserva registrada (Prioridad: P1)
 
-Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud del valor calculado de una reserva específica (identificada por su identificador de reserva), quiero recuperar la información previamente registrada para esa reserva (tarifa base, cantidad de días y número de pasajeros) y calcular sobre ella el monto de alquiler, el monto del seguro náutico y el depósito de garantía. En este caso de uso, el depósito de garantía se define como el 10% de la tarifa base de la embarcación, de manera que pueda devolver el desglose completo junto con su valor total y dejar los importes disponibles internamente para el proceso de cobro posterior.
+Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud del valor calculado de una reserva específica (identificada por su identificador de reserva), quiero recuperar la información previamente registrada para esa reserva (tarifa base, cantidad de días y número de pasajeros) y calcular sobre ella el monto de alquiler, el monto del seguro náutico y el depósito de garantía. En este caso de uso, el depósito de garantía se define como el 10% de la tarifa base diaria de la embarcación, de manera que pueda devolver el desglose completo junto con su valor total y dejar los importes disponibles internamente para el proceso de cobro posterior.
 
 **Por qué esta prioridad**: Este caso de uso produce el valor financiero definitivo de la reserva —a diferencia de la estimación preliminar de "Solicitar estimación para reserva", que excluye explícitamente el depósito de garantía—, por lo que es el paso indispensable antes de que pueda ejecutarse cualquier cobro real al arrendatario.
 
