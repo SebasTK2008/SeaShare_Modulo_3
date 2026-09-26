@@ -34,6 +34,38 @@ Como el sistema, al recibir del Administrador Financiero una solicitud de balanc
    - **Cuando** el Administrador Financiero selecciona, dentro de la lista ofrecida, un período distinto al más reciente.
    - **Entonces** el sistema calcula y devuelve las tres cifras consolidadas correspondientes exactamente a ese período seleccionado.
 
+---
+
+### Historia de Usuario 2 - Exportar el balance financiero de un período cerrado a un archivo (Prioridad: P2)
+
+Como el sistema, al recibir del Administrador Financiero una solicitud de exportación del balance financiero indicando la periodicidad y el período cerrado que ya ha seleccionado en la consulta, quiero generar un archivo que contenga las tres cifras consolidadas del balance —fondos retenidos, comisiones acumuladas y depósitos en garantía pendientes de resolución— junto con la identificación del período y los metadatos de su generación, de manera que el Administrador Financiero pueda archivar y compartir el balance de ese período sin reconstruirlo ni consultar los registros individuales que lo componen.
+
+**Por qué esta prioridad**: El balance de un período cerrado es una cifra que se archiva, se comparte con la operación y sirve como respaldo documental. Reconstruirla a partir de la consulta de registros financieros (SPEC 12) obliga al Administrador Financiero a recalcular por su cuenta las mismas magnitudes, con lo que cualquier diferencia de corte o de redondeo se convierte en una discrepancia inexplicada. Exportar el resultado ya calculado por el sistema elimina esa fuente de discrepancia. Se ubica en P2 porque la consulta del balance ya entrega las tres cifras y cubre la necesidad operativa principal; la exportación agrega archivo y trazabilidad, no información.
+
+**Prueba Independiente**: Con registros de cobro, reembolso y dispersión previamente creados y con depósitos en distintos estados de disputa, enviar al sistema una solicitud de exportación del balance para cada una de las tres periodicidades, seleccionando el período cerrado más reciente ofrecido, y validar que el archivo generado contiene exactamente las mismas tres cifras y el mismo período que la consulta del balance devuelve para esa misma selección.
+
+**Escenarios de Aceptación**:
+
+1. **Escenario**: Exportación del balance del período cerrado más reciente.
+   - **Dado** que existen registros de cobro, reembolso y dispersión, así como reservas con depósitos de garantía pendientes de resolución.
+   - **Cuando** el Administrador Financiero solicita la exportación del balance con una periodicidad y selecciona el período cerrado más reciente ofrecido por el sistema.
+   - **Entonces** el sistema genera un archivo que contiene los fondos retenidos, las comisiones acumuladas y los depósitos en garantía pendientes de resolución correspondientes a ese período, junto con la periodicidad, las fechas de inicio y fin fijas del período, el solicitante y la fecha y hora de generación.
+
+2. **Escenario**: Exportación de un período cerrado anterior.
+   - **Dado** que el sistema ofrece una lista acotada de períodos cerrados anteriores de la periodicidad seleccionada.
+   - **Cuando** el Administrador Financiero exporta un período distinto al más reciente.
+   - **Entonces** el sistema genera un archivo con las mismas tres cifras consolidadas y el mismo período que devolvería la consulta del balance para esa selección.
+
+3. **Escenario**: Exportación de un balance con componentes en cero.
+   - **Dado** que no existen registros dentro del alcance de alguno de los tres componentes del período seleccionado.
+   - **Cuando** el Administrador Financiero solicita la exportación de ese balance.
+   - **Entonces** el sistema genera el archivo con el valor cero en el componente correspondiente, sin error, conforme a RF-008.
+
+4. **Escenario**: Exportación de una selección de período no válida.
+   - **Dado** que el Administrador Financiero solicita la exportación de un período que no corresponde a un período cerrado ofrecido (por ejemplo, el período en curso o un identificador inválido).
+   - **Cuando** el sistema procesa esa solicitud de exportación.
+   - **Entonces** no genera ningún archivo y responde con un error controlado indicando que la selección no es válida, conforme a RNF-003.
+
 ### Casos Extremos (Edge Cases)
 
 - **¿Cómo se determinan exactamente los límites fijos de cada quincena, mes y trimestre?**
@@ -63,6 +95,15 @@ Como el sistema, al recibir del Administrador Financiero una solicitud de balanc
 - **¿Este caso de uso puede ser consultado por el Propietario, como ocurre con "Consultar registros financieros"?**
   No. Según el contexto (sección 3.5 y el diagrama de casos de uso), "Consultar balance financiero" está asociado exclusivamente al Administrador Financiero; el Propietario cuenta con "Consultar ingresos" y "Consultar registros financieros" (este último limitado a sus propios registros) para sus propias necesidades de supervisión.
 
+- **¿Qué sucede si se solicita la exportación de un balance cuyos componentes están en cero?**
+  El sistema genera el archivo con el valor cero en el componente correspondiente, sin error, conforme a RF-008; la ausencia de registros dentro de un componente no impide la exportación.
+
+- **¿Qué sucede si se solicita la exportación de un período que no corresponde a un período cerrado ofrecido (por ejemplo, el período en curso o un identificador inválido)?**
+  El sistema no genera ningún archivo y responde con un error controlado indicando que la selección no es válida, conforme a RNF-003 y RF-013.
+
+- **¿La exportación del balance recalcula los fondos retenidos, las comisiones acumuladas o los depósitos en garantía pendientes de resolución por una vía distinta a la de la consulta?**
+  No. La exportación entrega el resultado ya calculado por el sistema para la selección indicada; el archivo y la respuesta de la consulta contienen las mismas magnitudes y el mismo período, sin divergencias de corte ni de redondeo (RF-012).
+
 ## Requisitos *(obligatorio)*
 
 ### Requisitos Funcionales
@@ -82,6 +123,9 @@ Como el sistema, al recibir del Administrador Financiero una solicitud de balanc
 - **RF-010**: El sistema DEBE exponer este caso de uso exclusivamente al Administrador Financiero.
 - **RF-011**: El sistema NO DEBE crear, modificar ni eliminar ningún `RegistroDeCobro`, `RegistroDeReembolso`, `RegistroDeDispersión` o `InformaciónDeReserva` como parte de la ejecución de este caso de uso, al tratarse de una operación exclusivamente de consulta.
 
+- **RF-012**: El sistema DEBE recibir del Administrador Financiero una solicitud de exportación del balance financiero, indicando la periodicidad y el período cerrado seleccionado, y DEBE producir un archivo que contenga exactamente las mismas tres cifras consolidadas y el mismo período que devuelve la consulta del balance para esa misma selección, sin recalcular las magnitudes por una vía distinta.
+- **RF-013**: El sistema DEBE identificar cada archivo de balance generado con el solicitante, la fecha y hora de generación, la periodicidad y las fechas de inicio y fin fijas del período exportado, y DEBE responder con un error controlado, conforme a RNF-003, sin generar archivo cuando la selección de período no corresponda a un período cerrado ofrecido. La exportación NO DEBE crear, modificar ni eliminar ningún `RegistroDeCobro`, `RegistroDeReembolso`, `RegistroDeDispersión` o `InformaciónDeReserva`, conforme a RF-011.
+
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con el Administrador Financiero, tanto para recibir la solicitud de balance (periodicidad y selección del período cerrado ofrecido) como para devolver el resultado consolidado.
@@ -98,6 +142,8 @@ Como el sistema, al recibir del Administrador Financiero una solicitud de balanc
 - **SolicitudBalanceFinanciero (DTO)**: Información recibida desde el Administrador Financiero para esta operación. Contiene la periodicidad (quincenal, mensual o trimestral) y la selección del período cerrado, identificado por su rango de fechas o por su identificador dentro de la lista de períodos ofrecidos (RF-003). No incluye año ni rangos de fechas libres.
 - **BalanceFinancieroResultado (DTO)**: Resultado que el sistema devuelve al Administrador Financiero. Contiene el período consultado (periodicidad y las fechas de inicio y fin fijas del período seleccionado), los fondos retenidos, las comisiones acumuladas y los depósitos en garantía pendientes de resolución. No representa una entidad persistida, sino el valor de retorno de esta operación.
 
+- **ArchivoExportacionBalanceFinanciero (DTO)**: Resultado que el sistema devuelve al Administrador Financiero al generar la exportación. Contiene el archivo con los fondos retenidos, las comisiones acumuladas y los depósitos en garantía pendientes de resolución, la periodicidad, las fechas de inicio y fin fijas del período exportado, el solicitante y la fecha y hora de generación. No representa una entidad persistida, sino el artefacto descargable de esta operación.
+
 ## Criterios de Éxito *(obligatorio)*
 
 ### Resultados Medibles
@@ -109,3 +155,5 @@ Como el sistema, al recibir del Administrador Financiero una solicitud de balanc
 - **CE-005**: Resiliencia del Sistema, "100% de las solicitudes con una selección de período inválida (periodicidad no reconocida o período no cerrado/no ofrecido) son respondidas mediante un error controlado, y 100% de las consultas sin registros dentro del alcance de alguno de los tres componentes devuelven el valor cero para dicho componente sin generar un error".
 - **CE-006**: Exactitud de Períodos Ofrecidos, "100% de los períodos ofrecidos por el sistema corresponden a períodos cerrados (su fecha de fin ya ocurrió) y son los más recientes de la periodicidad seleccionada, con cero (0) períodos en curso o fuera de la lista ofrecida calculados".
 - **CE-007**: Consistencia Terminológica, "100% de las referencias al estado de la reserva y al resultado de la disputa de garantía usan el modelo vigente (estado único 'completada'; resultado `RECHAZADO`/`COMPLETADO`/`PENDIENTE` de 'Brindar información de disputa de garantía'), sin residuos de la terminología 'completada con incidentes'/'Resolver disputa de garantía' del modelo anterior".
+- **CE-008**: Fidelidad de la Exportación del Balance, "100% de los archivos de balance exportados contienen exactamente las mismas cifras consolidadas y el mismo período que la consulta del balance devuelve para la misma selección, con cero (0) discrepancias detectadas en pruebas automatizadas".
+- **CE-009**: Trazabilidad y Control de la Exportación, "100% de los archivos de balance exportados identifican al solicitante, la fecha y hora de generación, la periodicidad y el período, y 0 solicitudes de exportación con una selección de período inválida generan un archivo, respondiéndose con un error controlado".

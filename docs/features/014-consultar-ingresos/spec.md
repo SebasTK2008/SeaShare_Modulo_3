@@ -47,6 +47,38 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
    - **Cuando** el Propietario consulta su total de ingresos (con o sin filtro de embarcaciones) incluyendo dicha embarcación.
    - **Entonces** el sistema incluye el monto de dicha compensación dentro del total agregado devuelto.
 
+---
+
+### Historia de Usuario 2 - Exportar los ingresos propios de un período a un archivo (Prioridad: P2)
+
+Como el sistema, al recibir del Propietario una solicitud de exportación de sus ingresos —con la misma periodicidad, el mismo período y, opcionalmente, los mismos identificadores de embarcaciones que la consulta—, quiero generar un archivo que contenga los totales bruto y neto, los promedios por reserva, el desglose por embarcación y por origen y la comparación con el período anterior equivalente, junto con la identificación del período y los metadatos de su generación, de manera que el Propietario pueda archivar y compartir el resultado de sus ingresos sin reconstruirlo ni consultar las dispersiones individuales que lo componen.
+
+**Por qué esta prioridad**: Las métricas de ingresos se archivan y se comparten con el contador, y se recalculan en cada consulta. Exportarlas elimina la posibilidad de que una reconstrucción externa difiera del corte utilizado por el sistema. Se ubica en P2 porque la consulta de ingresos ya devuelve todas las métricas y cubre la necesidad operativa principal; la exportación agrega archivo y trazabilidad, no información.
+
+**Prueba Independiente**: Con registros de dispersión previamente creados —incluidos liquidaciones estándar y compensaciones por penalidad— para reservas de varios propietarios, enviar al sistema una solicitud de exportación de ingresos desde un Propietario específico, para un período cerrado y para el período en curso, con y sin filtro de embarcaciones, y validar que el archivo generado contiene exactamente las mismas métricas y el mismo período que la consulta devuelve para esa misma selección.
+
+**Escenarios de Aceptación**:
+
+1. **Escenario**: Exportación de ingresos de un período cerrado.
+   - **Dado** que existen dispersiones exitosas dentro del período cerrado consultado.
+   - **Cuando** el Propietario solicita la exportación de sus ingresos para ese período.
+   - **Entonces** el sistema genera un archivo con los totales bruto y neto, los promedios por reserva, el desglose por embarcación y por origen y la comparación con el período anterior equivalente, junto con la periodicidad, el período, el solicitante y la fecha y hora de generación.
+
+2. **Escenario**: Exportación de ingresos del período en curso.
+   - **Dado** que el período en curso está identificado como abierto por el sistema.
+   - **Cuando** el Propietario solicita la exportación de sus ingresos para ese período.
+   - **Entonces** el sistema genera un archivo con las métricas calculadas hasta el momento de la generación y lo identifica como parcial y abierto, sin presentarlo como un resultado definitivo, conforme a RF-012.
+
+3. **Escenario**: Exportación de ingresos con filtro de embarcaciones.
+   - **Dado** que el Propietario indica uno o más identificadores de sus propias embarcaciones.
+   - **Cuando** el Propietario solicita la exportación con ese filtro.
+   - **Entonces** el sistema genera un archivo equivalente al que devolvería la consulta de ingresos con el mismo filtro, excluyendo cualquier identificador que no tenga dispersiones asociadas a ese propietario, conforme a RF-005.
+
+4. **Escenario**: Exportación de ingresos sin dispersiones exitosas en el alcance.
+   - **Dado** que no existen dispersiones exitosas dentro del alcance y período solicitados.
+   - **Cuando** el Propietario solicita la exportación.
+   - **Entonces** el sistema genera el archivo con los valores en cero, sin error, conforme a RF-013.
+
 ### Casos Extremos (Edge Cases)
 
 - **¿Qué sucede si un registro de dispersión no tiene un propietario asociado (por ejemplo, un registro legado o inconsistente)?**
@@ -66,6 +98,15 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
 
 - **¿Cómo se compara un período con el anterior?**
   La comparación utiliza el período inmediatamente anterior de igual periodicidad y límites equivalentes. Si no existe información para el período anterior, sus métricas son cero y la variación porcentual se devuelve como no calculable, evitando una división por cero.
+
+- **¿Qué sucede si se exportan los ingresos del período en curso?**
+  El sistema genera el archivo con las métricas calculadas hasta el momento de la generación y lo identifica como parcial y abierto, sin presentarlo como un resultado definitivo, conforme a RF-012 y RF-019.
+
+- **¿Qué sucede si el filtro de embarcaciones no deja dispersiones exitosas dentro del período exportado?**
+  El sistema genera el archivo con los valores en cero, sin error, conforme a RF-013; la ausencia de dispersiones exitosas dentro del alcance no impide la exportación.
+
+- **¿La exportación de ingresos recalcula los totales por una vía distinta a la de la consulta?**
+  No. La exportación entrega el resultado ya calculado por el sistema para la selección indicada; el archivo y la respuesta de la consulta contienen las mismas métricas y el mismo período, sin divergencias de corte (RF-018).
 
 ## Requisitos *(obligatorio)*
 
@@ -89,6 +130,9 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
 - **RF-016**: El sistema DEBE excluir del cálculo de ingresos de todo Propietario los registros de dispersión sin propietario asociado.
 - **RF-017**: El sistema NO DEBE consultar al Sistema de Gestión de Flota en ningún momento dentro de este caso de uso; el alcance y la validación de las embarcaciones se resuelven exclusivamente por el propietario asociado a cada `RegistroDeDispersión`.
 
+- **RF-018**: El sistema DEBE recibir del Propietario una solicitud de exportación de ingresos, indicando la periodicidad y el período fijo, y opcionalmente los mismos identificadores de embarcaciones aceptados por la consulta, y DEBE producir un archivo que contenga exactamente las mismas métricas y el mismo período que devuelve la consulta de ingresos para esa misma selección, sin recalcular los totales por una vía distinta.
+- **RF-019**: El sistema DEBE identificar cada archivo de ingresos generado con el solicitante, la fecha y hora de generación, la periodicidad, el período y su estado (cerrado o en curso), y DEBE identificar como parcial y abierto, sin presentarlo como definitivo, el archivo generado para el período en curso, cuyo corte es el momento de la generación, conforme a RF-012. La exportación NO DEBE crear, modificar ni eliminar ningún registro de dispersión, conforme a RF-015.
+
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con el Propietario, tanto para recibir la solicitud de consulta (con el filtro opcional de embarcaciones) como para devolver el resultado agregado.
@@ -101,6 +145,8 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
 - **RegistroDeDispersión (Entidad, definida en SPEC 10)**: En este caso de uso es únicamente consultada, para calcular el total agregado de ingresos del Propietario. Su atributo de propietario asociado y el identificador de la embarcación de la reserva determinan el alcance de la consulta. El origen de cada dispersión se identifica como liquidación estándar por reserva completada, o compensación por penalidad de cancelación (moderada o tardía/No-Show).
 - **SolicitudConsultaIngresos (DTO)**: Información recibida desde el Propietario para esta operación. Contiene la periodicidad, el período fijo seleccionado y, opcionalmente, la lista de identificadores de embarcaciones a consultar; si se omite, el alcance es la totalidad de los registros del Propietario solicitante.
 - **IngresosResultado (DTO)**: Resultado que el sistema devuelve al Propietario. Contiene la periodicidad, el período y su estado (cerrado o en curso), los totales bruto y neto, los promedios bruto y neto por reserva, el desglose por embarcación y origen, y, cuando corresponda, las métricas y variaciones del período anterior equivalente. No representa una entidad persistida.
+
+- **ArchivoExportacionIngresos (DTO)**: Resultado que el sistema devuelve al Propietario al generar la exportación. Contiene el archivo con los totales bruto y neto, los promedios bruto y neto por reserva, el desglose por embarcación y por origen y la comparación con el período anterior equivalente, junto con la periodicidad, el período y su estado (cerrado o en curso), el solicitante y la fecha y hora de generación. No representa una entidad persistida, sino el artefacto descargable de esta operación.
 
 ## Criterios de Éxito *(obligatorio)*
 
@@ -116,3 +162,5 @@ Como el sistema, al recibir del Propietario una solicitud de consulta de ingreso
 - **CE-008**: Exactitud de Métricas, "100% de los resultados devuelven totales y promedios bruto y neto que coinciden con los importes históricos conservados en las dispersiones exitosas, contando cada reserva una sola vez para los promedios".
 - **CE-009**: Comparación Equivalente, "100% de las comparaciones utilizan el período inmediatamente anterior de igual periodicidad y duración calendario, calculando correctamente la variación absoluta y evitando divisiones por cero en la variación porcentual".
 - **CE-010**: Consistencia Terminológica, "100% de las referencias al origen de una dispersión estándar usan el estado único 'completada', sin residuos de la terminología 'finalización sin incidentes'/'completada con incidentes' del modelo anterior".
+- **CE-011**: Fidelidad de la Exportación de Ingresos, "100% de los archivos de ingresos exportados contienen exactamente las mismas métricas y el mismo período que la consulta de ingresos devuelve para la misma selección, con cero (0) discrepancias detectadas en pruebas automatizadas".
+- **CE-012**: Trazabilidad y Control de la Exportación, "100% de los archivos de ingresos exportados identifican al solicitante, la fecha y hora de generación, la periodicidad, el período y su estado, y el 100% de los archivos correspondientes al período en curso se identifican como parciales y abiertos".
