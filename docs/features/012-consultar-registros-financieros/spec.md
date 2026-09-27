@@ -26,7 +26,7 @@ Como Propietario, quiero consultar de forma paginada los registros de cobro, ree
 
 ### Historia de Usuario 2 - Consultar los registros financieros de la plataforma de forma paginada (Prioridad: P1)
 
-Como Administrador Financiero, quiero consultar de forma paginada los registros de cobro, reembolso y dispersión de toda la plataforma, aplicando los filtros solicitados, de manera que pueda supervisar cada operación financiera individual.
+Como Administrador Financiero, quiero consultar de forma paginada los registros de cobro, reembolso, comisiones y dispersión de toda la plataforma, aplicando los filtros solicitados, de manera que pueda supervisar cada operación financiera individual.
 
 **Por qué esta prioridad**: El Administrador Financiero necesita revisar el detalle global de las operaciones financieras y aislar registros mediante filtros. La paginación mantiene controlado el tamaño de las respuestas aunque el histórico de la plataforma crezca.
 
@@ -66,7 +66,7 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 ### Requisitos Funcionales
 
 - **RF-001**: El sistema DEBE recibir del Propietario o del Administrador Financiero una solicitud de consulta que incluya el número de página y, opcionalmente, el tamaño de página y los filtros.
-- **RF-002**: El sistema DEBE aceptar filtros por tipo de transacción (cobro, reembolso o dispersión), estado, propietario asociado y embarcación asociada.
+- **RF-002**: El sistema DEBE aceptar filtros por tipo de transacción (cobro, comisiones(solamente para el administrador), reembolso o dispersión), estado, propietario asociado y embarcación asociada.
 - **RF-003**: El sistema DEBE limitar las consultas del Propietario a los registros asociados a sus reservas y permitir al Administrador Financiero consultar los registros de toda la plataforma.
 - **RF-004**: El sistema DEBE consultar los registros de cobro definidos en "Procesar cobro", los registros de reembolso definidos en "Reembolsar dinero a arrendatario" y los registros de dispersión definidos en "Liquidar fondos de alquiler".
 - **RF-005**: El sistema DEBE incluir en cada registro devuelto el tipo de transacción, la reserva asociada, el propietario y la embarcación asociados, el monto y el estado vigente.
