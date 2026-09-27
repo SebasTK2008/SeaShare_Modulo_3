@@ -46,7 +46,7 @@ Como Propietario, quiero consultar datos agregados de los registros financieros 
 
 ### Historia de Usuario 3 - Exportar el informe financiero (Prioridad: P2)
 
-Como Administrador Financiero o Propietario, quiero exportar el informe financiero consultado a un archivo con los mismos datos agregados, período y alcance de la consulta, de manera que pueda conservarlo sin reconstruirlo a partir de los registros individuales.
+Como Administrador Financiero o Propietario, quiero exportar el informe financiero consultado a un archivo `.csv` con los mismos datos agregados, período y alcance de la consulta, de manera que pueda conservarlo sin reconstruirlo a partir de los registros individuales.
 
 **Por qué esta prioridad**: La exportación permite conservar o compartir el resultado agregado del período consultado. Debe usar exactamente el mismo cálculo y alcance de la consulta para evitar diferencias entre la información mostrada y el archivo generado.
 
@@ -57,12 +57,12 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 1. **Escenario**: Exportación del informe de la plataforma.
    - **Dado** que el Administrador Financiero ha seleccionado una periodicidad y un período válidos.
    - **Cuando** solicita la exportación del informe.
-   - **Entonces** el sistema genera un archivo con los datos agregados de toda la plataforma, la periodicidad, el período, el solicitante y la fecha y hora de generación.
+   - **Entonces** el sistema genera un archivo `.csv` con los datos agregados de toda la plataforma, la periodicidad, el período, el solicitante y la fecha y hora de generación.
 
 2. **Escenario**: Exportación del informe propio.
    - **Dado** que el Propietario ha seleccionado una periodicidad y un período válidos.
    - **Cuando** solicita la exportación del informe.
-   - **Entonces** el sistema genera un archivo con los datos agregados únicamente de sus reservas, la periodicidad, el período, el solicitante y la fecha y hora de generación.
+   - **Entonces** el sistema genera un archivo `.csv` con los datos agregados únicamente de sus reservas, la periodicidad, el período, el solicitante y la fecha y hora de generación.
 
 ### Casos Extremos (Edge Cases)
 
@@ -99,14 +99,14 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 - **RF-009**: El sistema DEBE incluir la comisión de plataforma efectivamente aplicada y registrada en las dispersiones, además de la cantidad de operaciones agrupada por tipo de transacción.
 - **RF-010**: El sistema DEBE incluir la variación absoluta y porcentual frente al período inmediatamente anterior equivalente. Si el valor del período anterior es cero, la variación porcentual DEBE indicarse como no calculable.
 - **RF-011**: El sistema DEBE devolver un DTO con datos agregados y NO DEBE devolver mediante este caso de uso el detalle individual paginado definido en "Consultar registros financieros" (SPEC 12).
-- **RF-012**: El sistema DEBE permitir al Administrador Financiero y al Propietario exportar el informe correspondiente a su alcance y período seleccionado.
-- **RF-013**: El archivo exportado DEBE contener los mismos datos agregados, periodicidad, período y alcance que la consulta correspondiente, y la exportación NO DEBE modificar registros financieros.
+- **RF-012**: El sistema DEBE permitir al Administrador Financiero y al Propietario exportar el informe correspondiente a su alcance y período seleccionado en formato `.csv`.
+- **RF-013**: El archivo `.csv` exportado DEBE contener los mismos datos agregados, periodicidad, período y alcance que la consulta correspondiente, y la exportación NO DEBE modificar registros financieros.
 - **RF-014**: Los depósitos de garantía pendientes que no tengan un registro financiero confirmado NO DEBEN incluirse en las métricas del informe.
 - **RF-015**: El sistema NO DEBE consultar al Sistema de Gestión de Flota para determinar el alcance del informe.
 
 ### Requisitos No Funcionales
 
-- **RNF-001**: El sistema DEBE utilizar DTOs para recibir la solicitud, devolver el informe agregado y producir el archivo de exportación.
+- **RNF-001**: El sistema DEBE utilizar DTOs para recibir la solicitud, devolver el informe agregado y producir el archivo `.csv` de exportación.
 - **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar las métricas monetarias del informe y la comparación entre períodos.
 - **RNF-003**: El sistema DEBE utilizar la fecha de creación del registro inmutable de cada operación financiera para determinar su inclusión en el período seleccionado.
 - **RNF-004**: El sistema DEBE garantizar que la exportación y la consulta utilicen el mismo alcance, período y cálculo.
@@ -118,7 +118,7 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 - **RegistroDeDispersión (Entidad, definida en SPEC 10)**: En este caso de uso es únicamente consultada para agregar las dispersiones confirmadas y la comisión aplicada registrada.
 - **SolicitudInformeFinanciero (DTO)**: Información recibida del Administrador Financiero o del Propietario. Contiene la periodicidad y el período seleccionado.
 - **InformeFinancieroResultado (DTO)**: Resultado agregado que contiene las métricas del período, el alcance, la periodicidad y la comparación con el período anterior equivalente.
-- **ArchivoExportacionInformeFinanciero (DTO)**: Archivo que contiene el informe agregado, la periodicidad, el período, el alcance, el solicitante y la fecha y hora de generación.
+- **ArchivoExportacionInformeFinanciero (DTO)**: Archivo `.csv` que contiene el informe agregado, la periodicidad, el período, el alcance, el solicitante y la fecha y hora de generación.
 
 ## Criterios de Éxito *(obligatorio)*
 
@@ -129,4 +129,4 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 - **CE-003**: Consistencia de Periodicidad, "100% de los períodos quincenales, mensuales y trimestrales utilizan los límites fijos definidos y 0 solicitudes con rangos libres de fechas son aceptadas".
 - **CE-004**: Comparación Temporal, "100% de las comparaciones utilizan el período inmediatamente anterior equivalente y las variaciones porcentuales con valor anterior cero se identifican como no calculables".
 - **CE-005**: Exclusión de Garantías Pendientes, "100% de los depósitos de garantía pendientes sin registro financiero confirmado quedan excluidos del informe".
-- **CE-006**: Fidelidad de la Exportación, "100% de los archivos exportados contienen los mismos datos agregados, período y alcance que la consulta correspondiente, sin modificar registros financieros".
+- **CE-006**: Fidelidad de la Exportación, "100% de los archivos `.csv` exportados contienen los mismos datos agregados, período y alcance que la consulta correspondiente, sin modificar registros financieros".

@@ -26,7 +26,7 @@ Como Propietario, quiero consultar de forma paginada los registros de cobro, ree
 
 ### Historia de Usuario 2 - Consultar los registros financieros de la plataforma de forma paginada (Prioridad: P1)
 
-Como Administrador Financiero, quiero consultar de forma paginada los registros de cobro, reembolso y dispersión de toda la plataforma, aplicando los filtros solicitados, de manera que pueda supervisar cada operación financiera individual.
+Como Administrador Financiero, quiero consultar de forma paginada los registros de cobro, reembolso, y dispersión de toda la plataforma, aplicando los filtros solicitados, de manera que pueda supervisar cada operación financiera individual.
 
 **Por qué esta prioridad**: El Administrador Financiero necesita revisar el detalle global de las operaciones financieras y aislar registros mediante filtros. La paginación mantiene controlado el tamaño de las respuestas aunque el histórico de la plataforma crezca.
 
