@@ -15,14 +15,14 @@ Como el sistema, al ser invocado internamente por "Brindar el estado de la reser
 **Escenarios de Aceptación**:
 
 1. **Escenario**: Reembolso por cancelación flexible (>72h).
-   - **Dado** que existe un valor de alquiler previamente registrado para una reserva.
+   - **Dado** que existe un valor total previamente registrado para una reserva.
    - **Cuando** "Brindar el estado de la reserva" informa que la reserva fue cancelada flexiblemente.
-   - **Entonces** el sistema solicita la liberación del importe autorizado o, si ya fue capturado, un reembolso del 100% del valor de alquiler registrado. La operación queda pendiente hasta recibir confirmación externa.
+   - **Entonces** el sistema solicita la liberación del importe autorizado o, si ya fue capturado, un reembolso del 100% del valor total pagado registrado. La operación queda pendiente hasta recibir confirmación externa.
 
 2. **Escenario**: Reembolso por cancelación moderada (72h–24h).
-   - **Dado** que existe un valor de alquiler previamente registrado para una reserva.
+   - **Dado** que existe un valor total previamente registrado para una reserva.
    - **Cuando** "Brindar el estado de la reserva" informa que la reserva fue cancelada moderadamente.
-   - **Entonces** el sistema calcula el 50% del valor de alquiler registrado y solicita la liberación o el reembolso de dicho monto según el estado del cobro original. La operación queda pendiente hasta recibir confirmación externa.
+   - **Entonces** el sistema calcula el 50% del valor total pagado registrado y solicita la liberación o el reembolso de dicho monto según el estado del cobro original. La operación queda pendiente hasta recibir confirmación externa.
 
 3. **Escenario**: Reembolso por cancelación del anfitrión.
   - **Dado** que existe un valor total previamente registrado para una reserva.
@@ -105,13 +105,13 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 
 - **RF-001**: El sistema DEBE recibir, mediante invocación interna por estado de reserva, evento automático de garantía o estado `RECHAZADO`, una solicitud de reembolso para una reserva específica sin recibir un atributo de origen.
 - **RF-002**: El sistema DEBE, cuando el estado sea cancelado flexiblemente o cancelado por anfitrión, solicitar la liberación o el reembolso del 100% del valor pagado según el estado del cobro original.
-- **RF-003**: El sistema DEBE, cuando el estado sea cancelado moderadamente, calcular el 50% del valor de alquiler registrado y solicitar su liberación o reembolso.
+- **RF-003**: El sistema DEBE, cuando el estado sea cancelado moderadamente, calcular el 50% del valor total pagado registrado y solicitar su liberación o reembolso.
 - **RF-004**: El sistema DEBE, ante `RECHAZADO` o el evento automático de ausencia de disputa tras 24 horas, recuperar el depósito capturado y solicitar su reembolso íntegro.
 - **RF-005**: El sistema NO DEBE admitir retención parcial ni calcular un monto de reembolso parcial para el depósito de garantía.
-- **RF-006**: El sistema DEBE registrar internamente la solicitud de reembolso en curso, vinculada al cobro original y con una clave idempotente, mientras se espera el resultado de la Pasarela de Pago.
-- **RF-007**: El sistema DEBE recibir de la Pasarela de Pago el resultado del reembolso, registrando el monto confirmado, el estado externo, su detalle y la referencia externa provista.
-- **RF-008**: El sistema DEBE dejar disponible el resultado registrado del reembolso para ser consultado mediante "Consultar registros financieros".
-- **RF-009**: El sistema NO DEBE registrar ni reportar como completado un reembolso rechazado, cancelado, expirado o en proceso según la Pasarela de Pago.
+- **RF-006**: El sistema DEBE registrar internamente la `IntenciónDeReembolso` en curso, vinculada al cobro original y con una clave idempotente, mientras se espera el resultado de la Pasarela de Pago.
+- **RF-007**: El sistema DEBE recibir de la Pasarela de Pago el resultado del reembolso y registrarlo (exitoso o fallido) actualizando siempre el estado en la `IntenciónDeReembolso`. Si la operación es exitosa, el sistema DEBE además generar el `RegistroDeReembolso` inmutable de auditoría con su fecha de creación, monto confirmado, detalle y referencia externa.
+- **RF-008**: El sistema DEBE dejar disponible el `RegistroDeReembolso` inmutable creado para ser consultado internamente mediante "Consultar registros financieros".
+- **RF-009**: El sistema NO DEBE crear un `RegistroDeReembolso` para un reembolso rechazado, cancelado, expirado o en proceso según la Pasarela de Pago; en estos casos solo actualiza la `IntenciónDeReembolso`.
 - **RF-010**: El sistema DEBE registrar un error controlado cuando la reserva no tenga depósito capturado y registrado.
 - **RF-011**: El sistema DEBE distinguir el monto reembolsado del costo transaccional cobrado por la Pasarela de Pago.
 - **RF-012**: El sistema NO DEBE calcular ni aplicar ningún descuento por costos transaccionales sobre los montos de reembolso; dicha deducción es aplicada exclusivamente por la Pasarela de Pago al ejecutar la operación, como una condición externa a este sistema. El sistema se limita a registrar el costo o monto neto que la Pasarela de Pago reporte, sin inferirlo ni asumirlo.
@@ -126,7 +126,8 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 ### Entidades Clave
 
 - **InformaciónDeReserva (Entidad, definida en SPEC 3 y actualizada en SPEC 4)**: En este caso de uso es consultada para recuperar el valor de alquiler registrado en cancelaciones o el depósito fijo capturado cuando el evento recibido corresponde a una disputa `RECHAZADO` o al evento automático de ausencia de disputa.
-- **RegistroDeReembolso (Entidad)**: Estructura persistida para representar el ciclo de una liberación o reembolso sobre una reserva. Conserva el estado o evento desencadenante, tipo de operación, monto solicitado, referencia del cobro original, clave idempotente, monto confirmado, estado externo, detalle y referencia externa. También conserva el propietario, la embarcación y, cuando aplique, la disputa asociada; es consumida por "Consultar registros financieros".
+- **IntenciónDeReembolso (Entidad)**: Estructura persistida para representar la operación operativa de una liberación o reembolso. Conserva el estado o evento desencadenante, tipo de operación, monto solicitado, referencia del cobro original, clave idempotente, el estado de la solicitud (en proceso, aprobado, fallido, etc.) y la referencia externa. Esta entidad es la fuente de la verdad para conocer el estado y resultado de la operación.
+- **RegistroDeReembolso (Entidad Inmutable)**: Estructura inmutable creada como un subproducto de auditoría únicamente cuando la Pasarela de Pago confirma el reembolso como exitoso. Conserva la fecha de creación, el monto confirmado, el detalle, la referencia externa, el propietario, la embarcación y la disputa asociada. Es de uso estrictamente interno del Módulo de Finanzas para ser consumida por "Consultar registros financieros". Ningún módulo externo tiene acceso ni conocimiento de esta entidad.
 - **SolicitudReembolso (DTO)**: Información recibida internamente desde "Brindar el estado de la reserva", el evento automático de garantía o "Brindar Información de Disputa de Garantía". Contiene el identificador de la reserva y el motivo técnico de ejecución como estado o evento, no un atributo de origen financiero.
 - **SolicitudReembolsoPasarela (DTO)**: Información enviada a la Pasarela de Pago. Contiene el tipo de operación (liberación o reembolso), el monto, la referencia del cobro original, la referencia de la reserva y la clave idempotente.
 - **ResultadoReembolsoPasarela (DTO)**: Información recibida desde la Pasarela de Pago. Contiene el tipo de operación, el estado externo, su detalle, el monto confirmado y la referencia externa asignada.

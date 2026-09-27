@@ -47,12 +47,12 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado de c
 1. **Escenario**: Cancelación flexible (>72h).
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "cancelado flexiblemente".
-  - **Entonces** el sistema solicita la liberación o el reembolso del 100% del valor del alquiler, según el estado del cobro original, sin ejecutar "Liquidar fondos de alquiler". El resultado queda pendiente de confirmación externa.
+  - **Entonces** el sistema solicita la liberación o el reembolso del 100% del valor total pagado, según el estado del cobro original, sin ejecutar "Liquidar fondos de alquiler". El resultado queda pendiente de confirmación externa.
 
 2. **Escenario**: Cancelación moderada (72h–24h).
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "cancelado moderadamente".
-  - **Entonces** el sistema solicita la liberación o el reembolso del 50% del valor del alquiler y solicita la liquidación del 50% restante como compensación al propietario. Cada operación conserva su propio estado y resultado.
+  - **Entonces** el sistema solicita la liberación o el reembolso del 50% del valor total pagado y solicita la liquidación del 50% del valor del alquiler como compensación al propietario. Cada operación conserva su propio estado y resultado.
 
 3. **Escenario**: Cancelación tardía / No-Show (<24h).
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
@@ -110,8 +110,8 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
 
 - **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones el estado vigente de una reserva específica, identificada mediante su identificador de reserva, correspondiente a uno de los siguientes estados: disponible, iniciada, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show, cancelado por anfitrión o completada.
 - **RF-002**: El sistema DEBE, al recibir la notificación de cualquiera de los estados operativos sin acción financiera (disponible, iniciada, reservado, en navegación o pendiente), reconocer el estado recibido sin ejecutar ninguna operación de reembolso ni de dispersión de fondos. El estado "iniciada" indica el origen del bloqueo temporal (estado de espera) de 15 minutos, que comienza cuando el arrendatario oprime "Reservar"; el estado "pendiente" indica que el arrendatario ya inició la confirmación de pago dentro de ese mismo bloqueo temporal, sin reiniciar el TTL. El sistema reconoce ambos estados como tales sin necesidad de persistir el estado operativo, cuya gestión corresponde al Módulo 2.
-- **RF-003**: El sistema DEBE, cuando el estado recibido sea "cancelado flexiblemente", solicitar la liberación o el reembolso del 100% del valor del alquiler, según el estado del cobro original.
-- **RF-004**: El sistema DEBE, cuando el estado recibido sea "cancelado moderadamente", solicitar la liberación o el reembolso del 50% y la liquidación del 50% restante como compensación al propietario, manteniendo resultados independientes.
+- **RF-003**: El sistema DEBE, cuando el estado recibido sea "cancelado flexiblemente", solicitar la liberación o el reembolso del 100% del valor total pagado, según el estado del cobro original.
+- **RF-004**: El sistema DEBE, cuando el estado recibido sea "cancelado moderadamente", solicitar la liberación o el reembolso del 50% del valor total pagado y la liquidación del 50% del valor del alquiler como compensación al propietario, manteniendo resultados independientes.
 - **RF-005**: El sistema DEBE, cuando el estado recibido sea "cancelado tardíamente" o "No-Show", solicitar únicamente la liquidación del 100% del valor del alquiler como compensación al propietario, sin solicitar reembolso.
 - **RF-005A**: El sistema DEBE, cuando el estado recibido sea "cancelado por anfitrión", solicitar la liberación o el reembolso del 100% del valor pagado al Arrendatario, según el estado del cobro original, sin solicitar una dispersión.
 - **RF-006**: El sistema DEBE, cuando el estado recibido sea "completada", solicitar la liquidación estándar del valor de alquiler al propietario, sin incluir el depósito, y dejar el depósito pendiente hasta recibir "Brindar información de disputa de garantía".
@@ -128,8 +128,8 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
 
 ### Entidades Clave
 
-- **RegistroFinancieroDeReserva (Entidad, creada en SPEC 3, enriquecida en SPEC 4)**: Registro persistido por el Módulo 3 que contiene los datos financieros de la reserva (identificador, tarifa base, número de días, número de pasajeros, monto total calculado, depósito de garantía y monto del seguro). En este caso de uso es **consultada en modo lectura** para obtener los montos necesarios al ejecutar "Reembolsar dinero a arrendatario" y/o "Liquidar fondos de alquiler". El Módulo 3 **no persiste el estado operativo** de la reserva — ese pertenece al Módulo 2; únicamente utiliza el estado recibido como contexto de decisión dentro de la ejecución de este caso de uso.
-- **SolicitudEstadoReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva y el estado notificado, correspondiente a uno de los diez estados reconocidos (incluyendo "iniciada" y "cancelado por anfitrión"). No se persiste; se utiliza como contexto de decisión para determinar qué operación financiera ejecutar sobre el RegistroFinancieroDeReserva.
+- **InformaciónDeReserva (Entidad, creada en SPEC 3, enriquecida en SPEC 4)**: Registro persistido por el Módulo 3 que contiene los datos financieros de la reserva (identificador, tarifa base, número de días, número de pasajeros, monto total calculado, depósito de garantía y monto del seguro). En este caso de uso es **consultada en modo lectura** para obtener los montos necesarios al ejecutar "Reembolsar dinero a arrendatario" y/o "Liquidar fondos de alquiler". El Módulo 3 **no persiste el estado operativo** de la reserva — ese pertenece al Módulo 2; únicamente utiliza el estado recibido como contexto de decisión dentro de la ejecución de este caso de uso.
+- **SolicitudEstadoReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva y el estado notificado, correspondiente a uno de los diez estados reconocidos (incluyendo "iniciada" y "cancelado por anfitrión"). No se persiste; se utiliza como contexto de decisión para determinar qué operación financiera ejecutar sobre la InformaciónDeReserva.
 
 ## Criterios de Éxito *(obligatorio)*
 

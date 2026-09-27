@@ -59,9 +59,10 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud 
 
 ### Entidades Clave
 
-- **RegistroDeCobro (Entidad, definida en SPEC 5)**: En este caso de uso es únicamente consultada, no creada ni modificada. Sus estados interno y externo, montos autorizado, capturado, liberado o cobrado y referencias son la fuente de la respuesta devuelta.
+- **IntenciónDeCobro (Entidad, definida en SPEC 5)**: Es consultada para conocer el estado de operaciones en curso, rechazadas, canceladas o expiradas.
+- **RegistroDeCobro (Entidad Inmutable, definida en SPEC 5)**: Es consultada para confirmar cuando la operación ya fue aprobada o capturada, obteniendo de ella sus montos y referencias.
 - **SolicitudConfirmacionPago (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva cuya confirmación de pago se solicita.
-- **ConfirmacionPagoResultado (DTO)**: Resultado que el sistema devuelve al Sistema de Reservas y Operaciones. Contiene el identificador de la reserva, el estado de la operación, sus montos y referencias externas disponibles. No representa una entidad persistida, sino el valor de retorno de esta operación.
+- **ConfirmacionPagoResultado (DTO)**: Resultado que el sistema devuelve al Sistema de Reservas y Operaciones. Contiene el identificador de la reserva, el estado de la operación (en proceso, aprobado, rechazado, cancelado o expirado), sus montos y referencias externas disponibles. No representa una entidad persistida, sino el valor de retorno de esta operación.
 
 ## Criterios de Éxito *(obligatorio)*
 

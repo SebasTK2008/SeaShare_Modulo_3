@@ -108,7 +108,7 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para recibir la solicitud, devolver el informe agregado y producir el archivo de exportación.
 - **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar las métricas monetarias del informe y la comparación entre períodos.
-- **RNF-003**: El sistema DEBE utilizar la fecha registrada de cada operación financiera para determinar su inclusión en el período seleccionado.
+- **RNF-003**: El sistema DEBE utilizar la fecha de creación del registro inmutable de cada operación financiera para determinar su inclusión en el período seleccionado.
 - **RNF-004**: El sistema DEBE garantizar que la exportación y la consulta utilicen el mismo alcance, período y cálculo.
 
 ### Entidades Clave

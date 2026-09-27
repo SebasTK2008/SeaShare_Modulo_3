@@ -49,8 +49,7 @@ Completada
 [depósito → Arrendatario]  o  [depósito → Propietario]
 ```
 
-Rama de cancelación (puede iniciarse en Iniciada, Pendiente, Reservado o En Navegación — **pendiente de definir**: ningún documento aclara desde cuáles de estos estados es válido cancelar):
-
+Rama de cancelación (únicamente puede iniciarse desde el estado Reservado. Ningún otro estado es válido para cancelar, y no se puede cancelar una vez la reserva está En Navegación):
 ```text
 … → Cancelado Flexiblemente (>72h)          → Reembolso 100%
 … → Cancelado Moderadamente (72h–24h)       → Reembolso 50% + dispersión 50% al Propietario
