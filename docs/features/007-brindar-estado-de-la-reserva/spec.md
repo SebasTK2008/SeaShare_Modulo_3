@@ -36,11 +36,11 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones la notificaci�
 
 ### Historia de Usuario 2 - Disparar la operación financiera correspondiente ante un estado de cancelación (Prioridad: P1)
 
-Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado de cancelación de una reserva (cancelado flexiblemente, cancelado moderadamente o cancelado tardíamente/No-Show), quiero ejecutar la operación de reembolso y/o dispersión de fondos que corresponde a la ventana de cancelación informada, de manera que el arrendatario y el propietario reciban el tratamiento financiero definido para cada tipo de cancelación.
+Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado de cancelación de una reserva (cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show o cancelado por anfitrión), quiero ejecutar la operación de reembolso y/o dispersión de fondos que corresponde al estado informado.
 
 **Por qué esta prioridad**: Es la aplicación directa de la lógica de cancelaciones y reembolsos del negocio; sin este disparo correcto, una reserva cancelada quedaría sin el reembolso o la compensación al propietario que le corresponde.
 
-**Prueba Independiente**: Con reservas que cuentan con información y valor total previamente registrados, enviar al sistema cada uno de los tres estados de cancelación y validar que se ejecuta exactamente la combinación de operaciones esperada para cada ventana.
+**Prueba Independiente**: Con reservas que cuentan con información y valor total previamente registrados, enviar al sistema cada uno de los cuatro estados de cancelación y validar que se ejecuta exactamente la operación esperada para cada estado.
 
 **Escenarios de Aceptación**:
 
@@ -58,6 +58,11 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado de c
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "cancelado tardíamente" o "No-Show".
   - **Entonces** el sistema solicita únicamente la liquidación del 100% del valor del alquiler como compensación al propietario, sin solicitar reembolso. La solicitud no implica que los fondos ya hayan sido recibidos.
+
+  4. **Escenario**: Cancelación por anfitrión.
+    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
+    - **Cuando** el Sistema de Reservas y Operaciones informa el estado "cancelado por anfitrión".
+    - **Entonces** el sistema solicita la liberación o el reembolso del 100% del valor pagado al Arrendatario, según el estado del cobro original, sin ejecutar "Liquidar fondos de alquiler".
 
 ---
 
@@ -81,7 +86,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
 - **¿Qué sucede si el Sistema de Reservas y Operaciones notifica el estado de una reserva para la cual no existe un registro financiero creado por "Brindar información de reserva"?**
   El sistema no puede determinar qué operación financiera ejecutar sobre una reserva de la que no tiene registro financiero interno. Dado que este caso de uso es unidireccional y no existe un canal de respuesta hacia el Sistema de Reservas y Operaciones, el sistema registra internamente el fallo sin ejecutar operación alguna.
 
-- **¿Qué sucede si el estado notificado corresponde a una cancelación (flexible, moderada o tardía/No-Show), pero el registro financiero de la reserva no contiene un valor total previamente calculado por "Solicitar el valor calculado de la reserva"?**
+- **¿Qué sucede si el estado notificado corresponde a una cancelación (flexible, moderada, tardía/No-Show o por anfitrión), pero el registro financiero de la reserva no contiene un valor total previamente calculado por "Solicitar el valor calculado de la reserva"?**
   De forma análoga al caso anterior, el sistema no ejecuta "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler" sin un monto de referencia. Al no existir canal de respuesta hacia el Sistema de Reservas y Operaciones, el sistema registra internamente el fallo.
 
 - **¿Qué sucede si el estado notificado es "completada" pero el registro financiero de la reserva no contiene un depósito y/o un valor de alquiler?**
@@ -96,18 +101,19 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
 - **¿Qué sucede si el Sistema de Reservas y Operaciones notifica más de una vez el mismo estado de cancelación o de finalización ("completada") para la misma reserva?**
   El contexto no define un mecanismo de deduplicación explícito para este caso de uso. La notificación repetida de un estado de cancelación o de finalización no debe disparar nuevamente las operaciones financieras ya ejecutadas. Este comportamiento de idempotencia deberá ser abordado en la implementación, registrando internamente si las operaciones ya fueron ejecutadas para esa reserva.
 
-- **¿Qué sucede si el Sistema de Reservas y Operaciones notifica un estado distinto a los nueve estados definidos en el contexto (disponible, iniciada, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show y completada)?**
+- **¿Qué sucede si el Sistema de Reservas y Operaciones notifica un estado distinto a los diez estados definidos en el contexto (disponible, iniciada, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show, cancelado por anfitrión y completada)?**
   El sistema no ejecuta ninguna operación financiera asociada y registra internamente la inconsistencia.
 
 ## Requisitos *(obligatorio)*
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones el estado vigente de una reserva específica, identificada mediante su identificador de reserva, correspondiente a uno de los siguientes estados: disponible, iniciada, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show o completada.
+- **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones el estado vigente de una reserva específica, identificada mediante su identificador de reserva, correspondiente a uno de los siguientes estados: disponible, iniciada, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show, cancelado por anfitrión o completada.
 - **RF-002**: El sistema DEBE, al recibir la notificación de cualquiera de los estados operativos sin acción financiera (disponible, iniciada, reservado, en navegación o pendiente), reconocer el estado recibido sin ejecutar ninguna operación de reembolso ni de dispersión de fondos. El estado "iniciada" indica el origen del bloqueo temporal (estado de espera) de 15 minutos, que comienza cuando el arrendatario oprime "Reservar"; el estado "pendiente" indica que el arrendatario ya inició la confirmación de pago dentro de ese mismo bloqueo temporal, sin reiniciar el TTL. El sistema reconoce ambos estados como tales sin necesidad de persistir el estado operativo, cuya gestión corresponde al Módulo 2.
 - **RF-003**: El sistema DEBE, cuando el estado recibido sea "cancelado flexiblemente", solicitar la liberación o el reembolso del 100% del valor del alquiler, según el estado del cobro original.
 - **RF-004**: El sistema DEBE, cuando el estado recibido sea "cancelado moderadamente", solicitar la liberación o el reembolso del 50% y la liquidación del 50% restante como compensación al propietario, manteniendo resultados independientes.
 - **RF-005**: El sistema DEBE, cuando el estado recibido sea "cancelado tardíamente" o "No-Show", solicitar únicamente la liquidación del 100% del valor del alquiler como compensación al propietario, sin solicitar reembolso.
+- **RF-005A**: El sistema DEBE, cuando el estado recibido sea "cancelado por anfitrión", solicitar la liberación o el reembolso del 100% del valor pagado al Arrendatario, según el estado del cobro original, sin solicitar una dispersión.
 - **RF-006**: El sistema DEBE, cuando el estado recibido sea "completada", solicitar la liquidación estándar del valor de alquiler al propietario, sin incluir el depósito, y dejar el depósito pendiente hasta recibir "Brindar información de disputa de garantía".
 - **RF-007**: El sistema NO DEBE ejecutar una operación sobre el depósito únicamente por recibir el estado "completada".
 - **RF-008**: El sistema NO DEBE ejecutar "Reembolsar dinero a arrendatario" ni una liquidación del depósito cuando el estado recibido sea disponible, iniciada, reservado, en navegación, pendiente o completada.
@@ -123,14 +129,14 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
 ### Entidades Clave
 
 - **RegistroFinancieroDeReserva (Entidad, creada en SPEC 3, enriquecida en SPEC 4)**: Registro persistido por el Módulo 3 que contiene los datos financieros de la reserva (identificador, tarifa base, número de días, número de pasajeros, monto total calculado, depósito de garantía y monto del seguro). En este caso de uso es **consultada en modo lectura** para obtener los montos necesarios al ejecutar "Reembolsar dinero a arrendatario" y/o "Liquidar fondos de alquiler". El Módulo 3 **no persiste el estado operativo** de la reserva — ese pertenece al Módulo 2; únicamente utiliza el estado recibido como contexto de decisión dentro de la ejecución de este caso de uso.
-- **SolicitudEstadoReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva y el estado notificado, correspondiente a uno de los nueve estados reconocidos (incluyendo "iniciada"). No se persiste; se utiliza como contexto de decisión para determinar qué operación financiera ejecutar sobre el RegistroFinancieroDeReserva.
+- **SolicitudEstadoReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva y el estado notificado, correspondiente a uno de los diez estados reconocidos (incluyendo "iniciada" y "cancelado por anfitrión"). No se persiste; se utiliza como contexto de decisión para determinar qué operación financiera ejecutar sobre el RegistroFinancieroDeReserva.
 
 ## Criterios de Éxito *(obligatorio)*
 
 ### Resultados Medibles
 
 - **CE-001**: Corrección de Decisión Financiera por Estado, "100% de las notificaciones de estado recibidas desde el Sistema de Reservas y Operaciones desencadenan exactamente la operación financiera esperada (o ninguna operación, en el caso de estados sin acción financiera), con cero (0) discrepancias detectadas en pruebas automatizadas".
-- **CE-002**: Cumplimiento de la Lógica de Cancelaciones, "100% de las reservas notificadas con un estado de cancelación (flexible, moderada o tardía/No-Show) disparan exactamente la combinación de operaciones de reembolso y/o dispersión correspondiente a su ventana, sin ejecuciones adicionales ni faltantes, en pruebas automatizadas".
+- **CE-002**: Cumplimiento de la Lógica de Cancelaciones, "100% de las reservas notificadas con un estado de cancelación (flexible, moderada, tardía/No-Show o por anfitrión) disparan exactamente la operación de reembolso y/o dispersión correspondiente, sin ejecuciones adicionales ni faltantes, en pruebas automatizadas".
 - **CE-003**: Cumplimiento Arquitectónico, "0 ejecuciones de operaciones sobre el depósito registradas por recibir el estado 'completada' o por estados operativos sin acción financiera".
 - **CE-004**: Resiliencia del Sistema, "100% de los fallos simulados por ausencia de información previamente registrada, de valor total calculado o de depósito de garantía registrado quedan registrados internamente mediante manejo de errores controlado, sin provocar ejecuciones parciales o inconsistentes hacia la Pasarela de pago".
 - **CE-005**: Liquidación al Completar, "100% de las reservas informadas como 'completada' disparan exactamente la liquidación estándar del alquiler, sin incluir el depósito de garantía".

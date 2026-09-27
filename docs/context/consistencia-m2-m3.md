@@ -55,6 +55,7 @@ Rama de cancelación (puede iniciarse en Iniciada, Pendiente, Reservado o En Nav
 … → Cancelado Flexiblemente (>72h)          → Reembolso 100%
 … → Cancelado Moderadamente (72h–24h)       → Reembolso 50% + dispersión 50% al Propietario
 … → Cancelado Tardíamente / No-Show (<24h)  → Dispersión 100% al Propietario, sin reembolso
+… → Cancelado por Anfitrión                  → Reembolso 100% al Arrendatario
 ```
 
 ### Estados de la reserva
@@ -70,6 +71,7 @@ Rama de cancelación (puede iniciarse en Iniciada, Pendiente, Reservado o En Nav
 | Cancelado Flexiblemente | >72h de anticipación; reembolso 100% (menos costos transaccionales); sin dispersión. | El Arrendatario cancela con más de 72h de anticipación. |
 | Cancelado Moderadamente | 72h–24h de anticipación; reembolso 50% + dispersión 50% al Propietario. | El Arrendatario cancela entre 72h y 24h de anticipación. |
 | Cancelado Tardíamente / No-Show | <24h; sin reembolso; dispersión 100% al Propietario. | El Arrendatario cancela con <24h, o no se presenta 30 min después de la hora pactada. |
+| Cancelado por Anfitrión | Reembolso 100% al Arrendatario; sin dispersión. | El anfitrión no puede asegurar la flota a tiempo. |
 
 Ambos documentos reconocen exactamente los mismos 9 estados (contando las 3 variantes de cancelación por separado); no hay estados presentes en un módulo y ausentes en el otro.
 

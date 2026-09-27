@@ -32,15 +32,15 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 ### Supuestos de trazabilidad
 Dado que algunas reglas de negocio no tienen un caso de uso dedicado en el diagrama, se asumen las siguientes correspondencias:
 - El **seguro náutico** se calcula como parte de  "Solicitar el valor calculado de la reserva", no como un caso de uso independiente.
-- La **penalidad por cancelación** (regla del sistema de Reservas) se resuelve mediante la combinación de "Solicitar el valor calculado de la reserva", "Reembolsar dinero a arrendatario" y "Liquidar fondos de alquiler", según la ventana de tiempo en la que se solicitó la cancelación. La operacion financiera a realizar segun el caso depende de si la reserva pasa a estado: cancelado
+- La **penalidad por cancelación** (regla del sistema de Reservas) se resuelve mediante la combinación de "Solicitar el valor calculado de la reserva", "Reembolsar dinero a arrendatario" y "Liquidar fondos de alquiler", según el estado de la reserva. La operación financiera depende de si la reserva pasa a `cancelado flexiblemente`, `cancelado moderadamente`, `cancelado tardíamente` o `cancelado por anfitrión`.
 
 - **En procesar cobro** se utiliza, cuando la pasarela lo admite, un flujo de autorización y captura: la autorización representa la retención lógica del importe del alquiler y de la garantía, y la captura se solicita cuando el negocio determina el importe definitivo. Esto no constituye un escrow jurídico ni supone que toda pasarela pueda mantener una autorización hasta el final de una reserva. La autorización tiene una vigencia limitada; si expira, el sistema registra el hecho y ejecuta el flujo de recuperación definido, sin asumir que los fondos siguen disponibles.
 - La pasarela es un ejecutor externo: puede aceptar una solicitud sin haber aprobado el pago, reportar estados posteriores, rechazar, cancelar o dejar una operación en proceso. El sistema conserva los estados externos y no marca una operación como completada hasta recibir una confirmación válida.
 - Las solicitudes de cobro, captura, reembolso y liquidación son idempotentes. Cada operación conserva una identidad propia, su referencia externa y la relación con el cobro original para evitar duplicaciones durante reintentos o notificaciones repetidas.
-- Los **balances financieros** estaran dados por un periodo quincenal, mensual o trimestral. 
+- Los **informes financieros** se consultan por un período quincenal, mensual o trimestral. No aceptan rangos libres de fechas.
 - El **deposito de garantia** es manejado por el modulo 2 (reservas y operaciones) y funciona de la siguiente manera: Al terminarse una reserva, es decir, cuando el propietario recibe el barco este confirma que la reserva ya se completo y a partir de ese momento tiene un lapso de 24 horas para verificar que no hubo ningun daño. esto se traduce a que cuando una reserva pasa a estado "completada" automaticamente deberá entregarse el dinero correspondiente al propietario pero EL DEPOSITO DE GARANTIA SE DEBERÁ RETENER POR 24 HORAS. 
 
-El depósito se calcula como el 10% de la tarifa base diaria de la embarcación y el valor calculado se congela para la reserva.
+El depósito se calcula como el 10% de la tarifa base diaria de la embarcación y el valor calculado se congela para la reserva. Si pasan 24 horas desde `completada` sin que exista una disputa, un evento automático solicita el reembolso total del depósito al Arrendatario. Si existe una disputa, el depósito permanece retenido hasta recibir su resolución.
 ---
 
 ## 2. Flujo Paso a Paso de una Reserva (Participación del Sistema)
@@ -65,12 +65,13 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
    - **Cancelacion flexible: >72h:** el sistema solicita la liberación o el reembolso del 100% según el estado del cobro y la política explícita de costos transaccionales.
    - **Cancelacion moderada: 72h–24h:** el sistema reembolsa el 50% y dispersa el 50% restante como compensación al propietario vía *"Liquidar fondos de alquiler"*.
    - **Cancelacion tardia: <24h / No-Show:** el sistema no reembolsa; dispersa el 100% como compensación al propietario.
+   - **Cancelación por anfitrión:** el sistema reembolsa el 100% del valor pagado al Arrendatario.
 
 9. **Finalización y disputa de garantía.** El sistema de Reservas informa la finalización de la reserva con el único estado `completada`. Finanzas liquida el alquiler y el seguro, pero deja pendiente el depósito. El Módulo 2 crea y gestiona la disputa, concede al propietario una ventana de 24 horas para reportar daños y luego informa a Finanzas únicamente el estado de disputa. Si el estado es `RECHAZADO`, Finanzas solicita el reembolso total al Arrendatario; si el estado es `COMPLETADO`, solicita la liquidación total al Propietario.
 
 10. **Liquidación final.** Superadas las etapas anteriores (una reserva ya fue completada), el sistema calcula y solicita la captura y/o liquidación correspondiente vía la Pasarela de Pago: valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación. La solicitud puede quedar pendiente o fallar; solo su confirmación externa permite informar que los fondos fueron efectivamente liquidados.
 
-11. **Supervisión continua.** En cualquier momento, el **Propietario** puede *"Consultar ingresos"* y *"Consultar registros financieros"*; el **Administrador Financiero** puede *"Consultar balance financiero"*, *"Consultar registros financieros"* y *"Configurar parámetros financieros globales"* (porcentaje de comisión, tarifa de seguro y porcentajes de tarifa dinámica).
+11. **Supervisión continua.** En cualquier momento, el **Propietario** y el **Administrador Financiero** pueden *"Consultar registros financieros"* y *"Consultar informe financiero"*. El alcance del Propietario se limita a sus reservas y el del Administrador cubre toda la plataforma. El Administrador también puede *"Configurar parámetros financieros globales"*.
 
 ---
 
@@ -126,7 +127,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar el estado de la reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** El sistema de Reservas informa el estado de una reserva (disponible, iniciada, pendiente, reservado, en navegación, completada, cancelado flexiblemente, cancelado moderadamente o cancelado tardíamente). El estado "iniciada" es puramente informativo para Finanzas (no dispara ninguna acción financiera), al igual que "pendiente" y "reservado". El estado `completada` dispara la liquidación del alquiler y el seguro, sin incluir el depósito de garantia. El depósito queda pendiente hasta que Finanzas reciba el estado de disputa mediante "Brindar información de disputa de garantía" o pasadas las 24 horas en caso de  no haber una disputa. 
+- **Flujo:** El sistema de Reservas informa el estado de una reserva (disponible, iniciada, pendiente, reservado, en navegación, completada, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente o cancelado por anfitrión). El estado "iniciada" es puramente informativo para Finanzas (no dispara ninguna acción financiera), al igual que "pendiente" y "reservado". El estado `completada` dispara la liquidación del alquiler y el seguro, sin incluir el depósito de garantía. El depósito queda pendiente hasta que Finanzas reciba una resolución de disputa; si no existe disputa después de 24 horas, un evento automático solicita su reembolso total.
 - **Regla de negocio asociada:** Transversal a Matriz de Liquidación (3.2) y Cancelaciones (Módulo 2, 2.2).
 
 ---
@@ -135,7 +136,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar información de disputa de garantía
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** El Módulo 2 crea y gestiona la disputa después de la finalización de la reserva. El propietario dispone de 24 horas para reportar daños. El Módulo 2 informa a Finanzas únicamente el identificador de la reserva, el identificador de la disputa, el estado `PENDIENTE`, `RECHAZADO` o `COMPLETADO`, una versión o clave idempotente y un motivo opcional cuando el estado sea `RECHAZADO`. No envía montos ni ejecuta operaciones financieras. `RECHAZADO` implica devolver el depósito al Arrendatario y `COMPLETADO` implica liquidarlo al Propietario. Si una reserva es completada pero pasadas 24 horas no se encuentra una disputa relacionada  con su id se da por hecho que no hubo ningun inconveniente con esta y por lo tanto tambien se liberará el deposito al arrendatario.
+- **Flujo:** El Módulo 2 crea y gestiona la disputa después de la finalización de la reserva. El propietario dispone de 24 horas para reportar daños. El Módulo 2 informa a Finanzas únicamente el identificador de la reserva, el identificador de la disputa, el estado `PENDIENTE`, `RECHAZADO` o `COMPLETADO` y una versión o clave idempotente. No envía montos ni ejecuta operaciones financieras. `RECHAZADO` implica devolver el depósito al Arrendatario y `COMPLETADO` implica liquidarlo al Propietario. Si no existe una disputa al cumplirse las 24 horas, un evento automático solicita el reembolso total del depósito al Arrendatario; no se informa un origen ni un motivo operativo adicional.
 - **Regla de negocio asociada:** Depósito de Garantía (3.1).
 
 #### Reembolsar dinero a arrendatario
@@ -163,18 +164,13 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Consultar registros financieros
 - **Actores:** Administrador Financiero; Propietario.
-- **Flujo:** Ambos roles pueden revisar el historial de transacciones (cobros, reembolsos y dispersiones) asociadas a las reservas, con distintos niveles de alcance (el propietario ve solo sus propias embarcaciones; el administrador ve el histórico global). Las compensaciones por penalidad de cancelación se identifican mediante el origen del reembolso o de la dispersión correspondiente, no como un tipo de transacción independiente.
+- **Flujo:** Ambos roles pueden revisar cada registro de cobro, reembolso y dispersión de forma individual, con filtros y paginación. El Propietario ve únicamente registros relacionados con sus reservas; el Administrador ve los registros de toda la plataforma. El resultado incluye la referencia externa cuando exista.
 - **Regla de negocio asociada:** Transversal a la Matriz de Liquidación (3.2).
 
-#### Consultar balance financiero
-- **Actores:** Administrador Financiero.
-- **Flujo:** El administrador consulta el estado consolidado de las finanzas de la plataforma (fondos retenidos, comisiones acumuladas, depósitos en garantía pendientes de resolución).
+#### Consultar informe financiero
+- **Actores:** Administrador Financiero; Propietario.
+- **Flujo:** Ambos consultan datos agregados de registros financieros por períodos quincenales, mensuales o trimestrales. El Propietario ve sus reservas y el Administrador ve toda la plataforma. El informe prioriza el neto generado por cobros, reembolsos y dispersiones confirmados; no es un balance global ni incluye costos operativos o depósitos pendientes sin registro financiero.
 - **Regla de negocio asociada:** Transversal a la Matriz de Liquidación (3.2).
-
-#### Consultar ingresos
-- **Actores:** Propietario.
-- **Flujo:** El propietario revisa los ingresos generados por sus embarcaciones tras la dispersión de fondos, incluyendo penalidades recibidas por cancelaciones tardías.
-- **Regla de negocio asociada:** Matriz de Liquidación — Pago al Propietario (3.2).
 
 ---
 
@@ -187,7 +183,5 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 | Seguro Náutico | Solicitar el valor calculado de la reserva |
 | Valor Alquiler Bruto | Solicitar el valor calculado de la reserva |
 | Comisión Plataforma | Configurar parámetros financieros globales, Liquidar fondos de alquiler |
-| Pago al Propietario | Liquidar fondos de alquiler, Consultar ingresos |
-| Penalidad por Cancelación | Solicitar el valor calculado de la reserva, Reembolsar dinero a arrendatario, Liquidar fondos de alquiler |
-
-> **Nota**: "Penalidad por Cancelación" es un **origen** registrado dentro de un `RegistroDeReembolso` o de un `RegistroDeDispersión` (cancelación moderada o tardía/No-Show), no un tipo de transacción independiente. El modelo de transacciones se limita siempre a cobro, reembolso y dispersión.
+| Pago al Propietario | Liquidar fondos de alquiler, Consultar informe financiero |
+| Penalidad por Cancelación | Solicitar el valor calculado de la reserva, Reembolsar dinero a arrendatario, Liquidar fondos de alquiler, Consultar informe financiero |

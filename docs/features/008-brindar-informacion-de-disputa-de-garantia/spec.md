@@ -15,7 +15,7 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
 **Estados de la disputa**:
 
 - `PENDIENTE`: la disputa existe o continúa en revisión; no se ejecuta ninguna operación financiera.
-- `RECHAZADO`: el reclamo no procede (incluye la ausencia de reclamo al vencer la ventana de 24 horas); el depósito debe devolverse completamente al Arrendatario. El motivo, cuando exista, es opcional y no forma parte del estado.
+- `RECHAZADO`: el reclamo no procede; el depósito debe devolverse completamente al Arrendatario. Este estado no contiene ni requiere un motivo operativo.
 - `COMPLETADO`: el reclamo procede; el depósito debe liquidarse completamente al Propietario.
 
 ### Escenarios de Aceptación
@@ -35,10 +35,10 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
    - **Cuando** el Módulo 2 informa `COMPLETADO`.
    - **Entonces** el sistema solicita la liquidación total del depósito al Propietario mediante "Liquidar fondos de alquiler".
 
-4. **Escenario**: Ausencia de reclamo al vencer la ventana de 24 horas.
-   - **Dado** que el Módulo 2 cerró la ventana de reporte sin registrar un reclamo.
-   - **Cuando** informa `RECHAZADO`.
-   - **Entonces** el sistema solicita el reembolso total del depósito al Arrendatario.
+4. **Escenario**: Ausencia de una disputa al vencer la ventana de 24 horas.
+   - **Dado** que una reserva está `completada` y transcurrieron 24 horas sin que exista una disputa.
+   - **Cuando** el evento automático de garantía verifica la ausencia de disputa.
+   - **Entonces** se solicita el reembolso total del depósito al Arrendatario sin recibir una notificación de disputa ni un origen desde el Módulo 2.
 
 ### Casos Extremos (Edge Cases)
 
@@ -51,15 +51,16 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir desde el Módulo 2, y únicamente, los siguientes datos por notificación: el identificador de la reserva, el identificador de la disputa, el estado (`PENDIENTE`, `RECHAZADO` o `COMPLETADO`), una versión o clave idempotente del evento y, cuando el estado sea `RECHAZADO`, un motivo opcional. El sistema NO DEBE recibir ni requerir ningún otro dato (por ejemplo, identificadores de embarcación, montos u otros atributos) que `contexto-modulo3.md` no enumere explícitamente para esta notificación.
+- **RF-001**: El sistema DEBE recibir desde el Módulo 2, y únicamente, el identificador de la reserva, el identificador de la disputa, el estado (`PENDIENTE`, `RECHAZADO` o `COMPLETADO`) y una versión o clave idempotente del evento. El sistema NO DEBE recibir ni requerir motivos, orígenes, montos u otros atributos.
 - **RF-002**: El sistema DEBE reconocer únicamente los estados `PENDIENTE`, `RECHAZADO` y `COMPLETADO`.
-- **RF-003**: `RECHAZADO` DEBE admitir un motivo opcional, sin hacer obligatorio dicho motivo ni asumir una causa única.
+- **RF-003**: `RECHAZADO` NO DEBE requerir ni persistir un motivo u origen operativo.
 - **RF-004**: `PENDIENTE` NO DEBE ejecutar reembolso ni liquidación de garantía.
 - **RF-005**: Ante `RECHAZADO`, el sistema DEBE recuperar internamente el depósito capturado y solicitar su reembolso total al Arrendatario.
 - **RF-006**: Ante `COMPLETADO`, el sistema DEBE recuperar internamente el depósito capturado y solicitar su liquidación total al Propietario.
 - **RF-007**: El sistema NO DEBE recibir ni requerir desde el Módulo 2 el monto del depósito, el monto a reembolsar, el monto a liquidar ni una instrucción técnica de pasarela.
 - **RF-008**: El sistema DEBE aplicar idempotencia por reserva, disputa y versión o clave del evento.
 - **RF-009**: El sistema DEBE exponer este caso de uso como consumidor del Módulo 2 y no como un caso de uso mediante el cual el Administrador Financiero resuelva disputas dentro del Módulo 3.
+- **RF-009A**: El evento automático que detecta una reserva completada sin disputa después de 24 horas DEBE solicitar el reembolso total del depósito sin requerir un atributo de origen.
 - **RF-010**: El sistema NO DEBE reconocer sub-resultados adicionales (por ejemplo, liberación o retención parcial) dentro de `COMPLETADO` o `RECHAZADO`; ambos estados son tratamientos totales sobre el 100% del depósito capturado, conforme a la regla de negocio vigente ("Se entrega completo al Arrendatario o completo al Propietario").
 
 ### Requisitos No Funcionales
@@ -72,7 +73,7 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
 
 - **InformaciónDeReserva**: Se consulta para recuperar el depósito fijo registrado y el estado financiero de la reserva.
 - **RegistroDeCobro**: Se consulta para confirmar que el pago que contiene el depósito fue capturado y para obtener la referencia original.
-- **SolicitudInformaciónDisputa (DTO)**: Contiene el identificador de la reserva, el identificador de la disputa, el estado, la versión o clave idempotente y el motivo opcional cuando sea `RECHAZADO`. No contiene resultados monetarios ni un campo adicional de decisión (no admite sub-resultados como `LIBERAR_DEPOSITO`/`RETENER_DEPOSITO`).
+- **SolicitudInformaciónDisputa (DTO)**: Contiene el identificador de la reserva, el identificador de la disputa, el estado y la versión o clave idempotente. No contiene motivo, origen, resultados monetarios ni un campo adicional de decisión.
 
 ## Criterios de Éxito *(obligatorio)*
 
