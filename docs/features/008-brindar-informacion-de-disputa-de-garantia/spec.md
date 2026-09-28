@@ -85,6 +85,3 @@ Como el sistema, al recibir desde el Módulo 2 el estado de una disputa de garan
 - **CE-004**: "0 montos o instrucciones técnicas de pago son recibidos desde el Módulo 2, y 100% de los importes ejecutados provienen de registros financieros internos del Módulo 3".
 - **CE-005**: "100% de los eventos repetidos o concurrentes para una misma resolución evitan operaciones monetarias duplicadas".
 - **CE-006**: "0 sub-resultados de tipo `LIBERAR_DEPOSITO`/`RETENER_DEPOSITO` o cualquier retención parcial son procesados por este caso de uso, confirmando que es la única y canónica SPEC 8 vigente para la disputa de garantía".
-
----
-**Nota editorial**: El archivo `008-resolver-disputa-de-garantia/spec.md` (título interno idéntico pero contenido incompatible: modelo `LIBERAR_DEPOSITO`/`RETENER_DEPOSITO`, retención parcial, y el Administrador Financiero como actor directo) queda **descartado**. Debe eliminarse o archivarse fuera del set vigente de SPECs para evitar ambigüedad futura.
