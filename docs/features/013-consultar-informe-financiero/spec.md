@@ -8,16 +8,16 @@
 
 Como Administrador Financiero, quiero consultar datos agregados de los registros financieros de toda la plataforma para una periodicidad y un período determinados, de manera que pueda supervisar el neto generado exclusivamente por las operaciones financieras que gestiona el sistema.
 
-**Por qué esta prioridad**: El Administrador Financiero necesita una visión agregada de la actividad financiera de la plataforma. Este informe no representa un balance financiero global ni incluye costos operativos u otros egresos externos a los registros definidos por el Módulo 3.
+**Por qué esta prioridad**: El Administrador Financiero necesita una visión agregada de la actividad financiera de la plataforma. Este informe no representa un balance financiero global ni incluye costos operativos u otros egresos externos a los registros definidos por el sistema.
 
 **Prueba Independiente**: Con registros de cobro, reembolso y dispersión confirmados en distintos períodos y asociados a varias reservas, solicitar el informe como Administrador Financiero para cada periodicidad y validar que las métricas corresponden al agregado global del período seleccionado.
 
 **Escenarios de Aceptación**:
 
-1. **Escenario**: Consulta del período más reciente.
+1. **Escenario**: Consulta del último período cerrado.
    - **Dado** que el Administrador Financiero selecciona una periodicidad quincenal, mensual o trimestral.
    - **Cuando** solicita el informe sin seleccionar un período anterior.
-   - **Entonces** el sistema devuelve el informe del período más reciente disponible y la comparación con el período inmediatamente anterior equivalente.
+   - **Entonces** el sistema devuelve el informe del último período cerrado disponible y la comparación con el período inmediatamente anterior equivalente.
 
 2. **Escenario**: Consulta de un período anterior.
    - **Dado** que existen períodos anteriores para la periodicidad seleccionada.
@@ -26,7 +26,7 @@ Como Administrador Financiero, quiero consultar datos agregados de los registros
 
 ### Historia de Usuario 2 - Consultar el informe financiero propio (Prioridad: P1)
 
-Como Propietario, quiero consultar datos agregados de los registros financieros relacionados con mis reservas para una periodicidad y un período determinados, de manera que pueda conocer el neto generado por mis operaciones sin acceder a datos de otros propietarios.
+Como Propietario, quiero consultar datos agregados de los registros financieros relacionados con mis reservas para una periodicidad y un período determinados, de manera que pueda conocer mis ganancias (el total de dispersiones confirmadas a mi favor) sin acceder a datos de otros propietarios.
 
 **Por qué esta prioridad**: El Propietario necesita consultar sus resultados financieros de forma resumida por período, sin revisar cada operación individual. El alcance debe resolverse con la relación registrada entre cada operación financiera y la reserva o el propietario asociado.
 
@@ -34,10 +34,10 @@ Como Propietario, quiero consultar datos agregados de los registros financieros 
 
 **Escenarios de Aceptación**:
 
-1. **Escenario**: Consulta propia del período más reciente.
+1. **Escenario**: Consulta propia del último período cerrado.
    - **Dado** que el Propietario selecciona una periodicidad quincenal, mensual o trimestral.
    - **Cuando** solicita el informe sin seleccionar un período anterior.
-   - **Entonces** el sistema devuelve los datos agregados del período más reciente únicamente para sus reservas y la comparación con el período inmediatamente anterior equivalente.
+   - **Entonces** el sistema devuelve los datos agregados del último período cerrado únicamente para sus reservas y la comparación con el período inmediatamente anterior equivalente.
 
 2. **Escenario**: Consulta propia de un período anterior.
    - **Dado** que existen períodos anteriores para la periodicidad seleccionada.
@@ -90,12 +90,12 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 
 - **RF-001**: El sistema DEBE recibir del Administrador Financiero o del Propietario una solicitud que indique la periodicidad quincenal, mensual o trimestral y el período seleccionado.
 - **RF-002**: El sistema DEBE definir las quincenas del día 1 al día 15 y del día 16 al último día del mes, los meses calendario y los trimestres calendario.
-- **RF-003**: El sistema DEBE mostrar por defecto el período más reciente de la periodicidad seleccionada y la comparación con el período inmediatamente anterior equivalente.
+- **RF-003**: El sistema DEBE mostrar por defecto el último período cerrado de la periodicidad seleccionada y la comparación con el período inmediatamente anterior equivalente.
 - **RF-004**: El sistema DEBE permitir seleccionar períodos anteriores de la periodicidad elegida y NO DEBE aceptar rangos libres de fechas.
 - **RF-005**: El sistema DEBE calcular para el Administrador Financiero el agregado de todos los registros financieros confirmados de la plataforma que correspondan al período seleccionado.
 - **RF-006**: El sistema DEBE calcular para el Propietario el agregado de los registros financieros confirmados relacionados con sus reservas que correspondan al período seleccionado.
 - **RF-007**: El sistema DEBE agregar los cobros, reembolsos y dispersiones confirmados a partir de los montos registrados y la fecha de cada operación.
-- **RF-008**: El sistema DEBE calcular el neto generado como el total de cobros confirmados menos el total de reembolsos confirmados y menos el total de dispersiones confirmadas, sin incluir costos operativos ni conceptos externos a los registros financieros definidos por el Módulo 3.
+- **RF-008**: El sistema DEBE calcular para el Administrador Financiero el neto generado como el total de cobros confirmados menos el total de reembolsos confirmados y menos el total de dispersiones confirmadas, y para el Propietario sus ganancias como el total de dispersiones confirmadas a su favor (liquidación del alquiler, compensaciones por cancelación y depósitos liquidados), sin incluir costos operativos ni conceptos externos a los registros financieros definidos por el sistema.
 - **RF-009**: El sistema DEBE incluir la comisión de plataforma efectivamente aplicada y registrada en las dispersiones, además de la cantidad de operaciones agrupada por tipo de transacción.
 - **RF-010**: El sistema DEBE incluir la variación absoluta y porcentual frente al período inmediatamente anterior equivalente. Si el valor del período anterior es cero, la variación porcentual DEBE indicarse como no calculable.
 - **RF-011**: El sistema DEBE devolver un DTO con datos agregados y NO DEBE devolver mediante este caso de uso el detalle individual paginado definido en "Consultar registros financieros" (SPEC 12).
@@ -125,7 +125,7 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 ### Resultados Medibles
 
 - **CE-001**: Alcance del Informe, "100% de los informes del Administrador Financiero agregan únicamente registros financieros de la plataforma y 100% de los informes del Propietario agregan únicamente registros relacionados con sus reservas, con cero (0) datos de otros alcances expuestos".
-- **CE-002**: Precisión del Neto, "100% de los informes calculan el neto generado como cobros confirmados menos reembolsos confirmados menos dispersiones confirmadas, con cero (0) discrepancias frente a los registros financieros usados en pruebas automatizadas".
+- **CE-002**: Precisión del Neto, "100% de los informes del Administrador Financiero calculan el neto generado como cobros confirmados menos reembolsos confirmados menos dispersiones confirmadas, y 100% de los informes del Propietario calculan sus ganancias como el total de dispersiones confirmadas a su favor, con cero (0) discrepancias frente a los registros financieros usados en pruebas automatizadas".
 - **CE-003**: Consistencia de Periodicidad, "100% de los períodos quincenales, mensuales y trimestrales utilizan los límites fijos definidos y 0 solicitudes con rangos libres de fechas son aceptadas".
 - **CE-004**: Comparación Temporal, "100% de las comparaciones utilizan el período inmediatamente anterior equivalente y las variaciones porcentuales con valor anterior cero se identifican como no calculables".
 - **CE-005**: Exclusión de Garantías Pendientes, "100% de los depósitos de garantía pendientes sin registro financiero confirmado quedan excluidos del informe".

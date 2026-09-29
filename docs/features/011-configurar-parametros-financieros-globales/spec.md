@@ -28,7 +28,7 @@ Como el sistema, al recibir del Administrador Financiero el porcentaje de comisi
 
 ### Historia de Usuario 2 - Configurar los porcentajes de tarifa dinámica (fin de semana y temporada alta) (Prioridad: P1)
 
-Como el sistema, al recibir del Administrador Financiero el porcentaje de incremento por fin de semana y el porcentaje de incremento por temporada alta, quiero persistir dichos valores como parámetros financieros globales vigentes, de manera que "Brindar tarifa base" pueda aplicarlos al calcular la tarifa dinámica de una embarcación (la vigencia de la temporada alta es determinada automáticamente por la regla de calendario definida en el contexto del Módulo 3, no se configura en este caso de uso).
+Como el sistema, al recibir del Administrador Financiero el porcentaje de incremento por fin de semana y el porcentaje de incremento por temporada alta, quiero persistir dichos valores como parámetros financieros globales vigentes, de manera que "Brindar tarifa base" pueda aplicarlos al calcular la tarifa dinámica de una embarcación (la vigencia de la temporada alta es determinada automáticamente por la regla de calendario definida en el contexto del sistema, no se configura en este caso de uso).
 
 **Por qué esta prioridad**: Es la única fuente de los porcentajes que "Brindar tarifa base" necesita para aplicar la tarifa dinámica; sin esta configuración, dicho caso de uso no podría determinar cuánto ajustar la tarifa base de una embarcación.
 
@@ -37,7 +37,7 @@ Como el sistema, al recibir del Administrador Financiero el porcentaje de increm
 **Escenarios de Aceptación**:
 
 1. **Escenario**: Configuración o ajuste del porcentaje de incremento por fin de semana.
-   - **Dado** que el Administrador Financiero determina el porcentaje de incremento aplicable a la tarifa base durante los fines de semana.
+   - **Dado** que el Administrador Financiero determina el porcentaje de incremento aplicable a la tarifa base durante los fines de semana y puentes festivos.
    - **Cuando** configura dicho porcentaje en el sistema.
    - **Entonces** el sistema persiste el nuevo porcentaje como el valor vigente, sobrescribiendo cualquier valor previamente configurado.
 
@@ -55,13 +55,13 @@ Como el sistema, al recibir del Administrador Financiero el porcentaje de increm
   Los valores ya registrados en la reserva, incluida la tarifa base usada y el depósito, no se modifican; los nuevos parámetros aplican únicamente a cálculos posteriores.
 
 - **¿Cómo se determina la vigencia (fecha de inicio y fin) de la temporada alta?**
-  La vigencia no se configura mediante este caso de uso: el sistema la determina automáticamente aplicando la regla de calendario de temporada alta definida en el contexto del Módulo 3 (ventanas de fin de año, mitad de año, Semana Santa, semana de receso y puentes/fines de semana largos). "Brindar tarifa base" (SPEC 2) evalúa cada fecha contra dichas ventanas y, si corresponde, aplica el porcentaje de incremento de temporada alta configurado en este caso de uso.
+  La vigencia no se configura mediante este caso de uso: el sistema la determina automáticamente aplicando la regla de calendario de temporada alta definida en el contexto del sistema (ventanas de fin de año, mitad de año, Semana Santa y semana de receso). "Brindar tarifa base" (SPEC 2) evalúa cada fecha contra dichas ventanas y, si corresponde, aplica el porcentaje de incremento de temporada alta configurado en este caso de uso.
 
 - **¿Qué sucede si "Brindar tarifa base", "Solicitar el valor calculado de la reserva" o "Liquidar fondos de alquiler" necesitan un parámetro financiero global que aún no ha sido configurado por el Administrador Financiero?**
   Este caso de uso no define dicho tratamiento: cada caso de uso consumidor gestiona por sí mismo la ausencia del parámetro que necesita (por ejemplo, tratándola como información incompleta y registrando o respondiendo con un error controlado, según lo definido en sus propios requisitos).
 
 - **¿Los umbrales que determinan el tipo de cancelación (flexible, moderada, tardía/No-Show) se configuran mediante este caso de uso?**
-  No. Dichos umbrales son determinados y gestionados por el Sistema de Reservas y Operaciones (Módulo 2); el sistema únicamente recibe el resultado ya clasificado (el tipo de cancelación) a través de "Brindar el estado de la reserva", sin necesitar ni configurar los umbrales de tiempo que originan dicha clasificación.
+  No. Dichos umbrales son determinados y gestionados por el Sistema de Reservas y Operaciones; el sistema únicamente recibe el resultado ya clasificado (el tipo de cancelación) a través de "Brindar el estado de la reserva", sin necesitar ni configurar los umbrales de tiempo que originan dicha clasificación.
 
 ## Requisitos *(obligatorio)*
 
@@ -69,10 +69,10 @@ Como el sistema, al recibir del Administrador Financiero el porcentaje de increm
 
 - **RF-001**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) el porcentaje de comisión de la plataforma aplicado sobre el monto de alquiler en la liquidación estándar.
 - **RF-002**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) la tarifa del seguro náutico por pasajero.
-- **RF-003**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) el porcentaje de incremento de tarifa dinámica aplicable a los fines de semana.
+- **RF-003**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) el porcentaje de incremento de tarifa dinámica aplicable a los fines de semana y puentes festivos.
 - **RF-004**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) el porcentaje de incremento de tarifa dinámica aplicable a la temporada alta.
 - **RF-005**: El sistema DEBE persistir cada parámetro financiero global configurado, sobrescribiendo el valor previamente vigente cuando el Administrador Financiero lo ajuste.
-- **RF-006**: El sistema DEBE exponer los parámetros financieros globales vigentes para su consumo por "Brindar tarifa base" (porcentajes de tarifa dinámica), "Solicitar el valor calculado de la reserva" (tarifa de seguro náutico) y "Liquidar fondos de alquiler" (porcentaje de comisión de la plataforma). El depósito no es configurable y se calcula conforme a la regla definida en "Solicitar el valor calculado de la reserva".
+- **RF-006**: El sistema DEBE exponer los parámetros financieros globales vigentes para su consumo por "Brindar tarifa base" (porcentajes de tarifa dinámica), "Solicitar estimación para reserva" y "Solicitar el valor calculado de la reserva" (tarifa de seguro náutico) y "Liquidar fondos de alquiler" (porcentaje de comisión de la plataforma). El depósito no es configurable y se calcula conforme a la regla definida en "Solicitar el valor calculado de la reserva".
 - **RF-007**: El sistema NO DEBE modificar los valores ya registrados en reservas previamente calculadas cuando se actualice un parámetro financiero global; los nuevos valores configurados aplican únicamente a los cálculos que se realicen después de la actualización.
 - **RF-008**: El sistema DEBE exponer este caso de uso exclusivamente al Administrador Financiero.
 
@@ -84,7 +84,7 @@ Como el sistema, al recibir del Administrador Financiero el porcentaje de increm
 
 ### Entidades Clave
 
-- **ParámetrosFinancierosGlobales (Entidad)**: Estructura única gestionada y persistida internamente por el sistema para representar la configuración financiera vigente de la plataforma. Contiene el porcentaje de comisión, la tarifa del seguro por pasajero y los porcentajes de tarifa dinámica. Es creada y actualizada exclusivamente por este caso de uso, y consultada por "Brindar tarifa base", "Solicitar el valor calculado de la reserva" y "Liquidar fondos de alquiler".
+- **ParámetrosFinancierosGlobales (Entidad)**: Estructura única gestionada y persistida internamente por el sistema para representar la configuración financiera vigente de la plataforma. Contiene el porcentaje de comisión, la tarifa del seguro por pasajero y los porcentajes de tarifa dinámica. Es creada y actualizada exclusivamente por este caso de uso, y consultada por "Brindar tarifa base", "Solicitar estimación para reserva", "Solicitar el valor calculado de la reserva" y "Liquidar fondos de alquiler".
 - **SolicitudConfiguraciónComisiónYSeguro (DTO)**: Información recibida desde el Administrador Financiero para la Historia de Usuario 1. Contiene el porcentaje de comisión de la plataforma y/o la tarifa del seguro náutico por pasajero. No se persiste tal cual; sus datos se utilizan para actualizar la entidad ParámetrosFinancierosGlobales.
 - **SolicitudConfiguraciónTarifaDinámica (DTO)**: Información recibida desde el Administrador Financiero para la Historia de Usuario 2. Contiene el porcentaje de incremento por fin de semana y el porcentaje de incremento por temporada alta. No se persiste tal cual; sus datos se utilizan para actualizar la entidad ParámetrosFinancierosGlobales.
 

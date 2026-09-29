@@ -6,7 +6,7 @@
 
 ### Historia de Usuario 1 - Obtener la tarifa base vigente aplicando la tarifa dinámica (Prioridad: P1)
 
-Como el sistema, al ser invocado internamente por "Solicitar estimación para reserva" o "Brindar información de reserva", quiero consultar al Sistema de Gestión de Flota la tarifa base específica de la embarcación solicitada (el precio fijado por su propietario y almacenado en dicho módulo, identificada por su identificador único), y aplicar sobre esa tarifa la regla de tarifa dinámica vigente (temporada alta —determinada automáticamente por la regla de calendario definida en el contexto—, fin de semana u otra condición configurada), de manera que el caso de uso que me invocó reciba la tarifa base por unidad de tiempo lista para ser utilizada en sus propios cálculos.
+Como el sistema, al ser invocado internamente por "Solicitar estimación para reserva" o "Brindar información de reserva", quiero consultar al Sistema de Gestión de Flota la tarifa base específica de la embarcación solicitada (el precio fijado por su propietario y almacenado en dicho módulo, identificada por su identificador único), y aplicar sobre esa tarifa la regla de tarifa dinámica vigente para la fecha evaluada (temporada alta —determinada automáticamente por la regla de calendario definida en el contexto— o fin de semana), de manera que el caso de uso que me invocó reciba la tarifa base por unidad de tiempo lista para ser utilizada en sus propios cálculos.
 
 **Por qué esta prioridad**: Esta es la única función del sistema donde reside la lógica de tarifas dinámicas; tanto la estimación preliminar como el desglose final de precio dependen de que este valor sea correcto, ya que ningún otro caso de uso debe duplicar este cálculo.
 
@@ -31,6 +31,7 @@ Como el sistema, al ser invocado internamente por "Solicitar estimación para re
 
 **Regla de cálculo de la tarifa base final** (aplicación de la tarifa dinámica sobre la tarifa provista por el Sistema de Gestión de Flota):
 
+- **Fecha evaluada**: la tarifa dinámica se evalúa sobre la fecha de inicio de la reserva o, en la estimación en lote sin fechas, sobre la fecha actual.
 - **Condición regular**: `Tarifa base final = Tarifa base provista por Gestión de Flota` (sin ajuste dinámico).
 - **Fin de semana**: `Tarifa base final = Tarifa base × (1 + %IncrementoFinDeSemana / 100)`, usando el porcentaje configurado mediante "Configurar parámetros financieros globales".
 - **Temporada alta**: `Tarifa base final = Tarifa base × (1 + %IncrementoTemporadaAlta / 100)`, usando el porcentaje configurado mediante "Configurar parámetros financieros globales", cuando la fecha evaluada caiga dentro de alguna de las ventanas de temporada alta definidas a continuación.
@@ -48,7 +49,7 @@ La vigencia de la temporada alta se deriva automáticamente aplicando, a cada a�
 
 Estas ventanas son fijas por calendario, se recalculan automáticamente cada año (incluyendo el cálculo de Semana Santa vía Meeus/Jones/Butcher) y no requieren configuración manual de fechas por parte del Administrador Financiero, quien únicamente configura el **porcentaje de incremento** aplicable.
 
-Los puentes festivos y los fines de semana largos **no** se categorizan como temporada alta; el fin de semana se evalúa exclusivamente como su propia condición dinámica independiente (ver "Regla de cálculo de la tarifa base final"), sin que la condición de puente festivo agregue ningún ajuste adicional.
+Los puentes festivos y los fines de semana largos **no** se categorizan como temporada alta; se evalúan como fin de semana, dado que los festivos hacen parte de fin de semana, a excepción de los días santos. La tarifa de un puente utiliza el porcentaje de incremento de fin de semana (ver "Regla de cálculo de la tarifa base final"), sin un porcentaje adicional.
 
 ### Casos Extremos (Edge Cases)
 
@@ -62,30 +63,36 @@ Los puentes festivos y los fines de semana largos **no** se categorizan como tem
   Cuando más de una condición dinámica vigente coincide sobre la misma fecha, el sistema evalúa todas las condiciones aplicables y aplica aquella cuyo ajuste resulte en la tarifa más alta (la condición más favorable para la plataforma), de manera que el resultado sea siempre determinista y sin depender de un orden de evaluación arbitrario.
 
 - **¿Sobre qué fecha debe evaluarse la tarifa dinámica cuando "Solicitar estimación para reserva" invoca este caso de uso en modo lote, sin fechas específicas (estimación general para la pantalla principal)?**
-  En el modo lote sin fechas, la tarifa dinámica se evalúa sobre la fecha actual (el día en que se realiza la solicitud), reflejando las condiciones vigentes ese día. La estimación así obtenida es meramente informativa; al confirmar la reserva, "Solicitar el valor calculado de la reserva" recalcula con las fechas reales y su tarifa dinámica correspondiente.
+  En el modo lote sin fechas, la tarifa dinámica se evalúa sobre la fecha actual (el día en que se realiza la solicitud), reflejando las condiciones vigentes ese día. La estimación así obtenida es meramente informativa; al confirmar la reserva, "Brindar información de reserva" registra la tarifa base correspondiente a la fecha de inicio real, sobre la cual "Solicitar el valor calculado de la reserva" calcula el valor.
+
+- **¿Sobre qué fecha debe evaluarse la tarifa dinámica cuando la invocación incluye fechas específicas?**
+  Cuando la invocación proviene de "Solicitar estimación para reserva" en modalidad individual o de "Brindar información de reserva", la tarifa dinámica se evalúa sobre la fecha de inicio recibida, y la tarifa base obtenida se utiliza para toda la duración de la reserva.
 
 - **¿Cómo determina el sistema si una fecha evaluada corresponde a temporada alta?**
-  El sistema evalúa la fecha contra las ventanas exactas de temporada alta definidas arriba (fin de año: 15 de noviembre–15 de enero; mitad de año: 1 de junio–30 de julio; Semana Santa: calculada mediante el Algoritmo de Meeus/Jones/Butcher; y semana de receso: 5–12 de octubre). Si la fecha cae dentro de alguna de estas ventanas, aplica el porcentaje de incremento de temporada alta configurado por el Administrador Financiero mediante "Configurar parámetros financieros globales". La vigencia se deriva automáticamente de dicha regla de calendario —NO se configura manualmente ni se deriva de los datos de las reservas, del tipo de embarcación ni de su categoría— y los cambios derivados del calendario afectan únicamente los cálculos posteriores, nunca los valores ya aplicados a reservas existentes. Los puentes festivos y los fines de semana largos no forman parte de estas ventanas de temporada alta; únicamente el fin de semana se evalúa como su propia condición dinámica.
+  El sistema evalúa la fecha contra las ventanas exactas de temporada alta definidas arriba (fin de año: 15 de noviembre–15 de enero; mitad de año: 1 de junio–30 de julio; Semana Santa: calculada mediante el Algoritmo de Meeus/Jones/Butcher; y semana de receso: 5–12 de octubre). Si la fecha cae dentro de alguna de estas ventanas, aplica el porcentaje de incremento de temporada alta configurado por el Administrador Financiero mediante "Configurar parámetros financieros globales". La vigencia se deriva automáticamente de dicha regla de calendario —NO se configura manualmente ni se deriva de los datos de las reservas, del tipo de embarcación ni de su categoría— y los cambios derivados del calendario afectan únicamente los cálculos posteriores, nunca los valores ya aplicados a reservas existentes. Los puentes festivos y los fines de semana largos no forman parte de estas ventanas de temporada alta; se evalúan como fin de semana, dado que los festivos hacen parte de fin de semana, a excepción de los días santos.
 
 - **¿La tarifa dinámica depende del tipo o la categoría de la embarcación (lancha, yate, catamarán)?**
   No. El tipo y la categoría de la embarcación no son un insumo de este caso de uso ni de la regla de tarifa dinámica. El único dato variable de la embarcación utilizado aquí es su propia tarifa base (el precio fijado por su propietario), consultada al Sistema de Gestión de Flota por identificador único. La tarifa dinámica se aplica exclusivamente en función de la fecha evaluada (fin de semana / temporada alta), de forma idéntica para cualquier tipo o categoría de embarcación.
+
+- **¿Qué sucede si el porcentaje de incremento que requiere la fecha evaluada (fin de semana o temporada alta) no ha sido configurado mediante "Configurar parámetros financieros globales"?**
+  El sistema considera la información incompleta: no puede establecer la tarifa base final de la fecha evaluada sin ese porcentaje. No asume ningún valor, registra el fallo y lo comunica a la operación invocante, que aplica su propio manejo (según lo definido en los SPEC 1 y 3), sin entregar una tarifa asumida. Si la fecha evaluada no requiere ese porcentaje (por ejemplo, un día regular), el porcentaje no configurado no impide obtener la tarifa.
 
 ## Requisitos *(obligatorio)*
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE, al ser invocado mediante `<<include>>`, consultar al Sistema de Gestión de Flota la tarifa base específica (el precio fijado por el propietario) de la embarcación solicitada, identificándola por su identificador único, **sin** requerir ni utilizar el tipo o la categoría de la embarcación para este cálculo.
-- **RF-002**: El sistema DEBE aplicar la tarifa dinámica vigente (temporada alta, fin de semana u otra condición vigente) sobre la tarifa provista por el Sistema de Gestión de Flota para obtener la tarifa base final por unidad de tiempo, conforme a la regla de cálculo `tarifa base × (1 + porcentaje de incremento / 100)` cuando aplique una condición dinámica. Esta regla depende exclusivamente de la fecha evaluada.
+- **RF-001**: El sistema DEBE, al ser invocado mediante `<<include>>`, consultar al Sistema de Gestión de Flota la tarifa base específica (el precio fijado por el propietario) de la embarcación solicitada, identificándola por su identificador único, y evaluar la tarifa dinámica sobre la fecha de inicio de la reserva o, en la estimación en lote sin fechas, sobre la fecha actual, **sin** requerir ni utilizar el tipo o la categoría de la embarcación para este cálculo.
+- **RF-002**: El sistema DEBE aplicar la tarifa dinámica vigente (temporada alta o fin de semana) sobre la tarifa provista por el Sistema de Gestión de Flota para obtener la tarifa base final por unidad de tiempo, conforme a la regla de cálculo `tarifa base × (1 + porcentaje de incremento / 100)` cuando aplique una condición dinámica. Esta regla depende exclusivamente de la fecha evaluada.
 - **RF-003**: El sistema DEBE devolver la tarifa base final exclusivamente a la operación interna que lo invocó ("Solicitar estimación para reserva" o "Brindar información de reserva"), sin exponer un *endpoint* directo para actores externos.
 - **RF-004**: El sistema DEBE utilizar al Sistema de Gestión de Flota como única fuente autoritativa de la tarifa base de cada embarcación, dado que dicho valor es definido por el propietario y almacenado exclusivamente en ese módulo.
-- **RF-005**: El sistema NO DEBE delegar ni duplicar en el Sistema de Gestión de Flota, ni en el Módulo de Reservas y Operaciones, el cálculo de la tarifa dinámica; esta lógica reside exclusivamente en este caso de uso.
+- **RF-005**: El sistema NO DEBE delegar ni duplicar en el Sistema de Gestión de Flota, ni en el Sistema de Reservas y Operaciones, el cálculo de la tarifa dinámica; esta lógica reside exclusivamente en este caso de uso.
 - **RF-006**: El sistema DEBE determinar si la fecha evaluada corresponde a temporada alta aplicando la siguiente regla exacta de calendario, recalculada automáticamente para cada año evaluado:
   - Fin de año: 15 de noviembre – 15 de enero del año siguiente.
   - Mitad de año: 1 de junio – 30 de julio.
   - Semana Santa: calculada mediante el Algoritmo de Meeus/Jones/Butcher.
   - Semana de receso: 5 de octubre – 12 de octubre.
 
-  sin requerir que el Administrador Financiero configure manualmente las fechas de inicio y fin de dicha condición. Los puentes festivos y los fines de semana largos NO forman parte de esta regla de temporada alta; únicamente el fin de semana constituye una condición dinámica adicional e independiente.
+  sin requerir que el Administrador Financiero configure manualmente las fechas de inicio y fin de dicha condición. Los puentes festivos y los fines de semana largos NO forman parte de esta regla de temporada alta; se evalúan como fin de semana, dado que los festivos hacen parte de fin de semana, a excepción de los días santos, y utilizan el porcentaje de incremento de fin de semana.
 - **RF-007**: El sistema NO DEBE utilizar el tipo, la categoría ni ningún otro atributo de clasificación de la embarcación como insumo para determinar la tarifa base final o la aplicación de la tarifa dinámica.
 
 ### Requisitos No Funcionales

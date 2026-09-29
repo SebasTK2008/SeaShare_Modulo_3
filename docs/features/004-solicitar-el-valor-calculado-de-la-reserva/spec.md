@@ -33,13 +33,16 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud 
 - **¿Qué sucede si la información registrada para la reserva está incompleta (por ejemplo, sin tarifa base) debido a una falla previa durante "Brindar información de reserva"?**
   Se trata igualmente de un caso de información incompleta cubierto por RNF-003: el sistema no debe ejecutar un cálculo parcial (por ejemplo, omitiendo el monto de alquiler). Debe tratar la solicitud como no calculable y responder con un error controlado al Sistema de Reservas y Operaciones, equivalente al tratamiento definido en RF-009.
 
+- **¿Qué sucede si la tarifa del seguro náutico no ha sido configurada por el Administrador Financiero al momento de calcular el valor de la reserva?**
+  El sistema considera la información necesaria incompleta. No calcula el monto del seguro náutico ni un valor total parcial; registra el fallo y responde con un error controlado al Sistema de Reservas y Operaciones.
+
 ## Requisitos *(obligatorio)*
 
 ### Requisitos Funcionales
 
 - **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones una solicitud del valor calculado de una reserva específica, identificada mediante su identificador de reserva.
 - **RF-002**: El sistema DEBE recuperar la información previamente registrada para dicha reserva (tarifa base vigente, cantidad de días y número de pasajeros), registrada mediante "Brindar información de reserva".
-- **RF-003**: El sistema DEBE calcular el monto de alquiler multiplicando la tarifa base registrada por la cantidad de días registrada.
+- **RF-003**: El sistema DEBE calcular el monto de alquiler multiplicando la tarifa base registrada —obtenida para la fecha de inicio de la reserva mediante "Brindar información de reserva"— por la cantidad de días registrada.
 - **RF-004**: El sistema DEBE calcular el monto del seguro náutico multiplicando la tarifa de seguro establecida por el número de pasajeros registrado.
 - **RF-005**: El sistema DEBE calcular el depósito de garantía conforme a la regla definida en este caso de uso, sin multiplicarlo por la duración, el número de pasajeros o el daño reportado.
 - **RF-006**: El sistema DEBE calcular el valor total de la reserva como la suma del monto de alquiler, el monto del seguro náutico y el monto del depósito de garantía.
@@ -51,7 +54,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud 
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con el Sistema de Reservas y Operaciones, tanto para recibir la solicitud como para devolver el desglose del valor.
 - **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el monto de alquiler, el monto del seguro náutico, el monto del depósito de garantía y el valor total.
-- **RNF-003**: El sistema DEBE implementar un manejo de errores robusto para los casos en que la información previamente registrada de la reserva no exista o esté incompleta, evitando cálculos parciales o inconsistentes.
+- **RNF-003**: El sistema DEBE implementar un manejo de errores robusto para los casos en que la información previamente registrada de la reserva no exista o esté incompleta, o en que la tarifa del seguro náutico no esté configurada, evitando cálculos parciales o inconsistentes.
 
 ### Entidades Clave
 

@@ -45,11 +45,11 @@ Como el sistema, al ser invocado internamente por "Brindar el estado de la reser
 
 ### Historia de Usuario 3 - Liquidar el depósito retenido tras una disputa completada (Prioridad: P1)
 
-Como el sistema, al recibir desde "Brindar información de disputa de garantía" el estado `COMPLETADO`, quiero recuperar internamente el depósito fijo capturado y solicitar su liquidación total al Propietario, sin recibir montos ni instrucciones de pago desde el Módulo 2.
+Como el sistema, al recibir desde "Brindar información de disputa de garantía" el estado `COMPLETADO`, quiero recuperar internamente el depósito fijo cobrado y registrado y solicitar su liquidación total al Propietario, sin recibir montos ni instrucciones de pago desde el Sistema de Reservas y Operaciones.
 
 **Por qué esta prioridad**: La liquidación del alquiler ya ocurre al completar la reserva; esta operación se limita a aplicar la retención total del depósito decidida por la disputa.
 
-**Prueba Independiente**: Con una reserva completada que cuenta con un depósito capturado, recibir `COMPLETADO` desde la disputa y validar que el sistema solicita una liquidación idempotente por el depósito completo, vinculada al cobro original y a la disputa.
+**Prueba Independiente**: Con una reserva completada que cuenta con un depósito cobrado y registrado, recibir `COMPLETADO` desde la disputa y validar que el sistema solicita una liquidación idempotente por el depósito completo, vinculada al cobro original y a la disputa.
 
 **Escenarios de Aceptación**:
 
@@ -107,7 +107,7 @@ Como el sistema, al calcular la liquidación estándar del valor de alquiler al 
 - **¿Qué sucede si este caso de uso es invocado para una reserva que no cuenta con el monto de alquiler o el monto del seguro náutico previamente registrados?**
    El sistema no ejecuta ningún cálculo parcial ni envía una solicitud a la Pasarela de Pago con un monto asumido; registra internamente un fallo, dado que la validación de existencia de dicha información corresponde previamente a "Brindar el estado de la reserva" o a "Brindar información de disputa de garantía".
 
-- **¿Qué sucede si la disputa informa `COMPLETADO` pero no existe un depósito capturado registrado internamente?**
+- **¿Qué sucede si la disputa informa `COMPLETADO` pero no existe un depósito cobrado y registrado internamente?**
    El sistema trata la información como incompleta y registra el fallo sin enviar una solicitud a la Pasarela de Pago con un monto asumido.
 
 - **¿Por qué la dispersión por penalidad de cancelación (moderada o tardía/No-Show) no aplica el descuento de comisión de la plataforma ni de seguro náutico, a diferencia de la liquidación estándar?**
@@ -135,21 +135,21 @@ Como el sistema, al calcular la liquidación estándar del valor de alquiler al 
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir, mediante invocación interna desde "Brindar el estado de la reserva" o desde "Brindar información de disputa de garantía", una solicitud de dispersión para una reserva específica, junto con el estado de reserva o la resolución de disputa que la desencadena. No debe recibir montos financieros desde el Módulo 2.
+- **RF-001**: El sistema DEBE recibir, mediante invocación interna desde "Brindar el estado de la reserva" o desde "Brindar información de disputa de garantía", una solicitud de dispersión para una reserva específica, junto con el estado de reserva o la resolución de disputa que la desencadena. No debe recibir montos financieros desde el Sistema de Reservas y Operaciones.
 - **RF-002**: El sistema DEBE, cuando el estado sea cancelado moderadamente, calcular el 50% del monto de alquiler previamente registrado para la reserva y solicitarlo como compensación al Propietario.
 - **RF-003**: El sistema DEBE, cuando el estado sea cancelado tardíamente o No-Show, solicitar el 100% del monto de alquiler previamente registrado como compensación al Propietario.
 - **RF-004**: El sistema DEBE calcular la comisión de la plataforma aplicando, sobre el monto de alquiler previamente registrado, el porcentaje de comisión configurado en los parámetros financieros globales, para su uso en el cálculo de la liquidación estándar (RF-005 y RF-006).
 - **RF-005**: El sistema DEBE, cuando el estado de la reserva sea `completada`, calcular la liquidación estándar del alquiler al Propietario y solicitarla sin incluir el depósito.
-- **RF-006**: El sistema DEBE, cuando reciba `COMPLETADO` desde una disputa, recuperar internamente el depósito capturado y solicitar su liquidación total al Propietario mediante una operación consolidada o relacionada según la capacidad de la Pasarela de Pago.
+- **RF-006**: El sistema DEBE, cuando reciba `COMPLETADO` desde una disputa, recuperar internamente el depósito cobrado y registrado y solicitar su liquidación total al Propietario mediante una operación consolidada o relacionada según la capacidad de la Pasarela de Pago.
 - **RF-007**: El sistema NO DEBE aplicar la comisión de la plataforma ni el descuento del monto de seguro náutico sobre los montos calculados por penalidad de cancelación (RF-002 y RF-003).
 - **RF-008**: El sistema DEBE enviar a la Pasarela de Pago la solicitud de captura y/o liquidación por el monto total calculado según el estado o resolución correspondiente, únicamente mediante una capacidad soportada por la integración configurada.
 - **RF-009**: El sistema DEBE registrar internamente la `IntenciónDeDispersión` en curso, indicando el estado o resolución que la desencadenó, el monto, el cobro original, la capacidad utilizada y una clave idempotente.
 - **RF-010**: El sistema DEBE recibir de la Pasarela de Pago el resultado de la operación y registrarlo (exitoso o fallido) actualizando siempre el estado en la `IntenciónDeDispersión`. Si la operación es exitosa, el sistema DEBE además generar el `RegistroDeDispersión` inmutable de auditoría con su fecha de creación, monto confirmado, detalle y referencia externa.
 - **RF-011**: El sistema DEBE dejar disponible el `RegistroDeDispersión` inmutable creado para ser consultado internamente mediante "Consultar registros financieros" y "Consultar informe financiero".
 - **RF-012**: El sistema NO DEBE crear un `RegistroDeDispersión` para una dispersión cuya operación fue rechazada, cancelada, expirada o quedó en proceso según la Pasarela de Pago; en esos casos solo actualiza la `IntenciónDeDispersión`.
-- **RF-013**: El sistema DEBE registrar internamente un fallo, sin ejecutar ningún cálculo parcial, cuando se invoque este caso de uso para una reserva sin el monto requerido en sus registros internos: alquiler, seguro o depósito capturado, según el estado o resolución recibida.
+- **RF-013**: El sistema DEBE registrar internamente un fallo, sin ejecutar ningún cálculo parcial, cuando se invoque este caso de uso para una reserva sin el monto requerido en sus registros internos: alquiler, seguro o depósito cobrado y registrado, según el estado o resolución recibida.
 - **RF-014**: El sistema DEBE registrar, como parte del `RegistroDeDispersión` inmutable, el monto de comisión efectivamente aplicado cuando el estado de la reserva sea `completada`. Para dispersiones por cancelación, este campo DEBE registrarse explícitamente con el valor cero.
-- **RF-015**: El sistema DEBE registrar, como parte del `RegistroDeDispersión` inmutable, el propietario y la embarcación asociados a la reserva, de manera que el registro pueda consultarse internamente en SPEC 12 y SPEC 13.
+- **RF-015**: El sistema DEBE registrar, como parte del `RegistroDeDispersión` inmutable, la reserva, el propietario y la embarcación asociados, de manera que el registro pueda consultarse internamente en SPEC 12 y SPEC 13.
 
 - **RF-016**: El sistema DEBE registrar, como parte del `RegistroDeDispersión` inmutable, el monto bruto de alquiler utilizado para el cálculo, el monto de seguro náutico aplicado y el monto de depósito de garantía retenido. Estos valores deben conservarse aunque cambien posteriormente los parámetros financieros para permitir las consultas históricas.
 
@@ -161,10 +161,10 @@ Como el sistema, al calcular la liquidación estándar del valor de alquiler al 
 
 ### Entidades Clave
 
-- **InformaciónDeReserva (Entidad, definida en SPEC 3 y actualizada en SPEC 4)**: En este caso de uso es únicamente consultada, para recuperar el monto de alquiler, el monto del seguro y el depósito fijo capturado cuando la solicitud se desencadena por una resolución de disputa.
+- **InformaciónDeReserva (Entidad, definida en SPEC 3 y actualizada en SPEC 4)**: En este caso de uso es únicamente consultada, para recuperar el monto de alquiler, el monto del seguro y el depósito fijo cobrado y registrado cuando la solicitud se desencadena por una resolución de disputa.
 - **IntenciónDeDispersión (Entidad)**: Estructura para representar la operación operativa en curso de captura o liquidación de fondos hacia el Propietario. Conserva el estado o resolución desencadenante, el monto solicitado, el cobro original, la capacidad utilizada, la clave idempotente y el estado actual de la solicitud (en curso, aprobado, fallido, etc.). Esta entidad es la fuente de la verdad para conocer el estado y resultado de la operación.
-- **RegistroDeDispersión (Entidad Inmutable)**: Estructura inmutable y estática creada como un subproducto de auditoría únicamente cuando la Pasarela de Pago confirma la captura o liquidación como exitosa. Conserva la fecha de creación, el monto confirmado, la referencia externa, el monto bruto de alquiler, el monto de seguro náutico aplicado, el monto de depósito retenido y la comisión aplicada. Conserva también el propietario y la embarcación asociados. Es de uso estrictamente interno del Módulo de Finanzas para ser consumida posteriormente por "Consultar registros financieros" y "Consultar informe financiero" (SPEC 13). Ningún módulo externo tiene acceso ni conocimiento de esta entidad.
-- **SolicitudDispersión (DTO)**: Información recibida internamente desde "Brindar el estado de la reserva" o "Brindar información de disputa de garantía". Contiene el identificador de la reserva y el estado o resolución desencadenante; no contiene monto de depósito enviado por el Módulo 2.
+- **RegistroDeDispersión (Entidad Inmutable)**: Estructura inmutable y estática creada como un subproducto de auditoría únicamente cuando la Pasarela de Pago confirma la captura o liquidación como exitosa. Conserva la fecha de creación, el monto confirmado, la referencia externa, el monto bruto de alquiler, el monto de seguro náutico aplicado, el monto de depósito retenido y la comisión aplicada. Conserva también la reserva, el propietario y la embarcación asociados. Es de uso estrictamente interno del sistema para ser consumida posteriormente por "Consultar registros financieros" y "Consultar informe financiero" (SPEC 13). Ningún sistema externo tiene acceso ni conocimiento de esta entidad.
+- **SolicitudDispersión (DTO)**: Información recibida internamente desde "Brindar el estado de la reserva" o "Brindar información de disputa de garantía". Contiene el identificador de la reserva y el estado o resolución desencadenante; no contiene monto de depósito enviado por el Sistema de Reservas y Operaciones.
 - **SolicitudDispersiónPasarela (DTO)**: Información enviada a la Pasarela de Pago. Contiene el tipo de operación, el monto total, la referencia del cobro original, la referencia de la reserva y la clave idempotente.
 - **ResultadoDispersiónPasarela (DTO)**: Información recibida desde la Pasarela de Pago como resultado de una operación previamente iniciada. Contiene el estado externo, su detalle, el monto confirmado y la referencia externa asignada por la Pasarela de Pago.
 

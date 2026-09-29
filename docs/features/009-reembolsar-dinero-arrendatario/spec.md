@@ -6,50 +6,55 @@
 
 ### Historia de Usuario 1 - Solicitar el reembolso ante una cancelación de reserva (Prioridad: P1)
 
-Como el sistema, al ser invocado internamente por "Brindar el estado de la reserva" cuando el estado informado corresponde a una cancelación flexible, moderada o por anfitrión, quiero recuperar el valor registrado para la reserva y solicitar el monto que corresponde devolver.
+Como el sistema, al ser invocado internamente por "Brindar el estado de la reserva" cuando el estado informado corresponde a una cancelación flexible, moderada, tardía/No-Show o por anfitrión, quiero recuperar el valor registrado para la reserva y solicitar el monto que corresponde devolver.
 
 **Por qué esta prioridad**: Sin este cálculo y solicitud correctos, el arrendatario no recibiría el reembolso que le corresponde según la ventana de cancelación en la que se encuentre la reserva, incumpliendo directamente la lógica de cancelaciones definida para la plataforma.
 
-**Prueba Independiente**: Con una reserva que cuenta con un valor de alquiler previamente calculado y registrado, invocar internamente el reembolso indicando cada una de las dos ventanas de cancelación (flexible y moderada) y validar que el sistema calcula el monto correspondiente (100% o 50% del valor de alquiler registrado) y lo solicita a la Pasarela de Pago.
+**Prueba Independiente**: Con una reserva que cuenta con los montos de alquiler, seguro y depósito previamente calculados y registrados, invocar internamente el reembolso indicando cada uno de los estados de cancelación (flexible, moderada, tardía/No-Show y por anfitrión) y validar que el sistema calcula el monto correspondiente (100% del valor total pagado en flexible y por anfitrión; 50% del alquiler más el 100% del depósito en moderada; 100% del depósito en tardía/No-Show) y lo solicita a la Pasarela de Pago.
 
 **Escenarios de Aceptación**:
 
 1. **Escenario**: Reembolso por cancelación flexible (>72h).
    - **Dado** que existe un valor total previamente registrado para una reserva.
    - **Cuando** "Brindar el estado de la reserva" informa que la reserva fue cancelada flexiblemente.
-   - **Entonces** el sistema solicita la liberación del importe autorizado o, si ya fue capturado, un reembolso del 100% del valor total pagado registrado. La operación queda pendiente hasta recibir confirmación externa.
+   - **Entonces** el sistema solicita la liberación del importe autorizado o, si ya fue capturado, un reembolso del 100% del valor total pagado registrado (alquiler, seguro y depósito). La operación queda pendiente hasta recibir confirmación externa.
 
 2. **Escenario**: Reembolso por cancelación moderada (72h–24h).
-   - **Dado** que existe un valor total previamente registrado para una reserva.
+   - **Dado** que existen el valor de alquiler y el depósito previamente registrados para una reserva.
    - **Cuando** "Brindar el estado de la reserva" informa que la reserva fue cancelada moderadamente.
-   - **Entonces** el sistema calcula el 50% del valor total pagado registrado y solicita la liberación o el reembolso de dicho monto según el estado del cobro original. La operación queda pendiente hasta recibir confirmación externa.
+   - **Entonces** el sistema calcula el 50% del valor de alquiler registrado, le suma el 100% del depósito registrado y solicita la liberación o el reembolso de dicho monto según el estado del cobro original. El seguro no se reembolsa. La operación queda pendiente hasta recibir confirmación externa.
 
 3. **Escenario**: Reembolso por cancelación del anfitrión.
   - **Dado** que existe un valor total previamente registrado para una reserva.
   - **Cuando** "Brindar el estado de la reserva" informa que la reserva fue cancelada por anfitrión.
   - **Entonces** el sistema solicita la liberación o el reembolso del 100% del valor pagado al Arrendatario, según el estado del cobro original.
 
+4. **Escenario**: Reembolso del depósito por cancelación tardía / No-Show (<24h).
+  - **Dado** que existe un depósito previamente registrado para una reserva.
+  - **Cuando** "Brindar el estado de la reserva" informa que la reserva fue cancelada tardíamente o No-Show.
+  - **Entonces** el sistema solicita la liberación o el reembolso del 100% del depósito registrado, según el estado del cobro original, sin reembolsar el alquiler ni el seguro. La operación queda pendiente hasta recibir confirmación externa.
+
 ---
 
 ### Historia de Usuario 2 - Solicitar el reembolso íntegro del depósito ante un resultado `RECHAZADO` de la disputa de garantía (Prioridad: P1)
 
-Como el sistema, al recibir desde "Brindar Información de Disputa de Garantía" el estado `RECHAZADO`, quiero recuperar el depósito de garantía previamente registrado y solicitar a la Pasarela de Pago su reembolso íntegro.
+Como el sistema, al recibir desde "Brindar Información de Disputa de Garantía" el estado `RECHAZADO`, quiero recuperar el depósito de garantía previamente registrado y solicitar a la Pasarela de Pago su liberación o reembolso íntegro, según el estado del cobro original.
 
-**Por qué esta prioridad**: La mayoría de las reservas finalizan sin incidentes o con reclamos que no proceden, por lo que la liberación oportuna del depósito es indispensable para no retener el dinero del arrendatario cuando el Módulo 2 ya determinó que no corresponde retenerlo.
+**Por qué esta prioridad**: La mayoría de las reservas finalizan sin incidentes o con reclamos que no proceden, por lo que la liberación oportuna del depósito es indispensable para no retener el dinero del arrendatario cuando el Sistema de Reservas y Operaciones ya determinó que no corresponde retenerlo.
 
-**Prueba Independiente**: Con una reserva que cuenta con un depósito de garantía capturado, recibir el estado `RECHAZADO` o el evento automático de ausencia de disputa tras 24 horas y validar que se solicita el reembolso del 100% del depósito registrado.
+**Prueba Independiente**: Con una reserva que cuenta con un depósito de garantía cobrado y registrado, recibir el estado `RECHAZADO` o el evento automático de ausencia de disputa tras 24 horas y validar que se solicita la liberación o el reembolso del 100% del depósito registrado.
 
 **Escenarios de Aceptación**:
 
 1. **Escenario**: Reembolso automático por ausencia de disputa al vencer la ventana de 24 horas.
-   - **Dado** que existe un depósito de garantía capturado y registrado para una reserva.
+   - **Dado** que existe un depósito de garantía cobrado y registrado para una reserva.
   - **Cuando** el evento automático verifica que no existe una disputa tras el vencimiento de la ventana.
-   - **Entonces** el sistema solicita el reembolso íntegro del depósito capturado. La operación queda pendiente hasta recibir confirmación externa.
+   - **Entonces** el sistema solicita la liberación o el reembolso íntegro del depósito cobrado, según el estado del cobro original. La operación queda pendiente hasta recibir confirmación externa.
 
 2. **Escenario**: Reembolso por disputa rechazada.
-   - **Dado** que existe un depósito de garantía capturado y registrado para una reserva.
+   - **Dado** que existe un depósito de garantía cobrado y registrado para una reserva.
   - **Cuando** "Brindar Información de Disputa de Garantía" informa `RECHAZADO`.
-   - **Entonces** el sistema solicita el reembolso íntegro del depósito capturado. La operación queda pendiente hasta recibir confirmación externa.
+   - **Entonces** el sistema solicita la liberación o el reembolso íntegro del depósito cobrado, según el estado del cobro original. La operación queda pendiente hasta recibir confirmación externa.
 
 ---
 
@@ -76,10 +81,10 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 ### Casos Extremos (Edge Cases)
 
 - **¿Quién aplica el descuento por costos transaccionales en una cancelación flexible (>72h)?**
-  El sistema no calcula ni aplica ningún descuento por costos transaccionales: solicita a la Pasarela de Pago la liberación del importe autorizado o, si ya fue capturado, el reembolso del 100% del valor de alquiler registrado (o el 50% correspondiente en cancelación moderada), y es la propia Pasarela de Pago quien, al ejecutar la operación, neta sus propios costos de procesamiento como una condición externa a este sistema, conforme a RF-012. El sistema únicamente registra cualquier costo o monto neto que la Pasarela de Pago reporte, sin asumir ni inferir cómo lo aplica.
+  El sistema no calcula ni aplica ningún descuento por costos transaccionales: solicita a la Pasarela de Pago la liberación del importe autorizado o, si ya fue capturado, el reembolso del monto que fija la regla de negocio para el estado recibido (100% del valor total pagado registrado en cancelación flexible), conforme a RF-012. El sistema únicamente registra cualquier costo o monto neto que la Pasarela de Pago reporte, cuando lo reporte, sin asumir ni inferir cómo lo aplica.
 
 - **¿Qué diferencia existe entre el reembolso automático por ausencia de disputa y el reembolso por una disputa rechazada?**
-  No existe una diferencia financiera: ambos devuelven el 100% del depósito capturado. El evento automático de ausencia de disputa no envía un atributo adicional.
+  No existe una diferencia financiera: ambos devuelven el 100% del depósito cobrado. El evento automático de ausencia de disputa no envía un atributo adicional.
 
 - **¿Qué sucede cuando la Pasarela de Pago está caída, agota el tiempo de espera (*timeout*) o es inalcanzable al momento de enviar la solicitud de reembolso?**
   Conforme a RNF-003, el sistema no asume ningún resultado; aplica un manejo de errores controlado, registra la solicitud de reembolso con un estado que refleje la falla de comunicación (sin marcarla como exitosa ni como rechazada por la Pasarela) y conserva dicha solicitud disponible para consulta posterior.
@@ -104,18 +109,19 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 ### Requisitos Funcionales
 
 - **RF-001**: El sistema DEBE recibir, mediante invocación interna por estado de reserva, evento automático de garantía o estado `RECHAZADO`, una solicitud de reembolso para una reserva específica sin recibir un atributo de origen.
-- **RF-002**: El sistema DEBE, cuando el estado sea cancelado flexiblemente o cancelado por anfitrión, solicitar la liberación o el reembolso del 100% del valor pagado según el estado del cobro original.
-- **RF-003**: El sistema DEBE, cuando el estado sea cancelado moderadamente, calcular el 50% del valor total pagado registrado y solicitar su liberación o reembolso.
-- **RF-004**: El sistema DEBE, ante `RECHAZADO` o el evento automático de ausencia de disputa tras 24 horas, recuperar el depósito capturado y solicitar su reembolso íntegro.
+- **RF-002**: El sistema DEBE, cuando el estado sea cancelado flexiblemente o cancelado por anfitrión, solicitar la liberación o el reembolso del 100% del valor total pagado (alquiler, seguro y depósito) según el estado del cobro original.
+- **RF-003**: El sistema DEBE, cuando el estado sea cancelado moderadamente, calcular el 50% del valor de alquiler registrado, sumarle el 100% del depósito registrado y solicitar su liberación o reembolso según el estado del cobro original. El seguro no forma parte del monto reembolsado.
+- **RF-003A**: El sistema DEBE, cuando el estado sea cancelado tardíamente o No-Show, solicitar la liberación o el reembolso del 100% del depósito registrado según el estado del cobro original. El alquiler y el seguro no forman parte del monto reembolsado.
+- **RF-004**: El sistema DEBE, ante `RECHAZADO` o el evento automático de ausencia de disputa tras 24 horas, recuperar el depósito cobrado y registrado y solicitar su liberación o reembolso íntegro según el estado del cobro original.
 - **RF-005**: El sistema NO DEBE admitir retención parcial ni calcular un monto de reembolso parcial para el depósito de garantía.
 - **RF-006**: El sistema DEBE registrar internamente la `IntenciónDeReembolso` en curso, vinculada al cobro original y con una clave idempotente, mientras se espera el resultado de la Pasarela de Pago.
 - **RF-007**: El sistema DEBE recibir de la Pasarela de Pago el resultado del reembolso y registrarlo (exitoso o fallido) actualizando siempre el estado en la `IntenciónDeReembolso`. Si la operación es exitosa, el sistema DEBE además generar el `RegistroDeReembolso` inmutable de auditoría con su fecha de creación, monto confirmado, detalle y referencia externa.
 - **RF-008**: El sistema DEBE dejar disponible el `RegistroDeReembolso` inmutable creado para ser consultado internamente mediante "Consultar registros financieros".
 - **RF-009**: El sistema NO DEBE crear un `RegistroDeReembolso` para un reembolso rechazado, cancelado, expirado o en proceso según la Pasarela de Pago; en estos casos solo actualiza la `IntenciónDeReembolso`.
-- **RF-010**: El sistema DEBE registrar un error controlado cuando la reserva no tenga depósito capturado y registrado.
-- **RF-011**: El sistema DEBE distinguir el monto reembolsado del costo transaccional cobrado por la Pasarela de Pago.
-- **RF-012**: El sistema NO DEBE calcular ni aplicar ningún descuento por costos transaccionales sobre los montos de reembolso; dicha deducción es aplicada exclusivamente por la Pasarela de Pago al ejecutar la operación, como una condición externa a este sistema. El sistema se limita a registrar el costo o monto neto que la Pasarela de Pago reporte, sin inferirlo ni asumirlo.
-- **RF-013**: El sistema DEBE registrar, como parte del `RegistroDeReembolso`, el propietario, la embarcación y, cuando aplique, la disputa asociada, sin almacenar un atributo de origen.
+- **RF-010**: El sistema DEBE registrar un error controlado cuando la reserva no tenga depósito cobrado y registrado.
+- **RF-011**: El sistema DEBE distinguir el monto reembolsado del costo transaccional reportado por la Pasarela de Pago, cuando esta lo reporte.
+- **RF-012**: El sistema NO DEBE calcular ni aplicar ningún descuento por costos transaccionales sobre los montos de reembolso. El sistema solicita el monto que fija la regla de negocio y se limita a registrar el costo o monto neto que la Pasarela de Pago reporte, cuando lo reporte, sin inferirlo ni asumirlo.
+- **RF-013**: El sistema DEBE registrar, como parte del `RegistroDeReembolso`, la reserva, el propietario, la embarcación y, cuando aplique, la disputa asociada, sin almacenar un atributo de origen.
 
 ### Requisitos No Funcionales
 
@@ -125,9 +131,9 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 
 ### Entidades Clave
 
-- **InformaciónDeReserva (Entidad, definida en SPEC 3 y actualizada en SPEC 4)**: En este caso de uso es consultada para recuperar el valor de alquiler registrado en cancelaciones o el depósito fijo capturado cuando el evento recibido corresponde a una disputa `RECHAZADO` o al evento automático de ausencia de disputa.
+- **InformaciónDeReserva (Entidad, definida en SPEC 3 y actualizada en SPEC 4)**: En este caso de uso es consultada para recuperar el valor total pagado, el valor de alquiler y el depósito registrados en cancelaciones, o el depósito fijo cobrado y registrado cuando el evento recibido corresponde a una disputa `RECHAZADO` o al evento automático de ausencia de disputa.
 - **IntenciónDeReembolso (Entidad)**: Estructura persistida para representar la operación operativa de una liberación o reembolso. Conserva el estado o evento desencadenante, tipo de operación, monto solicitado, referencia del cobro original, clave idempotente, el estado de la solicitud (en proceso, aprobado, fallido, etc.) y la referencia externa. Esta entidad es la fuente de la verdad para conocer el estado y resultado de la operación.
-- **RegistroDeReembolso (Entidad Inmutable)**: Estructura inmutable creada como un subproducto de auditoría únicamente cuando la Pasarela de Pago confirma el reembolso como exitoso. Conserva la fecha de creación, el monto confirmado, el detalle, la referencia externa, el propietario, la embarcación y la disputa asociada. Es de uso estrictamente interno del Módulo de Finanzas para ser consumida por "Consultar registros financieros". Ningún módulo externo tiene acceso ni conocimiento de esta entidad.
+- **RegistroDeReembolso (Entidad Inmutable)**: Estructura inmutable creada como un subproducto de auditoría únicamente cuando la Pasarela de Pago confirma el reembolso como exitoso. Conserva la fecha de creación, el monto confirmado, el detalle, la referencia externa, la reserva, el propietario, la embarcación y la disputa asociada. Es de uso estrictamente interno del sistema para ser consumida por "Consultar registros financieros". Ningún sistema externo tiene acceso ni conocimiento de esta entidad.
 - **SolicitudReembolso (DTO)**: Información recibida internamente desde "Brindar el estado de la reserva", el evento automático de garantía o "Brindar Información de Disputa de Garantía". Contiene el identificador de la reserva y el motivo técnico de ejecución como estado o evento, no un atributo de origen financiero.
 - **SolicitudReembolsoPasarela (DTO)**: Información enviada a la Pasarela de Pago. Contiene el tipo de operación (liberación o reembolso), el monto, la referencia del cobro original, la referencia de la reserva y la clave idempotente.
 - **ResultadoReembolsoPasarela (DTO)**: Información recibida desde la Pasarela de Pago. Contiene el tipo de operación, el estado externo, su detalle, el monto confirmado y la referencia externa asignada.
@@ -136,8 +142,8 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 
 ### Resultados Medibles
 
-- **CE-001**: Precisión Financiera, "100% de los reembolsos de depósito solicitados por `RECHAZADO` o por el evento automático de ausencia de disputa corresponden exactamente al 100% del depósito capturado".
-- **CE-002**: Cumplimiento Arquitectónico, "0 decisiones sobre daños y 0 retenciones parciales son calculadas por este caso de uso; 0 descuentos por costos transaccionales son calculados o aplicados por el sistema, confirmando que dicha deducción es exclusiva de la Pasarela de Pago".
+- **CE-001**: Precisión Financiera, "100% de los reembolsos de depósito solicitados por `RECHAZADO` o por el evento automático de ausencia de disputa corresponden exactamente al 100% del depósito cobrado y registrado".
+- **CE-002**: Cumplimiento Arquitectónico, "0 decisiones sobre daños y 0 retenciones parciales son calculadas por este caso de uso; 0 descuentos por costos transaccionales son calculados o aplicados por el sistema".
 - **CE-003**: Trazabilidad, "100% de las solicitudes de liberación o reembolso enviadas a la Pasarela de Pago quedan registradas internamente, y 100% de los resultados recibidos actualizan dicho registro, dejándolo disponible para 'Consultar registros financieros'".
 - **CE-004**: Resiliencia del Sistema, "100% de las fallas de comunicación simuladas con la Pasarela de Pago, tanto al enviar la solicitud de reembolso como al recibir su resultado, son manejadas mediante fallbacks controlados, sin dejar transacciones de reembolso en un estado indefinido".
 - **CE-005**: Consolidación de Historias, "0 Historias de Usuario duplicadas o con disparadores solapados (`RECHAZADO`) coexisten en esta SPEC, confirmando que el tratamiento de ambos orígenes del depósito rechazado está unificado en la Historia de Usuario 2".

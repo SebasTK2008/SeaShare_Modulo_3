@@ -1,19 +1,19 @@
 # Especificación de Funcionalidad: UC07 - Brindar el Estado de la Reserva
 
-**Creado**: 2026-09-06 (v3 — se incorpora "iniciada" como el noveno estado reconocido y como el verdadero origen del bloqueo temporal (TTL) de 15 minutos; "pendiente" ya no origina el TTL, únicamente indica que este continúa vigente mientras se ejecuta la confirmación de pago, conforme a la actualización de `contexto-modulo3.md` y `sea-share.md`)
+**Creado**: 2026-09-06 (v3 — se incorpora "iniciada" como el décimo estado reconocido y como el verdadero origen del bloqueo temporal (TTL) de 15 minutos; "pendiente" ya no origina el TTL, únicamente indica que este continúa vigente mientras se ejecuta la confirmación de pago, conforme a la actualización de `contexto-modulo3.md` y `sea-share.md`)
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
-### Historia de Usuario 1 - Reconocer estados operativos sin acción financiera, incluyendo el inicio del bloqueo temporal en el estado "iniciada" (Prioridad: P1)
+### Historia de Usuario 1 - Reconocer estados operativos sin acción de reembolso ni de dispersión, incluyendo el inicio del bloqueo temporal en "iniciada" y el disparo del cobro en "pendiente" (Prioridad: P1)
 
-Como el sistema, al recibir del Sistema de Reservas y Operaciones la notificación del estado vigente de una reserva (disponible, iniciada, reservado, en navegación o pendiente), quiero reconocer dicho estado y no ejecutar ninguna operación de reembolso ni de dispersión de fondos, ya que estos estados no desencadenan ninguna acción financiera. En particular:
+Como el sistema, al recibir del Sistema de Reservas y Operaciones la notificación del estado vigente de una reserva (disponible, iniciada, reservado, en navegación o pendiente), quiero reconocer dicho estado y no ejecutar ninguna operación de reembolso ni de dispersión de fondos, ya que estos estados no las desencadenan. En particular:
 
-- Cuando el estado informado sea **iniciada**, este indica que el arrendatario acaba de oprimir "Reservar" y que comienza el bloqueo temporal (estado de espera) de 15 minutos.
-- Cuando el estado informado sea **pendiente**, este indica que el arrendatario ya inició la confirmación de pago, dentro del mismo bloqueo temporal iniciado previamente en "iniciada"; esta transición **no reinicia** el TTL, que sigue corriendo desde su origen.
+- Cuando el estado informado sea **iniciada**, este indica que el arrendatario acaba de oprimir "Reservar" y que comienza el bloqueo temporal (TTL) de 15 minutos.
+- Cuando el estado informado sea **pendiente**, este indica que el arrendatario ya inició la confirmación de pago, dentro del mismo bloqueo temporal iniciado previamente en "iniciada"; esta transición **no reinicia** el TTL, que sigue corriendo desde su origen. Además, este estado habilita a "Procesar cobro": junto con él, el Sistema de Reservas y Operaciones entrega el token o referencia segura del medio de pago, y el sistema ejecuta "Procesar cobro" para esa reserva.
 
-**Por qué esta prioridad**: Definir explícitamente qué estados no desencadenan ninguna acción financiera es tan importante como definir cuáles sí lo hacen, para evitar reembolsos o dispersiones involuntarias. Reconocer específicamente el estado "iniciada" permite al sistema identificar el momento exacto de origen del bloqueo temporal previo al cobro, y reconocer "pendiente" permite identificar que dicho bloqueo continúa vigente durante la confirmación de pago, sin necesidad de duplicar la lógica de tiempos, que reside en el Sistema de Reservas y Operaciones.
+**Por qué esta prioridad**: Definir explícitamente qué estados no desencadenan reembolsos ni dispersiones de fondos es tan importante como definir cuáles sí lo hacen, para evitar reembolsos o dispersiones involuntarias. Reconocer específicamente el estado "iniciada" permite al sistema identificar el momento exacto de origen del bloqueo temporal previo al cobro, y reconocer "pendiente" permite identificar que dicho bloqueo continúa vigente durante la confirmación de pago y que corresponde ejecutar el cobro, sin necesidad de duplicar la lógica de tiempos, que reside en el Sistema de Reservas y Operaciones.
 
-**Prueba Independiente**: Enviar al sistema la notificación de cada uno de los estados operativos (disponible, iniciada, reservado, en navegación, pendiente) para una reserva con registro financiero existente, y validar que el sistema no dispara "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler" en ninguno de los casos.
+**Prueba Independiente**: Enviar al sistema la notificación de cada uno de los estados operativos (disponible, iniciada, reservado, en navegación, pendiente) para una reserva con registro financiero existente, y validar que el sistema no dispara "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler" en ninguno de los casos, y que únicamente el estado "pendiente" dispara "Procesar cobro".
 
 **Escenarios de Aceptación**:
 
@@ -27,10 +27,10 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones la notificaci�
    - **Cuando** el Sistema de Reservas y Operaciones notifica al sistema que el estado vigente de la reserva es "iniciada".
    - **Entonces** el sistema reconoce el estado "iniciada" como el inicio del bloqueo temporal (TTL) de 15 minutos, sin ejecutar ninguna operación de reembolso ni de dispersión de fondos.
 
-3. **Escenario**: Notificación del estado "pendiente" como continuación del bloqueo temporal ya iniciado.
-   - **Dado** que existe un registro financiero para una reserva específica, el arrendatario ya inició la confirmación de pago y el bloqueo temporal comenzó previamente en "iniciada".
+3. **Escenario**: Notificación del estado "pendiente" como continuación del bloqueo temporal ya iniciado y disparo del cobro.
+   - **Dado** que existe un registro financiero para una reserva específica, el arrendatario ya inició la confirmación de pago, el bloqueo temporal comenzó previamente en "iniciada" y el Sistema de Reservas y Operaciones entrega el token o referencia segura del medio de pago.
    - **Cuando** el Sistema de Reservas y Operaciones notifica al sistema que el estado vigente de la reserva es "pendiente".
-   - **Entonces** el sistema reconoce el estado "pendiente" como continuación del mismo bloqueo temporal (sin reiniciar el TTL), sin ejecutar ninguna operación de reembolso ni de dispersión de fondos.
+   - **Entonces** el sistema reconoce el estado "pendiente" como continuación del mismo bloqueo temporal (sin reiniciar el TTL), ejecuta "Procesar cobro" para esa reserva con el token recibido y no ejecuta ninguna operación de reembolso ni de dispersión de fondos.
 
 ---
 
@@ -47,17 +47,17 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado de c
 1. **Escenario**: Cancelación flexible (>72h).
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "cancelado flexiblemente".
-  - **Entonces** el sistema solicita la liberación o el reembolso del 100% del valor total pagado, según el estado del cobro original, sin ejecutar "Liquidar fondos de alquiler". El resultado queda pendiente de confirmación externa.
+  - **Entonces** el sistema solicita la liberación o el reembolso del 100% del valor total pagado (alquiler, seguro y depósito), según el estado del cobro original, sin ejecutar "Liquidar fondos de alquiler". El resultado queda pendiente de confirmación externa.
 
 2. **Escenario**: Cancelación moderada (72h–24h).
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "cancelado moderadamente".
-  - **Entonces** el sistema solicita la liberación o el reembolso del 50% del valor total pagado y solicita la liquidación del 50% del valor del alquiler como compensación al propietario. Cada operación conserva su propio estado y resultado.
+  - **Entonces** el sistema solicita la liberación o el reembolso del 50% del valor del alquiler y del 100% del depósito, según el estado del cobro original, y solicita la liquidación del 50% del valor del alquiler como compensación al propietario. El seguro no se reembolsa. Cada operación conserva su propio estado y resultado.
 
 3. **Escenario**: Cancelación tardía / No-Show (<24h).
    - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones informa al sistema el estado "cancelado tardíamente" o "No-Show".
-  - **Entonces** el sistema solicita únicamente la liquidación del 100% del valor del alquiler como compensación al propietario, sin solicitar reembolso. La solicitud no implica que los fondos ya hayan sido recibidos.
+  - **Entonces** el sistema solicita la liquidación del 100% del valor del alquiler como compensación al propietario y la liberación o el reembolso del 100% del depósito, según el estado del cobro original, sin solicitar el reembolso del alquiler ni del seguro. La solicitud no implica que los fondos ya hayan sido recibidos.
 
   4. **Escenario**: Cancelación por anfitrión.
     - **Dado** que existe información previamente registrada, incluyendo el valor total, para una reserva.
@@ -68,7 +68,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado de c
 
 ### Historia de Usuario 3 - Liquidar el alquiler al completar la reserva y esperar el estado de la disputa de garantía (Prioridad: P1)
 
-Como el sistema, al recibir del Sistema de Reservas y Operaciones el único estado de finalización "completada" para una reserva específica, quiero liquidar el valor correspondiente al alquiler y mantener pendiente únicamente el depósito de garantía, de manera que el Módulo 2 pueda informar posteriormente el estado de la disputa y el Módulo 3 ejecute su consecuencia financiera.
+Como el sistema, al recibir del Sistema de Reservas y Operaciones el único estado de finalización "completada" para una reserva específica, quiero liquidar el valor correspondiente al alquiler y mantener pendiente únicamente el depósito de garantía, de manera que el Sistema de Reservas y Operaciones pueda informar posteriormente el estado de la disputa y el sistema ejecute su consecuencia financiera.
 
 **Por qué esta prioridad**: La finalización de la reserva no implica por sí misma que exista o no un daño. El alquiler puede liquidarse al completar la reserva, mientras que el depósito permanece pendiente hasta recibir el estado de disputa.
 
@@ -89,14 +89,14 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
 - **¿Qué sucede si el estado notificado corresponde a una cancelación (flexible, moderada, tardía/No-Show o por anfitrión), pero el registro financiero de la reserva no contiene un valor total previamente calculado por "Solicitar el valor calculado de la reserva"?**
   De forma análoga al caso anterior, el sistema no ejecuta "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler" sin un monto de referencia. Al no existir canal de respuesta hacia el Sistema de Reservas y Operaciones, el sistema registra internamente el fallo.
 
-- **¿Qué sucede si el estado notificado es "completada" pero el registro financiero de la reserva no contiene un depósito y/o un valor de alquiler?**
-  El sistema no ejecuta "Reembolsar dinero a arrendatario" ni "Liquidar fondos de alquiler" con montos asumidos. Dado que ambas operaciones se disparan de forma conjunta para este estado, la ausencia de cualquiera de los dos montos requeridos impide ejecutar la operación correspondiente sobre información incompleta. De forma análoga a los casos anteriores, y al no existir canal de respuesta hacia el Sistema de Reservas y Operaciones, el sistema registra internamente el fallo sin ejecutar liberaciones o liquidaciones parciales o inconsistentes.
+- **¿Qué sucede si el estado notificado es "completada" pero el registro financiero de la reserva no contiene el valor de alquiler y/o el monto del seguro?**
+  El sistema no ejecuta "Liquidar fondos de alquiler" con montos asumidos. Dado que la liquidación estándar (Valor Bruto menos Comisión de la Plataforma menos Seguro) requiere tanto el valor de alquiler como el monto del seguro, la ausencia de cualquiera de los dos impide ejecutar la operación correspondiente sobre información incompleta. De forma análoga a los casos anteriores, y al no existir canal de respuesta hacia el Sistema de Reservas y Operaciones, el sistema registra internamente el fallo sin ejecutar liquidaciones parciales o inconsistentes.
 
-- **¿Qué sucede si, tras recibir la notificación "completada", el Módulo 2 nunca informa el estado de la disputa?**
-  El depósito permanece pendiente y el sistema registra la ausencia del evento esperado para su conciliación o escalamiento, sin reembolsarlo ni liquidarlo automáticamente.
+- **¿Qué sucede si, tras recibir la notificación "completada", no se recibe la resolución de la disputa de garantía?**
+  Si no existe una disputa notificada al cumplirse 24 horas desde "completada", el evento automático de garantía solicita el reembolso total del depósito al Arrendatario (SPEC 8, RF-009A). Si el estado de disputa informado fue `PENDIENTE` y no se recibe posteriormente una resolución (`RECHAZADO` o `COMPLETADO`), el depósito permanece retenido y el sistema registra la ausencia del evento esperado para su conciliación o escalamiento, sin reembolsarlo ni liquidarlo automáticamente.
 
 - **¿Qué sucede si el Sistema de Reservas y Operaciones notifica el estado "iniciada" o "pendiente" para una reserva que ya había recibido esa misma notificación (notificación repetida)?**
-  El contexto no define un mecanismo de deduplicación explícito para este caso de uso. Una notificación repetida con el mismo estado no desencadena ninguna operación financiera adicional, ya que ni "iniciada" ni "pendiente" disparan ninguna acción financiera por sí mismos.
+  El contexto no define un mecanismo de deduplicación explícito para este caso de uso. Una notificación repetida del estado "iniciada" no desencadena ninguna operación financiera, ya que dicho estado no dispara ninguna acción financiera por sí mismo. Una notificación repetida del estado "pendiente" no debe generar un cobro adicional: "Procesar cobro" aplica idempotencia (SPEC 5, RNF-003).
 
 - **¿Qué sucede si el Sistema de Reservas y Operaciones notifica más de una vez el mismo estado de cancelación o de finalización ("completada") para la misma reserva?**
   El contexto no define un mecanismo de deduplicación explícito para este caso de uso. La notificación repetida de un estado de cancelación o de finalización no debe disparar nuevamente las operaciones financieras ya ejecutadas. Este comportamiento de idempotencia deberá ser abordado en la implementación, registrando internamente si las operaciones ya fueron ejecutadas para esa reserva.
@@ -109,10 +109,11 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
 ### Requisitos Funcionales
 
 - **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones el estado vigente de una reserva específica, identificada mediante su identificador de reserva, correspondiente a uno de los siguientes estados: disponible, iniciada, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente/No-Show, cancelado por anfitrión o completada.
-- **RF-002**: El sistema DEBE, al recibir la notificación de cualquiera de los estados operativos sin acción financiera (disponible, iniciada, reservado, en navegación o pendiente), reconocer el estado recibido sin ejecutar ninguna operación de reembolso ni de dispersión de fondos. El estado "iniciada" indica el origen del bloqueo temporal (estado de espera) de 15 minutos, que comienza cuando el arrendatario oprime "Reservar"; el estado "pendiente" indica que el arrendatario ya inició la confirmación de pago dentro de ese mismo bloqueo temporal, sin reiniciar el TTL. El sistema reconoce ambos estados como tales sin necesidad de persistir el estado operativo, cuya gestión corresponde al Módulo 2.
-- **RF-003**: El sistema DEBE, cuando el estado recibido sea "cancelado flexiblemente", solicitar la liberación o el reembolso del 100% del valor total pagado, según el estado del cobro original.
-- **RF-004**: El sistema DEBE, cuando el estado recibido sea "cancelado moderadamente", solicitar la liberación o el reembolso del 50% del valor total pagado y la liquidación del 50% del valor del alquiler como compensación al propietario, manteniendo resultados independientes.
-- **RF-005**: El sistema DEBE, cuando el estado recibido sea "cancelado tardíamente" o "No-Show", solicitar únicamente la liquidación del 100% del valor del alquiler como compensación al propietario, sin solicitar reembolso.
+- **RF-002**: El sistema DEBE, al recibir la notificación de cualquiera de los estados operativos sin acción de reembolso ni de dispersión (disponible, iniciada, reservado, en navegación o pendiente), reconocer el estado recibido sin ejecutar ninguna operación de reembolso ni de dispersión de fondos. El estado "iniciada" indica el origen del bloqueo temporal (TTL) de 15 minutos, que comienza cuando el arrendatario oprime "Reservar"; el estado "pendiente" indica que el arrendatario ya inició la confirmación de pago dentro de ese mismo bloqueo temporal, sin reiniciar el TTL. El sistema reconoce ambos estados como tales sin necesidad de persistir el estado operativo, cuya gestión corresponde al Sistema de Reservas y Operaciones.
+- **RF-002A**: El sistema DEBE, cuando el estado recibido sea "pendiente", ejecutar "Procesar cobro" para la reserva informada, utilizando el token o referencia segura del medio de pago recibido junto con dicho estado.
+- **RF-003**: El sistema DEBE, cuando el estado recibido sea "cancelado flexiblemente", solicitar la liberación o el reembolso del 100% del valor total pagado (alquiler, seguro y depósito), según el estado del cobro original.
+- **RF-004**: El sistema DEBE, cuando el estado recibido sea "cancelado moderadamente", solicitar la liberación o el reembolso del 50% del valor del alquiler y del 100% del depósito, según el estado del cobro original, y la liquidación del 50% del valor del alquiler como compensación al propietario, manteniendo resultados independientes. El seguro no se reembolsa.
+- **RF-005**: El sistema DEBE, cuando el estado recibido sea "cancelado tardíamente" o "No-Show", solicitar la liquidación del 100% del valor del alquiler como compensación al propietario y la liberación o el reembolso del 100% del depósito, según el estado del cobro original, sin solicitar el reembolso del alquiler ni del seguro.
 - **RF-005A**: El sistema DEBE, cuando el estado recibido sea "cancelado por anfitrión", solicitar la liberación o el reembolso del 100% del valor pagado al Arrendatario, según el estado del cobro original, sin solicitar una dispersión.
 - **RF-006**: El sistema DEBE, cuando el estado recibido sea "completada", solicitar la liquidación estándar del valor de alquiler al propietario, sin incluir el depósito, y dejar el depósito pendiente hasta recibir "Brindar información de disputa de garantía".
 - **RF-007**: El sistema NO DEBE ejecutar una operación sobre el depósito únicamente por recibir el estado "completada".
@@ -122,14 +123,14 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
 
 ### Requisitos No Funcionales
 
-- **RNF-001**: El sistema DEBE utilizar un DTO para recibir la solicitud del Sistema de Reservas y Operaciones, mapeando únicamente los atributos esenciales (identificador de la reserva y estado informado).
+- **RNF-001**: El sistema DEBE utilizar un DTO para recibir la solicitud del Sistema de Reservas y Operaciones, mapeando únicamente los atributos esenciales (identificador de la reserva y estado informado) y, cuando el estado informado sea "pendiente", el token o referencia segura del medio de pago y, cuando estén disponibles, su tipo y metadatos no sensibles.
 - **RNF-002**: El sistema DEBE mantener el uso de `BigDecimal` para cualquier valor monetario de la reserva que sea consultado o referenciado al ejecutar las extensiones hacia "Reembolsar dinero a arrendatario" y "Liquidar fondos de alquiler".
 - **RNF-003**: El sistema DEBE implementar un manejo de errores robusto ante la ausencia de información previamente registrada, de valor total calculado o de depósito de garantía registrado para la reserva, registrando el fallo internamente dado que, al ser este caso de uso unidireccional, no existe un canal de respuesta directo hacia el Sistema de Reservas y Operaciones para notificarlo.
 
 ### Entidades Clave
 
-- **InformaciónDeReserva (Entidad, creada en SPEC 3, enriquecida en SPEC 4)**: Registro persistido por el Módulo 3 que contiene los datos financieros de la reserva (identificador, tarifa base, número de días, número de pasajeros, monto total calculado, depósito de garantía y monto del seguro). En este caso de uso es **consultada en modo lectura** para obtener los montos necesarios al ejecutar "Reembolsar dinero a arrendatario" y/o "Liquidar fondos de alquiler". El Módulo 3 **no persiste el estado operativo** de la reserva — ese pertenece al Módulo 2; únicamente utiliza el estado recibido como contexto de decisión dentro de la ejecución de este caso de uso.
-- **SolicitudEstadoReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva y el estado notificado, correspondiente a uno de los diez estados reconocidos (incluyendo "iniciada" y "cancelado por anfitrión"). No se persiste; se utiliza como contexto de decisión para determinar qué operación financiera ejecutar sobre la InformaciónDeReserva.
+- **InformaciónDeReserva (Entidad, creada en SPEC 3, enriquecida en SPEC 4)**: Registro persistido por el sistema que contiene los datos financieros de la reserva (identificador, embarcación, tarifa base, número de días, número de pasajeros, propietario, capacidad máxima de pasajeros, monto de alquiler, monto total calculado, depósito de garantía y monto del seguro). En este caso de uso es **consultada en modo lectura** para obtener los montos necesarios al ejecutar "Reembolsar dinero a arrendatario" y/o "Liquidar fondos de alquiler". El sistema **no persiste el estado operativo** de la reserva — ese pertenece al Sistema de Reservas y Operaciones; únicamente utiliza el estado recibido como contexto de decisión dentro de la ejecución de este caso de uso.
+- **SolicitudEstadoReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva y el estado notificado, correspondiente a uno de los diez estados reconocidos (incluyendo "iniciada" y "cancelado por anfitrión") y, cuando el estado es "pendiente", el token o referencia segura del medio de pago con su tipo y metadatos no sensibles cuando estén disponibles. No se persiste; se utiliza como contexto de decisión para determinar qué operación financiera ejecutar sobre la InformaciónDeReserva.
 
 ## Criterios de Éxito *(obligatorio)*
 

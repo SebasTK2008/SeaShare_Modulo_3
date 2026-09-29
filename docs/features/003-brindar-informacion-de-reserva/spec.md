@@ -6,20 +6,20 @@
 
 ### Historia de Usuario 1 - Registrar internamente la información de una reserva específica, incluyendo el propietario y la capacidad máxima recibidos del Sistema de Reservas y Operaciones (Prioridad: P1)
 
-Como el sistema, al recibir del Sistema de Reservas y Operaciones los datos específicos de una reserva (identificador de la reserva, embarcación, cantidad de días, número de pasajeros, propietario y capacidad máxima de pasajeros de la embarcación) que el arrendatario ya ingresó, quiero incluir "Brindar tarifa base" para obtener la tarifa vigente de esa embarcación y registrar internamente toda esta información, de manera que quede disponible para cuando Reservas solicite posteriormente el valor calculado de la reserva y para que los registros financieros posteriores queden asociados a su propietario.
+Como el sistema, al recibir del Sistema de Reservas y Operaciones los datos específicos de una reserva (identificador de la reserva, embarcación, fecha de inicio, cantidad de días, número de pasajeros, propietario y capacidad máxima de pasajeros de la embarcación) que el arrendatario ya ingresó, quiero incluir "Brindar tarifa base" para obtener la tarifa vigente de esa embarcación en la fecha de inicio de la reserva y registrar internamente toda esta información, de manera que quede disponible para cuando Reservas solicite posteriormente el valor calculado de la reserva y para que los registros financieros posteriores queden asociados a su propietario.
 
-> **Nota de alcance**: El propietario y la capacidad máxima de pasajeros de la embarcación son obtenidos por el Sistema de Reservas y Operaciones desde el Sistema de Gestión de Flota. Este sistema (Módulo 3) **no** consulta directamente al Sistema de Gestión de Flota para obtener dichos datos; únicamente los recibe como parte de la solicitud entregada por Reservas.
+> **Nota de alcance**: El propietario y la capacidad máxima de pasajeros de la embarcación son obtenidos por el Sistema de Reservas y Operaciones desde el Sistema de Gestión de Flota. Este sistema **no** consulta directamente al Sistema de Gestión de Flota para obtener dichos datos; únicamente los recibe como parte de la solicitud entregada por Reservas.
 
 **Por qué esta prioridad**: Es el paso que deja preparada, dentro del sistema, la información necesaria (tarifa vigente, cantidad de días, número de pasajeros y el propietario de la embarcación) para que el cálculo definitivo del valor de la reserva pueda ejecutarse correctamente cuando se solicite, y para que todo registro financiero asociado a la reserva pueda atribuirse a su propietario.
 
-**Prueba Independiente**: Enviar desde el Sistema de Reservas y Operaciones el identificador de una reserva, el identificador de una embarcación específica, la cantidad de días, el número de pasajeros, el propietario y la capacidad máxima de la embarcación, y validar que el sistema incluye "Brindar tarifa base", registra internamente la información recibida junto con la tarifa obtenida, sin realizar ninguna consulta directa al Sistema de Gestión de Flota, y no devuelve ninguna respuesta a Reservas.
+**Prueba Independiente**: Enviar desde el Sistema de Reservas y Operaciones el identificador de una reserva, el identificador de una embarcación específica, la fecha de inicio, la cantidad de días, el número de pasajeros, el propietario y la capacidad máxima de la embarcación, y validar que el sistema incluye "Brindar tarifa base", registra internamente la información recibida junto con la tarifa obtenida, sin realizar ninguna consulta directa al Sistema de Gestión de Flota, y no devuelve ninguna respuesta a Reservas.
 
 **Escenarios de Aceptación**:
 
 1. **Escenario**: Registro exitoso de la información de una reserva específica.
-   - **Dado** que el arrendatario ingresó una embarcación específica, una cantidad de días y un número de pasajeros para una reserva.
+   - **Dado** que el arrendatario ingresó una embarcación específica, una fecha de inicio, una cantidad de días y un número de pasajeros para una reserva.
    - **Cuando** el Sistema de Reservas y Operaciones envía esos datos al sistema mediante "Brindar información de reserva", incluyendo el propietario y la capacidad máxima de pasajeros de la embarcación (obtenidos previamente por Reservas desde el Sistema de Gestión de Flota).
-   - **Entonces** el sistema incluye "Brindar tarifa base" para obtener la tarifa vigente de la embarcación, registra internamente la información de la reserva (identificador de la reserva, tarifa base, cantidad de días, número de pasajeros, propietario y capacidad máxima recibidos), sin consultar directamente al Sistema de Gestión de Flota, y no devuelve ninguna respuesta a Reservas.
+   - **Entonces** el sistema incluye "Brindar tarifa base" para obtener la tarifa vigente de la embarcación en la fecha de inicio recibida, registra internamente la información de la reserva (identificador de la reserva, tarifa base, cantidad de días, número de pasajeros, propietario y capacidad máxima recibidos), sin consultar directamente al Sistema de Gestión de Flota, y no devuelve ninguna respuesta a Reservas.
 
 ### Casos Extremos (Edge Cases)
 
@@ -42,8 +42,8 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones los datos espe
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones los datos específicos de la reserva: identificador de la reserva, identificador de la embarcación, cantidad de días, número de pasajeros, el propietario de la embarcación y su capacidad máxima de pasajeros (estos dos últimos ya obtenidos por el Sistema de Reservas y Operaciones desde el Sistema de Gestión de Flota).
-- **RF-002**: El sistema DEBE incluir (`<<include>>`) a "Brindar tarifa base" utilizando el identificador de la embarcación recibido, para obtener su tarifa vigente.
+- **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones los datos específicos de la reserva: identificador de la reserva, identificador de la embarcación, fecha de inicio, cantidad de días, número de pasajeros, el propietario de la embarcación y su capacidad máxima de pasajeros (estos dos últimos ya obtenidos por el Sistema de Reservas y Operaciones desde el Sistema de Gestión de Flota).
+- **RF-002**: El sistema DEBE incluir (`<<include>>`) a "Brindar tarifa base" utilizando el identificador de la embarcación y la fecha de inicio recibidos, para obtener su tarifa vigente en esa fecha.
 - **RF-003**: El sistema NO DEBE consultar directamente al Sistema de Gestión de Flota para obtener el propietario o la capacidad máxima de pasajeros de la embarcación; el sistema DEBE utilizar exclusivamente los valores recibidos del Sistema de Reservas y Operaciones en la misma solicitud.
 - **RF-004**: El sistema DEBE registrar internamente la información de la reserva (identificador de la reserva, tarifa base obtenida, cantidad de días, número de pasajeros, propietario y capacidad máxima recibidos) como preparación para el cálculo posterior en "Solicitar el valor calculado de la reserva" y para que los registros financieros posteriores queden asociados a su propietario.
 - **RF-005**: El sistema DEBE validar que la cantidad de días sea mayor que cero y que el número de pasajeros esté entre 1 y la capacidad máxima de la embarcación recibida, no registrando la información cuando estos valores sean inválidos.
@@ -53,14 +53,14 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones los datos espe
 
 ### Requisitos No Funcionales
 
-- **RNF-001**: El sistema DEBE utilizar un DTO para recibir la solicitud del Sistema de Reservas y Operaciones, mapeando únicamente los atributos esenciales (identificador de la reserva, embarcación, cantidad de días, número de pasajeros, propietario y capacidad máxima de pasajeros).
+- **RNF-001**: El sistema DEBE utilizar un DTO para recibir la solicitud del Sistema de Reservas y Operaciones, mapeando únicamente los atributos esenciales (identificador de la reserva, embarcación, fecha de inicio, cantidad de días, número de pasajeros, propietario y capacidad máxima de pasajeros).
 - **RNF-002**: El sistema DEBE utilizar `BigDecimal` para almacenar la tarifa base registrada internamente.
 - **RNF-003**: El sistema DEBE implementar un manejo de errores robusto ante fallas en la inclusión de "Brindar tarifa base", registrando el fallo internamente dado que, al ser este caso de uso unidireccional, no existe un canal de respuesta directo hacia el Sistema de Reservas y Operaciones para notificarlo. El sistema DEBE aplicar el mismo tratamiento (registro interno del fallo, sin persistir información incompleta) cuando el propietario o la capacidad máxima de pasajeros no sean recibidos en la solicitud.
 
 ### Entidades Clave
 
 - **InformaciónDeReserva (Entidad)**: Estructura gestionada y persistida internamente por el sistema para representar la información financiera preliminar de una reserva específica. Contiene el identificador de la reserva, el identificador de la embarcación, la tarifa base aplicada (obtenida de "Brindar tarifa base"), la cantidad de días, el número de pasajeros, el propietario de la embarcación y su capacidad máxima de pasajeros (ambos recibidos como parte de la solicitud entregada por el Sistema de Reservas y Operaciones, que los obtuvo previamente del Sistema de Gestión de Flota). Es creada por este caso de uso y consumida posteriormente por "Solicitar el valor calculado de la reserva"; el propietario aquí registrado se copia a cada registro financiero que se genere para la reserva.
-- **SolicitudInformacionReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva, el identificador de la embarcación, la cantidad de días, el número de pasajeros, el propietario de la embarcación y su capacidad máxima de pasajeros. No se persiste tal cual; sus datos se utilizan para construir o actualizar la entidad InformaciónDeReserva.
+- **SolicitudInformacionReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva, el identificador de la embarcación, la fecha de inicio, la cantidad de días, el número de pasajeros, el propietario de la embarcación y su capacidad máxima de pasajeros. No se persiste tal cual; sus datos se utilizan para construir o actualizar la entidad InformaciónDeReserva.
 
 ## Criterios de Éxito *(obligatorio)*
 

@@ -20,7 +20,7 @@ Como Propietario, quiero consultar de forma paginada los registros de cobro, ree
    - **Entonces** el sistema devuelve como máximo diez registros de su alcance, junto con el número de página, el tamaño utilizado, el total de registros y el total de páginas.
 
 2. **Escenario**: Consulta propia con filtros.
-   - **Dado** que existen registros de varios tipos, estados, propietarios y embarcaciones.
+   - **Dado** que existen registros de varios tipos, propietarios y embarcaciones.
    - **Cuando** el Propietario solicita una página indicando filtros válidos.
    - **Entonces** el sistema devuelve únicamente los registros de sus reservas que coinciden con los filtros indicados.
 
@@ -41,7 +41,7 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 
 2. **Escenario**: Consulta global filtrada.
    - **Dado** que existen registros que no coinciden con los filtros solicitados.
-   - **Cuando** el Administrador Financiero consulta por tipo de transacción, estado, propietario asociado o embarcación asociada.
+   - **Cuando** el Administrador Financiero consulta por tipo de transacción, propietario asociado, embarcación asociada o comisión.
    - **Entonces** el sistema devuelve únicamente los registros que coinciden con todos los filtros indicados.
 
 ### Casos Extremos (Edge Cases)
@@ -58,6 +58,9 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 - **¿Puede un Propietario consultar registros de otro propietario usando un filtro de propietario o de embarcación?**
   No. El sistema aplica primero el alcance del Propietario sobre sus reservas y después los filtros solicitados; ningún filtro puede ampliar dicho alcance.
 
+- **¿Qué devuelve el filtro por comisión?**
+  Dado que solo el `RegistroDeDispersión` registra comisión, el filtro por comisión devuelve únicamente los registros de dispersión con comisión aplicada mayor a cero.
+
 - **¿Se incluyen operaciones en curso o fallidas?**
   No. Este caso de uso consulta exclusivamente los registros financieros inmutables (`RegistroDeCobro`, `RegistroDeReembolso`, `RegistroDeDispersión`), los cuales se crean únicamente cuando una operación es confirmada y completada exitosamente. Las operaciones en curso o fallidas se gestionan a través de las entidades de intención (`IntenciónDeCobro`, etc.) y no forman parte de este informe histórico.
 
@@ -66,7 +69,7 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 ### Requisitos Funcionales
 
 - **RF-001**: El sistema DEBE recibir del Propietario o del Administrador Financiero una solicitud de consulta que incluya el número de página y, opcionalmente, el tamaño de página y los filtros.
-- **RF-002**: El sistema DEBE aceptar filtros por tipo de transacción (cobro, reembolso o dispersión), propietario asociado y embarcación asociada.
+- **RF-002**: El sistema DEBE aceptar filtros por tipo de transacción (cobro, reembolso o dispersión), propietario asociado, embarcación asociada y comisión. El filtro por comisión devuelve únicamente los registros de dispersión con comisión aplicada mayor a cero.
 - **RF-003**: El sistema DEBE limitar las consultas del Propietario a los registros asociados a sus reservas y permitir al Administrador Financiero consultar los registros de toda la plataforma.
 - **RF-004**: El sistema DEBE consultar los registros inmutables de cobro (`RegistroDeCobro`), reembolso (`RegistroDeReembolso`) y dispersión (`RegistroDeDispersión`), omitiendo las intenciones de operación que aún no han sido confirmadas.
 - **RF-005**: El sistema DEBE incluir en cada registro devuelto el tipo de transacción, la reserva asociada, el propietario y la embarcación asociados, el monto y la fecha de creación del registro.
@@ -90,7 +93,7 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 - **RegistroDeCobro (Entidad Inmutable, definida en SPEC 5)**: En este caso de uso es únicamente consultada y representa una operación de cobro confirmada.
 - **RegistroDeReembolso (Entidad Inmutable, definida en SPEC 9)**: En este caso de uso es únicamente consultada y representa una operación de liberación o reembolso confirmada.
 - **RegistroDeDispersión (Entidad Inmutable, definida en SPEC 10)**: En este caso de uso es únicamente consultada y representa una operación de captura o liquidación de fondos confirmada.
-- **SolicitudConsultaRegistrosFinancieros (DTO)**: Información recibida desde el Propietario o el Administrador Financiero. Contiene el número de página, el tamaño opcional y los filtros por tipo, propietario y embarcación.
+- **SolicitudConsultaRegistrosFinancieros (DTO)**: Información recibida desde el Propietario o el Administrador Financiero. Contiene el número de página, el tamaño opcional y los filtros por tipo, propietario, embarcación y comisión.
 - **RegistroFinancieroResultado (DTO)**: Representa el detalle de una operación individual. Contiene el tipo de transacción, la reserva, el propietario y la embarcación asociados, el monto, la fecha de creación y la referencia externa cuando exista.
 - **PáginaDeRegistrosFinancierosResultado (DTO)**: Resultado que el sistema devuelve para cada solicitud. Contiene la lista de registros de la página y sus metadatos de paginación.
 
@@ -101,5 +104,5 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 - **CE-001**: Alcance del Propietario, "100% de las páginas consultadas por un Propietario contienen únicamente registros relacionados con sus reservas, con cero (0) registros de otros propietarios expuestos en pruebas automatizadas".
 - **CE-002**: Cobertura Global, "100% de las páginas consultadas por el Administrador Financiero corresponden al conjunto global de registros que coincide con los filtros indicados, sin omisiones ni duplicados detectados en pruebas automatizadas".
 - **CE-003**: Consistencia de Paginación, "100% de las respuestas se entregan paginadas y el tamaño utilizado por defecto es de diez registros, con cero (0) respuestas que entreguen el conjunto completo en una sola página".
-- **CE-004**: Integridad del Detalle, "100% de los registros devueltos incluyen el tipo de transacción, la reserva, el propietario, la embarcación, el monto y el estado; la referencia externa se incluye cuando está disponible".
+- **CE-004**: Integridad del Detalle, "100% de los registros devueltos incluyen el tipo de transacción, la reserva, el propietario, la embarcación y el monto; la referencia externa se incluye cuando está disponible".
 - **CE-005**: Integridad de Solo Lectura, "0 modificaciones, creaciones o eliminaciones de registros financieros como resultado de este caso de uso y 0 archivos generados por la consulta".
