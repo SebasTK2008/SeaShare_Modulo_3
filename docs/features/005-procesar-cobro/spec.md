@@ -6,17 +6,17 @@
 
 ### Historia de Usuario 1 - Enviar la solicitud de cobro a la Pasarela de pago (Prioridad: P1)
 
-Como el sistema, al recibir del Sistema de Reservas y Operaciones el estado "pendiente" de una reserva con su valor total ya calculado y registrado, junto con un medio de pago representado por una referencia segura de la Pasarela de pago, quiero solicitar a la Pasarela de pago una autorización o cobro por dicho valor —reteniendo internamente, como parte de ese monto, el depósito de garantía y el seguro náutico previamente registrados para la reserva—, de manera que quede registrada internamente la operación en curso mientras se espera su resultado.
+Como el sistema, al recibir la solicitud de cobro asociada al pago que el Arrendatario inicia sobre una reserva con su valor total ya calculado y registrado y un medio de pago representado por una referencia segura de la Pasarela de pago, quiero solicitar a la Pasarela de pago una autorización o cobro por dicho valor —reteniendo internamente, como parte de ese monto, el depósito de garantía y el seguro náutico previamente registrados para la reserva—, de manera que quede registrada internamente la operación en curso mientras se espera su resultado.
 
 **Por qué esta prioridad**: Sin el envío correcto del valor total a la Pasarela de pago no puede iniciarse ninguna transacción real; es el punto de partida obligatorio de todo el ciclo de cobro.
 
-**Prueba Independiente**: Con una reserva que ya tiene un valor total calculado y registrado, enviar al sistema el estado "pendiente" junto con el token del medio de pago y validar que este recupera el valor total registrado (incluyendo depósito y seguro como parte de ese monto), lo envía a la Pasarela de pago (simulada) y registra internamente la solicitud de cobro en curso.
+**Prueba Independiente**: Con una reserva que ya tiene un valor total calculado y registrado, enviar al sistema una solicitud de cobro y validar que este recupera el valor total registrado (incluyendo depósito y seguro como parte de ese monto), lo envía a la Pasarela de pago (simulada) y registra internamente la solicitud de cobro en curso.
 
 **Escenarios de Aceptación**:
 
 1. **Escenario**: Envío exitoso de la solicitud de cobro a la Pasarela de pago.
-   - **Dado** que una reserva tiene un valor total previamente calculado y registrado (incluyendo el monto de alquiler, el seguro náutico y el depósito de garantía) y el Sistema de Reservas y Operaciones entrega un token o referencia segura de medio de pago emitido por la Pasarela de pago.
-   - **Cuando** el Sistema de Reservas y Operaciones informa el estado "pendiente" de esa reserva.
+   - **Dado** que una reserva tiene un valor total previamente calculado y registrado (incluyendo el monto de alquiler, el seguro náutico y el depósito de garantía) y el Arrendatario proporciona un token o referencia segura de medio de pago emitido por la Pasarela de pago.
+   - **Cuando** el Arrendatario inicia el pago de esa reserva.
    - **Entonces** el sistema recupera el valor total registrado, envía a la Pasarela de pago el monto (reteniendo internamente que dicho monto incluye el depósito de garantía y el seguro náutico) y la referencia segura del medio de pago, y registra internamente la solicitud de cobro en curso, a la espera del resultado de la transacción.
 
 2. **Escenario**: Uso de un medio de pago tokenizado sin almacenar datos sensibles.
@@ -54,10 +54,10 @@ Como el sistema, al recibir de la Pasarela de pago el resultado de una operació
 ### Casos Extremos (Edge Cases)
 
 - **¿Qué sucede cuando la Pasarela de pago está caída, agota el tiempo de espera (*timeout*) o es inalcanzable al momento de enviar la solicitud de cobro?**
-  Conforme a RNF-003, el sistema no asume ningún resultado. Aplica un manejo de errores controlado, registra la solicitud de cobro con el estado "desconocido", que refleja la falla de comunicación (sin marcarla como exitosa ni como rechazada por la Pasarela) y deja esta condición disponible para "Solicitar confirmación de pago".
+  Conforme a RNF-003, el sistema no asume ningún resultado. Aplica un manejo de errores controlado, registra la solicitud de cobro con un estado que refleje la falla de comunicación (sin marcarla como exitosa ni como rechazada por la Pasarela) y deja esta condición disponible para "Solicitar confirmación de pago".
 
 - **¿Qué sucede si se solicita procesar el cobro de una reserva para la cual no existe un valor total previamente calculado por "Solicitar el valor calculado de la reserva"?**
-  De acuerdo con RF-009, el sistema no envía ninguna solicitud a la Pasarela de pago con un monto asumido; registra internamente un fallo controlado indicando que no existe un valor total registrado para esa reserva.
+  De acuerdo con RF-009, el sistema no envía ninguna solicitud a la Pasarela de pago con un monto asumido; responde con un error controlado indicando que no existe un valor total registrado para esa reserva.
 
 - **¿Qué sucede si la Pasarela de pago reporta el rechazo del cobro (por ejemplo, fondos insuficientes o medio de pago inválido)?**
   Según RF-006 y RF-008, el sistema registra la transacción como fallida junto con la referencia provista por la Pasarela de pago, y en ningún caso marca la reserva como cobrada exitosamente.
@@ -84,7 +84,7 @@ Como el sistema, al recibir de la Pasarela de pago el resultado de una operació
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones, al informar el estado "pendiente" de una reserva, la solicitud de cobro correspondiente a dicha reserva, identificada mediante su identificador de reserva, junto con un token o referencia segura del medio de pago emitido por la Pasarela de pago y, cuando estén disponibles, su tipo y metadatos no sensibles.
+- **RF-001**: El sistema DEBE recibir la solicitud de cobro correspondiente a una reserva, identificada mediante su identificador de reserva, junto con un token o referencia segura del medio de pago emitido por la Pasarela de pago y, cuando estén disponibles, su tipo y metadatos no sensibles.
 - **RF-002**: El sistema DEBE recuperar el valor total previamente calculado y registrado internamente para dicha reserva por "Solicitar el valor calculado de la reserva", incluyendo el monto de alquiler, el monto del seguro náutico y el monto del depósito de garantía que lo componen.
 - **RF-003**: El sistema DEBE enviar a la Pasarela de pago una solicitud de autorización o cobro por el valor total recuperado, según la capacidad configurada para la integración.
 - **RF-004**: El sistema DEBE registrar internamente la `IntenciónDeCobro` en curso mientras se espera el resultado de la Pasarela de pago.
@@ -92,11 +92,11 @@ Como el sistema, al recibir de la Pasarela de pago el resultado de una operació
 - **RF-006**: El sistema DEBE registrar el resultado (exitoso o fallido) actualizando siempre el estado y los montos en la `IntenciónDeCobro`. Si la operación es exitosa, el sistema DEBE además generar el `RegistroDeCobro` inmutable de auditoría con su fecha de creación.
 - **RF-007**: El sistema DEBE dejar disponible la `IntenciónDeCobro` para ser consultada externamente mediante "Solicitar confirmación de pago". El `RegistroDeCobro` no se expone al exterior.
 - **RF-008**: El sistema NO DEBE crear un `RegistroDeCobro` para una reserva cuya transacción fue rechazada o fallida según la Pasarela de pago.
-- **RF-009**: El sistema DEBE registrar internamente un fallo controlado, sin enviar ninguna solicitud a la Pasarela de pago, si se solicita procesar el cobro de una reserva para la cual no existe un valor total previamente calculado.
-- **RF-010**: El sistema DEBE registrar, como parte del `RegistroDeCobro`, la reserva, el propietario y la embarcación asociados (copiados de `InformaciónDeReserva`), de manera que dicho registro quede asociado a su propietario y pueda ser consultado en "Consultar registros financieros" (SPEC 12).
+- **RF-009**: El sistema DEBE responder con un error controlado si se solicita procesar el cobro de una reserva para la cual no existe un valor total previamente calculado.
+- **RF-010**: El sistema DEBE registrar, como parte del `RegistroDeCobro`, el propietario y la embarcación asociados a la reserva (copiados de `InformaciónDeReserva`), de manera que dicho registro quede asociado a su propietario y pueda ser consultado en "Consultar registros financieros" (SPEC 12).
 - **RF-011**: El sistema DEBE enviar a la Pasarela de pago el token o referencia segura del medio de pago, sin enviar ni persistir el número completo de tarjeta, el código de seguridad, la fecha de vencimiento ni otros datos sensibles equivalentes.
 - **RF-012**: El sistema DEBE registrar, cuando la Pasarela de pago los proporcione, el tipo de medio de pago, los últimos cuatro dígitos u otros metadatos no sensibles y la referencia externa asociada, para permitir trazabilidad y presentación enmascarada sin exponer credenciales de pago.
-- **RF-013**: El sistema DEBE registrar internamente un fallo controlado y no marcar la reserva como cobrada cuando el token o referencia segura sea inválido, haya expirado o no pueda utilizarse por una falla técnica o de validación de la Pasarela de pago.
+- **RF-013**: El sistema DEBE responder con un error controlado y no marcar la reserva como cobrada cuando el token o referencia segura sea inválido, haya expirado o no pueda utilizarse por una falla técnica o de validación de la Pasarela de pago.
 - **RF-014**: El sistema DEBE registrar la expiración de una autorización previamente aprobada que no fue capturada dentro de su vigencia, sin asumir que los fondos permanecen disponibles, y ejecutar un flujo de recuperación controlado (marcar la operación como expirada y dejarla disponible para conciliación o reintento), dejando este estado disponible para "Solicitar confirmación de pago".
 - **RF-015**: El sistema DEBE retener, como parte del único monto autorizado o cobrado ante la Pasarela de pago, el depósito de garantía y el seguro náutico previamente registrados para la reserva, sin generar solicitudes separadas a la Pasarela de pago para dichos componentes en el momento del cobro, conservando internamente la distinción de cada componente en el `RegistroDeCobro`.
 
@@ -110,9 +110,9 @@ Como el sistema, al recibir de la Pasarela de pago el resultado de una operació
 
 ### Entidades Clave
 
-- **IntenciónDeCobro (Entidad)**: Estructura persistida para representar la operación operativa de un cobro sobre una reserva. Conserva la clave idempotente, el estado de la solicitud (en proceso, aprobado, rechazado, cancelado, expirado o desconocido), los montos involucrados, la vigencia de la autorización y la referencia segura del medio de pago. Esta entidad es la única que se utiliza para responder a otros sistemas (ej. confirmación de pago).
-- **RegistroDeCobro (Entidad Inmutable)**: Estructura inmutable creada como un subproducto de auditoría únicamente cuando la Pasarela de Pago confirma la operación de cobro como exitosa (autorizada y/o capturada). Conserva la fecha de creación, el monto cobrado (desglosado internamente en alquiler, seguro y garantía), los metadatos no sensibles del medio de pago, las referencias externas y la reserva, el propietario y la embarcación asociados. Es de uso estrictamente interno del sistema y consumida únicamente por "Consultar registros financieros" (SPEC 12) y el informe financiero (SPEC 13). Ningún sistema externo tiene acceso ni conocimiento de esta entidad.
-- **SolicitudCobro (DTO)**: Información recibida del Sistema de Reservas y Operaciones junto con el estado "pendiente" para iniciar esta operación. Contiene el identificador de la reserva sobre la cual se debe procesar el cobro y el token o referencia segura del medio de pago, junto con su tipo y metadatos no sensibles cuando estén disponibles.
+- **IntenciónDeCobro (Entidad)**: Estructura persistida para representar la operación operativa de un cobro sobre una reserva. Conserva la clave idempotente, el estado de la solicitud (en proceso, aprobado, capturado, fallido, expirado, etc.), los montos involucrados, la vigencia de la autorización y la referencia segura del medio de pago. Esta entidad es la única que se utiliza para responder a otros módulos (ej. confirmación de pago).
+- **RegistroDeCobro (Entidad Inmutable)**: Estructura inmutable creada como un subproducto de auditoría únicamente cuando la Pasarela de Pago confirma la operación de cobro como exitosa (autorizada y/o capturada). Conserva la fecha de creación, el monto cobrado (desglosado internamente en alquiler, seguro y garantía), los metadatos no sensibles del medio de pago, las referencias externas y el propietario y embarcación asociados. Es de uso estrictamente interno del Módulo de Finanzas y consumida únicamente por "Consultar registros financieros" (SPEC 12) y el informe financiero (SPEC 13). Ningún módulo externo tiene acceso ni conocimiento de esta entidad.
+- **SolicitudCobro (DTO)**: Información recibida para iniciar esta operación. Contiene el identificador de la reserva sobre la cual se debe procesar el cobro y el token o referencia segura del medio de pago, junto con su tipo y metadatos no sensibles cuando estén disponibles.
 - **SolicitudCobroPasarela (DTO)**: Información enviada a la Pasarela de pago. Contiene el tipo de operación (autorización o cobro), el monto total (que incluye el monto de alquiler, el seguro náutico y el depósito de garantía), la referencia de la reserva, el token o referencia segura del medio de pago y una clave idempotente. No contiene el número completo de tarjeta, el código de seguridad ni la fecha de vencimiento.
 - **ResultadoCobroPasarela (DTO)**: Información recibida desde la Pasarela de pago como resultado de una operación previamente iniciada. Contiene el estado externo (incluyendo "expirado" cuando aplique), su detalle, los montos disponibles y la referencia externa asignada por la Pasarela de pago.
 
