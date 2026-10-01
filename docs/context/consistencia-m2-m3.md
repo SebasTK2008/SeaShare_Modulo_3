@@ -92,7 +92,7 @@ Ambos documentos reconocen exactamente los mismos 9 estados (contando las 3 vari
 - **Cuándo se genera**: tras "Completada", dentro de la ventana que Módulo 2 concede al Propietario para reportar daños (`contexto-modulo3.md` fija esta ventana en 24 horas). Si la disputa permanece `PENDIENTE` más de siete días, se rechaza automáticamente y se devuelve el depósito al Arrendatario.
 - **Quién interviene**: el Propietario (reporta o no reporta daños) y el Módulo 2 (crea y gestiona la disputa, incluida la evaluación de procedencia del reclamo).
 - **Qué módulo la gestiona**: Módulo 2 gestiona la disputa por completo; Módulo 3 únicamente consume su resultado final y ejecuta la operación financiera correspondiente.
-- **Estados** (definidos solo en `contexto-modulo3.md`; `sea-share.md` no usa el término "disputa" ni estos nombres — ver §6):
+- **Estados** (definidos solo en `contexto-modulo3.md`; `sea-share.md` no usa el término "disputa" ni estos nombres):
   - `PENDIENTE`: existe o continúa en revisión; sin acción financiera.
   - `RECHAZADO`: el reclamo no procede (incluye ausencia de reclamo al vencer la ventana); depósito 100% al Arrendatario.
   - `COMPLETADO`: el reclamo procede; depósito 100% al Propietario.
