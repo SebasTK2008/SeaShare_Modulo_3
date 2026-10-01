@@ -38,7 +38,7 @@ Como Sistema de Reservas y Operaciones, al solicitar los detalles de una embarca
 1. **Escenario**: Estimación delegada para una sola embarcación y retorno de aviso legal.
    - **Dado** que el Sistema de Reservas y Operaciones necesita la estimación exacta para las fechas de un viaje.
    - **Cuando** envía las fechas de inicio y fin, el número de pasajeros y el ID de la embarcación al sistema.
-   - **Entonces** el sistema calcula el valor delegadamente a partir de las fechas enviadas, utilizando la tarifa base correspondiente a la fecha de inicio, y devuelve el precio junto con una advertencia visible obligatoria que indica: "Valor estimado. No incluye cargos adicionales ni depósito de seguridad".
+  - **Entonces** el sistema calcula el valor delegadamente a partir de las fechas enviadas, utilizando la tarifa base correspondiente a la fecha de inicio, e informa la cantidad de días inclusiva junto con una advertencia visible obligatoria que indica: "Valor estimado. El valor incluye el seguro náutico, pero no incluye el depósito de garantía ni penalidades o ajustes derivados de cambios posteriores de la reserva".
 
 ---
 
@@ -73,8 +73,8 @@ Como Sistema de Gestión de Flota (Inventario y Tarifas), quiero proporcionar la
 - **¿Cómo se espera que el sistema maneje payloads inusualmente grandes (ej. solicitar estimaciones para 1,000 embarcaciones a la vez)?**
   Conforme a RF-006, el sistema aplica un límite máximo estricto de identificadores por solicitud (por ejemplo, máximo 50 o 100 embarcaciones). Una solicitud de 1,000 embarcaciones supera el umbral y es rechazada con un error controlado sin procesar el lote; el Sistema de Reservas y Operaciones debe partir la solicitud en lotes que respeten el límite.
 
-- **¿Cómo se comporta el cálculo si la duración de reserva solicitada es de 0 días?**
-  La modalidad en lote asume una duración por defecto de 1 día (RF-002) únicamente cuando el Sistema de Reservas y Operaciones no envía fechas. Si la solicitud individual envía explícitamente un rango de fechas cuya duración es de 0 días, dicha duración se considera inválida (el alquiler mínimo es de 1 día) y el sistema responde con un error controlado, sin ejecutar ningún cálculo.
+- **¿Cómo se comporta el cálculo si la fecha de inicio y la fecha de fin coinciden?**
+  La modalidad en lote asume una duración por defecto de 1 día (RF-002) únicamente cuando el Sistema de Reservas y Operaciones no envía fechas. En la solicitud individual, una fecha de inicio igual a la fecha de fin representa una reserva de 1 día; solo se considera inválida una fecha de fin anterior a la fecha de inicio.
 
 - **¿Qué sucede si la tarifa del seguro náutico por pasajero, o el porcentaje de incremento que requiere la fecha evaluada (fin de semana o temporada alta), aún no ha sido configurado mediante "Configurar parámetros financieros globales"?**
   Sin esos valores el sistema no puede presentar al arrendatario cuánto pagaría. Considera la información incompleta, no calcula ninguna estimación parcial ni asumida y responde al Sistema de Reservas y Operaciones con un error controlado que indica que la estimación no pudo completarse.
@@ -85,8 +85,8 @@ Como Sistema de Gestión de Flota (Inventario y Tarifas), quiero proporcionar la
 ### Requisitos Funcionales
 
 - **RF-001**: El sistema DEBE devolver estimaciones precisas al Sistema de Reservas y Operaciones basándose en la lista solicitada de identificadores de embarcaciones.
-- **RF-002**: El sistema DEBE calcular estimaciones en lote utilizando la fórmula de precios establecida: `(tarifa base de la embarcación * duración en días) + (tarifa de seguro * número de pasajeros)`. *(Nota: La duración por defecto es de 1 día; la cantidad de pasajeros por defecto es 1; y, al no especificarse fechas, la tarifa base corresponde a la fecha actual).*
-- **RF-003**: El sistema DEBE calcular estimaciones individuales utilizando la misma fórmula de precios que las estimaciones en lote, aplicada a una sola embarcación, con el número de pasajeros recibido y la tarifa base correspondiente a la fecha de inicio recibida.
+- **RF-002**: El sistema DEBE calcular estimaciones en lote utilizando la fórmula de precios establecida: `(tarifa base de la embarcación * duración en días) + (tarifa de seguro * número de pasajeros)`. *(Nota: La duración por defecto es de 1 día; la cantidad de pasajeros por defecto es 1; y, al no especificarse fechas, la tarifa base corresponde a la fecha actual. La estimación no incluye el depósito de garantía ni penalidades o ajustes posteriores de la reserva.)*
+- **RF-003**: El sistema DEBE calcular estimaciones individuales utilizando la misma fórmula de precios que las estimaciones en lote, aplicada a una sola embarcación, con el número de pasajeros recibido, la tarifa base correspondiente a la fecha de inicio recibida y la cantidad de días inclusiva entre la fecha de inicio y la fecha de fin.
 - **RF-004**: El sistema DEBE exponer un *endpoint* para recibir solicitudes de estimación del Sistema de Reservas y Operaciones y procesarlas exitosamente.
 - **RF-005**: El sistema DEBE consultar al Sistema de Gestión de Flota enviando una lista de IDs de embarcaciones para recuperar sus respectivas tarifas base.
 - **RF-006**: El sistema DEBE establecer un límite máximo estricto de identificadores por cada solicitud de estimación en lote (por ejemplo, máximo 50 o 100 embarcaciones por *payload*), rechazando con un error adecuado aquellas peticiones que superen este umbral para proteger la memoria y evitar sobrecargas en el sistema.

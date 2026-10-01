@@ -47,11 +47,14 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
 - **¿Qué sucede si no existe un depósito registrado o el cobro original no fue cobrado?** Registra un fallo controlado y no solicita reembolso ni liquidación con un monto asumido.
 - **¿Qué sucede si se recibe una resolución completada más de una vez?** La clave idempotente y la asociación con la reserva impiden duplicar operaciones.
 
+- **¿Qué sucede si una disputa permanece en estado `PENDIENTE` durante más de siete días desde la finalización de la reserva?**
+   El evento automático de garantía cambia la disputa a `RECHAZADO` por vencimiento de la revisión, registra la resolución y solicita la liberación o el reembolso total del depósito al Arrendatario. La operación es idempotente y no se genera una liquidación al Propietario.
+
 ## Requisitos *(obligatorio)*
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir desde el Sistema de Reservas y Operaciones, y únicamente, el identificador de la reserva, el identificador de la disputa, el estado (`PENDIENTE`, `RECHAZADO` o `COMPLETADO`) y una versión o clave idempotente del evento. El sistema NO DEBE recibir ni requerir motivos, orígenes, montos u otros atributos.
+- **RF-001**: El sistema DEBE recibir desde el Sistema de Reservas y Operaciones, y únicamente, el identificador de la reserva, el identificador de la disputa, el estado (`PENDIENTE`, `RECHAZADO` o `COMPLETADO`), la fecha y hora en que ocurrió la transición al estado informado y una versión o clave idempotente del evento. El sistema NO DEBE recibir ni requerir motivos, orígenes, montos u otros atributos.
 - **RF-002**: El sistema DEBE reconocer únicamente los estados `PENDIENTE`, `RECHAZADO` y `COMPLETADO`.
 - **RF-003**: `RECHAZADO` NO DEBE requerir ni persistir un motivo u origen operativo.
 - **RF-004**: `PENDIENTE` NO DEBE ejecutar reembolso ni liquidación de garantía.
@@ -61,6 +64,7 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
 - **RF-008**: El sistema DEBE aplicar idempotencia por reserva, disputa y versión o clave del evento.
 - **RF-009**: El sistema DEBE exponer este caso de uso como consumidor del Sistema de Reservas y Operaciones y no como un caso de uso mediante el cual el Administrador Financiero resuelva disputas dentro del sistema.
 - **RF-009A**: El evento automático que detecta una reserva completada sin disputa después de 24 horas DEBE solicitar la liberación o el reembolso total del depósito, según el estado del cobro original, sin requerir un atributo de origen.
+- **RF-009B**: Si una disputa permanece en estado `PENDIENTE` durante más de siete días desde la finalización de la reserva, el evento automático DEBE cambiarla a `RECHAZADO` y solicitar la liberación o el reembolso total del depósito al Arrendatario.
 - **RF-010**: El sistema NO DEBE reconocer sub-resultados adicionales (por ejemplo, liberación o retención parcial) dentro de `COMPLETADO` o `RECHAZADO`; ambos estados son tratamientos totales sobre el 100% del depósito cobrado y registrado, conforme a la regla de negocio vigente ("Se entrega completo al Arrendatario o completo al Propietario").
 
 ### Requisitos No Funcionales
@@ -73,7 +77,7 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
 
 - **InformaciónDeReserva**: Se consulta para recuperar el depósito fijo registrado y el estado financiero de la reserva.
 - **RegistroDeCobro**: Se consulta para confirmar que el pago que contiene el depósito fue cobrado y para obtener la referencia original.
-- **SolicitudInformaciónDisputa (DTO)**: Contiene el identificador de la reserva, el identificador de la disputa, el estado y la versión o clave idempotente. No contiene motivo, origen, resultados monetarios ni un campo adicional de decisión.
+- **SolicitudInformaciónDisputa (DTO)**: Contiene el identificador de la reserva, el identificador de la disputa, el estado, la versión o clave idempotente y la fecha y hora en que ocurrió la transición al estado informado. No contiene motivo, origen, resultados monetarios ni un campo adicional de decisión. La fecha y hora representa el momento del cambio de estado, no el momento de recepción.
 
 ## Criterios de Éxito *(obligatorio)*
 

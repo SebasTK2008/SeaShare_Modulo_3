@@ -51,7 +51,7 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
 
 2. **Inicio formal de la reserva.** El arrendatario selecciona la embarcación y oprime "Reservar". La reserva pasa al estado "Iniciada" (ver sea-share.md, Módulo 2, 2.1) y comienza el TTL de 15 minutos; desde este momento la embarcación deja de listarse como disponible.
 
-3. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"*, enviando el identificador de la reserva, la embarcación, la cantidad de días, el número de pasajeros, y el propietario y la capacidad máxima de pasajeros de la embarcación (datos que el sistema de Reservas obtuvo previamente del Sistema de Gestión de Flota). El sistema financiero, a su vez, incluye *"Brindar tarifa base"* para obtener la tarifa vigente y registra internamente toda esta información — sin consultar directamente al Sistema de Gestión de Flota — de manera que quede disponible para que *"Solicitar el valor calculado de la reserva"* entregue posteriormente el desglose de precio que el arrendatario verá antes de confirmar. Esto ocurre dentro del estado "Iniciada".
+3. **Consolidación de la información de reserva.** Cuando el sistema de Reservas necesita mostrarle al usuario los detalles completos, el sistema ejecuta *"Brindar información de reserva"*, enviando el identificador de la reserva, la embarcación, la fecha de inicio, la fecha de fin, el número de pasajeros, y el propietario y la capacidad máxima de pasajeros de la embarcación (datos que el sistema de Reservas obtuvo previamente del Sistema de Gestión de Flota). El sistema financiero, a su vez, incluye *"Brindar tarifa base"* para obtener la tarifa vigente y registra internamente toda esta información — sin consultar directamente al Sistema de Gestión de Flota — de manera que quede disponible para que *"Solicitar el valor calculado de la reserva"* entregue posteriormente el desglose de precio que el arrendatario verá antes de confirmar. Esto ocurre dentro del estado "Iniciada".
 
 4. **Cálculo del valor total.** Una vez el arrendatario decide reservar, el sistema de Reservas solicita el valor definitivo mediante *"Solicitar el valor calculado de la reserva"*: tarifa base diaria × duración + seguro náutico por pasajero + depósito de garantía. El depósito corresponde al 10% de la tarifa base diaria de la embarcación y no depende de la duración ni del daño reportado. Esto ocurre dentro del estado "Iniciada", antes de que el arrendatario oprima "Confirmar pago".
 
@@ -67,9 +67,9 @@ El sistema no inicia una reserva por sí mismo: reacciona a las solicitudes del 
    - **Cancelacion tardia: <24h / No-Show:** el sistema no reembolsa; dispersa el 100% como compensación al propietario.
    - **Cancelación por anfitrión:** el sistema reembolsa el 100% del valor pagado al Arrendatario.
 
-9. **Finalización y disputa de garantía.** El sistema de Reservas informa la finalización de la reserva con el único estado `completada`. Finanzas liquida el alquiler y el seguro, pero deja pendiente el depósito. El Módulo 2 crea y gestiona la disputa, concede al propietario una ventana de 24 horas para reportar daños y luego informa a Finanzas únicamente el estado de disputa. Si el estado es `RECHAZADO`, Finanzas solicita el reembolso total al Arrendatario; si el estado es `COMPLETADO`, solicita la liquidación total al Propietario.
+9. **Finalización y disputa de garantía.** El sistema de Reservas informa la finalización de la reserva con el único estado `completada` y su fecha y hora de transición. Finanzas liquida el alquiler y el seguro, manteniendo asociado el depósito. El Módulo 2 crea y gestiona la disputa, concede al propietario una ventana de 24 horas para reportar daños y luego informa a Finanzas únicamente el estado de disputa. Si el estado es `RECHAZADO`, Finanzas solicita el reembolso total al Arrendatario; si el estado es `COMPLETADO`, solicita la liquidación total al Propietario. Si una disputa permanece `PENDIENTE` durante más de siete días, el evento automático la cambia a `RECHAZADO` y solicita el reembolso total.
 
-10. **Liquidación final.** Superadas las etapas anteriores (una reserva ya fue completada), el sistema calcula y solicita la captura y/o liquidación correspondiente vía la Pasarela de Pago: valor bruto menos comisión de la plataforma y menos el seguro, respetando la matriz de liquidación. La solicitud puede quedar pendiente o fallar; solo su confirmación externa permite informar que los fondos fueron efectivamente liquidados.
+10. **Liquidación final.** Superadas las etapas anteriores (una reserva ya fue completada), el sistema utiliza la comisión calculada y cobrada previamente en la solicitud o intención de dispersión para calcular y solicitar la liquidación correspondiente vía la Pasarela de Pago. La solicitud mantiene asociado el depósito de garantía. Solo la confirmación externa crea las métricas informativas inmutables `RegistroDeDispersión` y, para la liquidación estándar, `RegistroDeComisión`.
 
 11. **Supervisión continua.** En cualquier momento, el **Propietario** y el **Administrador Financiero** pueden *"Consultar registros financieros"* y *"Consultar informe financiero"*. El alcance del Propietario se limita a sus reservas y el del Administrador cubre toda la plataforma. El Administrador también puede *"Configurar parámetros financieros globales"*.
 
@@ -85,7 +85,7 @@ La **temporada alta** comprende los periodos del año con mayor flujo de viajero
 
 - **Fin de año:** desde el 15 de noviembre hasta el 15 de enero del año siguiente.
 - **Mitad de año:** desde el 1 de junio y al 30 de julio (vacaciones escolares y fiestas locales).
-- **Semana Santa:** los días santos de marzo o abril. (se deben calcular mediante el Algoritmo de Meeus/Jones/Butcher)
+- **Semana Santa:** Jueves Santo y Viernes Santo de marzo o abril, calculados mediante el Algoritmo de Meeus/Jones/Butcher.
 - **Semana de receso:** Del 5 al 12 de octubre.
 
 
@@ -103,7 +103,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Brindar información de reserva
 - **Actores:** Sistema de Reservas y Operaciones.
-- **Flujo:** Cuando el arrendatario ingresa los datos de una reserva específica, el sistema de Reservas entrega dicha información (identificador de la reserva, embarcación, número de pasajeros, cantidad de días, propietario y capacidad máxima de pasajeros de la embarcación — estos dos últimos ya obtenidos por Reservas desde el Sistema de Gestión de Flota) y el sistema financiero incluye (`<<include>>`) a "Brindar tarifa base" para obtener la tarifa vigente de la embarcación, sin consultar directamente al Sistema de Gestión de Flota para el propietario o la capacidad máxima, de manera que quede registrada internamente toda la información necesaria para los cálculos de otro caso de uso.
+- **Flujo:** Cuando el arrendatario ingresa los datos de una reserva específica, el sistema de Reservas entrega dicha información (identificador de la reserva, embarcación, número de pasajeros, fecha de inicio, fecha de fin, propietario y capacidad máxima de pasajeros de la embarcación — estos dos últimos ya obtenidos por Reservas desde el Sistema de Gestión de Flota) y el sistema financiero incluye (`<<include>>`) a "Brindar tarifa base" para obtener la tarifa vigente de la embarcación, sin consultar directamente al Sistema de Gestión de Flota para el propietario o la capacidad máxima, de manera que quede registrada internamente toda la información necesaria para los cálculos de otro caso de uso.
 - **Regla de negocio asociada:** Tarifas Dinámicas (3.1); Matriz de Liquidación (3.2).
 
 #### Solicitar el valor calculado de la reserva
@@ -150,7 +150,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 
 #### Liquidar fondos de alquiler
 - **Actores:** Pasarela de Pago (ejecuta la operación); beneficia al Propietario.
-- **Flujo:** Al recibir `completada`, el sistema calcula el pago estándar como *Valor Bruto − Comisión de la Plataforma − Seguro* y lo solicita sin incluir el depósito. Cuando "Brindar información de disputa de garantía" informa `COMPLETADO`, el sistema recupera internamente el depósito fijo y solicita su liquidación total al Propietario. Esta liquidación es una consecuencia de negocio y puede ejecutarse mediante una operación consolidada o relacionada soportada por la integración, no necesariamente como una transferencia directa.
+- **Flujo:** Al recibir `completada`, el sistema utiliza la comisión calculada previamente y solicita el pago estándar como *Valor Bruto − Comisión de la Plataforma − Seguro*, manteniendo asociado el depósito. Cuando "Brindar información de disputa de garantía" informa `COMPLETADO`, el sistema recupera internamente el depósito fijo y solicita su liquidación total al Propietario. La confirmación de la dispersión estándar crea `RegistroDeDispersión` y `RegistroDeComisión`; la confirmación de la liquidación del depósito crea únicamente `RegistroDeDispersión`.
 - **Regla de negocio asociada:** Matriz de Liquidación — Pago al Propietario y Penalidad por Cancelación (3.2).
 
 ---

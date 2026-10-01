@@ -20,7 +20,7 @@
 Una reserva es el acuerdo entre Arrendatario y Propietario para el alquiler temporal de una embarcación. Módulo 2 es dueño del ciclo de vida y los tiempos de la reserva (TTL, ventanas de cancelación, umbral de No-Show); Módulo 3 es dueño de los cálculos y movimientos financieros asociados a cada transición de estado que se lo solicite.
 
 - **Cuándo comienza**: la reserva como entidad nace cuando el Arrendatario oprime "Reservar" → estado **Iniciada**. Antes de eso (pantalla de exploración) solo existe una *intención de reserva* sin ID, cubierta por "Solicitar estimación para reserva" en modo lote.
-- **Información que necesita Módulo 3 de Módulo 2**: identificador de reserva, embarcación, días, pasajeros, propietario y capacidad máxima ("Brindar información de reserva"); el estado vigente de la reserva ("Brindar el estado de la reserva"); el estado de la disputa de garantía ("Brindar información de disputa de garantía").
+- **Información que necesita Módulo 3 de Módulo 2**: identificador de reserva, embarcación, fecha de inicio, fecha de fin, pasajeros, propietario y capacidad máxima ("Brindar información de reserva"); el estado vigente de la reserva ("Brindar el estado de la reserva"); el estado de la disputa de garantía ("Brindar información de disputa de garantía").
 - **Información que necesita Módulo 2 de Módulo 3**: estimación preliminar ("Solicitar estimación para reserva"), desglose y valor total definitivo ("Solicitar el valor calculado de la reserva"), y el resultado del cobro ("Solicitar confirmación de pago").
 - **Qué ocurre al reservar**: → Iniciada; arranca el TTL de 15 min; la embarcación deja de listarse como disponible.
 - **Qué ocurre al pagar**: el Arrendatario oprime "Confirmar pago" → Pendiente; esto habilita a Finanzas a ejecutar "Procesar cobro"; el TTL sigue corriendo desde "Iniciada" (no se reinicia).
@@ -81,7 +81,7 @@ Ambos documentos reconocen exactamente los mismos 9 estados (contando las 3 vari
 - **Qué es**: 10% de la tarifa base diaria de la embarcación.
 - **Momento en la reserva**: se calcula y se congela en "Solicitar el valor calculado de la reserva" (antes de confirmar pago); se cobra junto con alquiler y seguro como **un único monto** en "Procesar cobro" (sin operación separada en la pasarela, aunque Módulo 3 conserva el desglose internamente); se retiene tras "Completada" hasta que se resuelve la disputa de garantía.
 - **Qué módulo interviene**: Módulo 2 crea y gestiona la disputa (otorga la ventana para reportar daños y decide el resultado operativo); Módulo 3 solo ejecuta la consecuencia financiera (reembolso o liquidación total) a partir del estado recibido, usando montos que ya tiene registrados internamente — nunca recibe montos de Módulo 2.
-- **Información que Módulo 2 debe enviar a Módulo 3**: únicamente identificador de reserva, identificador de disputa, estado (`PENDIENTE`/`RECHAZADO`/`COMPLETADO`), clave idempotente y, si es `RECHAZADO`, un motivo opcional. Nunca montos ni instrucciones de pago.
+- **Información que Módulo 2 debe enviar a Módulo 3**: únicamente identificador de reserva, identificador de disputa, estado (`PENDIENTE`/`RECHAZADO`/`COMPLETADO`), clave idempotente y fecha y hora de la transición de estado. Nunca motivos, montos ni instrucciones de pago.
 - **Qué ocurre después de resolver**: el depósito se entrega **completo** al Arrendatario o **completo** al Propietario; no existe retención parcial en ningún caso.
 
 ---
@@ -89,7 +89,7 @@ Ambos documentos reconocen exactamente los mismos 9 estados (contando las 3 vari
 ## 4. Disputa de garantía
 
 - **Qué se considera**: el proceso mediante el cual se decide si el depósito se devuelve al Arrendatario o se liquida al Propietario, según si se detectaron daños menores al regreso de la embarcación.
-- **Cuándo se genera**: tras "Completada", dentro de la ventana que Módulo 2 concede al Propietario para reportar daños (`contexto-modulo3.md` fija esta ventana en 24 horas; `sea-share.md` no la menciona — ver §6).
+- **Cuándo se genera**: tras "Completada", dentro de la ventana que Módulo 2 concede al Propietario para reportar daños (`contexto-modulo3.md` fija esta ventana en 24 horas). Si la disputa permanece `PENDIENTE` más de siete días, se rechaza automáticamente y se devuelve el depósito al Arrendatario.
 - **Quién interviene**: el Propietario (reporta o no reporta daños) y el Módulo 2 (crea y gestiona la disputa, incluida la evaluación de procedencia del reclamo).
 - **Qué módulo la gestiona**: Módulo 2 gestiona la disputa por completo; Módulo 3 únicamente consume su resultado final y ejecuta la operación financiera correspondiente.
 - **Estados** (definidos solo en `contexto-modulo3.md`; `sea-share.md` no usa el término "disputa" ni estos nombres — ver §6):
@@ -106,12 +106,12 @@ Ambos documentos reconocen exactamente los mismos 9 estados (contando las 3 vari
 | Acción / evento | Módulo que inicia | Módulo que recibe | Información relevante |
 | --- | --- | --- | --- |
 | Solicitar estimación para reserva | Módulo 2 | Módulo 3 | Lista de IDs de embarcación (fechas/pasajeros opcionales). |
-| Brindar información de reserva | Módulo 2 | Módulo 3 | ID reserva, ID embarcación, días, pasajeros, propietario, capacidad máxima. Unidireccional: Módulo 3 no responde. |
+| Brindar información de reserva | Módulo 2 | Módulo 3 | ID reserva, ID embarcación, fecha de inicio, fecha de fin, pasajeros, propietario, capacidad máxima. Unidireccional: Módulo 3 no responde. |
 | Solicitar el valor calculado de la reserva | Módulo 2 | Módulo 3 | ID reserva → desglose (alquiler, seguro, depósito, total). |
 | Procesar cobro | Módulo 2 (reserva en "Pendiente") | Módulo 3 | ID reserva, token/referencia segura de pago. |
 | Solicitar confirmación de pago | Módulo 2 | Módulo 3 | ID reserva → estado del cobro. |
-| Brindar el estado de la reserva | Módulo 2 | Módulo 3 | ID reserva, uno de los 9 estados. Unidireccional: Módulo 3 no responde ni notifica fallos a Módulo 2. |
-| Brindar información de disputa de garantía | Módulo 2 | Módulo 3 | ID reserva, ID disputa, estado (`PENDIENTE`/`RECHAZADO`/`COMPLETADO`), clave idempotente, motivo opcional. Unidireccional, sin montos. |
+| Brindar el estado de la reserva | Módulo 2 | Módulo 3 | ID reserva, uno de los 10 estados, fecha y hora del estado. Unidireccional: Módulo 3 no responde ni notifica fallos a Módulo 2. |
+| Brindar información de disputa de garantía | Módulo 2 | Módulo 3 | ID reserva, ID disputa, estado (`PENDIENTE`/`RECHAZADO`/`COMPLETADO`), clave idempotente y fecha y hora de transición. Unidireccional, sin motivos ni montos. |
 
 ---
 

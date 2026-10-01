@@ -10,7 +10,7 @@ Como Administrador Financiero, quiero consultar datos agregados de los registros
 
 **Por qué esta prioridad**: El Administrador Financiero necesita una visión agregada de la actividad financiera de la plataforma. Este informe no representa un balance financiero global ni incluye costos operativos u otros egresos externos a los registros definidos por el sistema.
 
-**Prueba Independiente**: Con registros de cobro, reembolso y dispersión confirmados en distintos períodos y asociados a varias reservas, solicitar el informe como Administrador Financiero para cada periodicidad y validar que las métricas corresponden al agregado global del período seleccionado.
+**Prueba Independiente**: Con registros de cobro, reembolso, dispersión y comisión confirmados en distintos períodos y asociados a varias reservas, solicitar el informe como Administrador Financiero para cada periodicidad y validar que las métricas corresponden al agregado global del período seleccionado sin contar la comisión dos veces.
 
 **Escenarios de Aceptación**:
 
@@ -30,7 +30,7 @@ Como Propietario, quiero consultar datos agregados de los registros financieros 
 
 **Por qué esta prioridad**: El Propietario necesita consultar sus resultados financieros de forma resumida por período, sin revisar cada operación individual. El alcance debe resolverse con la relación registrada entre cada operación financiera y la reserva o el propietario asociado.
 
-**Prueba Independiente**: Con registros financieros relacionados con reservas de varios propietarios y distribuidos en distintos períodos, solicitar el informe como un Propietario y validar que las métricas solo incluyen los registros relacionados con sus reservas y que la comparación usa el período anterior equivalente.
+**Prueba Independiente**: Con registros financieros relacionados con reservas de varios propietarios y distribuidos en distintos períodos, solicitar el informe como un Propietario y validar que las métricas solo incluyen los registros relacionados con sus reservas, incluyendo sus dispersiones confirmadas a favor, y que la comparación usa el período anterior equivalente.
 
 **Escenarios de Aceptación**:
 
@@ -96,7 +96,7 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 - **RF-006**: El sistema DEBE calcular para el Propietario el agregado de los registros financieros confirmados relacionados con sus reservas que correspondan al período seleccionado.
 - **RF-007**: El sistema DEBE agregar los cobros, reembolsos y dispersiones confirmados a partir de los montos registrados y la fecha de cada operación.
 - **RF-008**: El sistema DEBE calcular para el Administrador Financiero el neto generado como el total de cobros confirmados menos el total de reembolsos confirmados y menos el total de dispersiones confirmadas, y para el Propietario sus ganancias como el total de dispersiones confirmadas a su favor (liquidación del alquiler, compensaciones por cancelación y depósitos liquidados), sin incluir costos operativos ni conceptos externos a los registros financieros definidos por el sistema.
-- **RF-009**: El sistema DEBE incluir la comisión de plataforma efectivamente aplicada y registrada en las dispersiones, además de la cantidad de operaciones agrupada por tipo de transacción.
+- **RF-009**: El sistema DEBE incluir el total de comisiones representado por los `RegistroDeComisión` confirmados y la cantidad de registros agrupada por tipo. El total de comisiones es una métrica informativa independiente y NO DEBE sumarse ni restarse nuevamente en el cálculo del neto o de las ganancias, porque la comisión ya fue considerada al calcular la liquidación estándar.
 - **RF-010**: El sistema DEBE incluir la variación absoluta y porcentual frente al período inmediatamente anterior equivalente. Si el valor del período anterior es cero, la variación porcentual DEBE indicarse como no calculable.
 - **RF-011**: El sistema DEBE devolver un DTO con datos agregados y NO DEBE devolver mediante este caso de uso el detalle individual paginado definido en "Consultar registros financieros" (SPEC 12).
 - **RF-012**: El sistema DEBE permitir al Administrador Financiero y al Propietario exportar el informe correspondiente a su alcance y período seleccionado en formato `.csv`.
@@ -108,14 +108,15 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para recibir la solicitud, devolver el informe agregado y producir el archivo `.csv` de exportación.
 - **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar las métricas monetarias del informe y la comparación entre períodos.
-- **RNF-003**: El sistema DEBE utilizar la fecha de creación del registro inmutable de cada operación financiera para determinar su inclusión en el período seleccionado.
+- **RNF-003**: El sistema DEBE utilizar la fecha y hora de creación (fechaHoraCreación) del registro inmutable de cada operación financiera para determinar su inclusión en el período seleccionado.
 - **RNF-004**: El sistema DEBE garantizar que la exportación y la consulta utilicen el mismo alcance, período y cálculo.
 
 ### Entidades Clave
 
-- **RegistroDeCobro (Entidad, definida en SPEC 5)**: En este caso de uso es únicamente consultada para agregar los cobros confirmados del período.
-- **RegistroDeReembolso (Entidad, definida en SPEC 9)**: En este caso de uso es únicamente consultada para agregar los reembolsos confirmados del período.
-- **RegistroDeDispersión (Entidad, definida en SPEC 10)**: En este caso de uso es únicamente consultada para agregar las dispersiones confirmadas y la comisión aplicada registrada.
+- **RegistroDeCobro (Entidad Inmutable, definida en SPEC 5)**: En este caso de uso es únicamente consultada como métrica informativa de los cobros confirmados del período; no participa en cálculos de cobro.
+- **RegistroDeReembolso (Entidad Inmutable, definida en SPEC 9)**: En este caso de uso es únicamente consultada como métrica informativa de los reembolsos confirmados del período; no participa en cálculos de reembolso.
+- **RegistroDeDispersión (Entidad Inmutable, definida en SPEC 10)**: En este caso de uso es únicamente consultada como métrica informativa de las dispersiones confirmadas; no participa en cálculos de dispersión.
+- **RegistroDeComisión (Entidad Inmutable, definida en SPEC 10)**: En este caso de uso es únicamente consultada como métrica informativa de las comisiones confirmadas; no participa en cálculos de cobro, reembolso o dispersión.
 - **SolicitudInformeFinanciero (DTO)**: Información recibida del Administrador Financiero o del Propietario. Contiene la periodicidad y el período seleccionado.
 - **InformeFinancieroResultado (DTO)**: Resultado agregado que contiene las métricas del período, el alcance, la periodicidad y la comparación con el período anterior equivalente.
 - **ArchivoExportacionInformeFinanciero (DTO)**: Archivo `.csv` que contiene el informe agregado, la periodicidad, el período, el alcance, el solicitante y la fecha y hora de generación.
@@ -125,7 +126,7 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 ### Resultados Medibles
 
 - **CE-001**: Alcance del Informe, "100% de los informes del Administrador Financiero agregan únicamente registros financieros de la plataforma y 100% de los informes del Propietario agregan únicamente registros relacionados con sus reservas, con cero (0) datos de otros alcances expuestos".
-- **CE-002**: Precisión del Neto, "100% de los informes del Administrador Financiero calculan el neto generado como cobros confirmados menos reembolsos confirmados menos dispersiones confirmadas, y 100% de los informes del Propietario calculan sus ganancias como el total de dispersiones confirmadas a su favor, con cero (0) discrepancias frente a los registros financieros usados en pruebas automatizadas".
+- **CE-002**: Precisión del Neto, "100% de los informes del Administrador Financiero calculan el neto generado como cobros confirmados menos reembolsos confirmados menos dispersiones confirmadas, y 100% de los informes del Propietario calculan sus ganancias como el total de dispersiones confirmadas a su favor, con el total de comisiones presentado como métrica informativa independiente y sin doble contabilización".
 - **CE-003**: Consistencia de Periodicidad, "100% de los períodos quincenales, mensuales y trimestrales utilizan los límites fijos definidos y 0 solicitudes con rangos libres de fechas son aceptadas".
 - **CE-004**: Comparación Temporal, "100% de las comparaciones utilizan el período inmediatamente anterior equivalente y las variaciones porcentuales con valor anterior cero se identifican como no calculables".
 - **CE-005**: Exclusión de Garantías Pendientes, "100% de los depósitos de garantía pendientes sin registro financiero confirmado quedan excluidos del informe".

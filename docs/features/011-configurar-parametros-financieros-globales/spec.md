@@ -60,7 +60,7 @@ Como el sistema, al recibir del Administrador Financiero el porcentaje de increm
 - **¿Qué sucede si "Brindar tarifa base", "Solicitar el valor calculado de la reserva" o "Liquidar fondos de alquiler" necesitan un parámetro financiero global que aún no ha sido configurado por el Administrador Financiero?**
   Este caso de uso no define dicho tratamiento: cada caso de uso consumidor gestiona por sí mismo la ausencia del parámetro que necesita (por ejemplo, tratándola como información incompleta y registrando o respondiendo con un error controlado, según lo definido en sus propios requisitos).
 
-- **¿Los umbrales que determinan el tipo de cancelación (flexible, moderada, tardía/No-Show) se configuran mediante este caso de uso?**
+- **¿Los umbrales que determinan el tipo de cancelación (flexible, moderada o tardía) se configuran mediante este caso de uso?**
   No. Dichos umbrales son determinados y gestionados por el Sistema de Reservas y Operaciones; el sistema únicamente recibe el resultado ya clasificado (el tipo de cancelación) a través de "Brindar el estado de la reserva", sin necesitar ni configurar los umbrales de tiempo que originan dicha clasificación.
 
 ## Requisitos *(obligatorio)*

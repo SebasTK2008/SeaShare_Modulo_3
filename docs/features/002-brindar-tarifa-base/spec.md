@@ -44,10 +44,10 @@ La vigencia de la temporada alta se deriva automáticamente aplicando, a cada a�
 
 - **Fin de año**: desde el **15 de noviembre** hasta el **15 de enero** del año siguiente.
 - **Mitad de año**: desde el **1 de junio** hasta el **30 de julio** (inclusive).
-- **Semana Santa**: los días santos de marzo o abril, calculados mediante el **Algoritmo de Meeus/Jones/Butcher** para determinar el Domingo de Resurrección de cada año evaluado, y a partir de esa fecha derivar la ventana de días santos correspondiente (Jueves y Viernes Santo, y los días inmediatamente adyacentes que el negocio considere parte de la Semana Santa).
+- **Semana Santa**: Jueves Santo y Viernes Santo de marzo o abril, calculados mediante el **Algoritmo de Meeus/Jones/Butcher** para determinar el Domingo de Resurrección de cada año evaluado.
 - **Semana de receso**: del **5 de octubre** al **12 de octubre**.
 
-Estas ventanas son fijas por calendario, se recalculan automáticamente cada año (incluyendo el cálculo de Semana Santa vía Meeus/Jones/Butcher) y no requieren configuración manual de fechas por parte del Administrador Financiero, quien únicamente configura el **porcentaje de incremento** aplicable.
+Estas ventanas son fijas por calendario, se recalculan automáticamente cada año mediante el cálculo de Semana Santa vía Meeus/Jones/Butcher y no requieren configuración manual de fechas por parte del Administrador Financiero, quien únicamente configura el **porcentaje de incremento** aplicable.
 
 Los puentes festivos y los fines de semana largos **no** se categorizan como temporada alta; se evalúan como fin de semana, dado que los festivos hacen parte de fin de semana, a excepción de los días santos. La tarifa de un puente utiliza el porcentaje de incremento de fin de semana (ver "Regla de cálculo de la tarifa base final"), sin un porcentaje adicional.
 
@@ -89,7 +89,7 @@ Los puentes festivos y los fines de semana largos **no** se categorizan como tem
 - **RF-006**: El sistema DEBE determinar si la fecha evaluada corresponde a temporada alta aplicando la siguiente regla exacta de calendario, recalculada automáticamente para cada año evaluado:
   - Fin de año: 15 de noviembre – 15 de enero del año siguiente.
   - Mitad de año: 1 de junio – 30 de julio.
-  - Semana Santa: calculada mediante el Algoritmo de Meeus/Jones/Butcher.
+  - Semana Santa: Jueves Santo y Viernes Santo calculados mediante el Algoritmo de Meeus/Jones/Butcher.
   - Semana de receso: 5 de octubre – 12 de octubre.
 
   sin requerir que el Administrador Financiero configure manualmente las fechas de inicio y fin de dicha condición. Los puentes festivos y los fines de semana largos NO forman parte de esta regla de temporada alta; se evalúan como fin de semana, dado que los festivos hacen parte de fin de semana, a excepción de los días santos, y utilizan el porcentaje de incremento de fin de semana.
