@@ -7,7 +7,7 @@
 | Concepto | Módulo 2 (`sea-share.md`) | Módulo 3 (`contexto-modulo3.md`) | Nombre que debe utilizarse |
 | --- | --- | --- | --- |
 | Arrendatario | "turistas" en la introducción general; "Arrendatario" en el detalle operativo (2.1, 2.2) | "Arrendatario" (único término, sin excepciones) | **Arrendatario** |
-| Propietario | "Propietario" en la entidad Embarcación (Módulo 1); pero "**anfitrión**" en la regla de cancelación tardía (2.2: "compensación al anfitrión") | "Propietario" (único término, sin excepciones) | **Propietario** — ver inconsistencia §6 |
+| Propietario | "Propietario" en la entidad Embarcación (Módulo 1); pero "**anfitrión**" en la regla de cancelación tardía (2.2: "compensación al anfitrión") | "Propietario" (único término, sin excepciones) | **Propietario** |
 | Módulo 2 (como sistema) | "Módulo 2: Operación de Reservas, Tiempos y Cancelaciones" | "Sistema de Reservas y Operaciones" | Ambos son equivalentes; en interacciones con Finanzas usar **"Sistema de Reservas y Operaciones"** |
 | Módulo 3 (como sistema) | "Módulo 3: Liquidación, Seguros y Dispersión de Fondos" | Se autodenomina **"el sistema"** | Equivalentes; en todo contenido de SPEC/Finanzas usar **"el sistema"**, nunca "Módulo 3" |
 
