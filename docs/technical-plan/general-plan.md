@@ -23,21 +23,9 @@ Este documento define el orden **general** del proyecto: arquitectura, tecnolog�
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), WireMock (Flota y pasarela), Awaitility, ArchUnit
 **Target Platform**: Contenedores Docker (Linux); desarrollo local con Docker Compose
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio
-**Performance Goals**: Flota responde < 500 ms para 50 embarcaciones **[SPEC UC01 HU3]**. Objetivo del endpoint de lote (50 embarcaciones): p95 ≤ 1 s **[TÉC, derivado de ese SLA; a validar]**
 **Constraints**: `BigDecimal` en todo cálculo monetario **[SPEC RNF-002 de varios UC]**; sin datos sensibles de medios de pago **[SPEC UC05 RNF-004]**; registros financieros inmutables; manejo controlado de fallas externas **[SPEC RNF-003 de varios UC]**
 **Scale/Scope**: 13 casos de uso; sistemas externos: Reservas, Flota, Pasarela; clientes Administrador Financiero y Propietario. El SPEC no define volumen: el diseño es *stateless* y escala horizontalmente.
 
-### Estado actual del repositorio (punto de partida)
-
-| Elemento | Hoy | Acción |
-|---|---|---|
-| `pom.xml` | `spring-boot-starter-data-jpa`, `postgresql`, `mapstruct`, `lombok-mapstruct-binding`, Testcontainers (PostgreSQL) | Agregar los starters equivalentes de Spring Boot 4.1 para web, validation, amqp, actuator, security (resource server) y flyway (**verificar nombres exactos de artefactos** al agregarlos), más Lombok (hoy figura solo en `annotationProcessorPaths`), Resilience4j, ArchUnit, WireMock, Awaitility y Testcontainers RabbitMQ |
-| Paquete raíz | `com.seashare.seasharem3` (`SeashareM3Application`) | Se conserva; las tres capas cuelgan de él (§3.3) |
-| Configuración | `application.properties` (`spring.application.name=seashare-m3`) | Se mantiene `.properties` o se migra a `.yml`; las claves de §7.4 son independientes del formato |
-| Migraciones | No existen | Flyway en `src/main/resources/db/migration` |
-| Docker | No existe | `Dockerfile` y `docker-compose.yml` (§8) |
-
----
 
 ## 1. Alcance y trazabilidad SPEC → componentes
 
@@ -118,10 +106,7 @@ flowchart LR
 |---|---|---|
 | Dominio | `com.seashare.seasharem3.domain` | Entidades, value objects, políticas y cálculos puros (sin Spring, JPA ni Jackson) |
 | Aplicación | `com.seashare.seasharem3.application` | Puertos de entrada (un caso de uso por interfaz), servicios que los implementan y puertos de salida |
-| Infraestructura | `com.seashare.seasharem3.infrastructure` | Adaptadores de entrada y salida, persistencia, mensajería, seguridad, configuración |
-
-No se separa en dos módulos de dominio. **Justificación** (acoplamiento de datos medido contra los SPEC):
-
+| Infraestructura | `com.seashare.seasharem3.infrastructure` | Adaptadores de entrada y salida, persistencia, mensajería, seguridad, configuración 
 | Concepto compartido | Casos de uso que lo tocan |
 |---|---|
 | `InformaciónDeReserva` | UC03 la crea; UC04 la actualiza; UC05, UC07, UC08, UC09 y UC10 la leen |
@@ -199,21 +184,7 @@ seashare-m3/
 | UC12 | `QueryFinancialRecordsUseCase` | `FinancialRecordQueryPort` | `web` | vista `v_financial_records` | Alcance del Propietario antes de filtros; paginación sin omitir ni duplicar; solo registros inmutables |
 | UC13 | `GetFinancialReportUseCase`, `ExportFinancialReportUseCase` | `FinancialReportQueryPort` | `web` | agregación sobre las 4 tablas inmutables | Períodos fijos; neto sin doble contabilizar la comisión; variación porcentual no calculable si el anterior es 0 |
 
-### 3.6 Orquestación de UC07 (qué dispara cada estado)
-
-| Estado recibido | Acción del sistema | Caso de uso destino |
-|---|---|---|
-| `DISPONIBLE`, `INICIADA`, `RESERVADO`, `EN_NAVEGACION` | Reconocer y registrar; **ninguna** operación financiera (RF-002) | — |
-| `PENDIENTE` | Procesar cobro con el token recibido (RF-002A) | UC05 |
-| `CANCELADO_FLEXIBLEMENTE` | Liberar/reembolsar 100 % del valor pagado (RF-003) | UC09 |
-| `CANCELADO_MODERADAMENTE` | Liberar/reembolsar 50 % del alquiler + 100 % del depósito (el seguro no se reembolsa) **y** liquidar 50 % del alquiler al Propietario, sin comisión ni descuento de seguro (RF-004; UC10 RF-002/RF-007) | UC09 + UC10 |
-| `CANCELADO_TARDIAMENTE` | Liquidar 100 % del alquiler al Propietario **y** liberar/reembolsar 100 % del depósito (RF-005) | UC10 + UC09 |
-| `CANCELADO_POR_ANFITRION` | Liberar/reembolsar 100 % del valor pagado al Arrendatario (RF-005A) | UC09 |
-| `COMPLETADA` | Liquidación estándar (alquiler − comisión − seguro) con depósito retenido; abre el seguimiento de garantía (RF-006, RF-007) | UC10 + UC08 |
-| Cualquier otro | Registrar inconsistencia, sin operación financiera | — |
-
-Cada operación derivada tiene **su propia intención, clave idempotente y resultado** (UC07 HU2, escenarios 2 y 3).
-
+### 
 ---
 
 ## 4. Modelo de datos (PostgreSQL)
@@ -242,140 +213,24 @@ Convenciones: `NUMERIC` para dinero y porcentajes (escala y redondeo: **[PEND] O
 
 **Inmutabilidad**: además de no exponer *setters* en el dominio, las cuatro tablas `*_record` tienen un trigger que rechaza `UPDATE` y `DELETE`, y el usuario de la aplicación no recibe esos privilegios.
 
----
 
-## 5. Conexiones con otros módulos y mensajería (RabbitMQ)
-
-### 5.1 Matriz de conexiones
-
-| # | Origen → Destino | UC | Estilo | Transporte | ¿Cola? | Contrato |
-|---|---|---|---|---|---|---|
-| C1 | Reservas → sistema | UC01 | Request/response | REST `POST` | No (necesita respuesta) | [lote](contracts/rest/UC01-estimacion-lote.md), [individual](contracts/rest/UC01-estimacion-individual.md) |
-| C2 | Reservas → sistema | UC03 | Notificación unidireccional | **RabbitMQ** | **Sí** | [UC03](contracts/events/UC03-informacion-reserva.md) |
-| C3 | Reservas → sistema | UC04 | Request/response | REST `POST` | No | [UC04](contracts/rest/UC04-valor-calculado-reserva.md) |
-| C4 | Reservas → sistema | UC06 | Consulta | REST `GET` | No | [UC06](contracts/rest/UC06-confirmacion-pago.md) |
-| C5 | Reservas → sistema | UC07 | Notificación unidireccional | **RabbitMQ** | **Sí** | [UC07](contracts/events/UC07-estado-reserva.md) |
-| C6 | Reservas → sistema | UC08 | Notificación unidireccional | **RabbitMQ** | **Sí** | [UC08](contracts/events/UC08-disputa-garantia.md) |
-| C7 | Sistema → Flota | UC01/02/03 | Request/response | REST `POST` (consulta por lote) | No | [Flota](contracts/external/flota-consulta-tarifas-base.md) |
-| C8 | Sistema → Pasarela | UC05/09/10 | Comando asíncrono | Outbox → **RabbitMQ interna** → worker → cliente de la pasarela | **Sí** | [cobro](contracts/external/pasarela-comando-cobro.md), [reembolso](contracts/external/pasarela-comando-reembolso.md), [liquidación](contracts/external/pasarela-comando-liquidacion.md) |
-| C9 | Pasarela → sistema | UC05/09/10 | Resultado | Webhook REST | No | [webhook](contracts/external/pasarela-webhook-resultados.md) |
-| C10 | Administrador Financiero → sistema | UC11 | Request/response | REST | No | [obtener](contracts/rest/UC11-obtener-parametros-financieros.md), [guardar](contracts/rest/UC11-guardar-parametros-financieros.md) |
-| C11 | Propietario / Administrador → sistema | UC12, UC13 | Request/response | REST | No | [UC12](contracts/rest/UC12-consultar-registros-financieros.md), [consultar](contracts/rest/UC13-consultar-informe-financiero.md), [exportar](contracts/rest/UC13-exportar-informe-financiero.md) |
-| C12 | Sistema → sistema | UC05, UC08 | Eventos por tiempo | Scheduler | No (ver D-10) | §5.4 |
-
-El sistema **no publica eventos hacia Reservas**: Reservas consulta mediante UC04 y UC06 (modelo *pull* definido por los SPEC).
-
-### 5.2 Topología RabbitMQ **[TÉC; nombres a acordar con Reservas — OQ-09]**
-
-| Elemento | Nombre | Configuración | Dueño |
-|---|---|---|---|
-| Exchange | `seashare.reservations` | `topic`, durable | Reservas |
-| Cola UC03 | `finance.reservation-info.v1` | *quorum*; binding `reservation.info.provided` | Sistema |
-| Cola UC07 | `finance.reservation-status.v1` | *quorum*; binding `reservation.status.changed` | Sistema |
-| Cola UC08 | `finance.guarantee-dispute.v1` | *quorum*; binding `reservation.dispute.updated` | Sistema |
-| Exchange interno | `finance.internal` | `direct`, durable | Sistema |
-| Cola de comandos de pasarela | `finance.gateway-commands.v1` | *quorum*; binding `gateway.command` | Sistema |
-| Dead letter | `finance.dlx` + `<cola>.dlq` por cada cola | `direct`; límite de entregas | Sistema |
-
-**Reglas de consumo**
-- Mensajes persistentes; publicación con *publisher confirms*; `ack` manual tras confirmar la transacción de BD.
-- Reintentos acotados con *backoff* exponencial **solo ante fallas transitorias** (por ejemplo, Flota inalcanzable); luego se registra el fallo en `operational_failure` (el SPEC exige "registrarlo internamente") y el mensaje va a la DLQ.
-- Mensaje no interpretable (JSON inválido o campos de tipo incorrecto) → DLQ directa, sin reintentos.
-- Los fallos de negocio (por ejemplo, pasajeros fuera de rango) se registran y el mensaje se confirma (`ack`): reintentarlo no cambiaría el resultado.
-- El orden entre mensajes de una misma reserva **no se asume** (**OQ-18**): lo garantizan la idempotencia y el bloqueo por reserva.
-
-### 5.3 Garantías de entrega y consistencia
-
-| Mecanismo | Qué resuelve | Aplicación |
-|---|---|---|
-| **Idempotencia por clave de negocio** | Duplicados y reenvíos | UC07: `(reservation_id, status)` (UC07, caso extremo de notificación repetida); UC08: `(reservation_id, dispute_id, event_key)` (RF-008); UC03: *upsert* por `reservation_id` |
-| **Bloqueo por reserva** | Operaciones de dinero concurrentes sobre una misma reserva | `pg_advisory_xact_lock(hash(reservation_id))` al ejecutar UC05/UC07/UC08/UC09/UC10 |
-| **Outbox** (`outbox_message`) | No perder comandos entre "persistí la intención" y "publiqué" | La intención y el comando a la pasarela se guardan en la **misma transacción**; un *relay* publica con `FOR UPDATE SKIP LOCKED` |
-| **Claves idempotentes hacia la pasarela** | Duplicar cobros, reembolsos o liquidaciones en reintentos (UC05 RNF-003, UC09/UC10) | Clave determinística por operación (ver comandos en `contracts/external/`), enviada a la pasarela y única en BD |
-| **Deduplicación del webhook** | Notificaciones repetidas del mismo resultado (UC05, UC09, UC10 casos extremos) | Por `idempotency_key` + `external_reference`; una repetición no altera un resultado ya registrado |
-| **Compare-and-set del depósito** (`deposit_disposition`) | Reembolsar **y** liquidar el mismo depósito (UC08 CE-005; UC09 y UC10 casos extremos) | Solo un desenlace gana; el otro se registra como inconsistencia para conciliación |
-| **Optimistic locking** (`@Version`) | Carreras en intenciones y en `reservation_information` | Intenciones y `reservation_information` |
-| **Conciliación** | Timeouts y estados indefinidos (UC05 RNF-003) | Job que reintenta o consulta intenciones sin resultado definitivo con la misma clave idempotente |
 
 ### 5.4 Jobs programados (`infrastructure.adapter.in.scheduler`)
 
 | Job | Origen en los SPEC | Regla |
 |---|---|---|
-| `DepositAutoRefundJob` | UC08 RF-009A | Reserva `COMPLETADA` hace ≥ 24 h (`completed_at`), sin disputa → reembolso total del depósito |
-| `PendingDisputeExpiryJob` | UC08 RF-009B | Disputa `PENDIENTE` más de 7 días desde la finalización → pasa a `RECHAZADO` + reembolso total |
-| `AuthorizationExpiryJob` | UC05 RF-014 / RNF-005 | Marca como `EXPIRADO` las autorizaciones aprobadas y no capturadas al vencer su vigencia |
+|  |
+| `AuthorizationExpiryJob` | UC05 RF-014 / RNF-005 | Marca como `EXPIRADO` las autorizaciones aprobadas y no capturaas al vencer su vigencia |
 | `GatewayReconciliationJob` | UC05/09/10 RNF-003 | Reintenta o consulta intenciones sin resultado definitivo |
 | `OutboxRelayJob` | Infra | Publica `outbox_message` pendientes |
 
 Las ventanas (24 h, 7 días) son configurables con los valores del SPEC por defecto. ShedLock se usa solo si se despliega más de una instancia; aun así las operaciones son idempotentes por el *compare-and-set* y las claves idempotentes.
 
-### 5.5 Flujo de referencia: reserva → cobro
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant M2 as Reservas y Operaciones
-  participant MQ as RabbitMQ
-  participant F as El sistema
-  participant M1 as Gestión de Flota
-  participant PG as Pasarela de Pago
-
-  M2->>MQ: reservation.info.provided (UC03)
-  MQ->>F: consumo
-  F->>M1: consulta de tarifa base (lote)
-  M1-->>F: tarifas base
-  F->>F: UC02 tarifa dinámica y registro de InformaciónDeReserva
-  M2->>F: POST calculated-value (UC04)
-  F-->>M2: desglose y total
-  M2->>MQ: reservation.status.changed PENDIENTE + medio de pago (UC07)
-  MQ->>F: consumo
-  F->>F: UC05 IntenciónDeCobro + outbox
-  F->>PG: autorizar o cobrar (worker, clave idempotente)
-  PG-->>F: webhook de resultado
-  F->>F: actualizar intención; crear RegistroDeCobro si hay cobro/captura confirmados
-  M2->>F: GET payment-confirmation (UC06)
-  F-->>M2: estado del cobro
-```
 
 ---
 
-## 6. Contratos
 
-Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). Allí se encuentran la leyenda `[SPEC]/[CONV]/[PEND]`, las convenciones comunes (headers, formato de error, catálogo de códigos) y el detalle de cada petición y respuesta.
-
-| Tipo | Archivo | Detalle |
-|---|---|---|
-| REST | [`rest/UC01-estimacion-lote.md`](contracts/rest/UC01-estimacion-lote.md) | Reservas → sistema |
-| REST | [`rest/UC01-estimacion-individual.md`](contracts/rest/UC01-estimacion-individual.md) | Reservas → sistema |
-| REST | [`rest/UC04-valor-calculado-reserva.md`](contracts/rest/UC04-valor-calculado-reserva.md) | Reservas → sistema |
-| REST | [`rest/UC06-confirmacion-pago.md`](contracts/rest/UC06-confirmacion-pago.md) | Reservas → sistema |
-| REST | [`rest/UC11-obtener-parametros-financieros.md`](contracts/rest/UC11-obtener-parametros-financieros.md) | Administrador Financiero → sistema |
-| REST | [`rest/UC11-guardar-parametros-financieros.md`](contracts/rest/UC11-guardar-parametros-financieros.md) | Administrador Financiero → sistema |
-| REST | [`rest/UC12-consultar-registros-financieros.md`](contracts/rest/UC12-consultar-registros-financieros.md) | Propietario / Administrador → sistema |
-| REST | [`rest/UC13-consultar-informe-financiero.md`](contracts/rest/UC13-consultar-informe-financiero.md) | Propietario / Administrador → sistema |
-| REST | [`rest/UC13-exportar-informe-financiero.md`](contracts/rest/UC13-exportar-informe-financiero.md) | Propietario / Administrador → sistema |
-| Cola | [`events/UC03-informacion-reserva.md`](contracts/events/UC03-informacion-reserva.md) | Reservas → sistema, unidireccional |
-| Cola | [`events/UC07-estado-reserva.md`](contracts/events/UC07-estado-reserva.md) | Reservas → sistema, unidireccional |
-| Cola | [`events/UC08-disputa-garantia.md`](contracts/events/UC08-disputa-garantia.md) | Reservas → sistema, unidireccional |
-| Externo | [`external/flota-consulta-tarifas-base.md`](contracts/external/flota-consulta-tarifas-base.md) | Sistema → Flota (contrato requerido) |
-| Externo | [`external/pasarela-comando-cobro.md`](contracts/external/pasarela-comando-cobro.md) | Sistema → Pasarela |
-| Externo | [`external/pasarela-comando-reembolso.md`](contracts/external/pasarela-comando-reembolso.md) | Sistema → Pasarela |
-| Externo | [`external/pasarela-comando-liquidacion.md`](contracts/external/pasarela-comando-liquidacion.md) | Sistema → Pasarela |
-| Externo | [`external/pasarela-webhook-resultados.md`](contracts/external/pasarela-webhook-resultados.md) | Pasarela → sistema |
-
-### Entrega y verificación
-
-| Destinatario | Contratos | Qué debe hacer |
-|---|---|---|
-| Reservas y Operaciones | UC01, UC04, UC06 (REST); UC03, UC07, UC08 (colas) | Implementar cliente REST y productor AMQP |
-| Gestión de Flota | `flota-consulta-tarifas-base` | Exponer la consulta por lote con el SLA del SPEC |
-| Pasarela de Pago (adaptador) | comandos + webhook | Mapear el proveedor elegido al modelo canónico (OQ-08) |
-| Administrador Financiero / Propietario | UC11, UC12, UC13 | Consumir los endpoints respetando paginación y períodos fijos |
-
-**Verificación**: pruebas de contrato en el sistema que usan los ejemplos de cada `.md` (REST con MockMvc; mensajes AMQP contra el cuerpo documentado) y *stubs* WireMock para Flota y la pasarela.
-
----
-
+¿
 ## 7. Aspectos transversales
 
 ### 7.1 Seguridad
@@ -394,8 +249,6 @@ Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). 
 ### 7.3 Observabilidad
 Actuator (`/health`, `/metrics`), Micrometer + Prometheus, logs JSON con `reservation_id`. Métricas: profundidad de DLQ, intenciones por estado, antigüedad de la intención más vieja sin resultado, filas en `operational_failure`, latencia de Flota. Alertas sobre DLQ > 0 y conciliaciones atascadas, porque los casos unidireccionales no pueden avisar a Reservas.
 
-### 7.4 Configuración **[TÉC]** (sobreescribible por entorno)
-`seashare.timezone` (OQ-04), `seashare.estimates.max-batch-size=50`, `seashare.reporting.max-page-size=100`, `seashare.fleet.*`, `seashare.gateway.*`, `seashare.guarantee.auto-refund-after=PT24H`, `seashare.guarantee.pending-dispute-expiry=P7D`.
 
 ---
 
