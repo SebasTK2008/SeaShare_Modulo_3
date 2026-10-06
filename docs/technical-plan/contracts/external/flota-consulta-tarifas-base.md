@@ -13,7 +13,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El sistema consulta al Sistema de Gestión de Flota la tarifa base vigente para una o varias embarcaciones. Flota es la fuente autoritativa de esta tarifa (el precio fijado por el propietario). El sistema luego aplicará la tarifa dinámica sobre este valor [SPEC HU1, RF-004].
+El sistema consulta al Sistema de Gestión de Flota la tarifa base vigente para una o varias embarcaciones. Flota es la fuente autoritativa de esta tarifa (el precio fi1jado por el propietario). El sistema luego aplicará la tarifa dinámica sobre este valor [SPEC HU1, RF-004].
 
 ## 2. Petición
 
