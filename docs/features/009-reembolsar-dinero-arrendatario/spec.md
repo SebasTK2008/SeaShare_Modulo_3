@@ -91,7 +91,7 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
   El sistema valida el estado de la operación idempotente. No solicita una segunda devolución ni una liquidación sobre un depósito ya reembolsado; registra la inconsistencia para conciliación.
 
 - **¿Qué sucede si la Pasarela de Pago reporta más de una vez el resultado de la misma transacción de reembolso (por ejemplo, una notificación repetida)?**
-  El contexto no define un mecanismo de deduplicación explícito. El sistema conserva el resultado ya registrado para esa solicitud de reembolso; una notificación repetida con el mismo resultado no altera el registro existente.
+  Este caso de uso no define un mecanismo de deduplicación explícito. El sistema conserva el resultado ya registrado para esa solicitud de reembolso; una notificación repetida con el mismo resultado no altera el registro existente.
 
 - **¿Qué sucede si se recibe más de una resolución para la misma disputa?**
   El sistema no sobrescribe la resolución aplicada ni solicita otra operación monetaria. Usa la clave idempotente y registra la inconsistencia para conciliación.

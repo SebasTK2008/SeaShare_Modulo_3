@@ -66,7 +66,7 @@ Como el sistema, al recibir de la Pasarela de pago el resultado de una operació
   El sistema no puede asociar dicho resultado a ninguna reserva conocida. Conforme a RNF-003, esta situación se trata como una falla de consistencia: el sistema registra el evento recibido sin poder vincularlo a una solicitud en curso, sin generar un registro de cobro exitoso.
 
 - **¿Qué sucede si la Pasarela de pago reporta más de una vez el resultado de la misma transacción (por ejemplo, una notificación repetida)?**
-  El contexto no define un mecanismo de deduplicación explícito. El sistema conserva el resultado ya registrado para esa solicitud de cobro; una notificación repetida con el mismo resultado no altera el registro existente.
+  Este caso de uso no define un mecanismo de deduplicación explícito. El sistema conserva el resultado ya registrado para esa solicitud de cobro; una notificación repetida con el mismo resultado no altera el registro existente.
 
 - **¿Qué sucede si el token o la referencia segura del medio de pago es inválido, expiró o no puede ser utilizado por la Pasarela de pago?**
   El sistema no envía un cobro con datos incompletos ni asume que la operación fue rechazada financieramente. Registra el fallo técnico o de validación informado, sin marcar la reserva como cobrada, y deja el resultado disponible para "Solicitar confirmación de pago".

@@ -28,7 +28,7 @@ Como el sistema, al recibir del Administrador Financiero el porcentaje de comisi
 
 ### Historia de Usuario 2 - Configurar los porcentajes de tarifa dinámica (fin de semana y temporada alta) (Prioridad: P1)
 
-Como el sistema, al recibir del Administrador Financiero el porcentaje de incremento por fin de semana y el porcentaje de incremento por temporada alta, quiero persistir dichos valores como parámetros financieros globales vigentes, de manera que "Brindar tarifa base" pueda aplicarlos al calcular la tarifa dinámica de una embarcación (la vigencia de la temporada alta es determinada automáticamente por la regla de calendario definida en el contexto del sistema, no se configura en este caso de uso).
+Como el sistema, al recibir del Administrador Financiero el porcentaje de incremento por fin de semana y el porcentaje de incremento por temporada alta, quiero persistir dichos valores como parámetros financieros globales vigentes, de manera que "Brindar tarifa base" pueda aplicarlos al calcular la tarifa dinámica de una embarcación (la vigencia de la temporada alta es determinada automáticamente por la regla de calendario de temporada alta definida en "Brindar tarifa base", SPEC 2 RF-006, no se configura en este caso de uso).
 
 **Por qué esta prioridad**: Es la única fuente de los porcentajes que "Brindar tarifa base" necesita para aplicar la tarifa dinámica; sin esta configuración, dicho caso de uso no podría determinar cuánto ajustar la tarifa base de una embarcación.
 
@@ -105,7 +105,7 @@ Como el sistema, al recibir del Administrador Financiero una configuración fina
   Los valores ya registrados en la reserva, incluida la tarifa base usada y el depósito, no se modifican; los nuevos parámetros aplican únicamente a cálculos posteriores.
 
 - **¿Cómo se determina la vigencia (fecha de inicio y fin) de la temporada alta?**
-  La vigencia no se configura mediante este caso de uso: el sistema la determina automáticamente aplicando la regla de calendario de temporada alta definida en el contexto del sistema (ventanas de fin de año, mitad de año, Semana Santa y semana de receso). "Brindar tarifa base" (SPEC 2) evalúa cada fecha contra dichas ventanas y, si corresponde, aplica el porcentaje de incremento de temporada alta configurado en este caso de uso.
+  La vigencia no se configura mediante este caso de uso: el sistema la determina automáticamente aplicando la regla de calendario de temporada alta definida en "Brindar tarifa base" (SPEC 2, RF-006, ventanas de fin de año, mitad de año, Semana Santa y semana de receso). "Brindar tarifa base" (SPEC 2) evalúa cada fecha contra dichas ventanas y, si corresponde, aplica el porcentaje de incremento de temporada alta configurado en este caso de uso.
 
 - **¿Qué sucede si "Brindar tarifa base", "Solicitar el valor calculado de la reserva" o "Liquidar fondos de alquiler" necesitan un parámetro financiero global que aún no ha sido configurado por el Administrador Financiero?**
   Este caso de uso no define dicho tratamiento: cada caso de uso consumidor gestiona por sí mismo la ausencia del parámetro que necesita (por ejemplo, tratándola como información incompleta y registrando o respondiendo con un error controlado, según lo definido en sus propios requisitos).

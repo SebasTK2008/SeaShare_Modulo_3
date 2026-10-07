@@ -1,6 +1,6 @@
 ﻿# Especificación de Funcionalidad: UC07 - Brindar el Estado de la Reserva
 
-**Creado**: 2026-09-06 (v3 — se incorpora "iniciada" como el décimo estado reconocido y como el verdadero origen del bloqueo temporal (TTL) de 15 minutos; "pendiente" ya no origina el TTL, únicamente indica que este continúa vigente mientras se ejecuta la confirmación de pago, conforme a la actualización de `contexto-modulo3.md` y `sea-share.md`)
+**Creado**: 2026-09-06 (v3 — se incorpora "iniciada" como el décimo estado reconocido y como el verdadero origen del bloqueo temporal (TTL) de 15 minutos; "pendiente" ya no origina el TTL, únicamente indica que este continúa vigente mientras se ejecuta la confirmación de pago)
 
 ## Escenarios de Usuario y Pruebas *(obligatorio)*
 
@@ -96,12 +96,12 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
   El depósito de garantía permanece retenido y asociado a la reserva en Finanzas. El Sistema de Finanzas no ejecuta temporizadores o cron jobs en segundo plano. Cuando transcurre la ventana de 24 horas o concluye la revisión de una disputa en `PENDIENTE`, el Sistema de Reservas y Operaciones notifica el estado correspondiente (`RECHAZADO` o `COMPLETADO`) a través de "Brindar información de disputa de garantía" (SPEC 8), disparando entonces el reembolso total al Arrendatario o la liquidación al Propietario.
 
 - **¿Qué sucede si el Sistema de Reservas y Operaciones notifica el estado "iniciada" o "pendiente" para una reserva que ya había recibido esa misma notificación (notificación repetida)?**
-  El contexto no define un mecanismo de deduplicación explícito para este caso de uso. Una notificación repetida del estado "iniciada" no desencadena ninguna operación financiera, ya que dicho estado no dispara ninguna acción financiera por sí mismo. Una notificación repetida del estado "pendiente" no debe generar un cobro adicional: "Procesar cobro" aplica idempotencia (SPEC 5, RNF-003).
+  Este caso de uso no define un mecanismo de deduplicación explícito. Una notificación repetida del estado "iniciada" no desencadena ninguna operación financiera, ya que dicho estado no dispara ninguna acción financiera por sí mismo. Una notificación repetida del estado "pendiente" no debe generar un cobro adicional: "Procesar cobro" aplica idempotencia (SPEC 5, RNF-003).
 
 - **¿Qué sucede si el Sistema de Reservas y Operaciones notifica más de una vez el mismo estado de cancelación o de finalización ("completada") para la misma reserva?**
   El sistema valida si ese estado ya fue recibido y procesado para la reserva. Si ya fue procesado, no ejecuta nuevamente las operaciones financieras asociadas. Las sucesiones imposibles de estados pertenecen al Sistema de Reservas y Operaciones y no se validan en este caso de uso.
 
-- **¿Qué sucede si el Sistema de Reservas y Operaciones notifica un estado distinto a los diez estados definidos en el contexto (disponible, iniciada, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente, cancelado por anfitrión y completada)?**
+- **¿Qué sucede si el Sistema de Reservas y Operaciones notifica un estado distinto a los diez estados reconocidos por este caso de uso (disponible, iniciada, reservado, en navegación, pendiente, cancelado flexiblemente, cancelado moderadamente, cancelado tardíamente, cancelado por anfitrión y completada)?**
   El sistema no ejecuta ninguna operación financiera asociada y registra internamente la inconsistencia.
 
 ## Requisitos *(obligatorio)*
