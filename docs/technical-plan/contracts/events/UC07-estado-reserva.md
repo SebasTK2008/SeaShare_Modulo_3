@@ -55,7 +55,7 @@ El Sistema de Reservas y Operaciones notifica el estado vigente de una reserva. 
 ## 3. Reglas de procesamiento
 
 1. **Reconocimiento**: Solo 10 estados válidos (`DISPONIBLE`, `INICIADA`, `RESERVADO`, `EN_NAVEGACION`, `PENDIENTE`, `CANCELADO_FLEXIBLEMENTE`, `CANCELADO_MODERADAMENTE`, `CANCELADO_TARDIAMENTE`, `CANCELADO_POR_ANFITRION`, `COMPLETADA`). Cualquier otro se registra como inconsistencia sin acción [SPEC casos extremos, RF-001].
-2. **Iniciada**: Inicia el TTL (no origina operaciones monetarias) [SPEC RF-002].
+2. **Iniciada**: Reconoce el comienzo del bloqueo temporal (TTL) de 15 minutos iniciado por el Sistema de Reservas y Operaciones; no origina operaciones monetarias ni administra el temporizador [SPEC RF-002].
 3. **Pendiente**: Dispara `Procesar cobro` (UC05) usando el token. No reinicia el TTL [SPEC RF-002A].
 4. **Cancelaciones**:
    - `CANCELADO_FLEXIBLEMENTE`: Reembolso 100% total [SPEC RF-003].

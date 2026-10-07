@@ -50,9 +50,9 @@ Casos de uso **sin contrato propio**:
 
 - **UC02** (Brindar tarifa base): solo interno (RF-003); su única conexión externa es la consulta a Flota.
 - **UC05**: no tiene endpoint público; lo dispara UC07 con el estado `PENDIENTE` (UC07 RF-002A).
-- **UC09 y UC10**: los invocan UC07, UC08 y los eventos automáticos; solo se comunican hacia afuera con la pasarela.
+- **UC09 y UC10**: los invocan UC07 y UC08; solo se comunican hacia afuera con la pasarela.
 - **UC11 "Cancelar"**: no genera petición; descartar cambios no persistidos es una acción del cliente (UC11 RF-010).
-- **Eventos automáticos de UC08** (24 h sin disputa; disputa `PENDIENTE` más de 7 días): los dispara el sistema, no se reciben por cola.
+- **Ventana de 24 h y vigencia de la disputa**: los administra el Sistema de Reservas y Operaciones, no el sistema. Al vencer la ventana sin reclamo, Reservas envía `RECHAZADO`; el sistema solo consume esa notificación y no ejecuta cron jobs, temporizadores ni tareas en segundo plano [SPEC 008 RF-009, RF-009A].
 
 ## 3. Convenciones comunes
 
@@ -145,3 +145,36 @@ Los tres contratos de `events/` comparten:
 | `delivery_mode` | `2` (persistente) | [CONV] |
 | Respuesta al productor | **Ninguna** (unidireccional) | [SPEC UC03 RF-006, UC07 RF-009, UC08 RF-009] |
 | Fallos | Se registran internamente (`operational_failure`) | [SPEC UC03 RNF-003, UC07 RF-010, UC08 RNF-003] |
+
+### Topología RabbitMQ **[TÉC; nombres a acordar con Reservas — OQ-09]**
+
+| Elemento | Nombre | Configuración | Dueño |
+|---|---|---|---|
+| Exchange | `seashare.reservations` | `topic`, durable | Reservas |
+| Cola UC03 | `finance.reservation-info.v1` | *quorum*; binding `reservation.info.provided` | Sistema |
+| Cola UC07 | `finance.reservation-status.v1` | *quorum*; binding `reservation.status.changed` | Sistema |
+| Cola UC08 | `finance.guarantee-dispute.v1` | *quorum*; binding `reservation.dispute.updated` | Sistema |
+| Exchange interno | `finance.internal` | `direct`, durable | Sistema |
+| Cola de comandos de pasarela | `finance.gateway-commands.v1` | *quorum*; binding `gateway.command` | Sistema |
+| Dead letter | `finance.dlx` + `<cola>.dlq` por cada cola | `direct`; límite de entregas | Sistema |
+
+**Reglas de consumo**
+- Mensajes persistentes; publicación con *publisher confirms*; `ack` manual tras confirmar la transacción de BD.
+- Reintentos acotados con *backoff* exponencial **solo ante fallas transitorias** (por ejemplo, Flota inalcanzable); luego se registra el fallo en `operational_failure` (el SPEC exige "registrarlo internamente") y el mensaje va a la DLQ.
+- Mensaje no interpretable (JSON inválido o campos de tipo incorrecto) → DLQ directa, sin reintentos.
+- Los fallos de negocio (por ejemplo, pasajeros fuera de rango) se registran y el mensaje se confirma (`ack`): reintentarlo no cambiaría el resultado.
+- El orden entre mensajes de una misma reserva **no se asume** (**OQ-18**): lo garantizan la idempotencia y el bloqueo por reserva.
+
+### 3.6 Garantías de entrega y consistencia
+
+| Mecanismo | Qué resuelve | Aplicación |
+|---|---|---|
+| **Idempotencia por clave de negocio** | Duplicados y reenvíos | UC07: `(reservation_id, status)` (UC07, caso extremo de notificación repetida); UC08: `(reservation_id, dispute_id, event_key)` (RF-008); UC03: *upsert* por `reservation_id` |
+| **Bloqueo por reserva** | Operaciones de dinero concurrentes sobre una misma reserva | `pg_advisory_xact_lock(hash(reservation_id))` al ejecutar UC05/UC07/UC08/UC09/UC10 |
+| **Outbox** (`outbox_message`) | No perder comandos entre "persistí la intención" y "publiqué" | La intención y el comando a la pasarela se guardan en la **misma transacción**; un *relay* publica con `FOR UPDATE SKIP LOCKED` |
+| **Claves idempotentes hacia la pasarela** | Duplicar cobros, reembolsos o liquidaciones en reintentos (UC05 RNF-003, UC09/UC10) | Clave determinística por operación (ver comandos en `contracts/external/`), enviada a la pasarela y única en BD |
+| **Deduplicación del webhook** | Notificaciones repetidas del mismo resultado (UC05, UC09, UC10 casos extremos) | Por `idempotency_key` + `external_reference`; una repetición no altera un resultado ya registrado |
+| **Compare-and-set del depósito** (`deposit_disposition`) | Reembolsar **y** liquidar el mismo depósito (UC08 CE-005; UC09 y UC10 casos extremos) | Solo un desenlace gana; el otro se registra como inconsistencia para conciliación |
+| **Optimistic locking** (`@Version`) | Carreras en intenciones y en `reservation_information` | Intenciones y `reservation_information` |
+| **Conciliación** | Timeouts y estados indefinidos (UC05 RNF-003) | Job que reintenta o consulta intenciones sin resultado definitivo con la misma clave idempotente |
+

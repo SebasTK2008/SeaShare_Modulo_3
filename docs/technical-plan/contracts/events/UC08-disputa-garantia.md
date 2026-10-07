@@ -58,6 +58,7 @@ El Sistema de Reservas y Operaciones informa el estado de una disputa de garant�
    - `COMPLETADO`: Liquidación total (100%) al propietario del depósito retenido [SPEC RF-006].
 4. **Validación interna**: Se consulta el depósito cobrado y registrado. Si no hay depósito registrado, se anota un fallo controlado sin ejecutar acciones asumidas [SPEC casos extremos].
 5. **No hay respuesta**: Es unidireccional. No se notifica a Reservas el resultado [SPEC RF-009].
+6. **Sin temporizadores**: El sistema no ejecuta cron jobs, temporizadores internos ni tareas en segundo plano sobre la ventana de 24 h ni sobre el estado de la disputa; esa gestión es del Sistema de Reservas y Operaciones, que envía la notificación correspondiente (por ejemplo, `RECHAZADO` al vencer la ventana sin reclamo) [SPEC RF-009, RF-009A].
 
 ## 4. Respuesta exitosa
 

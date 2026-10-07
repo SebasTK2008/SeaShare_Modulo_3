@@ -17,25 +17,20 @@ Este documento define el orden **general** del proyecto: arquitectura, tecnolog�
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`)
-**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Security (OAuth2 Resource Server), Actuator, Flyway, MapStruct, Resilience4j, ShedLock (opcional, §5.4), Micrometer (+ Prometheus), ArchUnit
+  
+**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Security (OAuth2 Resource Server), Actuator, Flyway, MapStruct, Resilience4j, ShedLock (opcional, §5.3), Micrometer (+ Prometheus), ArchUnit
+  
 **Storage**: PostgreSQL 16+ (`NUMERIC` para dinero, `timestamptz` para instantes)
 **Messaging**: RabbitMQ 3.13+ (colas *quorum*, confirmaciones de publicador, DLQ)
-**Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), WireMock (Flota y pasarela), Awaitility, ArchUnit
+  
+**Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), WireMock (Flota y pasarela), Awaitility, ArchUnit  
+
 **Target Platform**: Contenedores Docker (Linux); desarrollo local con Docker Compose
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio
-**Performance Goals**: Flota responde < 500 ms para 50 embarcaciones **[SPEC UC01 HU3]**. Objetivo del endpoint de lote (50 embarcaciones): p95 ≤ 1 s **[TÉC, derivado de ese SLA; a validar]**
+
 **Constraints**: `BigDecimal` en todo cálculo monetario **[SPEC RNF-002 de varios UC]**; sin datos sensibles de medios de pago **[SPEC UC05 RNF-004]**; registros financieros inmutables; manejo controlado de fallas externas **[SPEC RNF-003 de varios UC]**
 **Scale/Scope**: 13 casos de uso; sistemas externos: Reservas, Flota, Pasarela; clientes Administrador Financiero y Propietario. El SPEC no define volumen: el diseño es *stateless* y escala horizontalmente.
 
-### Estado actual del repositorio (punto de partida)
-
-| Elemento | Hoy | Acción |
-|---|---|---|
-| `pom.xml` | `spring-boot-starter-data-jpa`, `postgresql`, `mapstruct`, `lombok-mapstruct-binding`, Testcontainers (PostgreSQL) | Agregar los starters equivalentes de Spring Boot 4.1 para web, validation, amqp, actuator, security (resource server) y flyway (**verificar nombres exactos de artefactos** al agregarlos), más Lombok (hoy figura solo en `annotationProcessorPaths`), Resilience4j, ArchUnit, WireMock, Awaitility y Testcontainers RabbitMQ |
-| Paquete raíz | `com.seashare.seasharem3` (`SeashareM3Application`) | Se conserva; las tres capas cuelgan de él (§3.3) |
-| Configuración | `application.properties` (`spring.application.name=seashare-m3`) | Se mantiene `.properties` o se migra a `.yml`; las claves de §7.4 son independientes del formato |
-| Migraciones | No existen | Flyway en `src/main/resources/db/migration` |
-| Docker | No existe | `Dockerfile` y `docker-compose.yml` (§8) |
 
 ---
 
@@ -50,8 +45,8 @@ Este documento define el orden **general** del proyecto: arquitectura, tecnolog�
 | UC05 Procesar cobro | 005 | Interno (desde UC07 `PENDIENTE`) + Pasarela (resultado) | Puerto interno + Webhook | No público | [comando](contracts/external/pasarela-comando-cobro.md), [webhook](contracts/external/pasarela-webhook-resultados.md) |
 | UC06 Solicitar confirmación de pago | 006 | Reservas | REST | Sí | [UC06](contracts/rest/UC06-confirmacion-pago.md) |
 | UC07 Brindar el estado de la reserva | 007 | Reservas | **AMQP** | **No** (RF-009) | [UC07](contracts/events/UC07-estado-reserva.md) |
-| UC08 Brindar información de disputa de garantía | 008 | Reservas + eventos automáticos | **AMQP** + Scheduler | **No** (unidireccional) | [UC08](contracts/events/UC08-disputa-garantia.md) |
-| UC09 Reembolsar dinero a arrendatario | 009 | Interno (UC07, UC08, evento automático) + Pasarela | Puerto interno + Webhook | No público | [comando](contracts/external/pasarela-comando-reembolso.md), [webhook](contracts/external/pasarela-webhook-resultados.md) |
+| UC08 Brindar información de disputa de garantía | 008 | Reservas | **AMQP** | **No** (unidireccional) | [UC08](contracts/events/UC08-disputa-garantia.md) |
+| UC09 Reembolsar dinero a arrendatario | 009 | Interno (UC07, UC08) + Pasarela | Puerto interno + Webhook | No público | [comando](contracts/external/pasarela-comando-reembolso.md), [webhook](contracts/external/pasarela-webhook-resultados.md) |
 | UC10 Liquidar fondos de alquiler | 010 | Interno (UC07, UC08) + Pasarela | Puerto interno + Webhook | No público | [comando](contracts/external/pasarela-comando-liquidacion.md), [webhook](contracts/external/pasarela-webhook-resultados.md) |
 | UC11 Configurar parámetros financieros globales | 011 | Administrador Financiero | REST | Sí | [obtener](contracts/rest/UC11-obtener-parametros-financieros.md), [guardar](contracts/rest/UC11-guardar-parametros-financieros.md) |
 | UC12 Consultar registros financieros | 012 | Propietario, Administrador Financiero | REST | Sí | [UC12](contracts/rest/UC12-consultar-registros-financieros.md) |
@@ -120,7 +115,6 @@ flowchart LR
 | Aplicación | `com.seashare.seasharem3.application` | Puertos de entrada (un caso de uso por interfaz), servicios que los implementan y puertos de salida |
 | Infraestructura | `com.seashare.seasharem3.infrastructure` | Adaptadores de entrada y salida, persistencia, mensajería, seguridad, configuración |
 
-No se separa en dos módulos de dominio. **Justificación** (acoplamiento de datos medido contra los SPEC):
 
 | Concepto compartido | Casos de uso que lo tocan |
 |---|---|
@@ -192,29 +186,14 @@ seashare-m3/
 | UC05 | `ProcessChargeUseCase`, `RegisterChargeResultUseCase`, `ExpireStaleAuthorizationsUseCase` | `ChargeGatewayPort`, `ReservationInformationRepository`, `OutboxPort` | invocado por UC07; `webhook`; `scheduler` | `charge_intent`, `charge_record` | Un solo monto (alquiler + seguro + depósito); solo token; `RegistroDeCobro` solo con cobro/captura confirmados |
 | UC06 | `GetPaymentConfirmationUseCase` | `ChargeIntentRepository` | `web` | lectura de `charge_intent` | Solo lectura; no contacta la pasarela (RF-006) |
 | UC07 | `HandleReservationStatusUseCase` | `ProcessChargeUseCase`, `RequestRefundUseCase`, `RequestSettlementUseCase`, `OpenDepositTrackingUseCase` (por `port.in`) | `messaging` | `reservation_status_log` | 10 estados; estado desconocido = inconsistencia registrada; sin respuesta |
-| UC08 | `HandleDisputeNotificationUseCase`, `OpenDepositTrackingUseCase`, `AutoRefundDepositUseCase`, `ExpirePendingDisputesUseCase` | `RequestRefundUseCase`, `RequestSettlementUseCase` (por `port.in`) | `messaging`; `scheduler` | `deposit_disposition`, `dispute_event_log` | Solo `PENDIENTE/RECHAZADO/COMPLETADO`; 100 % del depósito; un único desenlace por depósito |
+| UC08 | `HandleDisputeNotificationUseCase`, `OpenDepositTrackingUseCase` | `RequestRefundUseCase`, `RequestSettlementUseCase` (por `port.in`) | `messaging` | `deposit_disposition`, `dispute_event_log` | Solo `PENDIENTE/RECHAZADO/COMPLETADO`; 100 % del depósito; un único desenlace por depósito |
 | UC09 | `RequestRefundUseCase`, `RegisterRefundResultUseCase` | `RefundGatewayPort`, `ReservationInformationRepository`, `ChargeIntentRepository` | invocado por UC07/UC08; `webhook` | `refund_intent`, `refund_record` | Montos por estado; "liberar o reembolsar según el estado del cobro original"; sin descuentos transaccionales propios (RF-012) |
 | UC10 | `RequestSettlementUseCase`, `RegisterSettlementResultUseCase` | `SettlementGatewayPort`, `ReservationInformationRepository`, `FinancialParametersRepository` | invocado por UC07/UC08; `webhook` | `settlement_intent`, `settlement_record`, `commission_record` | Liquidación estándar `alquiler − comisión − seguro`; penalidades sin comisión ni seguro; `RegistroDeDispersión` + `RegistroDeComisión` atómicos |
 | UC11 | `LoadFinancialParametersUseCase`, `SaveFinancialParametersUseCase` | `FinancialParametersRepository` | `web` | `financial_parameters` | Guardado atómico de los 4 valores; rangos 0–100 % y seguro ≥ 0; sin historial; solo Administrador Financiero |
 | UC12 | `QueryFinancialRecordsUseCase` | `FinancialRecordQueryPort` | `web` | vista `v_financial_records` | Alcance del Propietario antes de filtros; paginación sin omitir ni duplicar; solo registros inmutables |
 | UC13 | `GetFinancialReportUseCase`, `ExportFinancialReportUseCase` | `FinancialReportQueryPort` | `web` | agregación sobre las 4 tablas inmutables | Períodos fijos; neto sin doble contabilizar la comisión; variación porcentual no calculable si el anterior es 0 |
 
-### 3.6 Orquestación de UC07 (qué dispara cada estado)
 
-| Estado recibido | Acción del sistema | Caso de uso destino |
-|---|---|---|
-| `DISPONIBLE`, `INICIADA`, `RESERVADO`, `EN_NAVEGACION` | Reconocer y registrar; **ninguna** operación financiera (RF-002) | — |
-| `PENDIENTE` | Procesar cobro con el token recibido (RF-002A) | UC05 |
-| `CANCELADO_FLEXIBLEMENTE` | Liberar/reembolsar 100 % del valor pagado (RF-003) | UC09 |
-| `CANCELADO_MODERADAMENTE` | Liberar/reembolsar 50 % del alquiler + 100 % del depósito (el seguro no se reembolsa) **y** liquidar 50 % del alquiler al Propietario, sin comisión ni descuento de seguro (RF-004; UC10 RF-002/RF-007) | UC09 + UC10 |
-| `CANCELADO_TARDIAMENTE` | Liquidar 100 % del alquiler al Propietario **y** liberar/reembolsar 100 % del depósito (RF-005) | UC10 + UC09 |
-| `CANCELADO_POR_ANFITRION` | Liberar/reembolsar 100 % del valor pagado al Arrendatario (RF-005A) | UC09 |
-| `COMPLETADA` | Liquidación estándar (alquiler − comisión − seguro) con depósito retenido; abre el seguimiento de garantía (RF-006, RF-007) | UC10 + UC08 |
-| Cualquier otro | Registrar inconsistencia, sin operación financiera | — |
-
-Cada operación derivada tiene **su propia intención, clave idempotente y resultado** (UC07 HU2, escenarios 2 y 3).
-
----
 
 ## 4. Modelo de datos (PostgreSQL)
 
@@ -261,55 +240,27 @@ Convenciones: `NUMERIC` para dinero y porcentajes (escala y redondeo: **[PEND] O
 | C9 | Pasarela → sistema | UC05/09/10 | Resultado | Webhook REST | No | [webhook](contracts/external/pasarela-webhook-resultados.md) |
 | C10 | Administrador Financiero → sistema | UC11 | Request/response | REST | No | [obtener](contracts/rest/UC11-obtener-parametros-financieros.md), [guardar](contracts/rest/UC11-guardar-parametros-financieros.md) |
 | C11 | Propietario / Administrador → sistema | UC12, UC13 | Request/response | REST | No | [UC12](contracts/rest/UC12-consultar-registros-financieros.md), [consultar](contracts/rest/UC13-consultar-informe-financiero.md), [exportar](contracts/rest/UC13-exportar-informe-financiero.md) |
-| C12 | Sistema → sistema | UC05, UC08 | Eventos por tiempo | Scheduler | No (ver D-10) | §5.4 |
+| C12 | Sistema → sistema | UC05 | Eventos por tiempo | Scheduler | No (ver D-10) | §5.2 |
 
 El sistema **no publica eventos hacia Reservas**: Reservas consulta mediante UC04 y UC06 (modelo *pull* definido por los SPEC).
 
-### 5.2 Topología RabbitMQ **[TÉC; nombres a acordar con Reservas — OQ-09]**
-
-| Elemento | Nombre | Configuración | Dueño |
-|---|---|---|---|
-| Exchange | `seashare.reservations` | `topic`, durable | Reservas |
-| Cola UC03 | `finance.reservation-info.v1` | *quorum*; binding `reservation.info.provided` | Sistema |
-| Cola UC07 | `finance.reservation-status.v1` | *quorum*; binding `reservation.status.changed` | Sistema |
-| Cola UC08 | `finance.guarantee-dispute.v1` | *quorum*; binding `reservation.dispute.updated` | Sistema |
-| Exchange interno | `finance.internal` | `direct`, durable | Sistema |
-| Cola de comandos de pasarela | `finance.gateway-commands.v1` | *quorum*; binding `gateway.command` | Sistema |
-| Dead letter | `finance.dlx` + `<cola>.dlq` por cada cola | `direct`; límite de entregas | Sistema |
-
-**Reglas de consumo**
-- Mensajes persistentes; publicación con *publisher confirms*; `ack` manual tras confirmar la transacción de BD.
-- Reintentos acotados con *backoff* exponencial **solo ante fallas transitorias** (por ejemplo, Flota inalcanzable); luego se registra el fallo en `operational_failure` (el SPEC exige "registrarlo internamente") y el mensaje va a la DLQ.
-- Mensaje no interpretable (JSON inválido o campos de tipo incorrecto) → DLQ directa, sin reintentos.
-- Los fallos de negocio (por ejemplo, pasajeros fuera de rango) se registran y el mensaje se confirma (`ack`): reintentarlo no cambiaría el resultado.
-- El orden entre mensajes de una misma reserva **no se asume** (**OQ-18**): lo garantizan la idempotencia y el bloqueo por reserva.
-
-### 5.3 Garantías de entrega y consistencia
-
-| Mecanismo | Qué resuelve | Aplicación |
-|---|---|---|
-| **Idempotencia por clave de negocio** | Duplicados y reenvíos | UC07: `(reservation_id, status)` (UC07, caso extremo de notificación repetida); UC08: `(reservation_id, dispute_id, event_key)` (RF-008); UC03: *upsert* por `reservation_id` |
-| **Bloqueo por reserva** | Operaciones de dinero concurrentes sobre una misma reserva | `pg_advisory_xact_lock(hash(reservation_id))` al ejecutar UC05/UC07/UC08/UC09/UC10 |
-| **Outbox** (`outbox_message`) | No perder comandos entre "persistí la intención" y "publiqué" | La intención y el comando a la pasarela se guardan en la **misma transacción**; un *relay* publica con `FOR UPDATE SKIP LOCKED` |
-| **Claves idempotentes hacia la pasarela** | Duplicar cobros, reembolsos o liquidaciones en reintentos (UC05 RNF-003, UC09/UC10) | Clave determinística por operación (ver comandos en `contracts/external/`), enviada a la pasarela y única en BD |
-| **Deduplicación del webhook** | Notificaciones repetidas del mismo resultado (UC05, UC09, UC10 casos extremos) | Por `idempotency_key` + `external_reference`; una repetición no altera un resultado ya registrado |
-| **Compare-and-set del depósito** (`deposit_disposition`) | Reembolsar **y** liquidar el mismo depósito (UC08 CE-005; UC09 y UC10 casos extremos) | Solo un desenlace gana; el otro se registra como inconsistencia para conciliación |
-| **Optimistic locking** (`@Version`) | Carreras en intenciones y en `reservation_information` | Intenciones y `reservation_information` |
-| **Conciliación** | Timeouts y estados indefinidos (UC05 RNF-003) | Job que reintenta o consulta intenciones sin resultado definitivo con la misma clave idempotente |
-
-### 5.4 Jobs programados (`infrastructure.adapter.in.scheduler`)
+### 5.2 Jobs internos programados
 
 | Job | Origen en los SPEC | Regla |
 |---|---|---|
-| `DepositAutoRefundJob` | UC08 RF-009A | Reserva `COMPLETADA` hace ≥ 24 h (`completed_at`), sin disputa → reembolso total del depósito |
-| `PendingDisputeExpiryJob` | UC08 RF-009B | Disputa `PENDIENTE` más de 7 días desde la finalización → pasa a `RECHAZADO` + reembolso total |
 | `AuthorizationExpiryJob` | UC05 RF-014 / RNF-005 | Marca como `EXPIRADO` las autorizaciones aprobadas y no capturadas al vencer su vigencia |
 | `GatewayReconciliationJob` | UC05/09/10 RNF-003 | Reintenta o consulta intenciones sin resultado definitivo |
 | `OutboxRelayJob` | Infra | Publica `outbox_message` pendientes |
 
-Las ventanas (24 h, 7 días) son configurables con los valores del SPEC por defecto. ShedLock se usa solo si se despliega más de una instancia; aun así las operaciones son idempotentes por el *compare-and-set* y las claves idempotentes.
+Estos son **los únicos jobs programados del sistema y son internos** (expiración de autorizaciones, conciliación con la pasarela y entrega de la mensajería). La ventana de 24 h, la vigencia de las disputas y cualquier otro temporizador relacionado con una reserva o con la garantía **no son responsabilidad del sistema**: los administra el Sistema de Reservas y Operaciones, que notifica `RECHAZADO` (ausencia de reclamo) o `COMPLETADO`/`PENDIENTE` mediante UC08 [SPEC 008 RF-009, RF-009A; SPEC 007 caso extremo].
 
-### 5.5 Flujo de referencia: reserva → cobro
+La topología de exchanges y colas se documenta en [`contracts/README.md`](contracts/README.md) §Topología RabbitMQ **[TÉC; nombres a acordar con Reservas — OQ-09]**.
+
+### 5.3 ShedLock (bloqueo de jobs programados) **[TÉC]**
+
+Si el servicio corre con varias réplicas, cada job de §5.2 se protege con **ShedLock** sobre la tabla `shedlock` (§4) para que solo una réplica lo ejecute por periodo. Es un mecanismo de despliegue, no un temporizador de negocio: no crea ni sustituye ninguna tarea programada fuera de la lista de §5.2.
+
+### 5.4 Flujo de referencia: reserva → cobro
 
 ```mermaid
 sequenceDiagram
@@ -332,13 +283,10 @@ sequenceDiagram
   F->>F: UC05 IntenciónDeCobro + outbox
   F->>PG: autorizar o cobrar (worker, clave idempotente)
   PG-->>F: webhook de resultado
-  F->>F: actualizar intención; crear RegistroDeCobro si hay cobro/captura confirmados
+  F->>F: actualizar intención, crear RegistroDeCobro si hay cobro/captura confirmados
   M2->>F: GET payment-confirmation (UC06)
   F-->>M2: estado del cobro
 ```
-
----
-
 ## 6. Contratos
 
 Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). Allí se encuentran la leyenda `[SPEC]/[CONV]/[PEND]`, las convenciones comunes (headers, formato de error, catálogo de códigos) y el detalle de cada petición y respuesta.
@@ -389,59 +337,16 @@ Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). 
 |---|---|---|---|
 | Flota (REST) | 1 s lectura (SLA del SPEC: < 500 ms para 50 embarcaciones) | 1 con *backoff* corto | *Circuit breaker*; falla ⇒ error controlado, **sin estimaciones parciales** (UC01 RNF-003) |
 | Pasarela (worker) | 10 s | Por reintento del mensaje, **misma clave idempotente** | Timeout ⇒ estado `FALLA_COMUNICACION` / en conciliación, nunca "fallido" (UC05 RNF-003) |
-| Listeners AMQP | — | 3–5 con *backoff* solo en fallas transitorias → DLQ | Ver §5.2 |
+| Listeners AMQP | — | 3–5 con *backoff* solo en fallas transitorias → DLQ | [`contracts/README.md`](contracts/README.md) §Reglas de consumo |
 
 ### 7.3 Observabilidad
 Actuator (`/health`, `/metrics`), Micrometer + Prometheus, logs JSON con `reservation_id`. Métricas: profundidad de DLQ, intenciones por estado, antigüedad de la intención más vieja sin resultado, filas en `operational_failure`, latencia de Flota. Alertas sobre DLQ > 0 y conciliaciones atascadas, porque los casos unidireccionales no pueden avisar a Reservas.
 
 ### 7.4 Configuración **[TÉC]** (sobreescribible por entorno)
-`seashare.timezone` (OQ-04), `seashare.estimates.max-batch-size=50`, `seashare.reporting.max-page-size=100`, `seashare.fleet.*`, `seashare.gateway.*`, `seashare.guarantee.auto-refund-after=PT24H`, `seashare.guarantee.pending-dispute-expiry=P7D`.
+`seashare.timezone` (OQ-04), `seashare.estimates.max-batch-size=50`, `seashare.reporting.max-page-size=100`, `seashare.fleet.*`, `seashare.gateway.*`. No hay configuración de ventanas ni de disputas (24 h, vigencias): la administra Reservas [SPEC 008 RF-009].
 
 ---
 
-## 8. Docker y entornos
-
-- **Dockerfile** multi-stage: *build* con Maven (`mvnw`) + JDK 25; imagen final con JRE 25, JAR por capas, usuario no *root*, `HEALTHCHECK` contra `/actuator/health`.
-- **docker-compose.yml**: servicios `postgres`, `rabbitmq` (con *management*), `seashare-m3`; *profile* `stubs` con WireMock para Flota y pasarela; *healthchecks* y `depends_on: condition: service_healthy`.
-- **Perfiles Spring**: `local` (compose), `test` (Testcontainers; ya existe `TestcontainersConfiguration` para PostgreSQL), `prod` (configuración externa, secretos por variables de entorno).
-- Flyway corre al arrancar; la imagen no contiene secretos.
-
-```yaml
-services:
-  postgres:
-    image: postgres:16
-    environment: { POSTGRES_DB: seashare_m3, POSTGRES_USER: seashare, POSTGRES_PASSWORD: ${DB_PASSWORD} }
-    healthcheck: { test: ["CMD-SHELL", "pg_isready -U seashare"], interval: 5s, retries: 10 }
-  rabbitmq:
-    image: rabbitmq:3.13-management
-    healthcheck: { test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 10s, retries: 10 }
-  seashare-m3:
-    build: .
-    depends_on: { postgres: { condition: service_healthy }, rabbitmq: { condition: service_healthy } }
-    environment:
-      SPRING_PROFILES_ACTIVE: local
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seashare_m3
-      SPRING_RABBITMQ_HOST: rabbitmq
-    ports: ["8080:8080"]
-```
-
----
-
-## 9. Estrategia de testing
-
-| Nivel | Qué cubre | Herramientas |
-|---|---|---|
-| Unitario de dominio | Fórmulas, tarifa dinámica, calendario (Semana Santa por Meeus/Jones/Butcher contra fechas conocidas), montos por estado de cancelación, `BigDecimal` | JUnit 5, AssertJ |
-| Aplicación | Casos de uso con puertos simulados; fallos controlados; idempotencia | Mockito |
-| Integración de adaptadores | JPA + Flyway, triggers de inmutabilidad, vista unificada, outbox, listeners AMQP, DLQ | Testcontainers (PostgreSQL, RabbitMQ), Awaitility |
-| Contrato | Cada `.md` de `contracts/`: REST con MockMvc; mensajes AMQP contra el cuerpo documentado; cliente de Flota contra WireMock | MockMvc, WireMock |
-| Arquitectura | Reglas de §3.4 | ArchUnit |
-| Extremo a extremo (por flujo) | Reserva→cobro; cancelaciones (4); completada→garantía (24 h / disputa / 7 días); informe con múltiples períodos | Testcontainers + stubs |
-| Resiliencia | Caídas de Flota/pasarela, mensajes duplicados, concurrencia sobre el mismo depósito | Pruebas de integración con fallos inyectados |
-
-**Metas orientativas**: dominio ≥ 90 %, aplicación ≥ 80 %. Los criterios de éxito de cada SPEC (por ejemplo UC01 CE-001: 100 transacciones sin error de redondeo; UC10 CE-006: cero comisiones duplicadas) se convierten en pruebas automatizadas nombradas por su `CE-xxx`.
-
----
 
 ## 10. Estados internos de las intenciones
 
@@ -467,7 +372,7 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
 | D-07 | Entrega **al-menos-una-vez** + **idempotencia por claves de negocio de los SPEC** + outbox para comandos | "Exactly-once"; tabla *inbox* por `message_id` | Exactly-once no es alcanzable entre BD y broker. Los SPEC ya definen las claves de deduplicación; un `message_id` no está en ningún SPEC | 005, 007, 008, 009, 010 |
 | D-08 | **Persistir intención → outbox → worker llama a la pasarela**; conciliación posterior | Llamar a la pasarela dentro de la transacción o del listener | No bloquea consumidores con una llamada lenta; un timeout no se interpreta como fallo (UC05 RNF-003) | 005, 009, 010 |
 | D-09 | UC05 **sin endpoint público**; se invoca desde UC07 `PENDIENTE` con el token | Endpoint de cobro para Reservas/Arrendatario | UC07 RF-002A define que `PENDIENTE` dispara el cobro con el token recibido junto al estado; un segundo canal duplicaría el disparador | 005, 007 |
-| D-10 | **Scheduler** para 24 h, 7 días y expiración de autorizaciones | Mensajes diferidos (TTL + DLX) por reserva | El sondeo sobre BD es simple, auditable e idempotente | 005, 008 |
+| D-10 | **Scheduler** solo para jobs internos (expiración de autorizaciones, conciliación y outbox) | Mensajes diferidos (TTL + DLX) por reserva | El sondeo sobre BD es simple, auditable e idempotente; la ventana de 24 h y la vigencia de la disputa las administra Reservas (SPEC 008 RF-009) | 005, Infra |
 | D-11 | `Money` (VO) sobre `BigDecimal`, `NUMERIC` en BD y *string* decimal en JSON | `double`/`float`; número JSON | Evita errores de redondeo (UC01 CE-001, UC04 CE-001) | 001, 004, 005, 009, 010 |
 | D-12 | Fechas de negocio y períodos en una zona horaria única (propuesta `America/Bogota`); instantes en UTC | UTC para todo | "Fecha actual", "inicio en el pasado" y los períodos de UC13 deben ser inequívocos (**OQ-04**) | 001, 013 |
 | D-13 | Inmutabilidad también en BD (trigger + privilegios) | Solo convención en código | Los registros son base de auditoría e informes | 005, 009, 010 |
@@ -482,7 +387,7 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
 | D-22 | Límite de lote = **50**; tamaño máximo de página = **100** | 100 como lote; sin máximo | UC01 RF-006 deja abierto "50 o 100"; 50 coincide con la prueba de carga de Flota. El máximo de página protege el tamaño de respuesta (OQ-16) | 001, 012 |
 | D-23 | Código y API en **inglés**; documentación en español con la tabla de §14 | Identificadores en español con tildes | Evita problemas de herramientas; §14 mantiene el lenguaje ubicuo | Todos |
 | D-24 | `financial_parameters` como **singleton sin historial ni versión** (último guardado gana) | Tabla con historial; *optimistic locking* | UC11 indica que se sobrescribe y no se conserva historial; el guardado atómico de una sola fila da una única versión coherente (RNF-003) | 011 |
-| D-25 | Tablas técnicas `deposit_disposition`, `dispute_event_log`, `reservation_status_log` | Persistir el estado operativo de la reserva | UC07 prohíbe persistir el estado operativo; solo se guarda lo necesario para temporizadores e idempotencia | 007, 008 |
+| D-25 | Tablas técnicas `deposit_disposition`, `dispute_event_log`, `reservation_status_log` | Persistir el estado operativo de la reserva | UC07 prohíbe persistir el estado operativo; solo se guarda lo necesario para idempotencia y para decidir la operación monetaria | 007, 008 |
 
 ---
 
@@ -502,12 +407,6 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
                                                                      └──────────────► 10 UC12/UC13 (tras 6 y 7) ───────► N Polish
 ```
 
-### Contenido de las fases iniciales
-- **Fase 1 — Setup**: dependencias del `pom.xml` (§Technical Context), Flyway baseline, `Dockerfile` y `docker-compose.yml`, reglas ArchUnit, esqueleto de paquetes `domain` / `application` / `infrastructure`.
-- **Fase 2 — Foundational**: `Money`, `Percentage`, identificadores; `FailureRecorderPort` + `operational_failure`; manejo de errores en formato *Problem Details*; seguridad base (OQ-01); configuración AMQP; outbox; vista y triggers de inmutabilidad se crean junto con las tablas de cada fase.
-
-### Dentro de cada caso de uso
-Migración y dominio → caso de uso (`port.in` + servicio) → adaptadores (REST/AMQP/job) → pruebas de contrato e integración. Cada fase termina con un *checkpoint* verificable de forma independiente.
 
 ### Qué debe contener cada plan específico por SPEC (`docs/features/NNN-…/plan.md`)
 1. Resumen y trazabilidad a los RF/RNF/CE del SPEC.
