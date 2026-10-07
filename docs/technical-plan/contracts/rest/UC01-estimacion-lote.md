@@ -34,7 +34,7 @@ Reservas envía una lista de identificadores de embarcación y recibe, ya calcul
 |---|---|---|---|---|
 | `boat_ids` | array de UUID | Sí | Identificadores de las embarcaciones a estimar. Puede ser `[]`. Máximo `seashare.estimates.max-batch-size` (por defecto **50**) | [SPEC HU1 flujo 2: "lista de identificadores (`boat_ids`)"; RF-006: máximo "50 o 100"] — el valor 50 es [PEND] D-22 |
 
-El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de pasajeros. El sistema fija siempre la fecha actual como fecha de evaluación, 1 día de duración y 1 pasajero (reglas 6 y 11).
+El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de pasajeros [SPEC Entidades Clave: `SolicitudEstimacionLote`]. El sistema fija siempre la fecha actual como fecha de evaluación, 1 día de duración y 1 pasajero (reglas 6 y 11).
 
 **Campos no aceptados**: si el payload incluye `start_date`, `end_date`, `passengers` u otros campos desconocidos, la solicitud se rechaza con `400 VALIDATION_ERROR` sin procesar el lote (regla 11 y §5) **[CONV]**.
 
