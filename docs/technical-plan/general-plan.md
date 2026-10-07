@@ -194,7 +194,6 @@ seashare-m3/
 | UC13 | `GetFinancialReportUseCase`, `ExportFinancialReportUseCase` | `FinancialReportQueryPort` | `web` | agregación sobre las 4 tablas inmutables | Períodos fijos; neto sin doble contabilizar la comisión; variación porcentual no calculable si el anterior es 0 |
 
 
-
 ## 4. Modelo de datos (PostgreSQL)
 
 Convenciones: `NUMERIC` para dinero y porcentajes (escala y redondeo: **[PEND] OQ-03**), `timestamptz` para instantes, UUID como identificadores (**[PEND] OQ-05**), migraciones versionadas con Flyway.
