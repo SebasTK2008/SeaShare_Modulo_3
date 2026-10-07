@@ -67,6 +67,7 @@ El Administrador Financiero guarda la configuración financiera global (comisió
 | 400 | `VALIDATION_ERROR` | Cuerpo inválido, campos vacíos, valores fuera de rango o negativos | No | [SPEC RF-013] |
 | 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
 | 403 | `FORBIDDEN` | El llamador no es Administrador Financiero | No | [SPEC RF-008] |
+| 500 | `PARAMETERS_SAVE_FAILED` | La persistencia falló; la configuración anterior se conserva íntegra | Sí | [SPEC HU4 esc. 3] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ```json

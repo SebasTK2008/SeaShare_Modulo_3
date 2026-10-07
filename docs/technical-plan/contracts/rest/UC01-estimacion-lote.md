@@ -33,23 +33,19 @@ Reservas envía una lista de identificadores de embarcación y recibe, ya calcul
 | Campo | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
 | `boat_ids` | array de UUID | Sí | Identificadores de las embarcaciones a estimar. Puede ser `[]`. Máximo `seashare.estimates.max-batch-size` (por defecto **50**) | [SPEC HU1 flujo 2: "lista de identificadores (`boat_ids`)"; RF-006: máximo "50 o 100"] — el valor 50 es [PEND] D-22 |
-| `start_date` | date (`YYYY-MM-DD`) o `null` | No | Vacío cuando aún no hay fechas seleccionadas | [SPEC HU1 flujo 2: "envía esta información vacía"] |
-| `end_date` | date o `null` | No | Ídem | ídem |
-| `passengers` | integer o `null` | No | Vacío = 1 pasajero | [SPEC RF-002 (1 pasajero por defecto)]; presencia en el lote: `docs/context/consistencia-m2-m3.md` §5 ("fechas/pasajeros opcionales") |
 
-**Comportamiento cuando `start_date`, `end_date` o `passengers` llegan con valor** no está definido por el SPEC → **[PEND] OQ-10**. Propuesta por defecto: aplicar el mismo cálculo y las mismas validaciones que la modalidad individual ([`UC01-estimacion-individual.md`](UC01-estimacion-individual.md)).
+El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de pasajeros. El sistema fija siempre la fecha actual como fecha de evaluación, 1 día de duración y 1 pasajero (reglas 6 y 11).
 
-### Ejemplo (pantalla principal, sin fechas)
+**Campos no aceptados**: si el payload incluye `start_date`, `end_date`, `passengers` u otros campos desconocidos, la solicitud se rechaza con `400 VALIDATION_ERROR` sin procesar el lote (regla 11 y §5) **[CONV]**.
+
+### Ejemplo
 
 ```json
 {
   "boat_ids": [
     "3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01",
     "9a1b7c33-2e4f-4b58-8d6a-0c9e5f3a2b02"
-  ],
-  "start_date": null,
-  "end_date": null,
-  "passengers": null
+  ]
 }
 ```
 
@@ -60,12 +56,12 @@ Reservas envía una lista de identificadores de embarcación y recibe, ya calcul
 3. El sistema consulta a Flota **una sola vez enviando la lista de IDs** [SPEC RF-005] — ver [`../external/flota-consulta-tarifas-base.md`](../external/flota-consulta-tarifas-base.md) — e invoca UC02 por cada embarcación.
 4. **Identificadores inexistentes**: se omiten (Flota no los confirma) y se estima solo a las reconocidas con tarifa [SPEC casos extremos].
 5. **Embarcación sin tarifa base** (nula o faltante): no se estima, el resto del lote se devuelve y nunca se muestra un precio asumido [SPEC casos extremos]. El SPEC permite "excluirla **o** marcarla"; este contrato la **marca** en `unavailable` ([PEND] OQ-11).
-6. **Supuestos cuando no hay fechas**: duración 1 día, 1 pasajero y **fecha actual** como fecha de evaluación de la tarifa [SPEC RF-002, HU1].
+6. **Supuestos fijos del lote** (no son valores por defecto configurables): duración **1 día**, **1 pasajero** y **fecha actual** como fecha de evaluación de la tarifa [SPEC RF-002, HU1].
 7. **Fórmula**: `estimated_total = (tarifa base final × duración en días) + (tarifa de seguro × pasajeros)` [SPEC RF-002]. La tarifa base final ya incluye la tarifa dinámica (UC02).
 8. La estimación **no incluye** el depósito de garantía ni penalidades o ajustes posteriores [SPEC RF-002].
-9. **Falla de Flota** (caída, *timeout*, inalcanzable): no se devuelven estimaciones parciales ni inventadas → `503 FLEET_UNAVAILABLE` [SPEC casos extremos, RNF-003, CE-004].
+9. **Falla de Flota** (caída, *timeout*, inalcanzable o respuesta inválida): no se devuelven estimaciones parciales ni inventadas → `503 FLEET_UNAVAILABLE` [SPEC casos extremos, RNF-003, CE-004].
 10. **Falta la tarifa de seguro o el porcentaje de incremento que exige la fecha evaluada** (fin de semana o temporada alta): no se calcula nada parcial → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED` [SPEC casos extremos]. Un día regular no necesita el porcentaje (UC02 casos extremos).
-11. La validación de rango de fechas **no aplica** al lote sin fechas [SPEC casos extremos].
+11. **Sin fechas ni pasajeros en el cuerpo**: el lote se define solo por `boat_ids`. Si el payload incluye `start_date`, `end_date`, `passengers` u otros campos desconocidos, se responde `400 VALIDATION_ERROR` sin procesar el lote **[CONV]**. Por eso la validación de rango de fechas no aplica en esta modalidad (solo en la individual) [SPEC casos extremos].
 
 ## 4. Respuesta exitosa
 
@@ -73,9 +69,9 @@ Reservas envía una lista de identificadores de embarcación y recibe, ya calcul
 
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
-| `evaluation_date` | date | Fecha usada para evaluar la tarifa (la fecha actual si no hubo fechas) | [CONV] informativo de RF-002 |
-| `duration_days` | integer | Duración aplicada (1 por defecto) | [CONV] informativo de RF-002 |
-| `passengers` | integer | Pasajeros aplicados (1 por defecto) | [CONV] informativo de RF-002 |
+| `evaluation_date` | date | Fecha usada para evaluar la tarifa (siempre la fecha actual de la petición) | [CONV] informativo de RF-002 |
+| `duration_days` | integer | Duración aplicada (siempre 1) | [CONV] informativo de RF-002 |
+| `passengers` | integer | Pasajeros aplicados (siempre 1) | [CONV] informativo de RF-002 |
 | `estimates` | array | Una entrada por embarcación estimada | [SPEC HU1 flujo 4: "arreglo de estimaciones"] |
 | `estimates[].boat_id` | UUID | Identificador de la embarcación | [SPEC] |
 | `estimates[].estimated_total` | string decimal | Costo estimado | [SPEC RF-002] |
@@ -107,15 +103,16 @@ Lista vacía:
 
 ## 5. Respuestas de error
 
+**Orden de validación** [CONV] (§4.3 del índice): E1 → E2 → E3 → E4 → E6 → E7 (E5 no aplica: no hay recurso en la URL; E8 no produce error en el lote: los identificadores no reconocidos se omiten y los sin tarifa se reportan en `unavailable`). La petición se valida completa (E4) antes de consultar los parámetros financieros (E6) o llamar a Flota (E7).
+
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
-| 400 | `VALIDATION_ERROR` | Cuerpo no es JSON, `boat_ids` ausente o no es arreglo, algún elemento no es UUID, tipos incorrectos | No | [CONV] |
+| 400 | `VALIDATION_ERROR` | Cuerpo no es JSON, `boat_ids` ausente o no es arreglo, algún elemento no es UUID, tipos incorrectos, o campos que el lote no acepta (`start_date`, `end_date`, `passengers` u otros desconocidos) | No | [CONV] |
 | 400 | `BATCH_SIZE_EXCEEDED` | `boat_ids` supera el máximo | No | [SPEC RF-006] |
-| 400 | `INVALID_DATE_RANGE` | Solo si se envían fechas y son inválidas (OQ-10) | No | [PEND] OQ-10 |
 | 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
 | 403 | `FORBIDDEN` | El llamador no es el Sistema de Reservas y Operaciones | No | [SPEC HU1] |
-| 503 | `FLEET_UNAVAILABLE` | Flota caída, *timeout* o inalcanzable | Sí | [SPEC casos extremos, RNF-003] |
-| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | Falta el seguro o el porcentaje requerido por la fecha evaluada | No | [SPEC casos extremos] |
+| 503 | `FLEET_UNAVAILABLE` | Flota caída, *timeout*, inalcanzable o con respuesta inválida | Sí | [SPEC casos extremos, RNF-003] |
+| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | Falta el seguro o el porcentaje requerido por la fecha evaluada | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ```json
@@ -135,4 +132,4 @@ La operación es de solo lectura: repetir la petición no produce efectos. Reser
 
 ## 7. Trazabilidad
 
-HU1 (escenario 1: 10 embarcaciones sin fechas) · RF-001, RF-002, RF-004, RF-005, RF-006 · RNF-001, RNF-002, RNF-003 · CE-001, CE-002, CE-004.
+HU1 (escenario 1: 10 embarcaciones en pantalla) · RF-001, RF-002, RF-004, RF-005, RF-006 · RNF-001, RNF-002, RNF-003 · CE-001, CE-002, CE-004.

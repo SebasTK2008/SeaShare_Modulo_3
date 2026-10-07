@@ -96,7 +96,7 @@ Estructura de cada elemento en `content` (DTO `RegistroFinancieroResultado` [SPE
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `VALIDATION_ERROR` | `page` < 1, o enumeración inválida | No | [SPEC RF-009] |
-| 400 | `PAGE_NOT_FOUND` | La página solicitada excede el total de páginas disponibles | No | [SPEC casos extremos] |
+| 404 | `PAGE_OUT_OF_RANGE` | La página solicitada excede el total de páginas disponibles | No | [SPEC casos extremos] |
 | 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
 | 403 | `FORBIDDEN` | El llamador no es Propietario ni Administrador Financiero | No | [SPEC RF-011] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |

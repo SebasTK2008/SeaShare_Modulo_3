@@ -50,13 +50,14 @@ La Pasarela de Pago notifica de forma asíncrona el resultado de las operaciones
 
 ## 3. Reglas de procesamiento
 
-1. **Autenticidad**: Se verifica la firma del webhook. Si es inválida, `401 Unauthorized`.
+1. **Autenticidad**: Se verifica la firma del webhook. Si es inválida o ausente, `401 UNAUTHENTICATED`.
 2. **Deduplicación**: Se utiliza la `idempotency_key` para buscar la intención original (Cobro, Reembolso o Liquidación). Si el resultado ya fue registrado, se devuelve `200 OK` ignorando el duplicado.
 3. **Manejo por tipo**:
    - `CHARGE` (UC05): Actualiza `IntenciónDeCobro`. Si `COMPLETED`, genera `RegistroDeCobro` inmutable [SPEC 5 RF-006]. Si `EXPIRED`, dispara flujo de expiración [SPEC 5 RF-014].
    - `REFUND` (UC09): Actualiza `IntenciónDeReembolso`. Si `COMPLETED`, genera `RegistroDeReembolso` inmutable. Distingue `transaction_cost` si se envía [SPEC 9 RF-007, RF-011].
    - `SETTLEMENT` (UC10): Actualiza `IntenciónDeDispersión`. Si `COMPLETED`, genera `RegistroDeDispersión` y, si corresponde, `RegistroDeComisión` atómicamente [SPEC 10 RF-010].
-4. **Resiliencia**: Si el procesamiento interno falla (ej. BD no disponible), devuelve `500` para que la Pasarela reintente el webhook.
+4. **Resiliencia**: Si el procesamiento interno falla (ej. BD no disponible), devuelve `500 INTERNAL_ERROR` para que la Pasarela reintente el webhook.
+5. **`idempotency_key` desconocida**: no existe intención asociada; se responde `200 OK` y el evento se registra en `operational_failure`, para evitar reintentos infinitos de la Pasarela. El SPEC exige registrar el evento sin crear un registro de cobro, pero no define la respuesta [SPEC UC05 casos extremos] + [PEND] OQ por asignar (propuesta de la §4.4 del índice).
 
 ## 4. Respuesta exitosa
 
@@ -64,11 +65,13 @@ La Pasarela de Pago notifica de forma asíncrona el resultado de las operaciones
 
 ## 5. Respuestas de error
 
-| HTTP | `code` | Cuándo |
-|---|---|---|
-| 401 | `UNAUTHORIZED` | Firma inválida o ausente |
-| 400 | `BAD_REQUEST` | Formato incorrecto del payload |
-| 500 | `INTERNAL_ERROR` | Error del sistema. La Pasarela debe reintentar. |
+| HTTP | `code` | Cuándo | `retryable` | Origen |
+|---|---|---|---|---|
+| 401 | `UNAUTHENTICATED` | Firma ausente o inválida (E1) | No | [CONV] §4.4 |
+| 400 | `VALIDATION_ERROR` | Payload mal formado o campos obligatorios ausentes (E4) | No | [CONV] §4.4 |
+| 500 | `INTERNAL_ERROR` | Error del sistema (E10). La Pasarela debe reintentar | Sí | [CONV] §4.4 |
+
+Además, ante una `idempotency_key` desconocida la respuesta es `200 OK` con registro en `operational_failure` (regla 5 de la §3, [PEND] §4.4).
 
 ## 6. Idempotencia y reintentos
 

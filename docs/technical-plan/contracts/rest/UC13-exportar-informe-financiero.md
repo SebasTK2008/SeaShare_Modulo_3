@@ -56,7 +56,8 @@ Los errores se devuelven preferiblemente como JSON (`application/problem+json`),
 
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
-| 400 | `VALIDATION_ERROR` | Periodicidad o formato de período inválido | No | [SPEC casos extremos] |
+| 400 | `INVALID_PERIOD` | Periodicidad no soportada o período con formato inválido | No | [SPEC RF-004, casos extremos] |
+| 400 | `VALIDATION_ERROR` | Falta `periodicity` o `period`, u otro parámetro con tipo o formato incorrecto | No | [CONV] |
 | 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
 | 403 | `FORBIDDEN` | El llamador no es Propietario ni Administrador Financiero | No | [SPEC RF-012] |
 | 500 | `INTERNAL_ERROR` | Error no previsto al generar el CSV | Sí | [CONV] |

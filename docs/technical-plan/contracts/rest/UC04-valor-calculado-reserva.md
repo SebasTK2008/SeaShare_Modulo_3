@@ -80,7 +80,7 @@ Reservas pide el valor definitivo de una reserva ya registrada (UC03). El sistem
 | 403 | `FORBIDDEN` | El llamador no es el Sistema de Reservas y Operaciones | No | [SPEC RF-001] |
 | 404 | `RESERVATION_INFO_NOT_FOUND` | No existe información registrada para esa reserva | Sí (OQ-06) | [SPEC RF-009] |
 | 422 | `RESERVATION_INFO_INCOMPLETE` | La información registrada no permite calcular (por ejemplo, sin tarifa base) | No | [SPEC RNF-003] |
-| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | La tarifa del seguro náutico no está configurada | No | [SPEC casos extremos] |
+| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | La tarifa del seguro náutico no está configurada | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ```json

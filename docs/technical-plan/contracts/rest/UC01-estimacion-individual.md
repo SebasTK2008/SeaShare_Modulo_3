@@ -55,7 +55,7 @@ Reservas delega el cálculo exacto de una embarcación para un rango de fechas y
 5. **Fórmula**: `estimated_total = (tarifa base final × días) + (tarifa de seguro × pasajeros)` [SPEC RF-002/RF-003].
 6. El campo `warning` es **obligatorio** y su texto proviene del sistema [SPEC HU2, escenario 1].
 7. Embarcación sin tarifa base ⇒ error controlado [SPEC casos extremos]. El SPEC no distingue "sin tarifa" de "no reconocida por Flota" en la modalidad individual; ambos devuelven `BASE_RATE_NOT_AVAILABLE` ([PEND] OQ-11).
-8. Falla de Flota ⇒ `503 FLEET_UNAVAILABLE`, sin valores asumidos [SPEC casos extremos, RNF-003].
+8. Falla de Flota (caída, *timeout*, inalcanzable o respuesta inválida) ⇒ `503 FLEET_UNAVAILABLE`, sin valores asumidos [SPEC casos extremos, RNF-003].
 9. Falta la tarifa de seguro o el porcentaje que exige la fecha de inicio ⇒ `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`, sin estimación parcial [SPEC casos extremos].
 
 ## 4. Respuesta exitosa
@@ -92,6 +92,8 @@ Texto exacto de `warning` (sin punto final, como en el SPEC):
 
 ## 5. Respuestas de error
 
+**Orden de validación** [CONV] (§4.3 del índice): E1 → E2 → E3 → E4 → E6 → E7 → E8 (E5 no aplica: no hay recurso en la URL). Las validaciones de E4 (fechas y tipos) ocurren antes de consultar los parámetros financieros (E6) o llamar a Flota (E7); si Flota responde y la embarcación no tiene tarifa o no la conoce, es E8, no E7.
+
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `INVALID_DATE_RANGE` | Formato de fecha inválido, inicio en el pasado o fin anterior al inicio | No | [SPEC casos extremos] |
@@ -99,8 +101,8 @@ Texto exacto de `warning` (sin punto final, como en el SPEC):
 | 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
 | 403 | `FORBIDDEN` | El llamador no es el Sistema de Reservas y Operaciones | No | [SPEC HU2] |
 | 422 | `BASE_RATE_NOT_AVAILABLE` | Embarcación sin tarifa base o no reconocida por Flota | No | [SPEC casos extremos] + OQ-11 |
-| 503 | `FLEET_UNAVAILABLE` | Flota caída, *timeout* o inalcanzable | Sí | [SPEC casos extremos, RNF-003] |
-| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | Falta el seguro o el porcentaje requerido | No | [SPEC casos extremos] |
+| 503 | `FLEET_UNAVAILABLE` | Flota caída, *timeout*, inalcanzable o con respuesta inválida | Sí | [SPEC casos extremos, RNF-003] |
+| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | Falta el seguro o el porcentaje requerido | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ```json
