@@ -89,7 +89,7 @@ Ambos documentos reconocen exactamente los mismos 9 estados (contando las 3 vari
 ## 4. Disputa de garantía
 
 - **Qué se considera**: el proceso mediante el cual se decide si el depósito se devuelve al Arrendatario o se liquida al Propietario, según si se detectaron daños menores al regreso de la embarcación.
-- **Cuándo se genera**: tras "Completada", dentro de la ventana que Módulo 2 concede al Propietario para reportar daños (`contexto-modulo3.md` fija esta ventana en 24 horas). Si la disputa permanece `PENDIENTE` más de siete días, se rechaza automáticamente y se devuelve el depósito al Arrendatario.
+- **Cuándo se genera**: tras "Completada", dentro de la ventana que Módulo 2 concede al Propietario para reportar daños (`contexto-modulo3.md` fija esta ventana en 24 horas). La duración y vigencia de la disputa las administra exclusivamente el Módulo 2; Módulo 3 no ejecuta temporizadores ni cron jobs. Al vencer la ventana de 24 horas sin reclamo, el Módulo 2 informa el estado `RECHAZADO` a Módulo 3.
 - **Quién interviene**: el Propietario (reporta o no reporta daños) y el Módulo 2 (crea y gestiona la disputa, incluida la evaluación de procedencia del reclamo).
 - **Qué módulo la gestiona**: Módulo 2 gestiona la disputa por completo; Módulo 3 únicamente consume su resultado final y ejecuta la operación financiera correspondiente.
 - **Estados** (definidos solo en `contexto-modulo3.md`; `sea-share.md` no usa el término "disputa" ni estos nombres):

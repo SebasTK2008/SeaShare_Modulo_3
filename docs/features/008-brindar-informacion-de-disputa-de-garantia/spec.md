@@ -35,10 +35,10 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
    - **Cuando** el Sistema de Reservas y Operaciones informa `COMPLETADO`.
    - **Entonces** el sistema solicita la liquidación total del depósito al Propietario mediante "Liquidar fondos de alquiler".
 
-4. **Escenario**: Ausencia de una disputa al vencer la ventana de 24 horas.
-   - **Dado** que una reserva está `completada` y transcurrieron 24 horas sin que exista una disputa.
-   - **Cuando** el evento automático de garantía verifica la ausencia de disputa.
-   - **Entonces** se solicita la liberación o el reembolso total del depósito al Arrendatario, según el estado del cobro original, sin recibir una notificación de disputa ni un origen desde el Sistema de Reservas y Operaciones.
+4. **Escenario**: Ausencia de disputa al vencer la ventana de 24 horas informada desde el Sistema de Reservas y Operaciones.
+   - **Dado** que transcurrieron 24 horas desde la finalización de una reserva sin reclamos reportados en el Sistema de Reservas y Operaciones.
+   - **Cuando** el Sistema de Reservas y Operaciones notifica el estado `RECHAZADO` para la garantía.
+   - **Entonces** el sistema registra la notificación y solicita la liberación o el reembolso total del depósito al Arrendatario, según el estado del cobro original.
 
 ### Casos Extremos (Edge Cases)
 
@@ -46,9 +46,6 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
 - **¿Qué sucede si se recibe `RECHAZADO` o `COMPLETADO` varias veces?** El sistema usa la clave idempotente y no duplica el reembolso o la liquidación ya solicitados.
 - **¿Qué sucede si no existe un depósito registrado o el cobro original no fue cobrado?** Registra un fallo controlado y no solicita reembolso ni liquidación con un monto asumido.
 - **¿Qué sucede si se recibe una resolución completada más de una vez?** La clave idempotente y la asociación con la reserva impiden duplicar operaciones.
-
-- **¿Qué sucede si una disputa permanece en estado `PENDIENTE` durante más de siete días desde la finalización de la reserva?**
-   El evento automático de garantía cambia la disputa a `RECHAZADO` por vencimiento de la revisión, registra la resolución y solicita la liberación o el reembolso total del depósito al Arrendatario. La operación es idempotente y no se genera una liquidación al Propietario.
 
 ## Requisitos *(obligatorio)*
 
@@ -62,9 +59,8 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
 - **RF-006**: Ante `COMPLETADO`, el sistema DEBE recuperar internamente el depósito cobrado y registrado y solicitar su liquidación total al Propietario.
 - **RF-007**: El sistema NO DEBE recibir ni requerir desde el Sistema de Reservas y Operaciones el monto del depósito, el monto a reembolsar, el monto a liquidar ni una instrucción técnica de pasarela.
 - **RF-008**: El sistema DEBE aplicar idempotencia por reserva, disputa y versión o clave del evento.
-- **RF-009**: El sistema DEBE exponer este caso de uso como consumidor del Sistema de Reservas y Operaciones y no como un caso de uso mediante el cual el Administrador Financiero resuelva disputas dentro del sistema.
-- **RF-009A**: El evento automático que detecta una reserva completada sin disputa después de 24 horas DEBE solicitar la liberación o el reembolso total del depósito, según el estado del cobro original, sin requerir un atributo de origen.
-- **RF-009B**: Si una disputa permanece en estado `PENDIENTE` durante más de siete días desde la finalización de la reserva, el evento automático DEBE cambiarla a `RECHAZADO` y solicitar la liberación o el reembolso total del depósito al Arrendatario.
+- **RF-009**: El sistema DEBE exponer este caso de uso exclusivamente como consumidor de las notificaciones enviadas por el Sistema de Reservas y Operaciones y NO DEBE ejecutar cron jobs, temporizadores internos ni tareas en segundo plano para verificar el vencimiento de la ventana de 24 horas o el estado de las disputas.
+- **RF-009A**: El sistema DEBE procesar la notificación con estado `RECHAZADO` enviada por el Sistema de Reservas y Operaciones al vencer la ventana de 24 horas sin disputa, solicitando la liberación o el reembolso total del depósito al Arrendatario sin requerir un atributo de origen.
 - **RF-010**: El sistema NO DEBE reconocer sub-resultados adicionales (por ejemplo, liberación o retención parcial) dentro de `COMPLETADO` o `RECHAZADO`; ambos estados son tratamientos totales sobre el 100% del depósito cobrado y registrado, conforme a la regla de negocio vigente ("Se entrega completo al Arrendatario o completo al Propietario").
 
 ### Requisitos No Funcionales
