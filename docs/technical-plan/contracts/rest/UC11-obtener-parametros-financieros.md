@@ -49,7 +49,7 @@ No aplica.
 | `weekend_increase_percentage` | string decimal | Porcentaje de incremento por fin de semana | [SPEC RF-009] |
 | `high_season_increase_percentage` | string decimal | Porcentaje de incremento por temporada alta | [SPEC RF-009] |
 | `guarantee_deposit_rule` | string | Regla del depósito de garantía (solo lectura) | [SPEC RF-012] |
-| `high_season_windows` | array de strings | Ventanas de temporada alta calculadas (solo lectura) | [SPEC RF-012] |
+| `high_season_windows` | array de strings | Ventanas de temporada alta calculadas (solo lectura) | [SPEC RF-012] [PEND formato: ver *OQ-UC11-03* en el plan UC11] |
 
 ```json
 {
@@ -59,10 +59,10 @@ No aplica.
   "high_season_increase_percentage": "25.00",
   "guarantee_deposit_rule": "10% de la tarifa base diaria",
   "high_season_windows": [
-    "Fin de año (ej. 15-dic a 15-ene)",
-    "Mitad de año",
-    "Semana Santa",
-    "Semana de receso"
+    "11-15→01-15",
+    "06-01→07-30",
+    "semana-santa",
+    "10-05→10-12"
   ]
 }
 ```
