@@ -6,7 +6,7 @@
 
 ### Historia de Usuario 1 - Obtener la tarifa base vigente aplicando la tarifa dinámica (Prioridad: P1)
 
-Como el sistema, al ser invocado internamente por "Solicitar estimación para reserva" o "Brindar información de reserva", quiero consultar al Sistema de Gestión de Flota la tarifa base específica de la embarcación solicitada (el precio fijado por su propietario y almacenado en dicho módulo, identificada por su identificador único), y aplicar sobre esa tarifa la regla de tarifa dinámica vigente para la fecha evaluada (temporada alta —determinada automáticamente por la regla de calendario definida en el contexto— o fin de semana), de manera que el caso de uso que me invocó reciba la tarifa base por unidad de tiempo lista para ser utilizada en sus propios cálculos.
+Como el sistema, al ser invocado internamente por "Solicitar estimación para reserva" o "Brindar información de reserva", quiero consultar al Sistema de Gestión de Flota la tarifa base específica de la embarcación solicitada (el precio fijado por su propietario y almacenado en dicho módulo, identificada por su identificador único), y aplicar sobre esa tarifa la regla de tarifa dinámica vigente para la fecha evaluada (temporada alta —determinada automáticamente por la regla de calendario de temporada alta definida en esta especificación, RF-006— o fin de semana), de manera que el caso de uso que me invocó reciba la tarifa base por unidad de tiempo lista para ser utilizada en sus propios cálculos.
 
 **Por qué esta prioridad**: Esta es la única función del sistema donde reside la lógica de tarifas dinámicas; tanto la estimación preliminar como el desglose final de precio dependen de que este valor sea correcto, ya que ningún otro caso de uso debe duplicar este cálculo.
 
@@ -31,7 +31,7 @@ Como el sistema, al ser invocado internamente por "Solicitar estimación para re
 
 **Regla de cálculo de la tarifa base final** (aplicación de la tarifa dinámica sobre la tarifa provista por el Sistema de Gestión de Flota):
 
-- **Fecha evaluada**: la tarifa dinámica se evalúa sobre la fecha de inicio de la reserva o, en la estimación en lote sin fechas, sobre la fecha actual.
+- **Fecha evaluada**: la tarifa dinámica se evalúa sobre la fecha de inicio de la reserva o, en la estimación en lote, sobre la fecha actual.
 - **Condición regular**: `Tarifa base final = Tarifa base provista por Gestión de Flota` (sin ajuste dinámico).
 - **Fin de semana**: `Tarifa base final = Tarifa base × (1 + %IncrementoFinDeSemana / 100)`, usando el porcentaje configurado mediante "Configurar parámetros financieros globales".
 - **Temporada alta**: `Tarifa base final = Tarifa base × (1 + %IncrementoTemporadaAlta / 100)`, usando el porcentaje configurado mediante "Configurar parámetros financieros globales", cuando la fecha evaluada caiga dentro de alguna de las ventanas de temporada alta definidas a continuación.
@@ -62,8 +62,8 @@ Los puentes festivos y los fines de semana largos **no** se categorizan como tem
 - **¿Qué tarifa dinámica debe prevalecer cuando una misma fecha coincide simultáneamente con más de una condición vigente (por ejemplo, fin de semana y temporada alta al mismo tiempo)?**
   Cuando más de una condición dinámica vigente coincide sobre la misma fecha, el sistema evalúa todas las condiciones aplicables y aplica aquella cuyo ajuste resulte en la tarifa más alta (la condición más favorable para la plataforma), de manera que el resultado sea siempre determinista y sin depender de un orden de evaluación arbitrario.
 
-- **¿Sobre qué fecha debe evaluarse la tarifa dinámica cuando "Solicitar estimación para reserva" invoca este caso de uso en modo lote, sin fechas específicas (estimación general para la pantalla principal)?**
-  En el modo lote sin fechas, la tarifa dinámica se evalúa sobre la fecha actual (el día en que se realiza la solicitud), reflejando las condiciones vigentes ese día. La estimación así obtenida es meramente informativa; al confirmar la reserva, "Brindar información de reserva" registra la tarifa base correspondiente a la fecha de inicio real, sobre la cual "Solicitar el valor calculado de la reserva" calcula el valor.
+- **¿Sobre qué fecha debe evaluarse la tarifa dinámica cuando "Solicitar estimación para reserva" invoca este caso de uso en modo lote (solo `boat_ids`) (estimación general para la pantalla principal)?**
+  En el modo lote, la tarifa dinámica se evalúa sobre la fecha actual (el día en que se realiza la solicitud), reflejando las condiciones vigentes ese día. La estimación así obtenida es meramente informativa; al confirmar la reserva, "Brindar información de reserva" registra la tarifa base correspondiente a la fecha de inicio real, sobre la cual "Solicitar el valor calculado de la reserva" calcula el valor.
 
 - **¿Sobre qué fecha debe evaluarse la tarifa dinámica cuando la invocación incluye fechas específicas?**
   Cuando la invocación proviene de "Solicitar estimación para reserva" en modalidad individual o de "Brindar información de reserva", la tarifa dinámica se evalúa sobre la fecha de inicio recibida, y la tarifa base obtenida se utiliza para toda la duración de la reserva.
@@ -81,7 +81,7 @@ Los puentes festivos y los fines de semana largos **no** se categorizan como tem
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE, al ser invocado mediante `<<include>>`, consultar al Sistema de Gestión de Flota la tarifa base específica (el precio fijado por el propietario) de la embarcación solicitada, identificándola por su identificador único, y evaluar la tarifa dinámica sobre la fecha de inicio de la reserva o, en la estimación en lote sin fechas, sobre la fecha actual, **sin** requerir ni utilizar el tipo o la categoría de la embarcación para este cálculo.
+- **RF-001**: El sistema DEBE, al ser invocado mediante `<<include>>`, consultar al Sistema de Gestión de Flota la tarifa base específica (el precio fijado por el propietario) de la embarcación solicitada, identificándola por su identificador único, y evaluar la tarifa dinámica sobre la fecha de inicio de la reserva o, en la estimación en lote, sobre la fecha actual, **sin** requerir ni utilizar el tipo o la categoría de la embarcación para este cálculo.
 - **RF-002**: El sistema DEBE aplicar la tarifa dinámica vigente (temporada alta o fin de semana) sobre la tarifa provista por el Sistema de Gestión de Flota para obtener la tarifa base final por unidad de tiempo, conforme a la regla de cálculo `tarifa base × (1 + porcentaje de incremento / 100)` cuando aplique una condición dinámica. Esta regla depende exclusivamente de la fecha evaluada.
 - **RF-003**: El sistema DEBE devolver la tarifa base final exclusivamente a la operación interna que lo invocó ("Solicitar estimación para reserva" o "Brindar información de reserva"), sin exponer un *endpoint* directo para actores externos.
 - **RF-004**: El sistema DEBE utilizar al Sistema de Gestión de Flota como única fuente autoritativa de la tarifa base de cada embarcación, dado que dicho valor es definido por el propietario y almacenado exclusivamente en ese módulo.
@@ -98,7 +98,7 @@ Los puentes festivos y los fines de semana largos **no** se categorizan como tem
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con el Sistema de Gestión de Flota, mapeando únicamente los atributos esenciales (identificador de la embarcación y tarifa base) necesarios para el cálculo.
-- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar la tarifa provista por el Sistema de Gestión de Flota, cualquier ajuste dinámico aplicado y la tarifa base final resultante.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar la tarifa provista por el Sistema de Gestión de Flota, cualquier ajuste dinámico aplicado y la tarifa base final resultante, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia la pasarela o reportes.
 - **RNF-003**: El sistema DEBE implementar un manejo de errores robusto (*timeouts*, *fallbacks*) ante fallas de comunicación con el Sistema de Gestión de Flota, dado que tanto "Solicitar estimación para reserva" como "Brindar información de reserva" dependen de este caso de uso para completar su propio flujo.
 - **RNF-004**: El sistema DEBE calcular la ventana de Semana Santa de cada año evaluado de forma determinística mediante el Algoritmo de Meeus/Jones/Butcher, sin depender de una tabla de fechas cargada manualmente.
 

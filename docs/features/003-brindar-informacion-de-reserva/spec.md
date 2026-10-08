@@ -54,7 +54,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones los datos espe
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar un DTO para recibir la solicitud del Sistema de Reservas y Operaciones, mapeando únicamente los atributos esenciales (identificador de la reserva, embarcación, fecha de inicio, fecha de fin, número de pasajeros, propietario y capacidad máxima de pasajeros).
-- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para almacenar la tarifa base registrada internamente.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para almacenar la tarifa base registrada internamente, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia la pasarela o reportes.
 - **RNF-003**: El sistema DEBE implementar un manejo de errores robusto ante fallas en la inclusión de "Brindar tarifa base", registrando el fallo internamente dado que, al ser este caso de uso unidireccional, no existe un canal de respuesta directo hacia el Sistema de Reservas y Operaciones para notificarlo. El sistema DEBE aplicar el mismo tratamiento (registro interno del fallo, sin persistir información incompleta) cuando el propietario o la capacidad máxima de pasajeros no sean recibidos en la solicitud.
 
 ### Entidades Clave
