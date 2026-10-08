@@ -1,10 +1,10 @@
-# Pasarela: Comando de liquidación
+# Pasarela: Comando de liquidación (Mercado Pago)
 
 | Campo | Valor |
 |---|---|
 | Caso de uso | UC10 Liquidar fondos de alquiler |
 | SPEC | `docs/features/010-liquidar-fondos-alquiler/spec.md` |
-| Dirección | Sistema (Worker) → Pasarela de Pago (Mercado Pago) |
+| Dirección | Sistema (Worker) → Mercado Pago |
 | ¿Responde? | Sí (respuesta síncrona técnica o acuse de recibo) |
 | Responsable de implementarlo | Adaptador de Pasarela (ACL) |
 
@@ -12,49 +12,66 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El sistema envía a la Pasarela de Pago —proveedor confirmado: **Mercado Pago**— la solicitud de dispersión (liquidación) de fondos hacia el Propietario. Ocurre al completarse una reserva (liquidación estándar), al completarse una disputa (liquidación de depósito) o por cancelaciones penalizadas [SPEC HU1, HU2, HU3].
+El sistema transfiere los fondos de una reserva completada a la cuenta de Mercado Pago vinculada del Propietario. Este proceso es la "liquidación" o "dispersión". Ocurre tras completarse la estadía sin incidentes, resolver disputas a favor del propietario, o al aplicar penalidades de cancelación [SPEC HU1, HU2, HU3].
 
-## 2. Petición (Llamada al Adaptador)
+En Mercado Pago, esto se gestiona mediante el esquema de **Marketplace** / **Split Payments**, dividiendo los fondos asociados al pago original.
 
-Representación del modelo canónico (`SolicitudDispersiónPasarela`).
+## 2. Petición (Llamada a Mercado Pago)
+
+Dependiendo de la integración de Mercado Pago elegida para el flujo (Advanced Payments, Split directo en el cobro, o transferencias directas API), el envío de fondos se instrumenta usualmente liberando o dispersando a la cuenta del vendedor (`application_fee`).
+Asumiendo un modelo de Advanced Payments o dispersión (Transfer):
+
+`POST /v1/advanced_payments/{id}/disbursements`
+*(o equivalente según la sub-API exacta que use el proyecto para el modelo de Marketplace).*
+
+### Headers
+
+| Header | Obligatorio | Valor |
+|---|---|---|
+| `Authorization` | Sí | `Bearer <ACCESS_TOKEN>` |
+| `X-Idempotency-Key` | Sí | Clave única (ej. `dispersion-<reserva>-<estado>`) |
+
+### Body (Payload)
+
+El adaptador convierte la `SolicitudDispersiónPasarela` a la estructura del split de Mercado Pago.
 
 | Campo | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
-| `operation_type` | string | Sí | Tipo de operación de la integración (ej. `TRANSFER`, `SPLIT_CAPTURE`) | [SPEC RF-008] |
-| `amount` | string decimal | Sí | Monto a dispersar al Propietario | [SPEC RNF-002] |
-| `deposit_component_amount` | string decimal | Sí | Componente del depósito (para trazabilidad/conciliación) | [SPEC SolicitudDispersiónPasarela] |
-| `original_charge_ref` | string | Sí | Referencia del cobro original (útil para transferencias vinculadas) | [SPEC SolicitudDispersiónPasarela] |
-| `reservation_ref` | string | Sí | Identificador de la reserva | [SPEC SolicitudDispersiónPasarela] |
-| `idempotency_key` | string | Sí | Clave única (ej. `dispersion-<reserva>-<estado>`) | [SPEC SolicitudDispersiónPasarela] |
+| `disbursements` | array | Sí | Arreglo con los montos a dispersar y destinatarios | [SPEC RF-008] |
+| `disbursements[].amount` | decimal | Sí | Monto neto a dispersar al Propietario | [SPEC RNF-002] |
+| `disbursements[].collector_id` | integer | Sí | ID de la cuenta de Mercado Pago del Propietario (Seller) | [SPEC RF-008] |
+| `disbursements[].external_reference` | string | Sí | Referencia de la reserva | [SPEC SolicitudDispersiónPasarela] |
 
 ```json
 {
-  "operation_type": "TRANSFER",
-  "amount": "675000.00",
-  "deposit_component_amount": "0.00",
-  "original_charge_ref": "TXN-987654321",
-  "reservation_ref": "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10",
-  "idempotency_key": "dispersion-b7d0e2a1-6c44-COMPLETADA-v1"
+  "disbursements": [
+    {
+      "amount": 675000.00,
+      "collector_id": 123456789,
+      "external_reference": "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10"
+    }
+  ]
 }
 ```
 
 ## 3. Reglas de procesamiento
 
-1. **Independencia de comisiones**: El sistema ya calculó la comisión y el seguro, y restó esos montos del pago (en el caso de liquidación estándar). El `amount` enviado aquí es el neto final a transferir al Propietario [SPEC RF-005].
-2. **Capacidad soportada**: La pasarela puede implementar esto como un *Capture* parcial donde se divide el dinero (Split Payment), o como un *Transfer* si los fondos se capturan primero a una cuenta principal (RF-008). El adaptador oculta este detalle [SPEC RF-008, SolicitudDispersiónPasarela].
-3. **Componente de depósito**: Se informa el monto que corresponde a depósito para fines de seguimiento, pero el valor a operar es `amount` [SPEC RF-016].
+1. **Independencia de comisiones**: El sistema asume que cobró inicialmente a una cuenta master (la de la plataforma) y ahora transfiere el neto al propietario. El monto remanente tras la dispersión se queda en la cuenta de la plataforma como recaudación propia (comisión + seguro de averías) [SPEC RF-005].
+2. **Cuenta destino vinculada**: El `collector_id` del propietario debe estar previamente autorizado y vinculado a la aplicación de Marketplace del sistema en Mercado Pago.
+3. **Componente de depósito**: Si parte de la liquidación al propietario incluye dinero que venía del depósito de garantía retenido al cliente, el sistema unifica esto en el `amount` enviado a MP (para simplificar la transferencia) y maneja el detalle del concepto de forma interna [SPEC RF-016].
 
 ## 4. Respuesta exitosa (Técnica)
 
+Mercado Pago confirma la dispersión creada. El resultado final del movimiento puede llegar por webhook (ej. eventos de `merchant_order` o `payment`).
+
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
-| `status` | string | Estado inmediato (`PENDING`, `COMPLETED`, `FAILED`) | [SPEC RF-010] |
-| `external_reference` | string | Identificador único de la transferencia/liquidación en la pasarela | [SPEC RF-010] |
-| `detail` | string | Mensaje de error si falla síncronamente | [SPEC] |
+| `status` | string | Estado inmediato (ej. `approved`, `pending`) | [SPEC RF-010] |
+| `id` | integer | Identificador único de la transferencia/dispersión en MP | [SPEC RF-010] |
 
 ## 5. Manejo de Errores
 
-Timeouts o errores HTTP `5xx` reintentan desde el worker. Fallos reportados síncronamente (`FAILED`) se registran en la `IntenciónDeDispersión` [SPEC RNF-003, RF-012].
+Timeouts o errores HTTP `5xx` reintentan desde el worker con el mismo `X-Idempotency-Key`. Fallos por errores de negocio (ej. `400` porque el `collector_id` no está vinculado, o fondos insuficientes) reportados síncronamente marcan la `IntenciónDeDispersión` en estado fallido para resolución manual o re-vinculación de cuenta [SPEC RNF-003, RF-012].
 
 ## 6. Trazabilidad
 

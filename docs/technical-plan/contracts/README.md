@@ -73,6 +73,7 @@ Casos de uso **sin contrato propio**:
 | Instantes | ISO-8601 en UTC, por ejemplo `2026-10-01T15:04:05Z` | [CONV] |
 | Dinero | **String decimal** (`"350000.00"`), nunca número JSON; el sistema usa `BigDecimal` | [SPEC RNF-002] + [CONV] |
 | Porcentajes | String decimal de 0 a 100 (`"15.00"` = 15 %), coherente con `tarifa × (1 + % / 100)` | [SPEC UC02 RF-002] + [CONV] |
+| Períodos de informe (`period`) | `YYYY-MM-H1`/`YYYY-MM-H2` (quincenal), `YYYY-MM` (mensual), `YYYY-Q1`…`YYYY-Q4` (trimestral) | [CONV] UC13 |
 | Escala y precisión | `NUMERIC(18,4)` en BD; `BigDecimal` con 4 decimales internos antes del redondeo final | [SPEC RNF-002] + [CONV] |
 
 ### 3.2 Headers comunes (REST)
