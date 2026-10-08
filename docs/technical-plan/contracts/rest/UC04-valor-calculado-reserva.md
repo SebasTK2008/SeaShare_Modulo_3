@@ -31,14 +31,14 @@ Reservas pide el valor definitivo de una reserva ya registrada (UC03). El sistem
 
 | Parámetro | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
-| `reservation_id` | UUID | Sí | Identificador de la reserva | [SPEC RF-001]; tipo [PEND] OQ-05 |
+| `reservation_id` | UUID v4 | Sí | Identificador de la reserva | [SPEC RF-001]; tipo [CONV] |
 
 ## 3. Reglas de procesamiento
 
 1. Se recupera la `InformaciónDeReserva` registrada por UC03: tarifa base vigente, fecha de inicio, fecha de fin y pasajeros [SPEC RF-002].
 2. **Monto de alquiler** = `tarifa base registrada × días inclusivos` (inicio = fin ⇒ 1 día; del día 10 al 12 ⇒ 3 días). Es el precio bruto: no incluye seguro, depósito ni comisión [SPEC HU1, RF-003].
 3. **Seguro náutico** = `tarifa de seguro × pasajeros registrados` [SPEC RF-004].
-4. **Depósito de garantía** = 10 % de la tarifa base diaria; **no** se multiplica por duración, pasajeros ni daño [SPEC HU1, RF-005]. Observación 5 del plan §12.2 (tarifa registrada vs. sin ajuste dinámico).
+4. **Depósito de garantía** = 10 % de la tarifa base diaria; **no** se multiplica por duración, pasajeros ni daño [SPEC HU1, RF-005].
 5. **Valor total** = alquiler + seguro + depósito; es el monto que se cobra en "Procesar cobro" [SPEC RF-006].
 6. Los montos se **guardan** en la `InformaciónDeReserva` [SPEC RF-008]. Si UC03 vuelve a registrar la reserva, los montos se invalidan y deben recalcularse antes de un nuevo cobro [SPEC RF-008, UC03 casos extremos].
 7. **Solicitud repetida**: se devuelve el mismo desglose y la actualización interna es idempotente [SPEC casos extremos]. Si los parámetros cambiaron entre dos solicitudes sin que UC03 invalidara los montos, se devuelven los ya registrados (D-17, [PEND] OQ-07).

@@ -36,6 +36,10 @@ Permite a Propietarios y Administradores Financieros consultar el histórico de 
 | `transaction_type` | string | No | Filtro por tipo: `COBRO`, `REEMBOLSO`, `DISPERSION`, `COMISION` | [SPEC RF-002, D-18] |
 | `owner_id` | UUID | No | Filtro por propietario asociado. Un Propietario no puede usarlo para ver a otros | [SPEC RF-002, RF-003, casos extremos] |
 | `boat_id` | UUID | No | Filtro por embarcación asociada | [SPEC RF-002] |
+| `reservation_id` | UUID | No | Filtro por reserva asociada. Permite aislar todos los registros financieros de una reserva concreta | [CONV] |
+| `q` | string | No | Búsqueda de texto libre por reserva, arrendatario o propietario | [CONV] |
+| `date_from` | string | No | Fecha inicio del rango (formato YYYY-MM-DD) | [CONV] |
+| `date_to` | string | No | Fecha fin del rango (formato YYYY-MM-DD) | [CONV] |
 
 ## 3. Reglas de procesamiento
 

@@ -47,13 +47,13 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud 
 - **RF-005**: El sistema DEBE calcular el depósito de garantía conforme a la regla definida en este caso de uso, sin multiplicarlo por la duración, el número de pasajeros o el daño reportado.
 - **RF-006**: El sistema DEBE calcular el valor total de la reserva como la suma del monto de alquiler, el monto del seguro náutico y el monto del depósito de garantía. Este valor total es el monto que se cobra al Arrendatario en "Procesar cobro".
 - **RF-007**: El sistema DEBE devolver al Sistema de Reservas y Operaciones el desglose completo del valor de la reserva, compuesto por el monto de alquiler, el monto del seguro náutico, el monto del depósito de garantía y el valor total.
-- **RF-008**: El sistema DEBE actualizar la información interna previamente registrada de la reserva, incorporando los montos calculados, dejándola disponible para "Procesar cobro". Si los datos de la reserva cambian posteriormente, los montos calculados deben invalidarse y recalcularse antes de un nuevo cobro.
+- **RF-008**: El sistema DEBE congelar los parámetros usados (comisión % y tarifa seguro por pasajero) vigentes al calcular el valor de la reserva; dichos valores no son retroactivos. El sistema DEBE actualizar la información interna previamente registrada de la reserva, incorporando los montos calculados, dejándola disponible para "Procesar cobro". Si los datos de la reserva cambian posteriormente, los montos calculados deben invalidarse y recalcularse antes de un nuevo cobro.
 - **RF-009**: El sistema DEBE responder con un error controlado al Sistema de Reservas y Operaciones cuando se solicita el valor calculado de una reserva para la cual no existe información previamente registrada.
 
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con el Sistema de Reservas y Operaciones, tanto para recibir la solicitud como para devolver el desglose del valor.
-- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el monto de alquiler, el monto del seguro náutico, el monto del depósito de garantía y el valor total.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el monto de alquiler, el monto del seguro náutico, el monto del depósito de garantía y el valor total, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia la pasarela o reportes.
 - **RNF-003**: El sistema DEBE implementar un manejo de errores robusto para los casos en que la información previamente registrada de la reserva no exista o esté incompleta, o en que la tarifa del seguro náutico no esté configurada, evitando cálculos parciales o inconsistentes.
 
 ### Entidades Clave
