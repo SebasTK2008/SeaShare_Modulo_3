@@ -98,7 +98,7 @@ Los puentes festivos y los fines de semana largos **no** se categorizan como tem
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con el Sistema de Gestión de Flota, mapeando únicamente los atributos esenciales (identificador de la embarcación y tarifa base) necesarios para el cálculo.
-- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar la tarifa provista por el Sistema de Gestión de Flota, cualquier ajuste dinámico aplicado y la tarifa base final resultante.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar la tarifa provista por el Sistema de Gestión de Flota, cualquier ajuste dinámico aplicado y la tarifa base final resultante, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia la pasarela o reportes.
 - **RNF-003**: El sistema DEBE implementar un manejo de errores robusto (*timeouts*, *fallbacks*) ante fallas de comunicación con el Sistema de Gestión de Flota, dado que tanto "Solicitar estimación para reserva" como "Brindar información de reserva" dependen de este caso de uso para completar su propio flujo.
 - **RNF-004**: El sistema DEBE calcular la ventana de Semana Santa de cada año evaluado de forma determinística mediante el Algoritmo de Meeus/Jones/Butcher, sin depender de una tabla de fechas cargada manualmente.
 
