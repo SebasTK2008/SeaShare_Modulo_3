@@ -4,7 +4,7 @@
 |---|---|
 | Caso de uso | UC09 Reembolsar dinero a arrendatario |
 | SPEC | `docs/features/009-reembolsar-dinero-arrendatario/spec.md` |
-| Dirección | Sistema (Worker) → Pasarela de Pago |
+| Dirección | Sistema (Worker) → Pasarela de Pago (Mercado Pago) |
 | ¿Responde? | Sí (respuesta síncrona técnica o acuse de recibo) |
 | Responsable de implementarlo | Adaptador de Pasarela (ACL) |
 
@@ -12,7 +12,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El sistema envía una solicitud de liberación (de una autorización) o reembolso (de un cobro capturado) a la Pasarela de Pago. Esto ocurre ante cancelaciones (UC07) o disputas rechazadas (UC08) [SPEC HU1, HU2].
+El sistema envía una solicitud de liberación (de una autorización) o reembolso (de un cobro capturado) a la Pasarela de Pago —proveedor confirmado: **Mercado Pago**—. Esto ocurre ante cancelaciones (UC07) o disputas rechazadas (UC08) [SPEC HU1, HU2].
 
 ## 2. Petición (Llamada al Adaptador)
 

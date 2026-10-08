@@ -17,7 +17,7 @@ Reservas delega el cálculo exacto de una embarcación para un rango de fechas y
 
 ## 2. Petición
 
-`POST /api/v1/estimates/individual` **[CONV]** (OQ-02; el SPEC RF-004 habla de "un *endpoint*" para ambas modalidades — observación 4 del plan §12.2)
+`POST /api/v1/estimates/individual` **[CONV]** (OQ-02; el SPEC RF-004 habla de "un *endpoint*" para ambas modalidades)
 
 ### Headers
 

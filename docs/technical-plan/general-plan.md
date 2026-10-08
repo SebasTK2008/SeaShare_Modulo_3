@@ -1,7 +1,7 @@
 # Implementation Plan: Sistema Financiero de SEA-SHARE (Módulo 3 — "el sistema")
 
 **Date**: 2026-10-08
-**Spec**: `docs/features/001-…` a `docs/features/013-…` (UC01–UC13). **Única fuente de verdad.** Los documentos de `docs/context/` son referencia secundaria; cuando discrepan de un SPEC, prevalece el SPEC (ver §12.2).
+**Spec**: `docs/features/001-…` a `docs/features/013-…` (UC01–UC13). **Única fuente de verdad.** Los documentos de `docs/context/` son referencia secundaria; cuando discrepan de un SPEC, prevalece el SPEC.
 **Contratos**: [`contracts/`](contracts/README.md) — un archivo `.md` por contrato (REST, colas de eventos e integraciones externas).
 
 ---
@@ -79,7 +79,7 @@ flowchart LR
   subgraph EXT["Actores y sistemas externos"]
     M2["Sistema de Reservas y Operaciones"]
     M1["Sistema de Gestión de Flota"]
-    PG["Pasarela de Pago"]
+    PG["Pasarela de Pago (Mercado Pago)"]
     ADM["Administrador Financiero"]
     PRO["Propietario"]
   end
@@ -200,7 +200,7 @@ seashare-m3/
 
 ## 4. Modelo de datos (PostgreSQL)
 
-Convenciones: `NUMERIC` para dinero y porcentajes (escala y redondeo: **[PEND] OQ-03**; precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de los UC 02, 03, 04, 05, 09, 10, 11, 12 y 13]**), `timestamptz` para instantes, UUID como identificadores (**[PEND] OQ-05**), migraciones versionadas con Flyway.
+Convenciones: `NUMERIC(18,4)` para dinero y porcentajes, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de los UC 02, 03, 04, 05, 09, 10, 11, 12 y 13]**, `timestamptz` para instantes, UUID v4 como identificadores (única excepción: `financial_parameters.id = 1`, entero fijo del singleton), migraciones versionadas con Flyway.
 
 | Tabla | Tipo | Propósito / columnas relevantes | Restricciones |
 |---|---|---|---|
@@ -268,7 +268,7 @@ El sistema **no publica eventos hacia Reservas**: Reservas consulta mediante UC0
 
 Estos son **los únicos jobs programados del sistema y son internos** (expiración de autorizaciones, conciliación con la pasarela y entrega de la mensajería). La ventana de 24 h, la vigencia de las disputas y cualquier otro temporizador relacionado con una reserva o con la garantía **no son responsabilidad del sistema**: los administra el Sistema de Reservas y Operaciones, que notifica `RECHAZADO` (ausencia de reclamo) o `COMPLETADO`/`PENDIENTE` mediante UC08 [SPEC 008 RF-009, RF-009A; SPEC 007 caso extremo].
 
-La topología de exchanges y colas se documenta en [`contracts/README.md`](contracts/README.md) §Topología RabbitMQ **[TÉC; nombres a acordar con Reservas — OQ-09]**.
+La topología de exchanges y colas se documenta en [`contracts/README.md`](contracts/README.md) (tabla de colas del §2 y propiedades AMQP del §3.5) **[TÉC; nombres a acordar con Reservas — OQ-09]**.
 
 ### 5.3 ShedLock (bloqueo de jobs programados) **[TÉC]**
 
@@ -332,7 +332,7 @@ Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). 
 |---|---|---|
 | Reservas y Operaciones | UC01, UC04, UC06 (REST); UC03, UC07, UC08 (colas) | Implementar cliente REST y productor AMQP |
 | Gestión de Flota | `flota-consulta-tarifas-base` | Exponer la consulta por lote con el SLA del SPEC |
-| Pasarela de Pago (adaptador) | comandos + webhook | Mapear el proveedor elegido al modelo canónico (OQ-08) |
+| Mercado Pago (pasarela, adaptador) | comandos + webhook | Adaptar Mercado Pago al modelo canónico |
 | Administrador Financiero / Propietario | UC11, UC12, UC13 | Consumir los endpoints respetando paginación y períodos fijos |
 
 **Verificación**: pruebas de contrato en el sistema que usan los ejemplos de cada `.md` (REST con MockMvc; mensajes AMQP contra el cuerpo documentado) y *stubs* WireMock para Flota y la pasarela.
@@ -342,17 +342,17 @@ Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). 
 ## 7. Aspectos transversales
 
 ### 7.1 Seguridad
-- Los SPEC fijan **quién puede usar cada caso de uso** (UC11 solo Administrador Financiero, RF-008; UC12/UC13 Propietario y Administrador Financiero; UC03/UC07/UC08 solo Reservas, UC03 RF-008) pero **no el mecanismo de autenticación** (**OQ-01**). Propuesta por defecto **[TÉC]**: OAuth2 Resource Server (JWT) con roles `ADMIN_FINANCIERO`, `PROPIETARIO` y una credencial de servicio para Reservas.
+- Los SPEC fijan **quién puede usar cada caso de uso** (UC11 solo Administrador Financiero, RF-008; UC12/UC13 Propietario y Administrador Financiero; UC03/UC07/UC08 solo Reservas, UC03 RF-008) pero **no el mecanismo de autenticación** (**OQ-01**). Propuesta por defecto **[TÉC]**: OAuth2 Resource Server (JWT) con roles `ADMIN_FINANCIERO`, `PROPIETARIO` y una credencial de servicio para Reservas. Las tareas de seguridad de cada plan (`SecurityConfig`, OAuth2) se implementan con esta propuesta por defecto y quedan condicionadas a la confirmación de OQ-01.
 - El `owner_id` del Propietario se toma de la identidad autenticada, nunca del cuerpo ni de la URL (UC12 RF-003, UC13 RF-006).
 - Datos de pago: solo token, tipo y últimos cuatro dígitos; sin PAN, CVV ni vencimiento; el token no se escribe en logs (UC05 RNF-004, CE-005).
-- Webhook: verificación de autenticidad del emisor; el mecanismo depende del proveedor (OQ-08).
+- Webhook: verificación de autenticidad del emisor según el mecanismo de Mercado Pago.
 
 ### 7.2 Resiliencia (valores iniciales **[TÉC]** a calibrar)
 | Dependencia | Timeout | Reintentos | Otros |
 |---|---|---|---|
 | Flota (REST) | 1 s lectura (SLA del SPEC: < 500 ms para 50 embarcaciones) | 1 con *backoff* corto | *Circuit breaker*; falla ⇒ error controlado, **sin estimaciones parciales** (UC01 RNF-003) |
 | Pasarela (worker) | 10 s | Por reintento del mensaje, **misma clave idempotente de la intención** (un reintento técnico nunca genera otra intención; un nuevo intento de negocio crea una intención con clave nueva, UC05 RF-004A) | Timeout ⇒ estado `FALLA_COMUNICACION` / en conciliación, nunca "fallido" (UC05 RNF-003) |
-| Listeners AMQP | — | 3–5 con *backoff* solo en fallas transitorias → DLQ | [`contracts/README.md`](contracts/README.md) §Reglas de consumo |
+| Listeners AMQP | — | 3–5 con *backoff* solo en fallas transitorias → DLQ | [`contracts/README.md`](contracts/README.md) §4.4 |
 
 ### 7.3 Observabilidad
 Actuator (`/health`, `/metrics`), Micrometer + Prometheus, logs JSON con `reservation_id`. Métricas: profundidad de DLQ, intenciones por estado, antigüedad de la intención más vieja sin resultado, intenciones de cobro por reserva (reintentos), filas en `operational_failure`, latencia de Flota. Alertas sobre DLQ > 0 y conciliaciones atascadas, porque los casos unidireccionales no pueden avisar a Reservas.
@@ -388,7 +388,7 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
 | D-08 | **Persistir intención → outbox → worker llama a la pasarela**; conciliación posterior | Llamar a la pasarela dentro de la transacción o del listener | No bloquea consumidores con una llamada lenta; un timeout no se interpreta como fallo (UC05 RNF-003) | 005, 009, 010 |
 | D-09 | UC05 **sin endpoint público**; se invoca desde UC07 `PENDIENTE` con el token | Endpoint de cobro para Reservas/Arrendatario | UC07 RF-002A define que `PENDIENTE` dispara el cobro con el token recibido junto al estado; un segundo canal duplicaría el disparador | 005, 007 |
 | D-10 | **Scheduler** solo para jobs internos (expiración de autorizaciones, conciliación y outbox) | Mensajes diferidos (TTL + DLX) por reserva | El sondeo sobre BD es simple, auditable e idempotente; la ventana de 24 h y la vigencia de la disputa las administra Reservas (SPEC 008 RF-009) | 005, Infra |
-| D-11 | `Money` (VO) sobre `BigDecimal`, `NUMERIC` en BD y *string* decimal en JSON | `double`/`float`; número JSON | Evita errores de redondeo (UC01 CE-001, UC04 CE-001) | 001, 004, 005, 009, 010 |
+| D-11 | `Money` (VO) sobre `BigDecimal`, `NUMERIC(18,4)` en BD y *string* decimal en JSON | `double`/`float`; número JSON | Evita errores de redondeo (UC01 CE-001, UC04 CE-001) | 001, 004, 005, 009, 010 |
 | D-12 | Fechas de negocio y períodos en una zona horaria única (propuesta `America/Bogota`); instantes en UTC | UTC para todo | "Fecha actual", "inicio en el pasado" y los períodos de UC13 deben ser inequívocos (**OQ-04**) | 001, 013 |
 | D-13 | Inmutabilidad también en BD (trigger + privilegios) | Solo convención en código | Los registros son base de auditoría e informes | 005, 009, 010 |
 | D-14 | **CQRS ligero** para UC12/UC13: vista `UNION ALL` + SQL de agregación | Pasar por el dominio | Son solo lectura (UC12 RF-010, UC13 RF-013) | 012, 013 |

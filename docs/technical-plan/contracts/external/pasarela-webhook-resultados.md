@@ -4,7 +4,7 @@
 |---|---|
 | Casos de uso | UC05, UC09, UC10 |
 | SPECs | 005 (Cobro), 009 (Reembolso), 010 (Liquidación) |
-| Dirección | Pasarela de Pago → sistema |
+| Dirección | Pasarela de Pago (Mercado Pago) → sistema |
 | ¿Responde? | Sí (200 OK para confirmar recepción) |
 | Quién puede llamarlo | Solo la Pasarela de Pago (verificado criptográficamente) |
 
@@ -12,7 +12,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-La Pasarela de Pago notifica de forma asíncrona el resultado de las operaciones (cobros, reembolsos, dispersiones). El sistema asocia el resultado a la intención original mediante la clave idempotente o la referencia del cobro y actualiza sus registros, generando los registros inmutables de auditoría si la operación fue exitosa.
+La Pasarela de Pago —proveedor confirmado: **Mercado Pago**— notifica de forma asíncrona el resultado de las operaciones (cobros, reembolsos, dispersiones). El sistema asocia el resultado a la intención original mediante la clave idempotente o la referencia del cobro y actualiza sus registros, generando los registros inmutables de auditoría si la operación fue exitosa.
 
 ## 2. Petición (Webhook)
 
@@ -23,7 +23,7 @@ La Pasarela de Pago notifica de forma asíncrona el resultado de las operaciones
 | Header | Obligatorio | Valor |
 |---|---|---|
 | `Content-Type` | Sí | `application/json` |
-| `X-Gateway-Signature` | Sí | Firma HMAC o token para validar autenticidad **[CONV]** |
+| `X-Gateway-Signature` | Sí | Firma según el mecanismo de Mercado Pago, para validar autenticidad **[CONV]** |
 
 ### Body
 
@@ -50,14 +50,14 @@ La Pasarela de Pago notifica de forma asíncrona el resultado de las operaciones
 
 ## 3. Reglas de procesamiento
 
-1. **Autenticidad**: Se verifica la firma del webhook. Si es inválida o ausente, `401 UNAUTHENTICATED`.
+1. **Autenticidad**: Se verifica la firma del webhook según el mecanismo de Mercado Pago. Si es inválida o ausente, `401 UNAUTHENTICATED`.
 2. **Deduplicación**: Se utiliza la `idempotency_key` para buscar la intención original (Cobro, Reembolso o Liquidación). Si el resultado ya fue registrado, se devuelve `200 OK` ignorando el duplicado.
 3. **Manejo por tipo**:
    - `CHARGE` (UC05): Actualiza `IntenciónDeCobro`. Si `COMPLETED`, genera `RegistroDeCobro` inmutable [SPEC 5 RF-006]. Si `EXPIRED`, dispara flujo de expiración [SPEC 5 RF-014].
    - `REFUND` (UC09): Actualiza `IntenciónDeReembolso`. Si `COMPLETED`, genera `RegistroDeReembolso` inmutable. Distingue `transaction_cost` si se envía [SPEC 9 RF-007, RF-011].
    - `SETTLEMENT` (UC10): Actualiza `IntenciónDeDispersión`. Si `COMPLETED`, genera `RegistroDeDispersión` y, si corresponde, `RegistroDeComisión` atómicamente [SPEC 10 RF-010].
 4. **Resiliencia**: Si el procesamiento interno falla (ej. BD no disponible), devuelve `500 INTERNAL_ERROR` para que la Pasarela reintente el webhook.
-5. **`idempotency_key` desconocida**: no existe intención asociada; se responde `200 OK` y el evento se registra en `operational_failure`, para evitar reintentos infinitos de la Pasarela. El SPEC exige registrar el evento sin crear un registro de cobro, pero no define la respuesta [SPEC UC05 casos extremos] + [PEND] OQ por asignar (propuesta de la §4.4 del índice).
+5. **`idempotency_key` desconocida**: no existe intención asociada; se responde `200 OK` y el evento se registra en `operational_failure`, para evitar reintentos infinitos de la Pasarela. El SPEC exige registrar el evento sin crear un registro de cobro, pero no define la respuesta [SPEC UC05 casos extremos] + [PEND] (propuesta de la §4.4 del índice).
 
 ## 4. Respuesta exitosa
 

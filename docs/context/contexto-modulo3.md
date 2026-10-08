@@ -25,7 +25,7 @@ El sistema es responsable de traducir cada operación turística de SEA-SHARE en
 | **Arrendatario** | Origina el cobro de su reserva. |
 | **Propietario** | Recibe la dispersión de fondos y consulta sus ingresos/registros. |
 | **Administrador Financiero** | Supervisa balances y configura parámetros globales. La resolución operativa y administrativa de disputas pertenece al Módulo 2. |
-| **Pasarela de Pago** | Sistema externo que ejecuta técnicamente cobros, reembolsos y dispersiones. |
+| **Pasarela de Pago (Mercado Pago)** | Sistema externo que ejecuta técnicamente cobros, reembolsos y dispersiones. |
 | **Sistema de Reservas y Operaciones** | Solicita estimaciones, confirma pagos, consulta el estado financiero de una reserva y su valor calculado; también entrega al sistema el propietario y la capacidad máxima de pasajeros de la embarcación (obtenidos previamente por Reservas desde el Sistema de Gestión de Flota). |
 | **Sistema de Gestión de Flota** | Provee la tarifa base de una embarcación necesaria para calcular la tarifa dinámica de una reserva. El sistema (Módulo 3) no lo consulta directamente para obtener el propietario o la capacidad máxima de pasajeros de una embarcación; ese dato llega siempre a través del Sistema de Reservas y Operaciones. |
 
@@ -116,7 +116,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 ### 3.2 Cobro y Confirmación de Pago
 
 #### Procesar cobro
-- **Actores:** Arrendatario (origina la solicitud); Pasarela de Pago (ejecuta la transacción).
+- **Actores:** Arrendatario (origina la solicitud); Pasarela de Pago (Mercado Pago) (ejecuta la transacción).
 - **Flujo:** El arrendatario confirma el pago (transición de la reserva a estado "Pendiente") dentro del TTL de 15 minutos que comenzó cuando la reserva pasó a estado "Iniciada" (Módulo 2, 2.1). El sistema puede solicitar a la pasarela una autorización por el valor calculado; la aceptación técnica de la solicitud no equivale a aprobación del pago.
 - **Regla de negocio asociada:** Bloqueo Temporal (Módulo 2, 2.1); Depósito de Garantía y Seguro Náutico (3.1).
 
@@ -140,7 +140,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 - **Regla de negocio asociada:** Depósito de Garantía (3.1).
 
 #### Reembolsar dinero a arrendatario
-- **Actores:** Pasarela de Pago (ejecuta la devolución); disparado por cancelaciones aplicables o por "Brindar información de disputa de garantía" cuando el resultado sea liberar el depósito.
+- **Actores:** Pasarela de Pago (Mercado Pago) (ejecuta la devolución); disparado por cancelaciones aplicables o por "Brindar información de disputa de garantía" cuando el resultado sea liberar el depósito.
 - **Flujo:** El sistema recupera de sus registros el monto correspondiente y ordena la devolución a través de la Pasarela de Pago. Para la garantía, la devolución es siempre del 100% del depósito capturado; no existe retención parcial.
 - **Reglas de negocio asociadas:** Depósito de Garantía (3.1); Lógica de Cancelaciones y Reembolsos (Módulo 2, 2.2).
 
@@ -149,7 +149,7 @@ La vigencia (fechas de inicio y fin) de la temporada alta **no se configura manu
 ### 3.4 Dispersión de Fondos
 
 #### Liquidar fondos de alquiler
-- **Actores:** Pasarela de Pago (ejecuta la operación); beneficia al Propietario.
+- **Actores:** Pasarela de Pago (Mercado Pago) (ejecuta la operación); beneficia al Propietario.
 - **Flujo:** Al recibir `completada`, el sistema utiliza la comisión calculada previamente y solicita el pago estándar como *Valor Bruto − Comisión de la Plataforma − Seguro*, manteniendo asociado el depósito. Cuando "Brindar información de disputa de garantía" informa `COMPLETADO`, el sistema recupera internamente el depósito fijo y solicita su liquidación total al Propietario. La confirmación de la dispersión estándar crea `RegistroDeDispersión` y `RegistroDeComisión`; la confirmación de la liquidación del depósito crea únicamente `RegistroDeDispersión`.
 - **Regla de negocio asociada:** Matriz de Liquidación — Pago al Propietario y Penalidad por Cancelación (3.2).
 

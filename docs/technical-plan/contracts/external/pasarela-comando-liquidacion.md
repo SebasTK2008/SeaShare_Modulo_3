@@ -4,7 +4,7 @@
 |---|---|
 | Caso de uso | UC10 Liquidar fondos de alquiler |
 | SPEC | `docs/features/010-liquidar-fondos-alquiler/spec.md` |
-| Dirección | Sistema (Worker) → Pasarela de Pago |
+| Dirección | Sistema (Worker) → Pasarela de Pago (Mercado Pago) |
 | ¿Responde? | Sí (respuesta síncrona técnica o acuse de recibo) |
 | Responsable de implementarlo | Adaptador de Pasarela (ACL) |
 
@@ -12,7 +12,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El sistema envía a la Pasarela de Pago la solicitud de dispersión (liquidación) de fondos hacia el Propietario. Ocurre al completarse una reserva (liquidación estándar), al completarse una disputa (liquidación de depósito) o por cancelaciones penalizadas [SPEC HU1, HU2, HU3].
+El sistema envía a la Pasarela de Pago —proveedor confirmado: **Mercado Pago**— la solicitud de dispersión (liquidación) de fondos hacia el Propietario. Ocurre al completarse una reserva (liquidación estándar), al completarse una disputa (liquidación de depósito) o por cancelaciones penalizadas [SPEC HU1, HU2, HU3].
 
 ## 2. Petición (Llamada al Adaptador)
 

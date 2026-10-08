@@ -4,7 +4,7 @@
 |---|---|
 | Caso de uso | UC05 Procesar cobro |
 | SPEC | `docs/features/005-procesar-cobro/spec.md` |
-| Dirección | Sistema (Worker) → Pasarela de Pago |
+| Dirección | Sistema (Worker) → Pasarela de Pago (Mercado Pago) |
 | ¿Responde? | Sí (respuesta síncrona técnica o acuse de recibo) |
 | Responsable de implementarlo | Adaptador de Pasarela (ACL) |
 
@@ -12,7 +12,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El sistema envía una solicitud de autorización o cobro a la Pasarela de Pago por el valor total de la reserva, utilizando el token de pago provisto. Esta llamada se realiza asíncronamente desde un worker (patrón outbox) para no bloquear la transacción que registró la intención de cobro [SPEC HU1].
+El sistema envía una solicitud de autorización o cobro a la Pasarela de Pago —proveedor confirmado: **Mercado Pago**— por el valor total de la reserva, utilizando el token de pago provisto. Esta llamada se realiza asíncronamente desde un worker (patrón outbox) para no bloquear la transacción que registró la intención de cobro [SPEC HU1].
 
 ## 2. Petición (Llamada al Adaptador)
 
@@ -40,7 +40,7 @@ Esta es una representación del modelo canónico (DTO `SolicitudCobroPasarela`) 
 
 1. **Minimización de datos**: NUNCA se envía el número completo de tarjeta, CVV o fecha de expiración [SPEC RF-011, RNF-004].
 2. **Monto único**: El monto es uno solo, englobando alquiler, seguro y depósito. No se hacen llamadas separadas por concepto [SPEC RF-015].
-3. **Idempotencia**: Se pasa la `idempotency_key` en los headers de la llamada HTTP a la pasarela (ej. `Idempotency-Key` en Stripe). Un timeout no significa fallo [SPEC RNF-003].
+3. **Idempotencia**: Se pasa la `idempotency_key` en los headers de la llamada HTTP a Mercado Pago. Un timeout no significa fallo [SPEC RNF-003].
 
 ## 4. Respuesta exitosa (Técnica)
 

@@ -1,6 +1,6 @@
 # Contratos del sistema financiero de SEA-SHARE (Módulo 3)
 
-Un archivo `.md` por contrato. Todo el contenido se deriva de los SPEC de `docs/features/` (única fuente de verdad). Lo que un SPEC no define **no se inventa**: se marca y se enlaza a un punto abierto (`OQ-xx`) del [plan general §12.1](../general-plan.md).
+Un archivo `.md` por contrato. Todo el contenido se deriva de los SPEC de `docs/features/` (única fuente de verdad). Lo que un SPEC no define **no se inventa**: se marca `[PEND]` y se aplica la propuesta por defecto documentada en el propio contrato.
 
 **Qué prevalece en caso de conflicto**
 
@@ -46,10 +46,10 @@ Los ejemplos usan **valores ilustrativos**.
 | Archivo | Operación | Quién → quién | UC |
 |---|---|---|---|
 | [`external/flota-consulta-tarifas-base.md`](external/flota-consulta-tarifas-base.md) | `POST /api/v1/fleet/base-rates` (contrato **requerido** a Flota) | Sistema → Flota | UC01, UC02, UC03 |
-| [`external/pasarela-comando-cobro.md`](external/pasarela-comando-cobro.md) | Comando de autorización/cobro | Sistema → Pasarela | UC05 |
-| [`external/pasarela-comando-reembolso.md`](external/pasarela-comando-reembolso.md) | Comando de liberación/reembolso | Sistema → Pasarela | UC09 |
-| [`external/pasarela-comando-liquidacion.md`](external/pasarela-comando-liquidacion.md) | Comando de captura/liquidación | Sistema → Pasarela | UC10 |
-| [`external/pasarela-webhook-resultados.md`](external/pasarela-webhook-resultados.md) | `POST /api/v1/webhook/gateway` | Pasarela → sistema | UC05, UC09, UC10 |
+| [`external/pasarela-comando-cobro.md`](external/pasarela-comando-cobro.md) | Comando de autorización/cobro | Sistema → Pasarela (Mercado Pago) | UC05 |
+| [`external/pasarela-comando-reembolso.md`](external/pasarela-comando-reembolso.md) | Comando de liberación/reembolso | Sistema → Pasarela (Mercado Pago) | UC09 |
+| [`external/pasarela-comando-liquidacion.md`](external/pasarela-comando-liquidacion.md) | Comando de captura/liquidación | Sistema → Pasarela (Mercado Pago) | UC10 |
+| [`external/pasarela-webhook-resultados.md`](external/pasarela-webhook-resultados.md) | `POST /api/v1/webhook/gateway` | Pasarela (Mercado Pago) → sistema | UC05, UC09, UC10 |
 
 Casos de uso **sin contrato propio**:
 
@@ -68,12 +68,12 @@ Casos de uso **sin contrato propio**:
 | Rutas | Prefijo `/api/v1/`, segmentos en minúscula con guiones. La ruta del contrato específico es la fuente de verdad (§ inicio) | [CONV] |
 | Cuerpos JSON | UTF-8, claves en `snake_case` (`boat_ids` ya viene fijado por UC01) | [CONV] |
 | Valores de enumeración | En español e idénticos a los SPEC (`PENDIENTE`, `RECHAZADO`, `CANCELADO_TARDIAMENTE`…) | [CONV] |
-| Identificadores | UUID (la embarcación es UUID en `docs/context/sea-share.md`; el resto, OQ-05) | [PEND] OQ-05 |
+| Identificadores | UUID v4 (única excepción: `financial_parameters.id = 1`, entero fijo del singleton) | [CONV] |
 | Fechas | `YYYY-MM-DD` | [CONV] |
 | Instantes | ISO-8601 en UTC, por ejemplo `2026-10-01T15:04:05Z` | [CONV] |
 | Dinero | **String decimal** (`"350000.00"`), nunca número JSON; el sistema usa `BigDecimal` | [SPEC RNF-002] + [CONV] |
 | Porcentajes | String decimal de 0 a 100 (`"15.00"` = 15 %), coherente con `tarifa × (1 + % / 100)` | [SPEC UC02 RF-002] + [CONV] |
-| Moneda, escala y redondeo | No definidos | [PEND] OQ-03 |
+| Escala y precisión | `NUMERIC(18,4)` en BD; `BigDecimal` con 4 decimales internos antes del redondeo final | [SPEC RNF-002] + [CONV] |
 
 ### 3.2 Headers comunes (REST)
 
@@ -216,7 +216,7 @@ Los canales sin respuesta al productor no pueden usar HTTP. Se aplican las misma
 | Webhook | Payload mal formado (E4) | `400 VALIDATION_ERROR` | [CONV] |
 | Webhook | Resultado ya registrado (duplicado) | `200 OK`, sin modificar el registro | [SPEC UC05 casos extremos, UC10 casos extremos] |
 | Webhook | Falla interna: BD no disponible (E10) | `500 INTERNAL_ERROR`, para que la Pasarela reintente | [CONV] |
-| Webhook | Resultado sin `IntenciónDe…` asociada (`idempotency_key` desconocida) | **[PEND]** Propuesta: `200 OK` y registro en `operational_failure`, para evitar reintentos infinitos de la Pasarela. El SPEC UC05 exige registrar el evento sin crear un registro de cobro, pero no define la respuesta | [SPEC UC05 casos extremos] + [PEND] OQ por asignar |
+| Webhook | Resultado sin `IntenciónDe…` asociada (`idempotency_key` desconocida) | **[PEND]** Propuesta: `200 OK` y registro en `operational_failure`, para evitar reintentos infinitos de la Pasarela. El SPEC UC05 exige registrar el evento sin crear un registro de cobro, pero no define la respuesta | [SPEC UC05 casos extremos] + [PEND] |
 
 ### 4.5 Lista de verificación para cada contrato
 
