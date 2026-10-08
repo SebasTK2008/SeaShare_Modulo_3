@@ -68,7 +68,6 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
 - **RNF-001**: El sistema DEBE utilizar un DTO para recibir la notificación mínima de disputa.
 - **RNF-002**: El sistema DEBE utilizar `BigDecimal` para los montos recuperados de sus propios registros y enviados a la Pasarela de Pago.
 - **RNF-003**: El sistema DEBE implementar idempotencia, control de concurrencia y manejo robusto de errores ante eventos repetidos, estados desconocidos o ausencia de información financiera interna.
-- **RNF-004**: El Sistema de Finanzas (Módulo 3) es el propietario y definidor absoluto de la estructura, nombres, tipos y canales de eventos asíncronos que consume o provee en su ámbito financiero. Los módulos emisores (por ejemplo, el Sistema de Reservas y Operaciones) deben adaptarse a los formatos y contratos definidos por Finanzas; Finanzas no debe adoptar formatos impuestos por otros módulos.
 
 ### Entidades Clave
 
