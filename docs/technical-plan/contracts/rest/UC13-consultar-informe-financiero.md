@@ -32,9 +32,17 @@ Devuelve datos agregados de los registros financieros para un período específi
 | Parámetro | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
 | `periodicity` | string | Sí | `QUINCENAL`, `MENSUAL`, `TRIMESTRAL` | [SPEC RF-001, D-18] |
-| `period` | string | No | Identificador del período. Si no se envía, usa el último cerrado | [SPEC RF-001, RF-003] |
+| `period` | string | No | Identificador del período en el formato canónico según periodicidad (ver tabla). Si no se envía, el sistema usa el último período cerrado | [SPEC RF-001, RF-003] |
 
-*(Nota de diseño: El formato de `period` debe ser estándar, p. ej. `2026-Q1`, `2026-10`, `2026-10-Q1` para primera quincena de octubre. Se documentará el formato esperado en convenciones del DTO)*.
+**Formato canónico de `period` según `periodicity`**:
+
+| `periodicity` | Formato | Ejemplos |
+|---|---|---|
+| `QUINCENAL` | `YYYY-MM-H1` (días 1-15) / `YYYY-MM-H2` (días 16-fin) | `2026-10-H1`, `2026-10-H2` |
+| `MENSUAL` | `YYYY-MM` | `2026-10` |
+| `TRIMESTRAL` | `YYYY-Q1` (Ene-Mar) / `YYYY-Q2` (Abr-Jun) / `YYYY-Q3` (Jul-Sep) / `YYYY-Q4` (Oct-Dic) | `2026-Q4` |
+
+Un valor de `period` que no coincida con el formato de `periodicity` recibido devuelve `400 INVALID_PERIOD` [SPEC RF-004, casos extremos].
 
 ## 3. Reglas de procesamiento
 
@@ -66,8 +74,12 @@ Devuelve datos agregados de los registros financieros para un período específi
 | `total_refunds` | string decimal | Suma de `RegistroDeReembolso` | [SPEC RF-007] |
 | `total_settlements` | string decimal | Suma de `RegistroDeDispersión` | [SPEC RF-007] |
 | `total_commissions` | string decimal | Suma de `RegistroDeComisión` (informativo) | [SPEC RF-009] |
+| `total_gross_volume` | string decimal | Volumen bruto total (solo Admin, null para Propietario) | [CONV] |
+| `retained_funds` | string decimal | Fondos retenidos / ciclo abierto (solo Admin, null para Propietario) | [CONV] |
+| `disputed_amount` | string decimal | Monto en disputas abiertas (solo Admin, null para Propietario) | [CONV] |
+| `open_disputes_count` | integer | Cantidad de disputas abiertas (solo Admin, null para Propietario) | [CONV] |
 | `counts` | object | Cantidad de registros (ej. `{"COBRO": 15, "REEMBOLSO": 2, ...}`) | [SPEC RF-009] |
-| `comparison` | object | Comparación con el período anterior | [SPEC RF-010] |
+| `comparison` | object | Comparación global con el período anterior | [SPEC RF-010] |
 
 ```json
 {
@@ -80,6 +92,10 @@ Devuelve datos agregados de los registros financieros para un período específi
   "total_refunds": "100000.00",
   "total_settlements": "900000.00",
   "total_commissions": "135000.00",
+  "total_gross_volume": "1250000.00",
+  "retained_funds": "100000.00",
+  "disputed_amount": "240.00",
+  "open_disputes_count": 1,
   "counts": {
     "COBRO": 10,
     "REEMBOLSO": 2,

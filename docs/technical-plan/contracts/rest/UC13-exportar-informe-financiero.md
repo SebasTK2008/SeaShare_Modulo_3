@@ -32,7 +32,17 @@ Genera un archivo `.csv` con los mismos datos agregados del informe financiero c
 | Parámetro | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
 | `periodicity` | string | Sí | `QUINCENAL`, `MENSUAL`, `TRIMESTRAL` | [SPEC RF-013] |
-| `period` | string | Sí | Identificador explícito del período a exportar | [SPEC RF-013] |
+| `period` | string | Sí | Identificador explícito del período a exportar, en el formato canónico según periodicidad (ver tabla) | [SPEC RF-013] |
+
+**Formato canónico de `period` según `periodicity`** (idéntico al contrato de consulta):
+
+| `periodicity` | Formato | Ejemplos |
+|---|---|---|
+| `QUINCENAL` | `YYYY-MM-H1` (días 1-15) / `YYYY-MM-H2` (días 16-fin) | `2026-10-H1`, `2026-10-H2` |
+| `MENSUAL` | `YYYY-MM` | `2026-10` |
+| `TRIMESTRAL` | `YYYY-Q1` (Ene-Mar) / `YYYY-Q2` (Abr-Jun) / `YYYY-Q3` (Jul-Sep) / `YYYY-Q4` (Oct-Dic) | `2026-Q4` |
+
+Un valor de `period` que no coincida con el formato de `periodicity` recibido devuelve `400 INVALID_PERIOD` [SPEC RF-004, casos extremos].
 
 ## 3. Reglas de procesamiento
 
@@ -46,8 +56,8 @@ Genera un archivo `.csv` con los mismos datos agregados del informe financiero c
 Header sugerido: `Content-Disposition: attachment; filename="informe_financiero_2026-10.csv"`
 
 ```csv
-Fecha de Generacion,Solicitante,Alcance,Periodicidad,Periodo,Neto Generado,Total Cobros,Total Reembolsos,Total Dispersiones,Total Comisiones (Informativo)
-2026-11-01T10:00:00Z,AdminFinanzas,PLATFORM,MENSUAL,2026-10,150000.00,1150000.00,100000.00,900000.00,135000.00
+Fecha de Generacion,Solicitante,Alcance,Periodicidad,Periodo,Neto Generado,Total Cobros,Total Reembolsos,Total Dispersiones,Total Comisiones,Volumen Bruto Total,Fondos Retenidos,Monto Disputado,Disputas Abiertas
+2026-11-01T10:00:00Z,AdminFinanzas,PLATFORM,MENSUAL,2026-10,150000.00,1150000.00,100000.00,900000.00,135000.00,1250000.00,100000.00,240.00,1
 ```
 
 ## 5. Respuestas de error

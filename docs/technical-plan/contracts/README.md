@@ -49,7 +49,7 @@ Los ejemplos usan **valores ilustrativos**.
 | [`external/pasarela-comando-cobro.md`](external/pasarela-comando-cobro.md) | Comando de autorización/cobro | Sistema → Pasarela | UC05 |
 | [`external/pasarela-comando-reembolso.md`](external/pasarela-comando-reembolso.md) | Comando de liberación/reembolso | Sistema → Pasarela | UC09 |
 | [`external/pasarela-comando-liquidacion.md`](external/pasarela-comando-liquidacion.md) | Comando de captura/liquidación | Sistema → Pasarela | UC10 |
-| [`external/pasarela-webhook-resultados.md`](external/pasarela-webhook-resultados.md) | `POST /api/v1/webhook/gateway` | Pasarela → sistema | UC05, UC09, UC10 |
+| [`external/pasarela-webhook-resultados.md`](external/pasarela-webhook-resultados.md) | `POST /api/v1/webhook/gateway?data.id=...&type=...` (Mercado Pago → sistema, flujo de dos pasos) | Pasarela → sistema | UC05, UC09, UC10 |
 
 Casos de uso **sin contrato propio**:
 
@@ -73,6 +73,7 @@ Casos de uso **sin contrato propio**:
 | Instantes | ISO-8601 en UTC, por ejemplo `2026-10-01T15:04:05Z` | [CONV] |
 | Dinero | **String decimal** (`"350000.00"`), nunca número JSON; el sistema usa `BigDecimal` | [SPEC RNF-002] + [CONV] |
 | Porcentajes | String decimal de 0 a 100 (`"15.00"` = 15 %), coherente con `tarifa × (1 + % / 100)` | [SPEC UC02 RF-002] + [CONV] |
+| Períodos de informe (`period`) | `YYYY-MM-H1`/`YYYY-MM-H2` (quincenal), `YYYY-MM` (mensual), `YYYY-Q1`…`YYYY-Q4` (trimestral) | [CONV] UC13 |
 | Moneda, escala y redondeo | No definidos | [PEND] OQ-03 |
 
 ### 3.2 Headers comunes (REST)
