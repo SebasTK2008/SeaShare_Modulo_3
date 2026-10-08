@@ -107,7 +107,7 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para recibir la solicitud, devolver el informe agregado y producir el archivo `.csv` de exportación.
-- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar las métricas monetarias del informe y la comparación entre períodos.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar las métricas monetarias del informe y la comparación entre períodos, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia la pasarela o reportes.
 - **RNF-003**: El sistema DEBE utilizar la fecha y hora de creación (fechaHoraCreación) del registro inmutable de cada operación financiera para determinar su inclusión en el período seleccionado.
 - **RNF-004**: El sistema DEBE garantizar que la exportación y la consulta utilicen el mismo alcance, período y cálculo.
 

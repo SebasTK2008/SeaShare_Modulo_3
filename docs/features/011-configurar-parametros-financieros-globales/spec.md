@@ -123,7 +123,7 @@ Como el sistema, al recibir del Administrador Financiero una configuración fina
 - **RF-004**: El sistema DEBE permitir al Administrador Financiero configurar (definir o ajustar) el porcentaje de incremento de tarifa dinámica aplicable a la temporada alta.
 - **RF-005**: El sistema DEBE persistir los cuatro parámetros configurables como una única actualización de la entidad lógica `ParámetrosFinancierosGlobales`, sobrescribiendo la configuración previamente vigente solo cuando todos los valores hayan sido validados correctamente.
 - **RF-006**: El sistema DEBE exponer los parámetros financieros globales vigentes para su consumo por "Brindar tarifa base" (porcentajes de tarifa dinámica), "Solicitar estimación para reserva" y "Solicitar el valor calculado de la reserva" (tarifa de seguro náutico) y "Liquidar fondos de alquiler" (porcentaje de comisión de la plataforma). El depósito no es configurable y se calcula conforme a la regla definida en "Solicitar el valor calculado de la reserva".
-- **RF-007**: El sistema NO DEBE modificar los valores ya registrados en reservas previamente calculadas cuando se actualice un parámetro financiero global; los nuevos valores configurados aplican únicamente a los cálculos que se realicen después de la actualización.
+- **RF-007**: El sistema NO DEBE modificar los valores ya registrados en reservas previamente calculadas cuando se actualice un parámetro financiero global; los nuevos valores configurados aplican únicamente a los cálculos que se realicen después de la actualización. Los parámetros no tienen historial y su efecto no es retroactivo; los valores ya congelados en reservas calculadas se conservan inalterados.
 - **RF-008**: El sistema DEBE exponer este caso de uso exclusivamente al Administrador Financiero.
 - **RF-009**: El sistema DEBE devolver en una única respuesta los parámetros configurables vigentes y los datos derivados de solo lectura necesarios para la pantalla de configuración.
 - **RF-010**: El sistema DEBE descartar cualquier cambio no persistido cuando el Administrador Financiero cancele la edición.
@@ -134,7 +134,7 @@ Como el sistema, al recibir del Administrador Financiero una configuración fina
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar un DTO general para cargar y guardar la configuración financiera global, mapeando los cuatro parámetros configurables. Los DTOs internos de cada grupo pueden utilizarse como detalle de implementación, pero no representan entidades ni contratos de persistencia separados.
-- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el porcentaje de comisión de la plataforma, la tarifa del seguro náutico y los porcentajes de incremento de tarifa dinámica.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el porcentaje de comisión de la plataforma, la tarifa del seguro náutico y los porcentajes de incremento de tarifa dinámica, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia la pasarela o reportes.
 - **RNF-003**: El sistema DEBE persistir de forma atómica la configuración completa, de manera que "Brindar tarifa base", "Solicitar el valor calculado de la reserva" y "Liquidar fondos de alquiler" recuperen siempre una única versión coherente de los valores vigentes.
 
 ### Entidades Clave

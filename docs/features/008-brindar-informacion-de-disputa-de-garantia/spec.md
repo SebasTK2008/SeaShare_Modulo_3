@@ -58,7 +58,7 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
 - **RF-005**: Ante `RECHAZADO`, el sistema DEBE recuperar internamente el depósito cobrado y registrado y solicitar su liberación o reembolso total al Arrendatario, según el estado del cobro original.
 - **RF-006**: Ante `COMPLETADO`, el sistema DEBE recuperar internamente el depósito cobrado y registrado y solicitar su liquidación total al Propietario.
 - **RF-007**: El sistema NO DEBE recibir ni requerir desde el Sistema de Reservas y Operaciones el monto del depósito, el monto a reembolsar, el monto a liquidar ni una instrucción técnica de pasarela.
-- **RF-008**: El sistema DEBE aplicar idempotencia por reserva, disputa y versión o clave del evento.
+- **RF-008**: El sistema DEBE aplicar idempotencia por reserva, disputa y versión o clave del evento. También DEBE reforzar exclusión mutua y coherencia con los flujos definidos en SPEC 07, 09 y 10.
 - **RF-009**: El sistema DEBE exponer este caso de uso exclusivamente como consumidor de las notificaciones enviadas por el Sistema de Reservas y Operaciones y NO DEBE ejecutar cron jobs, temporizadores internos ni tareas en segundo plano para verificar el vencimiento de la ventana de 24 horas o el estado de las disputas.
 - **RF-009A**: El sistema DEBE procesar la notificación con estado `RECHAZADO` enviada por el Sistema de Reservas y Operaciones al vencer la ventana de 24 horas sin disputa, solicitando la liberación o el reembolso total del depósito al Arrendatario sin requerir un atributo de origen.
 - **RF-010**: El sistema NO DEBE reconocer sub-resultados adicionales (por ejemplo, liberación o retención parcial) dentro de `COMPLETADO` o `RECHAZADO`; ambos estados son tratamientos totales sobre el 100% del depósito cobrado y registrado, conforme a la regla de negocio vigente ("Se entrega completo al Arrendatario o completo al Propietario").
@@ -68,6 +68,7 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
 - **RNF-001**: El sistema DEBE utilizar un DTO para recibir la notificación mínima de disputa.
 - **RNF-002**: El sistema DEBE utilizar `BigDecimal` para los montos recuperados de sus propios registros y enviados a la Pasarela de Pago.
 - **RNF-003**: El sistema DEBE implementar idempotencia, control de concurrencia y manejo robusto de errores ante eventos repetidos, estados desconocidos o ausencia de información financiera interna.
+- **RNF-004**: El Sistema de Finanzas (Módulo 3) es el propietario y definidor absoluto de la estructura, nombres, tipos y canales de eventos asíncronos que consume o provee en su ámbito financiero. Los módulos emisores (por ejemplo, el Sistema de Reservas y Operaciones) deben adaptarse a los formatos y contratos definidos por Finanzas; Finanzas no debe adoptar formatos impuestos por otros módulos.
 
 ### Entidades Clave
 
@@ -84,4 +85,4 @@ Como el sistema, al recibir desde el Sistema de Reservas y Operaciones el estado
 - **CE-003**: "100% de los estados `RECHAZADO` solicitan exactamente una liberación o reembolso total idempotente, y 100% de los estados `COMPLETADO` solicitan exactamente una liquidación total idempotente".
 - **CE-004**: "0 montos o instrucciones técnicas de pago son recibidos desde el Sistema de Reservas y Operaciones, y 100% de los importes ejecutados provienen de registros financieros internos del sistema".
 - **CE-005**: "100% de los eventos repetidos o concurrentes para una misma resolución evitan operaciones monetarias duplicadas".
-- **CE-006**: "0 sub-resultados de tipo `LIBERAR_DEPOSITO`/`RETENER_DEPOSITO` o cualquier retención parcial son procesados por este caso de uso, confirmando que es la única y canónica SPEC 8 vigente para la disputa de garantía".
+- **CE-006**: "0 sub-resultados de tipo `LIBERAR_DEPOSITO`/`RETENER_DEPOSITO` o cualquier retención parcial son procesados por este caso de uso, confirmando que es la única y canónica SPEC 8 vigente para la disputa de garantía". Verificar exclusión mutua y coherencia con SPEC 07, 09 y 10.
