@@ -283,22 +283,23 @@ sequenceDiagram
   participant MQ as RabbitMQ
   participant F as El sistema
   participant M1 as Gestión de Flota
-  participant PG as Pasarela de Pago
+  participant PG as Pasarela de Pago (Mercado Pago)
 
   M2->>MQ: reservation.info.provided (UC03)
   MQ->>F: consumo
-  F->>M1: consulta de tarifa base (lote)
+  F->>M1: consulta de tarifa base de la embarcación (lote de un elemento)
   M1-->>F: tarifas base
   F->>F: UC02 tarifa dinámica y registro de InformaciónDeReserva (invalida montos previos si es reenvío)
   M2->>F: POST calculated-value (UC04)
   F->>F: congela comisión % y seguro por pasajero, calcula y registra el desglose
   F-->>M2: desglose y total
-  M2->>MQ: reservation.status.changed PENDIENTE + medio de pago (UC07)
+  M2->>MQ: reservation.status.changed PENDIENTE + payment_token_ref (UC07)
   MQ->>F: consumo
   F->>F: UC05 nueva IntenciónDeCobro (clave idempotente propia) + outbox
+  Note over F: comando publicado a la cola interna (outbox → RabbitMQ) y consumido por el worker
   F->>PG: autorizar o cobrar (worker, clave idempotente de la intención)
   PG-->>F: webhook de resultado
-  F->>F: actualizar intención; si hay cobro/captura confirmados, crear RegistroDeCobro con charge_intent_id
+  F->>F: actualizar intención, si hay cobro/captura confirmados crear RegistroDeCobro con charge_intent_id
   M2->>F: GET payment-confirmation (UC06)
   F-->>M2: estado del cobro
 ```
