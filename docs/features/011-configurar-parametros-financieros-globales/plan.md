@@ -29,7 +29,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Conf
 | **RF-012** 4 editables; depósito y ventanas solo lectura | `HighSeasonCalendar`, `guarantee_deposit_rule`, `FinancialParametersResponse` | T007, T029, T032 | T026, T029 |
 | **RF-013** rangos y formatos → error controlado | Validación en `FinancialParameters` → `400 VALIDATION_ERROR` | T004, T005, T019, T024 | T020, T021 |
 | **RNF-001** DTO general de carga/guardado | `FinancialParametersRequest`/`FinancialParametersResponse` (HTTP) + `FinancialParametersCommand`/`FinancialParametersResult` (aplicación) | T012, T018, T030, T032 | T010, T026 |
-| **RNF-002** `BigDecimal` | Campos de `FinancialParameters`; JSON como *string* decimal (D-11, README §3.1) | T005, T018, T032 | T010, T020, T026 |
+| **RNF-002** `BigDecimal` | Campos de `FinancialParameters`; JSON como *string* decimal (README §3.1) | T005, T018, T032 | T010, T020, T026 |
 | **RNF-003** atómico y versión coherente | Fila singleton `id=1` + transacción única (D-24) | T016, T017, T025, T040 | T034, T037, T038 |
 | **CE-001** consistencia de configuración | Lectura vía `FinancialParametersRepository` tras el guardado | T034 | **T034** |
 | **CE-002** sobrescritura completa, sin parciales ni afectación de reservas | Adaptador limitado a `financial_parameters` + CHECK de BD | T035, T042 | **T035** |
@@ -43,16 +43,16 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Conf
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]
-**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC11: Spring Web MVC, Validation, Security (OAuth2 Resource Server), Flyway, MapStruct, ArchUnit. **Hoy no están en el `pom.xml`** (solo hay `data-jpa`, `postgresql`, `mapstruct`, `lombok-mapstruct-binding` y Testcontainers); los nombres exactos de los artefactos deben verificarse al agregarlos [SPEC general-plan: Technical Context y "Estado actual del repositorio"]
-**Storage**: PostgreSQL 16+ (`NUMERIC` para dinero y porcentajes, `timestamptz` para instantes) [SPEC general-plan §4]; migraciones Flyway en `src/main/resources/db/migration` (**hoy no existen**)
-**Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL — ya existe `src/test/java/com/seashare/seasharem3/TestcontainersConfiguration.java`), MockMvc, ArchUnit [SPEC general-plan §9]. *Hoy falta `spring-boot-starter-test` en el `pom.xml`*
+**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC11: Spring Web MVC, Validation, Security (OAuth2 Resource Server), Flyway, MapStruct, ArchUnit. **Hoy no están en el `pom.xml`** (solo hay `data-jpa`, `postgresql`, `mapstruct`, `lombok-mapstruct-binding` y Testcontainers); los nombres exactos de los artefactos deben verificarse al agregarlos [SPEC general-plan: Technical Context]
+**Storage**: PostgreSQL 16+ (`NUMERIC(18,4)` para dinero y porcentajes, `timestamptz` para instantes) [SPEC general-plan §4]; migraciones Flyway en `src/main/resources/db/migration` (**hoy no existen**)
+**Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL — ya existe `src/test/java/com/seashare/seasharem3/TestcontainersConfiguration.java`), MockMvc, ArchUnit [CONV]. *Hoy falta `spring-boot-starter-test` en el `pom.xml`*
 **Target Platform**: Contenedores Docker (Linux) [SPEC general-plan]
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio [SPEC general-plan]
 **Performance Goals**: No definidos por el SPEC 11 `[NEEDS CLARIFICATION: se buscó en spec.md 011, general-plan.md §Technical Context y contracts/rest/UC11-*; el SPEC no fija metas de rendimiento para este caso de uso]`. Administración esporádica [CONV]
 **Constraints**: `BigDecimal` en los cuatro campos [SPEC RNF-002]; guardado atómico sin actualizaciones parciales [SPEC RF-005, RF-011, RNF-003]; acceso exclusivo del Administrador Financiero [SPEC RF-008, CE-003]; singleton sin historial ni versión, último guardado gana [SPEC casos extremos + general-plan D-24]
 **Scale/Scope**: 1 fila singleton (`id = 1`) en `financial_parameters` [SPEC general-plan §4]; 2 endpoints REST [SPEC contratos UC11]; 13 RF + 3 RNF + 4 CE + 4 HU del SPEC 11
 
-**Estado actual del repositorio (relevante para UC11)**: existen `SeashareM3Application.java`, `application.properties` (solo `spring.application.name=seashare-m3`), `TestcontainersConfiguration` (imagen `postgres:latest`; el plan general §8 usa `postgres:16` — ver D-11), `SeashareM3ApplicationTests` y `TestSeashareM3Application`. **No existen** los paquetes `domain`/`application`/`infrastructure`, migraciones, `Dockerfile`, `docker-compose.yml` ni reglas ArchUnit.
+**Estado actual del repositorio (relevante para UC11)**: existen `SeashareM3Application.java`, `application.properties` (solo `spring.application.name=seashare-m3`), `TestcontainersConfiguration` (imagen `postgres:latest`; se alinea a `postgres:16` [CONV] — ver UC11-D-11), `SeashareM3ApplicationTests` y `TestSeashareM3Application`. **No existen** los paquetes `domain`/`application`/`infrastructure`, migraciones, `Dockerfile`, `docker-compose.yml` ni reglas ArchUnit.
 
 ## Project Structure
 
@@ -119,7 +119,7 @@ src/main/resources/
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/
-│   └── ArchitectureTest.java                        # T003, T042 [general-plan §3.4, §9]
+│   └── ArchitectureTest.java                        # T003, T042 [general-plan §3.4]
 ├── contract/
 │   ├── UC11GetFinancialParametersContractTest.java  # T026, T027 [CONV: nombre]
 │   └── UC11SaveFinancialParametersContractTest.java # T010, T021, T036, T041 [CONV: nombre]
@@ -141,20 +141,20 @@ src/test/java/com/seashare/seasharem3/
 Todas las reglas siguientes provienen del SPEC 11 (`spec.md`) salvo indicación.
 
 1. **Parámetros configurables** [SPEC RF-001…RF-004, HU1, HU2]: `commissionPct` (comisión de la plataforma), `insuranceFeePerPassenger` (tarifa del seguro náutico por pasajero), `weekendIncreasePct` (incremento fin de semana), `highSeasonIncreasePct` (incremento temporada alta). Ejemplo ilustrativo: comisión `20` (porcentaje entero), seguro `8,50` (importe por pasajero) — *los valores exactos son responsabilidad del Administrador Financiero; el SPEC no fija valores por defecto*.
-2. **Rangos y formatos de validación** [SPEC RF-013]: los tres porcentajes deben estar entre `0` y `100` (inclusive); la tarifa del seguro debe ser `>= 0`. Cuerpo con valores fuera de rango o no numéricos → `400 VALIDATION_ERROR` con el detalle de cada campo (`contracts/README.md` §3.3 y catálogo §3.4). **[PEND OQ-02: los límites exactos (0–100 / ≥0) los fija el CHECK de la tabla del general-plan §4; el SPEC 11 no los repite. Verificado en `pom`? — origen de los límites: `general-plan.md` §4, columna de la tabla `financial_parameters`. Nota: el contrato `UC11-guardar-parametros-financieros.md` menciona rangos 0–100 para porcentajes]**.
+2. **Rangos y formatos de validación** [SPEC RF-013]: los tres porcentajes deben estar entre `0` y `100` (inclusive); la tarifa del seguro debe ser `>= 0`. Cuerpo con valores fuera de rango o no numéricos → `400 VALIDATION_ERROR` con el detalle de cada campo (`contracts/README.md` §3.3 y catálogo §3.4). Los límites operativos (0–100 / ≥0) son los del CHECK de la tabla en `general-plan.md` §4 y los que documenta el contrato `UC11-guardar-parametros-financieros.md` **[CONV]**.
 3. **Sobrescritura completa, sin actualizaciones parciales** [SPEC RF-005, RF-011, HU4]: el `PUT` envía los cuatro valores siempre obligatorios; si uno es inválido, no se persiste *ninguno* (transacción única sobre la fila `id = 1`). Ejemplo ilustrativo: comisión `20` válida pero seguro `-1` inválido → respuesta `400` y la comisión **no** cambia.
 4. **Sin efecto retroactivo** [SPEC RF-007, CE-002, HU4]: el nuevo valor solo se aplica a cálculos posteriores; las reservas ya calculadas conservan sus importes. UC11 no escribe en ninguna otra tabla.
 5. **Datos de solo lectura** [SPEC RF-012, HU3]:
-   - `guarantee_deposit_rule` → regla textual `"10% de la tarifa base diaria"` (no es un importe editable; el 10% es dato de SPEC 2 / general-plan; la redacción exacta se deriva de ese dato **[PEND OQ-05: redacción literal no definida en el SPEC 11]**).
-   - `high_season_windows` → ventanas de temporada alta derivadas de SPEC 2 RF-006 y fijadas en `general-plan` (fechas de las ventanas en formato ISO `MM-dd`; **[PEND OQ-04: ¿el contrato espera `start`/`end` con `MM-dd` o con año? ver D-04]**).
+   - `guarantee_deposit_rule` → regla textual `"10% de la tarifa base diaria"` (no es un importe editable; el 10% es dato de SPEC 2 / general-plan; la redacción exacta se deriva de ese dato **[PEND UC11-OQ-05: redacción literal no definida en el SPEC 11]**).
+   - `high_season_windows` → ventanas de temporada alta derivadas de SPEC 2 RF-006 y fijadas en `general-plan` (fechas de las ventanas en formato ISO `MM-dd`; **[PEND UC11-OQ-04: ¿el contrato espera `start`/`end` con `MM-dd` o con año? ver UC11-D-04]**).
 6. **Ventanas de temporada alta** [SPEC RF-012; datos de SPEC 2 RF-006 (leído)]: 15-nov a 15-ene, 1-jun a 30-jul, Semana Santa (algoritmo de Meeus/Jones/Butcher), 5 a 12 de octubre; **los puentes no son temporada alta**; si un fin de semana coincide con temporada alta se aplica el **mayor** incremento [CONV derivado de SPEC 4 RF-003].
-7. **Seguridad** [SPEC RF-008, CE-003, HU3/HU4]: solo el Administrador Financiero (`ADMIN_FINANCIERO`) puede consultar y guardar. Mecanismo concreto **[PEND OQ-01: propuesta por defecto del general-plan §7.1 = OAuth2 Resource Server JWT con rol `ADMIN_FINANCIERO`; el SPEC 11 no lo especifica]**.
-8. **Exclusividad y semántica de escritura** [SPEC casos extremos; general-plan D-24]: una única fila lógica; la última escritura gana; no hay versionado (`@Version`) ni historial. Añadir `id = 1` por migración insert inicial = decisión tomada según HU3 escenario 2 (sin fila inicial → `404 PARAMETERS_NOT_CONFIGURED`) **[CONV, ver D-12 en Discrepancias: HU3 exige 404 cuando no hay fila; por tanto la migración NO inserta fila de ejemplo, y el caso extremo "primera configuración" es un `PUT` sobre tabla vacía (`INSERT ... ON CONFLICT DO UPDATE` o `save` diferenciado — ver T016)]**.
-9. **No definido por el SPEC 11** `[NEEDS CLARIFICATION]`: metas de rendimiento; redacción literal del depósito; formato exacto de `high_season_windows`; mecanismo de autenticación; comportamiento ante concurrencia (por defecto último guardado gana, D-24).
+7. **Seguridad** [SPEC RF-008, CE-003, HU3/HU4]: solo el Administrador Financiero (`ADMIN_FINANCIERO`) puede consultar y guardar. Mecanismo concreto **[OQ-01: propuesta por defecto del general-plan §7.1 = OAuth2 Resource Server JWT con rol `ADMIN_FINANCIERO`; el SPEC 11 no lo especifica, por lo que las tareas de seguridad de este plan quedan condicionadas a su confirmación]**.
+8. **Exclusividad y semántica de escritura** [SPEC casos extremos; general-plan D-24]: una única fila lógica; la última escritura gana; no hay versionado (`@Version`) ni historial. Añadir `id = 1` por migración insert inicial = decisión tomada según HU3 escenario 2 (sin fila inicial → `404 PARAMETERS_NOT_CONFIGURED`) **[CONV, ver UC11-D-12 en Discrepancias: HU3 exige 404 cuando no hay fila; por tanto la migración NO inserta fila de ejemplo, y el caso extremo "primera configuración" es un `PUT` sobre tabla vacía (`INSERT ... ON CONFLICT DO UPDATE` o `save` diferenciado — ver T016)]**.
+9. **No definido por el SPEC 11** `[NEEDS CLARIFICATION]`: metas de rendimiento; redacción literal del depósito; formato exacto de `high_season_windows`; mecanismo de autenticación; comportamiento ante concurrencia (por defecto último guardado gana, general-plan D-24).
 
 ## Contratos de API
 
-Fuente: `contracts/rest/UC11-obtener-parametros-financieros.md` y `contracts/rest/UC11-guardar-parametros-financieros.md` [SPEC; general-plan §6]. El SPEC 11 **no** fija la ruta base: los dos contratos usan `/api/v1/financial-parameters` y el índice `contracts/README.md` menciona `/api/v1/admin/financial-parameters` → ver **D-01**. Este plan implementa la ruta de los contratos `/api/v1/financial-parameters` y deja la discrepancia registrada.
+Fuente: `contracts/rest/UC11-obtener-parametros-financieros.md` y `contracts/rest/UC11-guardar-parametros-financieros.md` [SPEC; general-plan §6]. El SPEC 11 **no** fija la ruta base: rigen los dos contratos, que usan `/api/v1/financial-parameters`.
 
 ### `GET /api/v1/financial-parameters`
 
@@ -175,7 +175,7 @@ Devuelve los 4 vigentes + `guarantee_deposit_rule` + `high_season_windows` en un
 
 - **404 `PARAMETERS_NOT_CONFIGURED`** cuando la fila no existe (primera vez; HU3 escenario 2) [SPEC HU3].
 - **401 / 500 `INTERNAL_ERROR`** (catálogo §3.4) si aplica [SPEC].
-- Nota: los porcentajes se serializan como **string decimal** (RNF-002 + `contracts/README.md` §3.1). El formato exacto de `high_season_windows` **no está definido** → ver **D-04**.
+- Nota: los porcentajes se serializan como **string decimal** (RNF-002 + `contracts/README.md` §3.1). El formato exacto de `high_season_windows` **no está definido** → ver **UC11-D-04**.
 
 ### `PUT /api/v1/financial-parameters`
 
@@ -190,11 +190,11 @@ Body: los **cuatro** valores, todos obligatorios (RNF-001) [SPEC]:
 }
 ```
 
-- **204 No Content** (contratos UC11) vs **200 OK con el cuerpo guardado** (general-plan §6 / README §3.1) → ver **D-02**. *Decisión del plan: implementar **204** según los contratos de este UC (fuente más específica), dejando D-02 registrada.*
+- **204 No Content** (contratos UC11).
 - **400 `VALIDATION_ERROR`** — algún valor fuera de rango/no numérico; sin persistencia parcial [SPEC RF-013].
 - **401/403** — no autenticado / rol distinto de `ADMIN_FINANCIERO` [SPEC RF-008, CE-003].
-- **404 `PARAMETERS_NOT_CONFIGURED`** — `PUT` con fila ausente: **decisión: no aplica** (el `PUT` crea/actualiza; el 404 es de lectura) — *ver D-03*.
-- **500 `PARAMETERS_SAVE_FAILED`** — fallo de persistencia [SPEC catálogo general-plan §3.4; el contrato guardar no lo lista → ver **D-05**].
+- **404 `PARAMETERS_NOT_CONFIGURED`** — `PUT` con fila ausente: no aplica (el `PUT` crea/actualiza; el 404 es de lectura).
+- **500 `PARAMETERS_SAVE_FAILED`** — fallo de persistencia [SPEC catálogo `contracts/README.md` §3.4; el contrato de guardar ya lo lista].
 - Errores en formato Problem Details (RFC 9457, `contracts/README.md` §3.3).
 
 ### Resumen de códigos (catálogo `contracts/README.md` §3.4)
@@ -202,13 +202,13 @@ Body: los **cuatro** valores, todos obligatorios (RNF-001) [SPEC]:
 | Código | HTTP | En catálogo | Uso en UC11 |
 |---|---|---|---|
 | `VALIDATION_ERROR` | 400 | sí | PUT con valores inválidos |
-| `PARAMETERS_NOT_CONFIGURED` | 404 | **no** (ver D-03) | GET sin fila |
+| `PARAMETERS_NOT_CONFIGURED` | 404 | sí | GET sin fila |
 | `PARAMETERS_SAVE_FAILED` | 500 | sí | fallo de persistencia en PUT |
 | `INTERNAL_ERROR` | 500 | sí | error no controlado |
 
 ## Estrategia de testing
 
-Fuente: `general-plan.md` §9 (JUnit 5, AssertJ, Mockito, Testcontainers PostgreSQL, MockMvc, ArchUnit; cobertura dominio ≥90%, aplicación ≥80%) y `sdd-guide.MD` ("pruebas que demuestran cada caso de aceptación"). Ningún test del repositorio cubre UC11 hoy (solo `SeashareM3ApplicationTests` y `TestSeashareM3Application`).
+Fuente: `general-plan.md` (Technical Context), `sdd-guide.MD` ("pruebas que demuestran cada caso de aceptación") y los contratos UC11. Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. Ningún test del repositorio cubre UC11 hoy (solo `SeashareM3ApplicationTests` y `TestSeashareM3Application`).
 
 **Nivel de cada tipo de prueba:**
 
@@ -228,7 +228,7 @@ Fuente: `general-plan.md` §9 (JUnit 5, AssertJ, Mockito, Testcontainers Postgre
 - **`ce003_solo_admin_financiero_accede`** (CE-003, T028): sin token → `401`; rol distinto → `403`; rol `ADMIN_FINANCIERO` → `200`.
 - **`ce004_cancelar_no_genera_peticion_y_guardado_invalido_no_persiste`** (CE-004, T036): comportamiento de edición — no existe endpoint de cancelación (la cancelación es del cliente, `README` §2) y un `PUT` inválido no modifica la fila.
 
-Además: prueba de regresión de consumidores **fuera del alcance** (RF-006 es responsabilidad de UC01/UC02/UC04/UC10; aquí solo se expone el puerto) — ver D-07 de alcance.
+Además: prueba de regresión de consumidores **fuera del alcance** (RF-006 es responsabilidad de UC01/UC02/UC04/UC10; aquí solo se expone el puerto).
 
 ## Discrepancias y puntos abiertos
 
@@ -236,20 +236,15 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 
 | ID | Descripción | Fuentes en conflicto | Decisión para avanzar | Requiere |
 |---|---|---|---|---|
-| **D-01** | Ruta base: `/api/v1/financial-parameters` vs `/api/v1/admin/financial-parameters` | contratos UC11 vs `contracts/README.md` §índice; general-plan no fija ruta | usar `/api/v1/financial-parameters` (contratos específicos) | confirmación |
-| **D-02** | `PUT` responde 204 vs 200 con body | contratos UC11 (204) vs general-plan §6/README (200) | usar **204** | confirmación |
-| **D-03** | `PARAMETERS_NOT_CONFIGURED` (404) no está en el catálogo §3.4 | `contracts/README.md` §3.4 vs HU3 escenario 2 | usarlo en el `GET` y proponer añadirlo al catálogo | decisión + catálogo |
-| **D-04** | Ejemplo de ventana "15-dic a 15-ene" vs "15-nov a 15-ene"; formato del array no definido | `UC11-obtener…` (ejemplo) vs SPEC 2 RF-006 | fechas del SPEC 2; formato del array **[PEND]** | definición de formato |
-| **D-05** | El contrato de guardar no lista `PARAMETERS_SAVE_FAILED` | `UC11-guardar…` vs catálogo §3.4 | devolverlo igual (catálogo) | confirmación |
-| **D-06** | Depósito como texto "regla" vs "calculado 10%" | SPEC RF-012 ("calculado") vs general-plan (regla textual) | texto literal `guarantee_deposit_rule` | redacción literal **[OQ-05]** |
-| **D-07** | §12.1 (OQ-xx) y §12.2 (observaciones) referenciadas en el template/guide pero **no existen** en `general-plan.md` ni en `docs/` | `sdd-guide.MD` / expectativas de plantilla vs contenido real | se documenta aquí como secciones equivalentes | verificar si faltan documentos |
-| **D-08** | Concurrencia no definida | general-plan D-24 (último gana) vs ausencia en SPEC 11 | último guardado gana, sin `@Version` | confirmación |
-| **D-09** | Nombres JSON distintos de columnas | contratos (`platform_commission_percentage`…) vs tabla (`commission_pct`…) | mapeo explícito en mapper (ya sin renombres en dominio) | — (resuelto en diseño) |
-| **D-10** | RNF-001 pide "DTO general" de carga/guardado vs dos cuerpos HTTP distintos | SPEC 11 RNF-001 vs contratos GET/PUT | DTOs separados HTTP + command/result en aplicación | confirmación |
-| **D-11** | `TestcontainersConfiguration` usa `postgres:latest` vs `postgres:16` | repo actual vs general-plan §8 | alinear a `postgres:16` al ampliar los tests (T001) | confirmación |
-| **D-12** | Caso extremo "primera configuración": HU3 exige `404` sin fila, pero RF-005 requiere fila única | HU3 vs RF-005 | migración sin fila inicial; `PUT` crea la fila (upsert) | confirmación |
+| **UC11-D-04** | Ejemplo de ventana "15-dic a 15-ene" vs "15-nov a 15-ene"; formato del array no definido | `UC11-obtener…` (ejemplo) vs SPEC 2 RF-006 | fechas del SPEC 2; formato del array **[PEND UC11-OQ-04]** | definición de formato |
+| **UC11-D-06** | Depósito como texto "regla" vs "calculado 10%" | SPEC RF-012 ("calculado") vs general-plan (regla textual) | texto literal `guarantee_deposit_rule` | redacción literal **[UC11-OQ-05]** |
+| **UC11-D-08** | Concurrencia no definida | general-plan D-24 (último gana) vs ausencia en SPEC 11 | último guardado gana, sin `@Version` | confirmación |
+| **UC11-D-09** | Nombres JSON distintos de columnas | contratos (`platform_commission_percentage`…) vs tabla (`commission_pct`…) | mapeo explícito en mapper (ya sin renombres en dominio) | — (resuelto en diseño) |
+| **UC11-D-10** | RNF-001 pide "DTO general" de carga/guardado vs dos cuerpos HTTP distintos | SPEC 11 RNF-001 vs contratos GET/PUT | DTOs separados HTTP + command/result en aplicación | confirmación |
+| **UC11-D-11** | `TestcontainersConfiguration` usa `postgres:latest` vs `postgres:16` | repo actual vs PostgreSQL 16+ del general-plan | alinear a `postgres:16` al ampliar los tests (T001) | confirmación |
+| **UC11-D-12** | Caso extremo "primera configuración": HU3 exige `404` sin fila, pero RF-005 requiere fila única | HU3 vs RF-005 | migración sin fila inicial; `PUT` crea la fila (upsert) | confirmación |
 
-**`[NEEDS CLARIFICATION]` consolidado (no resolvibles por este plan):** metas de rendimiento; mecanismo de autenticación exacto **[OQ-01]**; origen y alcance de los rangos **[OQ-02]**; precisión/escala de `NUMERIC` **[OQ-03]**; formato de `high_season_windows` **[OQ-04]**; redacción literal del depósito **[OQ-05]**.
+**`[NEEDS CLARIFICATION]` consolidado (no resolvibles por este plan):** metas de rendimiento; mecanismo de autenticación exacto **[OQ-01]**; formato de `high_season_windows` **[UC11-OQ-04]**; redacción literal del depósito **[UC11-OQ-05]**.
 
 ## Implementation Phases
 
@@ -259,8 +254,8 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 
 Dependencias mínimas del proyecto para que UC11 pueda existir (incluye lo marcado como `PENDING` en la fase 1 del general: Web, Validation, Security, Flyway, test).
 
-- [ ] **T001** · Compartido: agregar al `pom.xml` los starters faltantes (`spring-boot-starter-web`, `validation`, `security` + OAuth2 Resource Server, `flyway`, `spring-boot-starter-test`, `spring-security-test`, ArchUnit) y alinear la imagen de Testcontainers a `postgres:16` en `TestcontainersConfiguration` (D-11). · M: `none` · P: `pending`
-- [ ] **T002** · Compartido: primera migración Flyway `V1__create_financial_parameters_table.sql` con la tabla singleton de `general-plan` §4 (`id`, `commission_pct`, `insurance_fee_per_passenger`, `weekend_increase_pct`, `high_season_increase_pct`, `updated_at`, `updated_by`; CHECK 0–100 y ≥0; **sin fila inicial** — D-12). · M: `none` · P: `pending`
+- [ ] **T001** · Compartido: agregar al `pom.xml` los starters faltantes (`spring-boot-starter-web`, `validation`, `security` + OAuth2 Resource Server, `flyway`, `spring-boot-starter-test`, `spring-security-test`, ArchUnit) y alinear la imagen de Testcontainers a `postgres:16` en `TestcontainersConfiguration` (UC11-D-11). · M: `none` · P: `pending`
+- [ ] **T002** · Compartido: primera migración Flyway `V1__create_financial_parameters_table.sql` con la tabla singleton de `general-plan` §4 (`id` entero fijo `= 1`; `commission_pct`, `insurance_fee_per_passenger`, `weekend_increase_pct`, `high_season_increase_pct` en `NUMERIC(18,4)`; `updated_at`, `updated_by`; CHECK 0–100 y ≥0; **sin fila inicial** — UC11-D-12). · M: `none` · P: `pending`
 - [ ] **T003** · Compartido: `ArchitectureTest` con las reglas de `general-plan` §3.4 y seed `application.properties` (datasource, Flyway). · M: `none` · P: `pending`
 
 ### Phase 2: Foundational — **compartido con Fase 2 (general)**
@@ -271,8 +266,8 @@ Prerrequisitos transversales sin los cuales ninguna tarea de UC11 es testeable.
 - [ ] **T005** · `FinancialParameters` (dominio, inmutable, `BigDecimal`, validación de rangos de RF-013, `equals`/`hashCode`). · M: `none` · P: `pending`
 - [ ] **T006** · Pruebas unitarias de dominio: rangos válidos/inválidos, null, formatos (RF-013, RNF-002). · M: `none` · P: `pending`
 - [ ] **T007** · Puerto `FinancialParametersRepository` (out) y `SaveFinancialParametersUseCase`/`LoadFinancialParametersUseCase` (in) — los tres del general §3.5 que consume UC11 (RF-006). · M: `none` · P: `pending`
-- [ ] **T008** · `ProblemDetailsConfig` (RFC 9457, `contracts/README.md` §3.3) con mapeo `VALIDATION_ERROR` 400, `PARAMETERS_NOT_CONFIGURED` 404 (D-03), `PARAMETERS_SAVE_FAILED` 500 (D-05), `INTERNAL_ERROR` 500. · M: `none` · P: `pending`
-- [ ] **T009** · `SecurityConfig`: OAuth2 Resource Server + regla `ADMIN_FINANCIERO` sobre `/api/v1/financial-parameters` **[OQ-01: mecanismo por defecto del general §7.1]**. · M: `none` · P: `pending`
+- [ ] **T008** · `ProblemDetailsConfig` (RFC 9457, `contracts/README.md` §3.3) con mapeo `VALIDATION_ERROR` 400, `PARAMETERS_NOT_CONFIGURED` 404, `PARAMETERS_SAVE_FAILED` 500, `INTERNAL_ERROR` 500. · M: `none` · P: `pending`
+- [ ] **T009** · `SecurityConfig`: OAuth2 Resource Server + regla `ADMIN_FINANCIERO` sobre `/api/v1/financial-parameters` **[OQ-01: mecanismo por defecto del general §7.1; tarea condicionada a su confirmación]**. · M: `none` · P: `pending`
 
 ### Phase 3: US1 — Comisión de plataforma y tarifa de seguro (HU1, RF-001, RF-002, RNF-001/002, CE-001, CE-002, CE-004)
 
@@ -281,8 +276,8 @@ Prerrequisitos transversales sin los cuales ninguna tarea de UC11 es testeable.
 - [ ] **T012** · `SaveFinancialParametersUseCase` + `FinancialParametersCommand` (los cuatro campos obligatorios, RNF-001). · M: `none` · P: `pending`
 - [ ] **T013** · `FinancialParametersRepository` (out) — definido en T007; aquí se congelan sus métodos `save`/`findById` para consumidores RF-006. · M: `none` · P: `pending`
 - [ ] **T014** · `FinancialParametersJpaEntity` + `FinancialParametersJpaRepository` sobre la tabla singleton (`@Table(name = "financial_parameters")`, `id = 1`). · M: `none` · P: `pending`
-- [ ] **T015** · `FinancialParametersMapper` (MapStruct): dominio ↔ entidad, con mapeo D-09 (`platform_commission_percentage`→`commission_pct`…). · M: `none` · P: `pending`
-- [ ] **T016** · `FinancialParametersPersistenceAdapter` (out): `save` atómico de la fila `id = 1`, **upsert** para la primera configuración (D-12) y degradación de errores a `PARAMETERS_SAVE_FAILED`. · M: `none` · P: `pending`
+- [ ] **T015** · `FinancialParametersMapper` (MapStruct): dominio ↔ entidad, con mapeo UC11-D-09 (`platform_commission_percentage`→`commission_pct`…). · M: `none` · P: `pending`
+- [ ] **T016** · `FinancialParametersPersistenceAdapter` (out): `save` atómico de la fila `id = 1`, **upsert** para la primera configuración (UC11-D-12) y degradación de errores a `PARAMETERS_SAVE_FAILED`. · M: `none` · P: `pending`
 - [ ] **T017** · `FinancialParametersService.save`: valida → persiste en una transacción única → sin actualizaciones parciales (RF-005, RF-011). · M: `none` · P: `pending`
 - [ ] **T018** · `FinancialParametersController` (`PUT`) + `FinancialParametersRequest` (claves JSON de los contratos). · M: `none` · P: `pending`
 - [ ] **T019** · Pruebas de integración del adaptador (Testcontainers): persistencia real de los dos campos + CHECK de BD. · M: `none` · P: `pending`
@@ -299,12 +294,12 @@ Prerrequisitos transversales sin los cuales ninguna tarea de UC11 es testeable.
 ### Phase 5: US3 — Visualizar vigentes y datos de solo lectura (HU3, RF-009, RF-012, RF-006)
 
 - [ ] **T026** · Test de contrato del `GET`: 200 con los 6 campos (4 editables + `guarantee_deposit_rule` + `high_season_windows`) y strings decimales (RF-009, RNF-002). · M: `none` · P: `pending`
-- [ ] **T027** · Test de contrato del `GET` sin fila configurada → `404 PARAMETERS_NOT_CONFIGURED` (HU3 escenario 2, D-03). · M: `none` · P: `pending`
+- [ ] **T027** · Test de contrato del `GET` sin fila configurada → `404 PARAMETERS_NOT_CONFIGURED` (HU3 escenario 2). · M: `none` · P: `pending`
 - [ ] **T028** · Prueba de seguridad CE-003: 401 sin token, 403 con rol distinto, 200 con `ADMIN_FINANCIERO` en `GET` y `PUT`. · M: `none` · P: `pending`
 - [ ] **T029** · `HighSeasonCalendar` (dominio) + `HighSeasonCalendarTest`: ventanas de SPEC 2 RF-006 (15-nov–15-ene, 1-jun–30-jul, Semana Santa por algoritmo, 5–12 oct), puentes excluidos, mayor incremento si coinciden (RF-012). · M: `none` · P: `pending`
 - [ ] **T030** · `LoadFinancialParametersUseCase` + `FinancialParametersResult` (4 vigentes + 2 derivados, RF-009, RNF-001). · M: `none` · P: `pending`
 - [ ] **T031** · `FinancialParametersService.load`: combina fila singleton + `HighSeasonCalendar` + regla del depósito; propaga `PARAMETERS_NOT_CONFIGURED`. · M: `none` · P: `pending`
-- [ ] **T032** · `FinancialParametersController` (`GET`) + `FinancialParametersResponse` con las claves del contrato (D-04 pendiente de formato). · M: `none` · P: `pending`
+- [ ] **T032** · `FinancialParametersController` (`GET`) + `FinancialParametersResponse` con las claves del contrato (UC11-D-04 pendiente de formato). · M: `none` · P: `pending`
 - [ ] **T033** · `FinancialParametersPersistenceAdapter.load` (lectura de la fila; vacío → `Optional.empty`). · M: `none` · P: `pending`
 
 ### Phase 6: US4 — Guardar, cancelar y manejo de fallos (HU4, RF-005, RF-007, RF-010, RF-011, CE-001, CE-002, CE-004)
@@ -312,17 +307,17 @@ Prerrequisitos transversales sin los cuales ninguna tarea de UC11 es testeable.
 - [ ] **T034** · **`ce001_lectura_refleja_ultima_escritura`** (CE-001): `PUT` → `GET` devuelve lo persistido (Testcontainers). · M: `none` · P: `pending`
 - [ ] **T035** · **`ce002_sobrescritura_completa_sin_parciales`** (CE-002): `PUT` inválido no modifica la fila; el adaptador solo escribe en `financial_parameters` (RF-007). · M: `none` · P: `pending`
 - [ ] **T036** · **`ce004_…`** (CE-004): sin endpoint de cancelación (la cancelación no genera petición, `README` §2); `PUT` inválido → 400 sin cambios. · M: `none` · P: `pending`
-- [ ] **T037** · Prueba unitaria de `FinancialParametersService` ante repositorio que lanza excepción → `PARAMETERS_SAVE_FAILED` (RF-011, D-05). · M: `none` · P: `pending`
+- [ ] **T037** · Prueba unitaria de `FinancialParametersService` ante repositorio que lanza excepción → `PARAMETERS_SAVE_FAILED` (RF-011). · M: `none` · P: `pending`
 - [ ] **T038** · Prueba de integración: fallo simulado de BD (constraint/CHECK) → 500 `PARAMETERS_SAVE_FAILED` y fila intacta. · M: `none` · P: `pending`
 - [ ] **T039** · Manejo del error no controlado → Problem Details `INTERNAL_ERROR` (catálogo §3.4). · M: `none` · P: `pending`
 - [ ] **T040** · Revisión de transaccionalidad: una única transacción por `PUT` (RF-005, RNF-003). · M: `none` · P: `pending`
-- [ ] **T041** · Test de contrato del `PUT` completo con los cuatro campos (HU4, flujo feliz y 204 — D-02). · M: `none` · P: `pending`
+- [ ] **T041** · Test de contrato del `PUT` completo con los cuatro campos (HU4, flujo feliz y 204). · M: `none` · P: `pending`
 
 ### Phase 7: Polish — **parcialmente compartido con Fase 7 (general)**
 
 - [ ] **T042** · ArchUnit: `domain` sin Spring/JPA/Jackson; `application` sin JPA/MapStruct; controller no toca repositorios; entidad JPA no sale de `adapter/out/persistence`; **sin imports de repositorios UC01/UC02/UC04/UC10** (RF-007, alcance de datos). · M: `none` · P: `pending`
-- [ ] **T043** · Compartido: revisar cobertura (dominio ≥90%, aplicación ≥80% según general §9). · M: `none` · P: `pending`
-- [ ] **T044** · Documentación/contratos: proponer al catálogo §3.4 `PARAMETERS_NOT_CONFIGURED` (D-03) y confirmar ruta (D-01) y status del `PUT` (D-02). · M: `none` · P: `pending`
+- [ ] **T043** · Compartido: revisar cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]). · M: `none` · P: `pending`
+- [ ] **T044** · Documentación/contratos: dejar los contratos UC11 y el catálogo `contracts/README.md` §3.4 alineados (códigos y rutas ya figuran en ambos). · M: `none` · P: `pending`
 - [ ] **T045** · Compartido: `./mvnw clean verify` final + ejecución de tests de aceptación CE-001…CE-004. · M: `none` · P: `pending`
 
 ## Dependencies & Execution Order
@@ -351,13 +346,12 @@ T001 ─┬─> T002 ─> T003 ─┬─> T004 ─> T005 ─> T006 ─┬─> T0
 - **Bloque 2 (T004–T009)**: fundacional (excepciones, dominio, puertos, Problem Details, seguridad) — compartido con la Fase 2 general; T009 bloquea las pruebas CE-003.
 - **US1 (T010–T019)** → **US2 (T020–T025)** → **US3 (T026–T033)** → **US4 (T034–T041)**: orden sugerido por prioridad P1 (HU1–HU4) y por dependencia (el `GET` necesita el servicio de US1/US2; US4 certifica la atomicidad de todo).
 - **T042–T045**: solo después de toda la funcionalidad.
-- Riesgo de secuencia: T009 (seguridad) puede quedar **pendiente de OQ-01**; alternativa [CONV]: implementar con la propuesta por defecto del general §7.1 y sustituir tras confirmación.
+- Riesgo de secuencia: T009 (seguridad) queda condicionada a **OQ-01**; alternativa [CONV]: implementar con la propuesta por defecto del general §7.1 y sustituir tras confirmación.
 
 ## Notes
 
-- El SPEC 11 **no** define metas de rendimiento, formato del array `high_season_windows`, redacción literal del depósito ni mecanismo de autenticación → `[NEEDS CLARIFICATION]` (OQ-01…OQ-05) y D-04, D-06.
-- El general-plan **no** fija la ruta del endpoint → D-01 (este plan usa la de los contratos).
-- La primera configuración (HU3 esc. 2) exige `404` en lectura y creación en escritura → D-12 (migración sin fila + upsert en T016).
+- El SPEC 11 **no** define metas de rendimiento, formato del array `high_season_windows`, redacción literal del depósito ni mecanismo de autenticación → `[NEEDS CLARIFICATION]` (OQ-01) y UC11-OQ-04, UC11-OQ-05, UC11-D-04, UC11-D-06.
+- La primera configuración (HU3 esc. 2) exige `404` en lectura y creación en escritura → UC11-D-12 (migración sin fila + upsert en T016).
 - Los consumidores (UC01/UC02/UC04/UC10) **están fuera de este plan**: RF-006 solo expone el puerto; su ausencia se maneja en cada HU correspondiente.
 - Etiquetas usadas: `[SPEC]` (SPEC 11 y contratos), `[CONV]` (general-plan, inferido), `[PEND]`/`[NEEDS CLARIFICATION]` (sin definir).
 
@@ -367,7 +361,7 @@ T001 ─┬─> T002 ─> T003 ─┬─> T004 ─> T005 ─> T006 ─┬─> T0
 - [ ] Sin placeholders ni tareas de ejemplo; sin etiquetas "Option 1/2".
 - [ ] Fecha `2026-10-06` y enlace a `spec.md`.
 - [ ] Toda regla marcada `[SPEC]`, `[CONV]`, `[PEND]` o `[NEEDS CLARIFICATION]`.
-- [ ] Contradicciones D-01…D-12 en "Discrepancias y puntos abiertos" con decisión explícita, sin resolución silenciosa.
+- [ ] Contradicciones UC11-D-04, UC11-D-06, UC11-D-08 a UC11-D-12 en "Discrepancias y puntos abiertos" con decisión explícita, sin resolución silenciosa.
 - [ ] Sin nombres de tablas/campos inventados: `financial_parameters` y columnas de `general-plan` §4; claves JSON de los contratos UC11.
 - [ ] Cada RF/RNF/CE/HU del SPEC 11 trazado a componente y tarea.
 - [ ] Pruebas CE-001…CE-004 con nombre `ce00X_…`.

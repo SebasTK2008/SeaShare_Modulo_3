@@ -85,7 +85,7 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 ### Requisitos No Funcionales
 
 - **RNF-001**: El sistema DEBE utilizar DTOs para recibir la solicitud de consulta y devolver cada página con sus metadatos.
-- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar los montos de los registros devueltos.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para representar los montos de los registros devueltos, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia la pasarela o reportes.
 - **RNF-003**: El sistema DEBE garantizar que la paginación de un mismo conjunto de datos no omita ni duplique registros entre páginas.
 
 ### Entidades Clave

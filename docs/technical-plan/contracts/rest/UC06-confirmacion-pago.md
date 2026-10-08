@@ -31,7 +31,7 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
 
 | Parámetro | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
-| `reservation_id` | UUID | Sí | Identificador de la reserva | [SPEC RF-001, `SolicitudConfirmacionPago`]; tipo [PEND] OQ-05 |
+| `reservation_id` | UUID v4 | Sí | Identificador de la reserva | [SPEC RF-001, `SolicitudConfirmacionPago`]; tipo [CONV] |
 
 ## 3. Reglas de procesamiento
 

@@ -12,7 +12,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El sistema envía una solicitud de reembolso (total o parcial) a Mercado Pago. Esto ocurre ante cancelaciones (UC07) o disputas que concluyen a favor del arrendatario (UC08) [SPEC HU1, HU2].
+El sistema envía una solicitud de liberación (de una autorización) o reembolso (de un cobro capturado) a la Pasarela de Pago (Mercado Pago). Esto ocurre ante cancelaciones (UC07) o disputas rechazadas (UC08) [SPEC HU1, HU2].
 
 ## 2. Petición (Llamada a Mercado Pago)
 

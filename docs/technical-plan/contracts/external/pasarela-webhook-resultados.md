@@ -12,7 +12,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-Mercado Pago notifica de forma asíncrona el resultado de las operaciones (cobros, reembolsos, dispersiones / liquidaciones) mediante un **flujo de dos pasos**:
+La Pasarela de Pago (Mercado Pago) notifica de forma asíncrona el resultado de las operaciones (cobros, reembolsos, dispersiones). El sistema asocia el resultado a la intención original mediante la clave idempotente o la referencia del cobro y actualiza sus registros, generando los registros inmutables de auditoría si la operación fue exitosa.
 
 1. **Notificación entrante**: MP hace `POST` al endpoint del sistema con un payload mínimo y query params identificadores. El sistema responde `200 OK` inmediatamente para acusar recibo.
 2. **Consulta activa a la API de MP**: El sistema usa el `data.id` recibido para consultar la API de Mercado Pago y obtener el estado y detalle completo de la operación, y actualiza sus registros internos.
