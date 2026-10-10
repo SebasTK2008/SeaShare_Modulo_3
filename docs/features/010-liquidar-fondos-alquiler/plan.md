@@ -9,7 +9,7 @@ UC10 es el caso de uso interno que solicita dispersiones al propietario por tres
 
 El sistema registra una `SettlementIntent` antes de enviar el comando a Mercado Pago. La respuesta/webhook actualiza siempre la intención; solo un resultado externo exitoso crea un `SettlementRecord` inmutable y, únicamente para liquidación estándar, un `CommissionRecord` inmutable en la misma transacción. Operaciones rechazadas, canceladas, expiradas o pendientes no crean registros exitosos [SPEC RF-010..RF-014].
 
-Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domain` / `application` / `infrastructure`), puertos internos consumidos por UC07/UC08, ACL de pasarela para el contrato de disbursement, outbox/worker para reintentos y webhook compartido firmado. UC10 es dueño de `settlement_intent`, `settlement_record` y `commission_record`; UC12/UC13 solo los consultan. Las piezas de otros planes se referencian por nombre y no se replanifican.
+Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domain` / `application` / `infrastructure`), puertos internos consumidos por UC07/UC08, ACL de pasarela para el contrato de disbursement, outbox/worker para reintentos y webhook despachado por UC05. UC10 es dueño de `settlement_intent`, `settlement_record` y `commission_record`; UC12/UC13 solo los consultan. Las piezas de otros planes se referencian por nombre y no se replanifican.
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -42,8 +42,8 @@ Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domai
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
-**Primary Dependencies**: Spring Boot 4.1.1; Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Security OAuth2 Resource Server, Actuator, Flyway, MapStruct, Resilience4j, Micrometer/Prometheus, ArchUnit y ShedLock opcional. UC10 usa especialmente JPA, AMQP, Web MVC para webhook, cliente HTTP de pasarela, Testcontainers, WireMock y Awaitility. Dependencias compartidas se agregan en `UC11·T001`–`UC11·T009`; este plan no modifica `pom.xml`.  
-**Storage**: PostgreSQL 16+, `NUMERIC(18,4)` para importes y `timestamptz` para instantes. UC10 es dueño de `settlement_intent`, `settlement_record` y `commission_record`; lee `reservation_information` y `charge_intent/charge_record` por puertos de sus dueños [general-plan §4].  
+**Primary Dependencies**: Spring Boot 4.1.1; Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Security OAuth2 Resource Server, Actuator, Flyway, MapStruct, Resilience4j, Micrometer/Prometheus, ArchUnit y ShedLock opcional. UC10 usa especialmente JPA, AMQP, cliente HTTP de pasarela, Testcontainers, WireMock y Awaitility. Las dependencias pertenecen al núcleo compartido; este plan no modifica `pom.xml`.
+**Storage**: PostgreSQL 16+, `NUMERIC(18,4)` para importes y `timestamptz` para instantes. UC10 es dueño de `settlement_intent`, `settlement_record` y `commission_record`, con DDL exacta en este plan; lee `reservation_information` y `charge_intent/charge_record` por puertos de sus dueños [general-plan §4].
 **Messaging**: RabbitMQ 3.13+ con outbox, colas quorum, confirmaciones de publicador y DLQ; comandos de pasarela se envían desde worker y los resultados entran por el webhook compartido [general-plan §5; contratos externos].  
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers PostgreSQL/RabbitMQ, WireMock para Mercado Pago, Awaitility y ArchUnit [CONV].  
 **Target Platform**: contenedores Docker sobre Linux; desarrollo con Docker Compose [SPEC general-plan].  
@@ -85,9 +85,10 @@ src/main/java/com/seashare/seasharem3/
 │   │   ├── SettlementRecordRepository.java
 │   │   ├── CommissionRecordRepository.java
 │   │   ├── ReservationInformationRepository.java # dueño UC03, solo referencia
-│   │   ├── ChargeRecordQueryPort.java             # dueño UC05, solo referencia
-│   │   ├── FailureRecorderPort.java               # UC11·T007
-│   │   └── OutboxPort.java                        # UC11·T009
+│   │   ├── ChargeRecordQueryPort.java             # catálogo compartido, dueño UC05
+│   │   ├── FailureRecorderPort.java               # puerto compartido
+│   │   ├── ReservationLockPort.java               # puerto compartido
+│   │   └── OutboxPort.java                        # puerto compartido
 │   ├── service/SettlementService.java
 │   └── dto/
 │       ├── SettlementCommand.java
@@ -95,9 +96,7 @@ src/main/java/com/seashare/seasharem3/
 │       ├── GatewaySettlementRequest.java
 │       └── GatewaySettlementResult.java
 └── infrastructure/
-    ├── adapter/in/
-    │   ├── webhook/GatewayWebhookController.java  # contrato compartido firmado
-    │   └── scheduler/SettlementWorker.java        # solo reintentos/outbox, no negocio nuevo
+    ├── adapter/in/scheduler/SettlementWorker.java  # reintentos/outbox
     ├── adapter/out/
     │   ├── gateway/{PaymentGatewayAdapter,GatewaySettlementMapper}.java
     │   ├── persistence/settlement/
@@ -108,7 +107,7 @@ src/main/java/com/seashare/seasharem3/
     └── config/{GatewayWebhookSecurityConfig,ProblemDetailsConfig,ObservabilityConfig}.java
 
 src/main/resources/db/migration/
-└── V1__create_settlement_tables.sql # solo documentado; consolidación asigna definitivo
+└── settlement_tables.sql # DDL exacta propiedad de UC10; política de versionado global abierta
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/ArchitectureTest.java
@@ -120,25 +119,25 @@ src/test/java/com/seashare/seasharem3/
 └── integration/SettlementProcessingIT.java
 ```
 
-**Structure Decision**: sigue `general-plan.md` §3.2–§3.4 y el patrón UC01/UC08/UC11. `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`; controllers/webhooks no acceden a repositorios; entidades JPA permanecen en `adapter/out/persistence`; DTOs externos viven en infraestructura.
+**Structure Decision**: sigue `general-plan.md` §3.2–§3.4. UC05 es dueño del receptor/verificación/despachador del webhook; UC10 solo registra su manejador y define sus puertos `SendSettlementCommand`/`ReconcileSettlementResult`. `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`.
 
-**Firmas referenciadas**: UC10 publica `RequestSettlementUseCase` para UC07 y UC08. Consume `ReservationInformationRepository`, `ChargeRecordQueryPort`, `FailureRecorderPort` y `OutboxPort` por nombre. UC12/UC13 consumen registros mediante la vista financiera; no se implementan ni modifican aquí.
+**Firmas referenciadas**: UC10 publica `RequestSettlementUseCase` para UC07 y UC08, y define `SendSettlementCommand`/`ReconcileSettlementResult` para el webhook/despachador de UC05. `SettlementCommand` incluye `trigger`, `scope` y `dispute_id` cuando aplica. Consume `ReservationInformationRepository`, `ChargeRecordQueryPort`, `FailureRecorderPort`, `ReservationLockPort` y `OutboxPort` por nombre.
 
 ## Reglas de negocio
 
 1. **Entrada interna sin montos externos** [SPEC RF-001]: UC07/UC08 entregan reserva y desencadenante; los montos se recuperan internamente.
 2. **Cancelación moderada** [SPEC RF-002, RF-007]: `0.50 × rental_amount`; sin comisión ni seguro.
 3. **Cancelación tardía** [SPEC RF-003, RF-007]: `1.00 × rental_amount`; sin comisión ni seguro.
-4. **Estándar** [SPEC RF-005]: `rental_amount − frozen_commission − insurance_amount`; conserva el depósito asociado. La comisión proviene de la intención/parámetro congelado, nunca del singleton actual.
-5. **Depósito por disputa** [SPEC RF-006]: `DEPOSIT_DISPUTE` liquida el 100 % del depósito interno, sin comisión ni seguro y sin duplicar la decisión de UC08.
+4. **Estándar** [SPEC RF-005]: la base de liquidación y el tratamiento del seguro quedan parametrizados hasta resolver OQ-CROSS-03 / D-03 y OQ-CROSS-05 / D-30.
+5. **Depósito por disputa** [SPEC RF-006]: el `scope` vigente de general-plan y `dispute_id` identifican la liquidación del 100 % del depósito interno, sin comisión ni seguro.
 6. **Intención antes de pasarela** [SPEC RF-009]: registrar desencadenante, alcance, monto, comisión si aplica, depósito, cobro original, capacidad e idempotency key antes de enviar.
-7. **Pasarela** [SPEC RF-008; contrato comando]: enviar `amount`, `collector_id`, `external_reference` y `X-Idempotency-Key`; el adaptador decide la forma Marketplace/Split soportada, no el caso de uso.
+7. **Pasarela** [SPEC RF-008; contrato comando]: enviar los campos cuya semántica esté confirmada; `payer.email`, `payment_method_id`, `installments`, `description` y `collector_id` permanecen abiertos en OQ-CROSS-02 / D-02.
 8. **Confirmación** [SPEC RF-010, RF-012]: aprobado crea registro inmutable; `pending`, `rejected`, `cancelled`, `expired` solo actualizan intención.
-9. **Comisión** [SPEC RF-004, RF-014]: se conserva en la intención; solo estándar confirmado crea exactamente un `CommissionRecord`, atómico con `SettlementRecord`; jamás es atributo del registro de dispersión.
+9. **Comisión** [SPEC RF-004, RF-014]: se conserva en la intención; cálculo, base, redondeo y ausencia permanecen abiertos en OQ-CROSS-04 / D-04.
 10. **Trazabilidad** [SPEC RF-009A, RF-015, RF-016]: registros incluyen intención, reserva, propietario, embarcación, bruto, seguro, depósito, monto confirmado, detalle, referencia externa y fecha de creación.
 11. **Faltantes** [SPEC RF-013]: alquiler/seguro/depósito requerido ausente → registrar fallo, no calcular parcialmente ni llamar pasarela.
 12. **Timeout/error** [SPEC RNF-003; contrato comando]: mismo idempotency key para retry; timeout no es rechazo ni éxito; conservar intención en estado de comunicación pendiente/fallida para conciliación.
-13. **Webhook** [CONV contrato webhook]: verificar `x-signature`; responder inmediatamente; consultar detalle en Mercado Pago fuera del request y deduplicar por `data.id` + idempotency key.
+13. **Webhook** [D-12]: UC05 verifica firma y despacha por `type`; UC10 solo reconcilia su resultado mediante `ReconcileSettlementResult` y no implementa receptor propio.
 14. **Inmutabilidad** [SPEC RF-010..RF-014; general-plan §2]: registros confirmados nunca se actualizan ni eliminan.
 
 ## Contratos
@@ -197,21 +196,27 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 | **D-UC10-01** | UC10 puede ser invocado por UC07 y UC08, pero las firmas se definen en planes distintos | publicar `RequestSettlementUseCase` aquí y copiar la firma en UC07/UC08; cambios externos no se aplican | Decidida |
 | **D-UC10-02** | La pasarela puede unificar depósito o usar operación relacionada | ACL decide capacidad soportada; UC10 conserva siempre el componente de depósito | Decidida por contrato |
 | **D-UC10-03** | El webhook es compartido por UC05/UC09/UC10 | UC10 consume solo resultados asociados a su intención; no crea otro webhook | Decidida |
-| **D-UC10-04** | Numeración de migraciones del bloque C | documentar **V1**; consolidación asigna definitiva | Decidida |
+| **OQ-CROSS-07 / D-CROSS-08** | Política y orden de migraciones | mantener abierta; respetar dependencias sin asignar versión aprobada | Abierta |
 | **OQ-UC10-02** | Mecanismo transversal de autenticación/autorización | heredar configuración compartida; no definir seguridad propia de UC10 | Diferida |
+| **OQ-CROSS-02 / D-CROSS-02** | Campos del pagador y metadatos exigidos por la pasarela | UC10 no inventa valores; usa solo campos confirmados | Abierta; requiere decisión externa |
+| **OQ-CROSS-03 / D-CROSS-03** | Tratamiento del seguro en la base de liquidación | No se fija fórmula adicional | Abierta; requiere decisión externa |
+| **OQ-CROSS-04 / D-CROSS-04** | Cálculo, base, redondeo y ausencia de comisión | No se fija política adicional | Abierta; requiere decisión externa |
+| **OQ-CROSS-12 / D-CROSS-19** | Escala y redondeo | Se parametriza según decisión transversal | Abierta; requiere decisión externa |
+| **D-30** | Parámetros congelados frente a globales | UC10 conserva ambos orígenes sin resolver precedencia | Abierta; requiere decisión externa |
 
 ## Implementation Phases
 
-### Phase 1: Setup — Compartido
+### Phase 1: Setup
 
-- [ ] **T001** Referenciar `UC11·T001`–`UC11·T009` para JPA, AMQP, errores, outbox, observabilidad y transacciones.
+- [ ] **T001** Consumir JPA, AMQP, errores, outbox, observabilidad y transacciones del núcleo compartido.
 - [ ] **T002** Publicar la firma de `RequestSettlementUseCase` y documentar consumidores UC07/UC08, sin editar sus planes.
-- [ ] **T003** Configurar ACL, idempotency key, outbox/worker y webhook compartido; no duplicar el webhook de otros UC.
+- [ ] **T003** Configurar ACL, idempotency key, outbox/worker y el manejador UC10 del webhook propiedad de UC05.
 
 ### Phase 2: Foundational
 
-- [ ] **T004** Crear `SettlementScope`, estados, `Money`, `SettlementCalculator` y reglas de precisión.
-- [ ] **T005** Crear puertos, commands/results y adapters de consulta para reserva/cobro; consumir piezas de UC03/UC05 por nombre.
+- [ ] **T004** Crear `SettlementScope`, `SettlementTrigger`, estados y `SettlementCalculator`; `Money`, `ReservationId`, `OwnerId` y `ClockPort` se consumen del núcleo compartido y no se redeclaran.
+- [ ] **T005** Crear puertos, `SettlementCommand`/results y adaptadores de consulta para reserva/cobro; el command incluye `trigger`, `scope` y `dispute_id` cuando aplica [D-28]. Consume piezas de UC03/UC05 por nombre.
+- [ ] **T005a** Congelar la firma pública `SettlementRequestResult request(SettlementCommand)`; `scope` usa el valor vigente del catálogo y `DEPOSIT_DISPUTE` solo cuando existe `dispute_id`. No se usa `void` ni se inventa otro valor [D-28].
 - [ ] **T006** Crear `SettlementGatewayPort`, DTOs del comando/resultado y mapper ACL de Mercado Pago.
 - [ ] **T007** Crear modelos de intención/registro/comisión y repositorios; definir restricciones de idempotencia e inmutabilidad.
 - [ ] **T008** Implementar persistencia de intención antes del envío y consulta de intención para webhook/worker.
@@ -221,12 +226,14 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 - [ ] **T009** [US1/US2/US3] Implementar cálculo por cancelación, estándar y depósito con validación de datos internos y sin montos externos.
 - [ ] **T010** [US1/US2/US3] Implementar `RequestSettlementUseCase`, outbox, envío a pasarela y reintentos con la misma clave.
 - [ ] **T011** [US4] Implementar recepción/verificación de webhook, consulta de detalle y `RegisterSettlementResultUseCase`.
-- [ ] **T012** [US4/US5] Implementar transacción de confirmación: actualizar intención; en éxito crear registro; en estándar crear comisión atómicamente.
+- [ ] **T012** [US4/US5] Implementar transacción de confirmación: actualizar intención; en éxito crear registro; la comisión solo se crea conforme a la decisión externa D-04.
+- [ ] **T012a** Documentar la DDL exacta de `settlement_intent`, `settlement_record` y `commission_record`, incluyendo claves idempotentes, FKs, `dispute_id`, estados y restricciones de inmutabilidad [D-CROSS-18].
 - [ ] **T013** `ce001_precision_financiera_100_casos`.
 - [ ] **T014** `ce002_comision_por_alcance`.
 - [ ] **T015** Prueba de depósito total y trazabilidad con disputa UC08.
 - [ ] **T016** `ce003_intencion_a_registro`.
 - [ ] **T017** `ce005_fallo_no_es_exito` y `ce006_una_comision_atomica`.
+- [ ] **T017a** **`rf013_informacion_interna_incompleta_registra_fallo_sin_llamada`**: cubre RF-013 cuando falta alquiler, seguro o depósito y verifica `FailureRecorderPort` sin cálculo parcial ni llamada a pasarela.
 
 ### Phase 4: Resiliencia y Polish
 
@@ -239,7 +246,7 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012 → T013..T021`.
 
-UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettlementUseCase` para UC07/UC08. UC12/UC13 solo consumen sus registros confirmados. Migración: **V1**, únicamente como referencia documental; la numeración final y cualquier cambio de otros planes se consolidan después.
+UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettlementUseCase` para UC07/UC08. UC12/UC13 solo consumen sus registros confirmados. La política de migraciones queda abierta en OQ-CROSS-07/D-08.
 
 ## Notes
 
@@ -251,4 +258,4 @@ No modificar `pom.xml`, `general-plan.md`, SPEC, contratos ni planes de UC03/UC0
 - [ ] Cada RF/RNF/CE/HU tiene componente, tarea y prueba.
 - [ ] Intención, registro, comisión, idempotencia e inmutabilidad están trazados.
 - [ ] Solo éxitos externos crean registros financieros.
-- [ ] Migración indicada como V1 y ningún cambio externo aplicado.
+- [ ] DDL exacta de UC10 documentada; la política de versionado de migraciones permanece abierta.

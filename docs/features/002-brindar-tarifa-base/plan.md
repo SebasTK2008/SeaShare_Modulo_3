@@ -9,9 +9,9 @@ UC02 es el caso de uso **interno** donde reside exclusivamente la lógica de tar
 
 UC02 **no persiste nada propio, no tiene endpoint REST** (RF-003) y devuelve la tarifa final **única y exclusivamente** a la operación invocante. Expone un **único puerto de entrada batch** (`ProvideBaseRateUseCase`) cuya firma publica UC02 para que UC01 y UC03 la consuman por nombre (regla de dependencia 4 del general-plan §3.4), con una sola consulta a Flota por invocación (contrato `flota-consulta-tarifas-base.md`). La tarifa final se entrega a **escala 4 sin redondeo** (RNF-002); el redondeo final hacia pantallas, la pasarela o reportes es responsabilidad del llamador (D-UC02-04).
 
-La fecha evaluada viaja **siempre** en el comando (`evaluatedDate`, obligatorio): UC01 resuelve la «fecha actual» del modo lote con el `ClockPort` (puerto compartido entre UC01 y UC02, publicado aquí) para que coincida exactamente con el `evaluation_date` que devuelve [contrato UC01 lote], y UC03/UC01-individual pasan la `start_date` recibida [SPEC RF-001, casos extremos]. Se leen los parámetros financieros (`financial_parameters`, de UC11) **solo cuando la fecha evaluada exige un porcentaje**; una fecha regular no los necesita [SPEC casos extremos, regla 14]. Ante cualquier falla (Flota caída/timeout, tarifa no disponible, porcentaje faltante) el sistema **registra el fallo** en `operational_failure` vía `FailureRecorderPort` (pieza compartida) **y** propaga una excepción de dominio `BaseRateException` con motivo y marca transitorio/permanente [SPEC casos extremos, RNF-003]; jamás devuelve una tarifa asumida ni un valor parcial [principio rector 4 del general-plan].
+La fecha evaluada viaja **siempre** en el comando (`evaluatedDate`, obligatorio): UC01 resuelve la «fecha actual» del modo lote con el `ClockPort` compartido para que coincida exactamente con el `evaluation_date` que devuelve [contrato UC01 lote], y UC03/UC01-individual pasan la `start_date` recibida [SPEC RF-001, casos extremos]. Se leen los parámetros financieros (`financial_parameters`) **solo cuando la fecha evaluada exige un porcentaje**; una fecha regular no los necesita [SPEC casos extremos, regla 14]. Ante cualquier falla (Flota caída/timeout, tarifa no disponible, porcentaje faltante) el sistema **registra el fallo** en `operational_failure` vía `FailureRecorderPort` y **propaga** una excepción de dominio `BaseRateException` con motivo y marca transitorio/permanente [SPEC casos extremos, RNF-003]; jamás devuelve una tarifa asumida ni un valor parcial [principio rector 4 del general-plan].
 
-Las contradicciones detectadas contra los documentos de `docs/context/` (uso de tipo/categoría, puentes como temporada alta) se resuelven a favor del SPEC 02 y se registran como `D-UC02-01` y `D-UC02-02`. El calendario expone `isHighSeason(fecha)` y `windowsForYear(año)`; la segunda operación **responde la OQ-UC11-05** del plan de UC11 (UC11 la consume para mostrar `high_season_windows`). La pieza compartida `FailureRecorderPort`/`operational_failure` **está pendiente** en el plan de UC11 (D-UC02-11, ver sección «Discrepancias»): UC02 la referencia por nombre, no la implementa y usa un doble de prueba; para avanzar se requiere que UC11 (a rehacer) la incluya en su fase Fundacional.
+Las contradicciones detectadas contra los documentos de `docs/context/` (uso de tipo/categoría, puentes como temporada alta) se resuelven a favor del SPEC 02 y se registran como `D-UC02-01` y `D-UC02-02`. El calendario expone `isHighSeason(fecha)` y `windowsForYear(año)`; esta última operación responde la `OQ-UC11-05` mediante una firma publicada, sin acoplar este plan a tareas de otro caso de uso. `FailureRecorderPort` y `operational_failure` se consumen por el catálogo compartido de puertos; UC02 no los redefine.
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -36,8 +36,8 @@ Las contradicciones detectadas contra los documentos de `docs/context/` (uso de 
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]
-**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC02: Spring Web (cliente `RestClient`), **Resilience4j** (`resilience4j-spring-boot3`: *timeout*, reintento, *circuit breaker*), MapStruct, ArchUnit y **WireMock** (pruebas del cliente Flota). **Ni Resilience4j ni WireMock están hoy en el `pom.xml`** (solo `data-jpa`, `postgresql`, `mapstruct`, `lombok-mapstruct-binding`, Testcontainers) → se coordina su alta dentro de la fase Setup Compartida (`UC11·T001`), sin editar el `pom.xml` en silencio
-**Storage**: PostgreSQL 16+ (**sin tablas propias**): UC02 solo **lee** `financial_parameters` (tabla de UC11, dueño B) y **escribe** en `operational_failure` (pieza técnica compartida, ver D-UC02-11) [SPEC general-plan §4] — `NUMERIC(18,4)` para dinero y porcentajes, `timestamptz` para instantes
+**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC02: Spring Web (cliente `RestClient`), **Resilience4j** (`resilience4j-spring-boot3`: *timeout*, reintento, *circuit breaker*), MapStruct, ArchUnit y **WireMock** (pruebas del cliente Flota). La incorporación de dependencias se documenta como trabajo de setup del repositorio; no se edita el `pom.xml` en silencio.
+**Storage**: PostgreSQL 16+ (**sin tablas propias**): UC02 solo **lee** `financial_parameters` y **escribe** en `operational_failure` mediante los puertos compartidos [SPEC general-plan §4] — `NUMERIC(18,4)` para dinero y porcentajes, `timestamptz` para instantes
 **Testing**: JUnit 5, AssertJ, Mockito, AssertJ, WireMock (contratos de Flota), Reactor de Resilience4j, ArchUnit, Awaitility (circuit breaker) [CONV]; el registro de fallas se prueba con un doble en memoria de `FailureRecorderPort` [CONV]
 **Target Platform**: Contenedores Docker (Linux) [SPEC general-plan]
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio [SPEC general-plan]
@@ -45,7 +45,7 @@ Las contradicciones detectadas contra los documentos de `docs/context/` (uso de 
 **Constraints**: `BigDecimal` con precisión interna de 4 decimales **sin redondeo final en UC02** (RNF-002, D-UC02-04); Flota es la única fuente de la tarifa base y **no se cachea** (RF-004, D-19); sin tipo ni categoría de embarcación (RF-007); calendario exacto sin configuración manual de fechas (RF-006); nunca tarifa asumida ni valor parcial (RNF-003, casos extremos)
 **Scale/Scope**: 1 puerto de entrada interno (solo batch, RF-003) [SPEC general-plan §3.5]; 1 contrato de salida a Flota [contrato `flota-consulta-tarifas-base.md`]; 7 RF + 4 RNF + 3 CE + 1 HU del SPEC 02
 
-**Estado actual del repositorio (relevante para UC02)**: igual que en UC11 — existen `SeashareM3Application.java`, `application.properties` (solo `spring.application.name=seashare-m3`), `TestcontainersConfiguration`, `SeashareM3ApplicationTests` y `TestSeashareM3Application`. **No existen** los paquetes `domain`/`application`/`infrastructure`, migraciones compartidas de `operational_failure`, `Money`/`BoatId`, ni los puertos `ClockPort`/`FailureRecorderPort`.
+**Estado actual del repositorio (relevante para UC02)**: existen `SeashareM3Application.java`, `application.properties` (solo `spring.application.name=seashare-m3`), `TestcontainersConfiguration`, `SeashareM3ApplicationTests` y `TestSeashareM3Application`. **No existen** todavía los paquetes `domain`/`application`/`infrastructure` ni las implementaciones de los puertos compartidos.
 
 ## Project Structure
 
@@ -77,8 +77,8 @@ src/main/java/com/seashare/seasharem3/
 │   ├── model/
 │   │   └── FinancialParameters.java                 # de UC11 (dueño B) — consumido, no implementado [general-plan §13]
 │   ├── valueobject/
-│   │   ├── Money.java                               # T006 [general-plan §3.3, D-11; compartido entre UC01/UC02/UC03]
-│   │   ├── BoatId.java                              # T006 [general-plan §3.3; compartido, mismo caso]
+│   │   ├── Money.java                               # VO compartido del núcleo común; UC02 lo consume por nombre
+│   │   ├── BoatId.java                              # VO compartido del núcleo común; UC02 lo consume por nombre
 │   │   ├── BaseRate.java                            # T006 [general-plan §13: "Tarifa base → BaseRate"]
 │   │   └── HighSeasonWindow.java                    # T009 [CONV]
 │   ├── service/
@@ -86,16 +86,16 @@ src/main/java/com/seashare/seasharem3/
 │   │   ├── HighSeasonCalendar.java                  # T009 [SPEC RF-006; expone windowsForYear → responde OQ-UC11-05]
 │   │   └── DynamicRatePolicy.java                   # T011 [SPEC RF-002, RF-005, casos extremos; nombre [CONV]]
 │   └── exception/
-│       ├── DomainException.java                     # T003 [general-plan §3.3; compartido con UC11·T004]
+│       ├── DomainException.java                     # T003 [general-plan §3.3; núcleo común]
 │       └── BaseRateException.java                   # T014 [SPEC RNF-003, casos extremos; nombre [CONV]]
 ├── application/
 │   ├── port/in/
 │   │   └── ProvideBaseRateUseCase.java              # T016 [SPEC RF-003; general-plan §3.5; firma publicada §Firmas referenciadas por otros planes]
 │   ├── port/out/
 │   │   ├── FleetRatePort.java                       # T015 [general-plan §3.5 UC02]
-│   │   ├── ClockPort.java                           # T005 [general-plan §3.3 "reloj"; compartido entre UC01 y UC02]
+│   │   ├── ClockPort.java                           # puerto compartido del núcleo común; UC02 lo consume por nombre
 │   │   ├── FinancialParametersRepository.java       # de UC11 — consumido por nombre [general-plan §4]
-│   │   └── FailureRecorderPort.java                 # Compartido (se define en UC11·T001–T009) — por nombre; D-UC02-11
+│   │   └── FailureRecorderPort.java                 # puerto compartido; UC02 lo consume por nombre
 │   ├── service/
 │   │   └── ProvideBaseRateService.java              # T016 [general-plan §3.5; RF-003]
 │   └── dto/
@@ -132,7 +132,7 @@ src/test/java/com/seashare/seasharem3/
     └── InMemoryFailureRecorder.java                 # T004/T016 (doble para pruebas; nombre [CONV])
 ```
 
-`FinancialParameters` (dominio) y `FinancialParametersRepository` (puerto de salida) **son de UC11**: UC02 los consume **por nombre**; no los implementa ni los prueba. `FailureRecorderPort`/tabla `operational_failure` son **compartidos** — ver **D-UC02-11** y la tarea **T004 (condicionada)**.
+`FinancialParameters` (dominio), `FinancialParametersRepository`, `FailureRecorderPort` y `operational_failure` pertenecen al catálogo compartido definido fuera de UC02: este plan los consume **por nombre**, no los implementa ni los redeclara.
 
 **Firmas referenciadas por otros planes** [general-plan §3.5, §12]: UC02 **publica** la firma que UC01 y UC03 consumen por nombre:
 
@@ -152,7 +152,7 @@ public record ProvideBaseRateCommand(List<BoatId> boatIds,           // obligato
 public record BaseRateResult(BoatId boatId, BaseRate baseRate) {}    // tarifa final por unidad de tiempo, escala 4
 ```
 
-Semántica acordada (D-UC02-09): la «fecha actual» del modo lote la resuelve **UC01** con `ClockPort.today()` y la pasa en el comando, para que coincida exactamente con el `evaluation_date` que UC01 devuelve; UC03 y UC01-individual pasan la `start_date`. **No se publican puertos de salida** (son internos o compartidos): `FleetRatePort`, `ClockPort` y `FinancialParametersRepository`/`FailureRecorderPort` quedan por nombre.
+Semántica acordada (D-UC02-09): la «fecha actual» del modo lote la resuelve **UC01** con `ClockPort.today()` y la pasa en el comando, para que coincida exactamente con el `evaluation_date` que UC01 devuelve; UC03 y UC01-individual pasan la `start_date`. **No se publican puertos de salida adicionales**: `FleetRatePort` es interno y `ClockPort`, `FinancialParametersRepository` y `FailureRecorderPort` se consumen desde el núcleo compartido.
 
 **Structure Decision**: servicio backend único con Arquitectura Hexagonal de tres capas (`domain`, `application`, `infrastructure`) en un solo módulo Maven, con subpaquetes temáticos sin reglas entre sí, bajo la raíz `com.seashare.seasharem3` [SPEC general-plan §3.2, §3.3, D-02, D-03]. Reglas del §3.4 aplicadas aquí: `domain` sin Spring/JPA/Jackson; `application` solo depende de `domain`; `infrastructure.adapter.out` solo implementa `application.port.out`; los DTOs HTTP/Flota viven en `infrastructure.adapter.out` y `application` trabaja con `command`/`result` (RNF-001); ningún controller accede a un repositorio (**no hay controller en UC02**, RF-003). Identificadores en inglés (D-23) y lenguaje ubicuo §13: *Tarifa base / tarifa dinámica → `BaseRate` / `DynamicRatePolicy`*; `EmbarcacionInfo` y `TarifaBaseResultado` del SPEC 02 no están en §13 → nombres `BoatBaseRateDto` y `BaseRateResult` **[CONV; D-UC02-10]**.
 
@@ -204,7 +204,7 @@ UC02 **no expone contratos REST** (RF-003): su entrada es el puerto interno `Pro
 
 ## Estrategia de testing
 
-Fuente: `general-plan.md` (Technical Context), contrato Flota y SPEC 02. Cobertura objetivo **[CONV]**: dominio ≥ 90 %, aplicación ≥ 80 %. El registro de fallas se prueba con un **doble en memoria** de `FailureRecorderPort` (`InMemoryFailureRecorder`), de modo que CE-003 y las pruebas de `ProvideBaseRateService` **no dependen de la pieza compartida pendiente (D-UC02-11)**.
+Fuente: `general-plan.md` (Technical Context), contrato Flota y SPEC 02. Cobertura objetivo **[CONV]**: dominio ≥ 90 %, aplicación ≥ 80 %. El registro de fallas se prueba con un **doble en memoria** de `FailureRecorderPort` (`InMemoryFailureRecorder`), sin redefinir la pieza compartida.
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
@@ -233,12 +233,12 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 | **D-UC02-02** | El contexto incluye **puentes festivos y fines de semana largos** como temporada alta | `docs/context/sea-share.md` (l. 53) vs **SPEC 02 RF-006** («NO forman parte de esta regla») | Rige el SPEC: puentes/festivos se evalúan como fin de semana o día regular; únicos días santos = Jueves/Viernes Santo | Decidida (SPEC prevalece) |
 | **D-UC02-03** | Ventana de fin de año que cruza el año (15-nov → 15-ene del año siguiente): las fechas de enero pertenecen a la ventana abierta el 15-nov del año **anterior** | SPEC RF-006 vs lectura «solo ventanas del año evaluado» | Interpretación por **intervalo**: se evalúan las ventanas del año de la fecha y las del año anterior; 1–15 de enero es temporada alta. Confirmada por el responsable | Decidida |
 | **D-UC02-04** | RNF-002 exige 4 decimales internos «antes de cualquier redondeo final»; UC02 entrega una tarifa que no va directa a la pasarela/reportes | SPEC RNF-002 vs posible redondeo a centavos | UC02 **no redondea**: salida a escala 4; el redondeo final es del llamador | Decidida |
-| **D-UC02-11** | `general-plan.md` §3.5 asigna `FailureRecorderPort` y §4 define la tabla `operational_failure` (y `outbox_message`/`OutboxPort` para otros planes), pero el plan de UC11 no incluye su implementación | `general-plan.md` §3.5/§4 vs plan UC11 (T004–T009) | UC02 no lo implementa: referencia el puerto **por nombre**, usa doble en pruebas y deja **T004 condicionada**. Se requiere que el plan de UC11 (en estado «Rehacer») incluya la migración de `operational_failure` + `FailureRecorderPort` (+ `outbox_message`/`OutboxPort` para los planes que los usen) o que se registre una tarea técnica compartida en `general-plan.md` | Abierta — pendiente del plan de UC11 || **D-UC02-06** | El SPEC 02 no define qué es «fin de semana» ni la zona horaria de la «fecha actual» | SPEC 02 vs general-plan D-12/OQ-04 | Sábado y domingo en `America/Bogota` (vía `seashare.timezone`); `ClockPort.today()` para las pruebas | Decidida (ver OQ-UC02-04) |
+| **D-UC02-06** | El SPEC 02 no define qué es «fin de semana» ni la zona horaria de la «fecha actual» | SPEC 02 vs general-plan D-12/OQ-04 | Se mantiene como pregunta abierta; el calendario debe recibir la zona horaria parametrizada y el reloj compartido | Abierta; ver OQ-UC02-04 |
 | **D-UC02-07** | El SPEC 02 solo contempla tarifa «nula o faltante»; no define qué hacer con tarifas negativas, cero o no numéricas | SPEC 02 casos extremos vs tabla de decisión `contracts/README.md` §4.2 regla 4 | Tarifa nula/ausente = sin tarifa (E8); negativa/cero/no numérica = **respuesta inválida** → `FLEET_UNAVAILABLE` (E7); falla toda la invocación | Decidida |
 | **D-UC02-08** | El SPEC 02 dice «registra el fallo Y propaga el error»: ¿duplicidad de registros en `operational_failure` (UC02 y el llamador)? | SPEC 02 casos extremos vs SPEC 03 CE-003 | UC02 registra **todas** sus fallas (una por embarcación sin tarifa; una por invocación en FLEET/DYNAMIC) y propaga; los llamadores registran solo las propias (con su `use_case`) | Decidida para UC02 |
 | **D-UC02-09** | ¿Quién resuelve la «fecha actual» del modo lote (el SPEC la atribuye a UC02, pero UC01 devuelve `evaluation_date`)? | SPEC 02 RF-001 vs contrato UC01 lote | Consecuencia del diseño «solo batch»: `evaluatedDate` es obligatorio y lo resuelve el llamador (UC01 con `ClockPort.today()`), garantizando que coincida con `evaluation_date` | Decidida |
 | **D-UC02-10** | Nombres de código de `EmbarcacionInfo` y `TarifaBaseResultado` (SPEC 02) no fijados en general-plan §13 | SPEC 02 entidades clave vs general-plan §13 | `BoatBaseRateDto` (infraestructura) y `BaseRateResult` (aplicación); el monto se modela con el VO `BaseRate` sobre `Money` | Decidida **[CONV]** |
-| **D-UC02-11** | `general-plan.md` §3.5 asigna `FailureRecorderPort` y §4 define la tabla `operational_failure` (y `outbox_message`/`OutboxPort` para otros planes), pero el plan de UC11 no incluye su implementación | `general-plan.md` §3.5/§4 vs plan UC11 (T004–T009) | UC02 no lo implementa: referencia el puerto **por nombre**, usa doble en pruebas y deja **T004 condicionada**. Se requiere que el plan de UC11 (en estado «Rehacer») incluya la migración de `operational_failure` + `FailureRecorderPort` (+ `outbox_message`/`OutboxPort` para los planes que los usen) o que se registre una tarea técnica compartida en `general-plan.md` | Abierta — pendiente del plan de UC11 |
+| **D-UC02-12** | La trazabilidad y las referencias de infraestructura no deben coordinarse mediante tareas de otro caso de uso | Auditoría de planes vs referencias a tareas externas | UC02 referencia puertos, VOs y tablas por su contrato; se eliminan las referencias de coordinación a tareas externas | Aplicada |
 
 ## Preguntas abiertas (OQ-UC02-xx)
 
@@ -252,24 +252,25 @@ Preguntas que este plan no puede resolver con el SPEC 02, el plan general ni los
 | **OQ-UC02-04** | ¿Cuál es la zona horaria de negocio para «fecha actual» y fin de semana (general-plan OQ-04)? | T005, T009, reglas 3 y 6 | `America/Bogota` en `seashare.timezone` **[CONV]** | Abierta (general) |
 | **OQ-UC02-05** | ¿UC02 debe imponer un límite al tamaño del lote? El límite (50) es de UC01 (RF-006, D-22) | T016 | UC02 no impone límite; acepta el lote que el llamador le pase (una sola consulta a Flota) **[CONV]** | Abierta |
 | **OQ-UC02-06** | ¿Cómo se nombra el puerto de reloj del general-plan §3.3 («reloj»)? | T005 | `ClockPort` con `LocalDate today()` **[CONV]** | Abierta |
+| **OQ-CROSS-10 / D-24** | ¿Cómo se tratan los festivos entre semana en la política de temporada alta? | T009–T012 | El calendario no añade comportamiento fuera del SPEC hasta recibir la decisión transversal | Abierta; requiere decisión externa |
 
 **`[NEEDS CLARIFICATION]` consolidado:** OQ-UC02-01 a OQ-UC02-06.
 
 ## Implementation Phases
 
-> **Convención**: cada tarea `T0NN` es una unidad de trabajo granular y verificable de forma independiente; su casilla (`[ ]`) es el mecanismo de seguimiento (no se usan marcadores de módulo/aprobación). **«Compartido»** = misma tarea que una fase de la hoja de ruta del `general-plan.md` §12: las fases Setup y Foundational se marcan «Compartido» y remiten a `UC11·T001`–`UC11·T009`. Los demás planes referencian estas tareas como `UC11·T0NN`.
+> **Convención**: cada tarea `T0NN` es una unidad de trabajo granular y verificable de forma independiente; su casilla (`[ ]`) es el mecanismo de seguimiento. Las dependencias con otros casos de uso se expresan mediante puertos, firmas y tablas, no mediante numeración de tareas externas.
 
-### Phase 1: Setup — **Compartido** (con la Fase 1 general; se referencia como `UC11·T001`–`UC11·T003`)
+### Phase 1: Setup
 
-- [ ] **T001** · Compartido: `pom.xml` — remite a `UC11·T001`. UC02 **requiere además** los artefactos `resilience4j-spring-boot3` y `wiremock-standalone` (o `wiremock-spring-boot`); como es el mismo archivo que edita `UC11·T001`, la ampliación se coordina en esa misma tarea sin duplicar ediciones.
-- [ ] **T002** · Compartido: base de `ArchitectureTest` (reglas §3.4) y `application.properties`: datasource, Flyway, `seashare.timezone` (OQ-UC02-04) y las propiedades `seashare.fleet.*` (general-plan §7.4) — remite a `UC11·T003`.
+- [ ] **T001** · `pom.xml`: registrar las dependencias necesarias para el cliente de Flota, resiliencia y pruebas, coordinando el archivo con el catálogo común del repositorio.
+- [ ] **T002** · base de `ArchitectureTest` (reglas §3.4) y `application.properties`: datasource, `seashare.timezone` (OQ-UC02-04) y propiedades `seashare.fleet.*` (general-plan §7.4).
 
-### Phase 2: Foundational — **Compartido** (con la Fase 2 general; se referencia como `UC11·T004`–`UC11·T009`)
+### Phase 2: Foundational
 
-- [ ] **T003** · Compartido: `DomainException` (`domain/exception`), base del árbol de excepciones — remite a `UC11·T004`.
-- [ ] **T004** · **Condicionada (D-UC02-11)**: consumir la pieza compartida `FailureRecorderPort` + tabla `operational_failure` **por nombre**; se prevé definir en las tareas Setup/Foundational de UC11 (`UC11·T001`–`UC11·T009`), que hoy **no la contienen**. UC02 no la implementa; para que sus pruebas no se bloqueen, T016/T025 usan el doble `InMemoryFailureRecorder`. Desbloqueo: el plan de UC11 (a rehacer) la incluye o se registra una tarea técnica compartida en `general-plan.md`.
-- [ ] **T005** · `ClockPort` (`application/port/out`): `LocalDate today()` en la zona de negocio, + `SystemClock` (`infrastructure/config`) leyendo `seashare.timezone` [OQ-UC02-04; OQ-UC02-06]. Publicado para **UC01** (compartido entre UC01 y UC02); UC02 no lo invoca (D-UC02-09).
-- [ ] **T006** · VOs de dominio: `Money` (`BigDecimal`, escala 4, sin enforced de signo: es compartido), `BoatId` (UUID), `BaseRate` (con `Money`, **rechaza monto ≤ 0**). Compartidos entre UC01/UC02/UC03 (definidos aquí por UC02).
+- [ ] **T003** · `DomainException` (`domain/exception`), base del árbol de excepciones del núcleo común.
+- [ ] **T004** · consumir `FailureRecorderPort` y `operational_failure` por sus firmas compartidas; UC02 no los implementa ni redeclara y las pruebas usan `InMemoryFailureRecorder`.
+- [ ] **T005** · consumir `ClockPort` del núcleo común (`LocalDate today()`); `SystemClock` puede ser el adaptador configurado por `seashore.timezone`, sin redeclarar el puerto [OQ-UC02-04; OQ-UC02-06].
+- [ ] **T006** · definir únicamente los VOs propios de UC02 (`BaseRate` y `HighSeasonWindow`); `Money` y `BoatId` se consumen del núcleo común y no se redeclaran.
 - [ ] **T007** · Pruebas de los VOs: escala/precisión, igualdad, `BaseRate` rechaza nulo/≤ 0, `BoatId` valida UUID (RNF-002).
 
 ### Phase 3: US1 — Calendario de temporada alta y Semana Santa (HU1, RF-006, RNF-004, CE-001)
@@ -285,7 +286,7 @@ Preguntas que este plan no puede resolver con el SPEC 02, el plan general ni los
 - [ ] **T013** · `ProvideBaseRateCommand` (`List<BoatId> boatIds`, `LocalDate evaluatedDate` obligatorio) y `BaseRateResult` (`BoatId`, `BaseRate`) en `application/dto` [D-UC02-10].
 - [ ] **T014** · `BaseRateException` (`domain/exception`, extiende `DomainException`): `BaseRateFailureReason` (`FLEET_UNAVAILABLE`, `DYNAMIC_RATE_NOT_CONFIGURED`, `BASE_RATE_NOT_AVAILABLE`) y `isTransient()` (verdadero en `FLEET_UNAVAILABLE` y `DYNAMIC_RATE_NOT_CONFIGURED`; falso en el registro por-embarcación).
 - [ ] **T015** · `FleetRatePort` (`application/port/out`): `Map<BoatId, BaseRate> findBaseRates(Set<BoatId> boatIds)` — devuelve **solo** las embarcaciones con tarifa válida; lanza `BaseRateException(FLEET_UNAVAILABLE)` ante falla de Flota (D-UC02-07).
-- [ ] **T016** · `ProvideBaseRateUseCase` + `ProvideBaseRateService`: dedupe de IDs; lista vacía → `List.of()` sin consultar a Flota; **una sola consulta** a `FleetRatePort`; lectura perezosa de `FinancialParametersRepository.find()` (solo si `DynamicRatePolicy.requiresAdjustment`); por cada embarcación sin tarifa → registro `BASE_RATE_NOT_AVAILABLE` en el `FailureRecorderPort` (por nombre, D-UC02-11); frente a `FLEET_UNAVAILABLE`/`DYNAMIC_RATE_NOT_CONFIGURED` → registra y **propaga** sin devolver nada; jamás una tarifa asumida.
+- [ ] **T016** · `ProvideBaseRateUseCase` + `ProvideBaseRateService`: dedupe de IDs; lista vacía → `List.of()` sin consultar a Flota; **una sola consulta** a `FleetRatePort`; lectura perezosa de `FinancialParametersRepository.find()` (solo si `DynamicRatePolicy.requiresAdjustment`); por cada embarcación sin tarifa → registro `BASE_RATE_NOT_AVAILABLE` en el `FailureRecorderPort`; frente a `FLEET_UNAVAILABLE`/`DYNAMIC_RATE_NOT_CONFIGURED` → registra y **propaga** sin devolver nada; jamás una tarifa asumida.
 - [ ] **T017** · Pruebas unitarias del servicio (Mockito + `InMemoryFailureRecorder`): escenarios 1–3 de HU1; lote con varias embarcaciones (una sin tarifa no rompe las demás); lista vacía; IDs duplicados → una sola consulta; fecha regular sin fila de parámetros; % faltante; Flota caída (registro + propagación).
 
 ### Phase 5: US1 — Adaptador a Flota (HU1, RF-004, RNF-001, RNF-003)
@@ -301,13 +302,13 @@ Preguntas que este plan no puede resolver con el SPEC 02, el plan general ni los
 - [ ] **T023** · **`ce001_tarifa_refleja_condicion_dinamica_vigente`** (CE-001): prueba de aceptación parametrizada (reglas 2–8) verificando la tarifa exacta a escala 4 para una batería de fechas (incluye Pascua 2024–2030 y los límites de las ventanas).
 - [ ] **T024** · **`ce002_tarifa_dinamica_solo_en_uc02_sin_tipo_ni_categoria`** (CE-002): ArchUnit sobre `DynamicRatePolicy` + reflexión sobre `BoatBaseRateDto`/`FleetBaseRatesRequestDto`/`BaseRateResult` (cero atributos de tipo/categoría).
 - [ ] **T025** · **`ce003_fallas_de_flota_manejadas_sin_tarifa_asumida`** (CE-003): integración `@SpringBootTest` + WireMock + `InMemoryFailureRecorder`: timeout, puerto cerrado, cuerpo inválido, 500 y circuito abierto → error controlado, registro del fallo y **cero tarifas devueltas**.
-- [ ] **T026** · Documentación y referencias entre planes: verificar la alineación con `flota-consulta-tarifas-base.md`; documentar la firma de `ProvideBaseRateUseCase` (§Firmas referenciadas por otros planes) y registrar el estado de `D-UC02-11`; confirmar con UC11 el formato de `high_season_windows` (OQ-UC02-03/OQ-UC11-03) y que `windowsForYear` responde su OQ-UC11-05.
-- [ ] **T027** · Compartido: revisar cobertura (dominio ≥ 90 %, aplicación ≥ 80 % **[CONV]**) y `./mvnw clean verify` final con las pruebas de aceptación CE-001…CE-003.
+- [ ] **T026** · Documentación y referencias: verificar la alineación con `flota-consulta-tarifas-base.md`, la firma publicada de `ProvideBaseRateUseCase`, el consumo del núcleo compartido y que `windowsForYear` responde la OQ-UC11-05. Mantener abierta la OQ sobre el formato de `high_season_windows`.
+- [ ] **T027** · revisar cobertura (dominio ≥ 90 %, aplicación ≥ 80 % **[CONV]**) y `./mvnw clean verify` final con las pruebas de aceptación CE-001…CE-003.
 
 ## Dependencies & Execution Order
 
 ```text
-T001 ─┬─> T002 ─┬─> T003 ──> T004* ──┐            (* condicionada: D-UC02-11)
+T001 ─┬─> T002 ─┬─> T003 ──> T004 ──┐
       │         │                     │
       │         └─────────────────────┴─> T005 ─> T006 ─> T007
       │                                      │
@@ -322,10 +323,10 @@ T001 ─┬─> T002 ─┬─> T003 ──> T004* ──┐            (* condi
       └────────────────────────────────────────────────> T022 ─> T023 ─> T024 ─> T025 ─> T026 ─> T027
 ```
 
-- **Grupo 1 (T001–T007)**: Setup y Foundational compartidos (`UC11·T001`–`UC11·T009`). T004 (registro de fallas) está **condicionada a D-UC02-11**; como UC02 la consume con doble de prueba, no bloquea a T016/T017/T025.
+- **Grupo 1 (T001–T007)**: Setup y Foundational de UC02. T004 consume el puerto compartido de registro de fallos con doble de prueba, sin redefinirlo.
 - **US1 calendario (T008–T012)** → **puerto y servicio (T013–T017)** → **adaptador Flota (T018–T021)**: el servicio depende del calendario y de la política; el adaptador es independiente y puede desarrollarse en paralelo con T013–T017. **UC01 (incluye a UC02) no puede terminar hasta publicarse la firma (T016) y existir el servicio.**
-- **Polish (T022–T027)**: después de toda la funcionalidad; T026 (documentar la firma publicada y el estado de la pieza compartida con UC11) debería completarse **lo antes posible** (§Firmas referenciadas por otros planes).
-- Riesgo de secuencia: T004 hereda el estado de UC11 (fase 3, «Rehacer»); si el plan de UC11 no incluye la pieza compartida, la alternativa acordada es registrar una tarea técnica común en `general-plan.md` **sin que cada UC la implemente por su cuenta** (D-UC02-11).
+- **Polish (T022–T027)**: después de toda la funcionalidad; T026 documenta la firma publicada y el estado de las OQ de integración.
+- Riesgo de secuencia: T004 depende de que el catálogo compartido de puertos esté disponible en el núcleo común; UC02 no crea una implementación paralela.
 
 ## Notes
 
@@ -333,8 +334,8 @@ T001 ─┬─> T002 ─┬─> T003 ──> T004* ──┐            (* condi
 - **`docs/context/` contradice al SPEC 02** en dos puntos (tipo/categoría; puentes como temporada alta) → rige el SPEC (D-UC02-01, D-UC02-02).
 - Calendario: `isHighSeason` + `windowsForYear` son de UC02; **UC11 los consume** (OQ-UC11-05 queda respondida). El formato de `high_season_windows` es decisión de UC11 (OQ-UC11-03).
 - `FinancialParameters`/`FinancialParametersRepository` son de UC11: UC02 los consume por nombre y **solo cuando la fecha lo exige** (lectura perezosa, regla 14).
-- `FailureRecorderPort`/`operational_failure` son compartidos y **están pendientes en UC11** (D-UC02-11): UC02 los referencia por nombre, no los implementa y los sustituye por un doble en pruebas (T016, T025).
-- `FleetRatePort` y los VOs `Money`/`BoatId` son piezas que UC02 define aquí y que UC01 y UC03 consumen por nombre, conforme a `general-plan.md` §3.3/§3.5.
+- `FailureRecorderPort`/`operational_failure` son piezas compartidas: UC02 las referencia por nombre, no las implementa y las sustituye por un doble en pruebas (T016, T025).
+- `FleetRatePort` es interno a UC02; `Money`, `BoatId` y `ClockPort` viven en el núcleo compartido y UC02 los consume por nombre, conforme a `general-plan.md` §3.3/§3.5.
 - Etiquetas usadas: `[SPEC]` (SPEC 02 y contratos), `[CONV]` (general-plan e inferido), `[PEND]`/`[NEEDS CLARIFICATION]` (sin definir).
 
 ## Checklist de auto-revisión
@@ -343,9 +344,10 @@ T001 ─┬─> T002 ─┬─> T003 ──> T004* ──┐            (* condi
 - [ ] Sin placeholders ni tareas de ejemplo; sin etiquetas "Option 1/2".
 - [ ] Fecha `2026-10-09` y enlace a `spec.md`.
 - [ ] Toda regla marcada `[SPEC]`, `[CONV]`, `[PEND]` o `[NEEDS CLARIFICATION]`.
-- [ ] Contradicciones `D-UC02-01` a `D-UC02-11` (hueco en `D-UC02-05` tras su eliminación) en «Discrepancias y puntos abiertos» con decisión explícita, sin resolución silenciosa; `D-UC02-11` queda pendiente del plan de UC11.
+- [ ] Contradicciones `D-UC02-01` a `D-UC02-12` en «Discrepancias y puntos abiertos» con decisión explícita, sin resolución silenciosa; las decisiones de infraestructura compartida se expresan por puertos y tablas, no por tareas externas.
 - [ ] Preguntas abiertas definidas en el propio plan (OQ-UC02-01 a OQ-UC02-06), con remisión explícita a las OQ del general-plan y de UC11 cuando corresponden.
 - [ ] Cada RF/RNF/CE/HU del SPEC 02 trazado a componente y tarea; pruebas `ce001_…`, `ce002_…`, `ce003_…`.
 - [ ] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§13) aplicadas; sin tipo/categoría en DTOs.
-- [ ] UC02 sin tablas propias, sin migración propia, sin endpoint REST; solo consume `financial_parameters` (nombre) y `operational_failure` (nombre, pieza compartida).
+- [ ] UC02 sin tablas propias, sin migración propia, sin endpoint REST; solo consume `financial_parameters` y `operational_failure` mediante sus puertos compartidos.
+- [ ] `Money`, `BoatId` y `ClockPort` se consumen del núcleo compartido y no se redeclaran; `OQ-UC11-05` queda respondida por `windowsForYear`.
 - [ ] Puerto `ProvideBaseRateUseCase` publicado con su firma (§Firmas referenciadas por otros planes); referencias por nombre con UC01/UC03 y UC11 declaradas.

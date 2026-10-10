@@ -36,9 +36,9 @@ Enfoque técnico: Spring Boot único con arquitectura hexagonal (`domain` / `app
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
-**Primary Dependencies**: Spring Boot 4.1.1; Web MVC, Validation, Data JPA, AMQP, Security OAuth2 Resource Server, Actuator, Flyway, MapStruct, Resilience4j, Micrometer/Prometheus, ArchUnit y ShedLock opcional. UC08 usa especialmente AMQP, JPA, Validation, PostgreSQL, RabbitMQ, Awaitility y Testcontainers. Dependencias compartidas: `UC11·T001`–`UC11·T009`; este plan no modifica `pom.xml`.  
+**Primary Dependencies**: Spring Boot 4.1.1; Web MVC, Validation, Data JPA, AMQP, Security OAuth2 Resource Server, Actuator, Flyway, MapStruct, Resilience4j, Micrometer/Prometheus, ArchUnit y ShedLock opcional. UC08 usa especialmente AMQP, JPA, Validation, PostgreSQL, RabbitMQ, Awaitility y Testcontainers. Las dependencias pertenecen al núcleo compartido; este plan no modifica `pom.xml`.
 **Storage**: PostgreSQL 16+, `NUMERIC(18,4)` y `timestamptz`. UC08 es dueño de `deposit_disposition` y `dispute_event_log`; lee `reservation_information` y `charge_record` mediante puertos de sus dueños [general-plan §4].  
-**Messaging**: RabbitMQ 3.13+, exchange topic durable `seashare.reservations`, routing key `reservation.dispute.updated`, cola `finance.guarantee-dispute.v1`, mensajes persistentes y DLQ [CONV contrato UC08].  
+**Messaging**: RabbitMQ 3.13+, exchange topic durable `seashare.reservations`, routing key `reservation.dispute.updated`, cola `finance.guarantee-dispute.v1`, mensajes persistentes y DLQ `finance.guarantee-dispute.v1.dlq` [D-22; contrato UC08].
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers PostgreSQL/RabbitMQ, Awaitility, ArchUnit y pruebas de contrato AMQP [CONV].  
 **Target Platform**: contenedores Docker sobre Linux; desarrollo con Docker Compose [SPEC general-plan].  
 **Project Type**: servicio backend único hexagonal, sin frontend propio.  
@@ -72,8 +72,9 @@ src/main/java/com/seashare/seasharem3/
 │   │   ├── {DepositDispositionRepository,DisputeEventLogRepository}.java
 │   │   ├── ReservationInformationRepository.java     # dueño UC03, solo referencia
 │   │   ├── ChargeRecordQueryPort.java                # dueño UC05, solo referencia
-│   │   ├── FailureRecorderPort.java                  # UC11·T007
-│   │   └── OutboxPort.java                           # UC11·T009
+│   │   ├── FailureRecorderPort.java                  # puerto compartido
+│   │   ├── ReservationLockPort.java                  # lock único por reserva
+│   │   └── OutboxPort.java                           # puerto compartido
 │   ├── service/DisputeInformationService.java
 │   └── dto/{DisputeNotificationCommand,DepositTrackingResult}.java
 └── infrastructure/
@@ -88,7 +89,7 @@ src/main/java/com/seashare/seasharem3/
     └── config/{AmqpConfig,ProblemDetailsConfig,ObservabilityConfig}.java
 
 src/main/resources/db/migration/
-└── V1__create_dispute_tracking_tables.sql # solo documentado; consolidación asigna definitivo
+└── dispute_tracking_tables.sql # DDL exacta de UC08; política de versionado global abierta
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/ArchitectureTest.java
@@ -99,7 +100,7 @@ src/test/java/com/seashare/seasharem3/
 └── infrastructure/adapter/out/persistence/DisputePersistenceAdapterTest.java
 ```
 
-**Structure Decision**: sigue `general-plan.md` §3.2–§3.4 y la referencia UC01/UC11: `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`; ningún listener accede directamente a repositorios; DTOs AMQP viven en infraestructura y aplicación trabaja con commands/results.
+**Structure Decision**: sigue `general-plan.md` §3.2–§3.4: `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`; ningún listener accede directamente a repositorios; DTOs AMQP viven en infraestructura y aplicación trabaja con commands/results.
 
 **Firmas referenciadas**: UC08 publica `OpenDepositTrackingUseCase` para UC07. Consume `RequestRefundUseCase` de UC09 y `RequestSettlementUseCase` de UC10 por sus puertos publicados; no redefine ni implementa esos casos. No expone REST ni responde a Reservas.
 
@@ -164,29 +165,31 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 | ID | Descripción | Propuesta por defecto | Estado |
 |---|---|---|---|
 | **OQ-UC08-01** | El SPEC no define SLA ni número exacto de reintentos | heredar backoff general de 3–5 reintentos y medir lag | Abierta |
-| **D-UC08-01** | UC09/UC10 deben publicar firmas | consumir sus `port.in`; copiar firmas de los planes dueños | Decidida |
-| **D-UC08-02** | Orden definitivo de migraciones | documentar **V1**; consolidación asigna números finales | Decidida |
+| **D-UC08-01** | UC08 es dueño de `deposit_disposition` y `dispute_event_log`; UC09/UC10 deben publicar firmas | UC08 conserva la DDL exacta de ambas tablas, consume los `port.in` de UC09/UC10 y no redefine sus firmas | Aplicada |
+| **D-UC08-02** | Orden definitivo de migraciones | documentar la DDL exacta de UC08; la política y orden global permanecen abiertos (OQ-CROSS-07 / D-CROSS-08) | Abierta; requiere decisión externa |
 | **D-UC08-03** | Tratamiento de errores en cola | ack + fallo para lógica; nack/DLQ para transitorios | Decidida por contrato |
+| **D-UC08-04** | Carrera entre creación de seguimiento y actualización de depósito | reintento acotado o creación idempotente de la fila bajo `ReservationLockPort` | Aplicada (D-13) |
 | **OQ-UC08-02** | Seguridad transversal para AMQP | heredar configuración compartida; no crear `SecurityConfig` propio | Diferida |
 
 ## Implementation Phases
 
 ### Phase 1: Setup — Compartido
 
-- [ ] **T001** Referenciar `UC11·T001`–`UC11·T009` para AMQP, persistencia, errores y observabilidad.
-- [ ] **T002** Configurar exchange, binding, cola quorum y DLQ según contrato.
+- [ ] **T001** Consumir la configuración AMQP común, Problem Details, `FailureRecorderPort`, `ReservationLockPort`, `OutboxPort` y observabilidad compartida; los fallos se registran con `REQUIRES_NEW`, `reservation_id` nullable, `payload_ref` referencial y procedimiento de reproceso [D-10].
+- [ ] **T002** Configurar exchange, binding, cola quorum y DLQ `<cola>.dlq` según contrato [D-22].
 - [ ] **T003** Definir ack/nack, backoff y correlación; sin cron/scheduler propio.
 
 ### Phase 2: Foundational
 
 - [ ] **T004** Crear `DisputeStatus`, value objects, `DisputeEvent` y reglas canónicas.
-- [ ] **T005** Consumir por nombre puertos de UC09/UC10, repositorios de reserva/cobro, `FailureRecorderPort` y `OutboxPort`; no implementarlos.
+- [ ] **T005** Consumir por nombre puertos de UC09/UC10, repositorios de reserva/cobro, `FailureRecorderPort`, `ReservationLockPort` y `OutboxPort`; no implementarlos.
 - [ ] **T006** Crear DTO AMQP estricto y mapearlo a `DisputeNotificationCommand`.
 - [ ] **T007** Crear `HandleDisputeNotificationUseCase`, `OpenDepositTrackingUseCase` y result interno.
 
 ### Phase 3: US1 — Recibir y procesar disputa (P1)
 
-- [ ] **T008** Implementar servicio: registrar, deduplicar, resolver pendientes y persistir disposición.
+- [ ] **T008** Implementar servicio: registrar, deduplicar por `(reservation_id, dispute_id, event_key)`, resolver pendientes y persistir disposición; la carrera usa reintento acotado o creación idempotente [D-13].
+- [ ] **T008a** Persistir `deposit_disposition` con CAS explícito: estados finales, rechazo del reembolso cuando corresponda y transición única bajo `ReservationLockPort` [D-CROSS-11].
 - [ ] **T009** Consultar depósito/cobro internos y llamar exactamente una vez a UC09/UC10 con el total interno.
 - [ ] **T010** Implementar listener con ack para errores no reintentables y nack/DLQ para transitorios.
 - [ ] **T011** Tests de contrato AMQP, listener y ausencia de respuesta.
@@ -205,7 +208,7 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012..T018`.
 
-UC08 consume las firmas publicadas por UC09/UC10 y publica `OpenDepositTrackingUseCase` para UC07. Cualquier cambio a esos planes queda fuera y solo se documenta. Migración: **V1**, únicamente como referencia documental; la numeración final se consolida después.
+UC08 consume las firmas publicadas por UC09/UC10 y publica `OpenDepositTrackingUseCase` para UC07. Cualquier cambio a esos planes queda fuera y solo se documenta. UC08 es dueño de la DDL de `deposit_disposition` y `dispute_event_log`; la política de migraciones permanece abierta en OQ-CROSS-07/D-08.
 
 ## Notes
 

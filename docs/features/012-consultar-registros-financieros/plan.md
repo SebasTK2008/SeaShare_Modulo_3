@@ -39,8 +39,8 @@ Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domai
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
-**Primary Dependencies**: Spring Boot 4.1.1; Spring Web MVC, Validation, Data JPA (Hibernate), Security OAuth2 Resource Server, Actuator, Flyway, MapStruct, Micrometer/Prometheus y ArchUnit. UC12 usa especialmente Web MVC, JPA/read-only query, seguridad, MockMvc, Testcontainers y pruebas de arquitectura. Dependencias compartidas se agregan mediante `UC11·T001`–`UC11·T009`; este plan no modifica `pom.xml`.  
-**Storage**: PostgreSQL 16+; vista `v_financial_records` como `UNION ALL` de `charge_record`, `refund_record`, `settlement_record` y `commission_record`, con `NUMERIC(18,4)` y `timestamptz`. UC12 solo lee [general-plan §4].  
+**Primary Dependencies**: Spring Boot 4.1.1; Spring Web MVC, Validation, Data JPA (Hibernate), Security OAuth2 Resource Server, Actuator, Flyway, MapStruct, Micrometer/Prometheus y ArchUnit. UC12 usa especialmente Web MVC, JPA/read-only query, seguridad, MockMvc, Testcontainers y pruebas de arquitectura. Las dependencias pertenecen al núcleo compartido; este plan no modifica `pom.xml`.
+**Storage**: PostgreSQL 16+; UC12 crea `v_financial_records` como `UNION ALL` de `charge_record`, `refund_record`, `settlement_record` y `commission_record`, con `record_id`, orden estable `(created_at DESC, record_id DESC)` y `NULL::text AS external_reference` para comisiones. Usa `NUMERIC(18,4)` y `timestamptz` [D-07].
 **Messaging**: N/A para la entrada de UC12; no consume ni publica eventos en este caso de uso.  
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Spring Security Test, Testcontainers PostgreSQL y ArchUnit [CONV].  
 **Target Platform**: contenedores Docker sobre Linux; desarrollo local con Docker Compose [SPEC general-plan].  
@@ -89,7 +89,7 @@ src/main/java/com/seashare/seasharem3/
     └── config/{SecurityConfig,ProblemDetailsConfig,ObservabilityConfig}.java
 
 src/main/resources/db/migration/
-└── V1__create_financial_records_view.sql # solo documentado; vista/migración se consolida fuera
+└── V*__create_financial_records_view.sql # versión sujeta a OQ-CROSS-07/D-08
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/ArchitectureTest.java
@@ -101,15 +101,15 @@ src/test/java/com/seashare/seasharem3/
 └── integration/FinancialRecordsPaginationIT.java
 ```
 
-**Structure Decision**: sigue `general-plan.md` §3.2–§3.4 y el patrón de UC01/UC08/UC11. `domain` no depende de Spring/JPA/Jackson; `application` solo depende de `domain`; controller invoca solo `application.port.in`; query adapter implementa `FinancialRecordQueryPort`; no se expone entidad JPA ni se accede a repositorios desde el controller. Los DTOs HTTP viven en infraestructura y application trabaja con command/result.
+**Structure Decision**: sigue `general-plan.md` §3.2–§3.4. Los VOs compartidos (`Money`, `ReservationId`, `OwnerId`, `ClockPort`) se consumen del núcleo compartido y no se redeclaran. `domain` no depende de Spring/JPA/Jackson; `application` solo depende de `domain`; controller invoca solo `application.port.in`; query adapter implementa `FinancialRecordQueryPort`; no se expone entidad JPA ni se accede a repositorios desde el controller.
 
-**Firmas referenciadas**: UC12 publica `QueryFinancialRecordsUseCase` para su adaptador REST. Consume `v_financial_records` y las columnas de registros publicadas por UC05, UC09 y UC10; no modifica ni replanifica esos planes. UC13 puede consumir un puerto de consulta/agregación distinto; no se implementa exportación en UC12.
+**Firmas referenciadas**: UC12 publica `QueryFinancialRecordsUseCase` para su adaptador REST y define la vista que UC13 consume. Consume `FinancialRecordQueryPort`/registros publicados por UC05, UC09 y UC10; no modifica sus planes. Zona horaria: `ClockPort` con `seashare.timezone` [D-23].
 
 ## Reglas de negocio
 
 1. **Alcance** [SPEC RF-003, RF-011; contrato §3.1]: Propietario filtra siempre por su identidad y reservas asociadas; Administrador Financiero puede consultar plataforma completa y filtrar por propietario.
-2. **Filtros** [SPEC RF-002; contrato §2]: `COBRO`, `REEMBOLSO`, `DISPERSION`, `COMISION`, propietario y embarcación; contrato añade reserva, fechas y `q` como filtros técnicos. Todos se combinan con AND.
-3. **Comisión** [SPEC RF-002]: `COMISION` devuelve únicamente `CommissionRecord`; nunca se compara numéricamente la comisión para decidir el tipo.
+2. **Filtros** [SPEC RF-002; contrato §2]: `CHARGE`, `REFUND`, `SETTLEMENT`, `COMMISSION`, propietario y embarcación; contrato añade reserva, fechas y `q` como filtros técnicos. Todos se combinan con AND.
+3. **Comisión** [SPEC RF-002]: `COMMISSION` devuelve únicamente `CommissionRecord`; nunca se compara numéricamente la comisión para decidir el tipo.
 4. **Fuente** [SPEC RF-004]: solo cuatro registros inmutables confirmados; intenciones, pendientes y fallidos quedan fuera.
 5. **Detalle** [SPEC RF-005, RF-006]: cada resultado contiene tipo, reserva, propietario, embarcación, monto, `created_at` y referencia externa opcional.
 6. **Paginación** [SPEC RF-007, RF-008, RNF-003]: `page` es 1-indexed, `size` por defecto 10, orden determinista `(created_at DESC, record_id DESC)`, sin omisiones ni duplicados.
@@ -138,7 +138,7 @@ Respuesta `200 OK`:
 ```json
 {
   "content": [{
-    "record_type": "COBRO",
+    "record_type": "CHARGE",
     "reservation_id": "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10",
     "owner_id": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
     "boat_id": "3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01",
@@ -179,17 +179,18 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 | ID | Descripción | Propuesta por defecto | Estado |
 |---|---|---|---|
 | **OQ-UC12-01** | El SPEC no fija latencia ni volumen | usar consulta paginada indexada y no cargar histórico completo; medir p95 en integración | Abierta |
-| **D-UC12-01** | El contrato añade `reservation_id`, `q`, fechas y filtro de propietario | aceptarlos como filtros técnicos sin ampliar el alcance del SPEC; validar tipos y combinarlos con AND | Decidida por contrato |
-| **D-UC12-02** | La vista `v_financial_records` es propiedad de UC10/consolidación, pero UC12 necesita leerla | consumirla mediante `FinancialRecordQueryPort`; no crear tablas ni cambiar la vista aquí | Decidida |
+| **D-UC12-01** | El contrato añade `reservation_id`, `q`, fechas y filtro de propietario | aceptarlos como filtros técnicos sin ampliar el alcance del SPEC; validar tipos y combinarlos con AND | Aplicada |
+| **D-07** | Dueño y forma de `v_financial_records` | UC12 crea la vista con `record_id`, orden estable y `NULL::text` para comisiones | Aplicada |
 | **D-UC12-03** | Seguridad transversal no está cerrada | documentar 401/403 y heredar `SecurityConfig`; no inventar mecanismo local | Diferida |
-| **D-UC12-04** | Numeración de migraciones del bloque C | documentar **V1**; consolidación asigna definitiva | Decidida |
+| **OQ-CROSS-07 / D-08** | Política y orden de migraciones | mantener abierta y respetar dependencias | Abierta |
+| **OQ-CROSS-14 / D-26** | Semántica de `q` y métricas adicionales | UC12 implementa solo la búsqueda y métricas exigidas por el SPEC; no agrega métricas ni columnas | Abierta; requiere decisión externa |
 
 ## Implementation Phases
 
-### Phase 1: Setup — Compartido
+### Phase 1: Setup
 
-- [ ] **T001** Referenciar `UC11·T001`–`UC11·T009` para web, validación, seguridad, errores y observabilidad.
-- [ ] **T002** Confirmar columnas/contrato de `v_financial_records` publicados por sus dueños, sin editar planes vecinos.
+- [ ] **T001** Consumir web, validación, seguridad, errores y observabilidad del núcleo compartido.
+- [ ] **T002** Crear DDL de `v_financial_records` con `record_id`, `NULL::text AS external_reference` para comisiones y orden estable; incluir pruebas de esquema.
 - [ ] **T003** Configurar parámetros de paginación y correlación; no agregar exportación ni cliente de Flota.
 
 ### Phase 2: Foundational
@@ -222,7 +223,7 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009/T010 → T011 → T012..T020`.
 
-UC12 depende de la vista/registros confirmados publicados por UC05, UC09 y UC10 y de la seguridad compartida. UC13 no se implementa aquí y mantiene la responsabilidad de exportar. Migración: **V1**, únicamente como referencia documental; la numeración definitiva y cualquier cambio de la vista se consolidan después.
+UC12 depende de los registros confirmados publicados por UC05, UC09 y UC10 y define la vista consumida por UC13. La política de migraciones queda abierta en OQ-CROSS-07/D-08.
 
 ## Notes
 
@@ -234,4 +235,4 @@ No modificar `pom.xml`, `general-plan.md`, SPEC, contrato ni planes de UC05/UC09
 - [ ] RF/RNF/CE/HU trazados a componente, tarea y prueba.
 - [ ] Alcance, filtros, paginación estable y errores documentados.
 - [ ] Solo lectura, sin Flota y sin exportación.
-- [ ] Migración indicada como V1 y ningún cambio externo aplicado.
+- [ ] DDL exacta de `v_financial_records` documentada; política de versionado global permanece abierta.

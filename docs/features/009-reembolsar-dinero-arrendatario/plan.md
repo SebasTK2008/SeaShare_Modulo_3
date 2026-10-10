@@ -7,7 +7,7 @@
 
 UC09 solicita a la Pasarela de Pago (Mercado Pago) la **liberación** de una autorización o el **reembolso** de un cobro capturado, por el monto que fija la regla de negocio según el estado de cancelación (flexible, moderada, tardía o por anfitrión) o según el estado `REJECTED` de la disputa de garantía; registra la `RefundIntent` en curso y, cuando la pasarela confirma el reembolso, crea el `RefundRecord` inmutable. **No calcula ni aplica descuentos por costos transaccionales**, no admite retención parcial del depósito y no recibe montos de Reservas [SPEC HU1, HU2, HU3, RF-001…RF-013, CE-001…CE-005].
 
-Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. UC09 **no tiene endpoint público**: lo invocan UC07 (cancelaciones) y UC08 (`REJECTED`) por `RequestRefundUseCase`. El cálculo del monto es una política de dominio pura (`RefundCalculator`, general-plan §3.3); la intención y el mensaje *outbox* se persisten en una sola transacción y un *worker* llama a la pasarela con una clave idempotente propia (general-plan D-08). El resultado entra por respuesta técnica, webhook (`type=refund`, consulta activa) o conciliación, y converge en `RegisterRefundResultUseCase`. `RefundIntent`/`RefundRecord` son del bloque B; `settlement_*` y `deposit_disposition` son del bloque C y se referencian por nombre.
+Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. UC09 **no tiene endpoint público**: lo invocan UC07 y UC08 por `RequestRefundUseCase`. El cálculo del monto es una política de dominio pura (`RefundCalculator`); la intención y el mensaje *outbox* se persisten en una sola transacción y un *worker* llama a la pasarela con una clave idempotente derivada de `(reservation_id, estado, tipo de operación)` [D-06]. El resultado converge en `RegisterRefundResultUseCase`. UC05 es dueño del receptor/verificación del webhook; UC09 registra su manejador `type=refund` y sus puertos `Send…`/`Reconcile…` [D-12]. `RefundIntent`/`RefundRecord` son propiedad de UC09; las demás tablas se referencian por nombre.
 
 El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Reembolsar dinero a arrendatario" con el actor *Pasarela de pago* y con un `<<extend>>` desde "Brindar información de disputa garantía". El disparo desde "Brindar el estado de la reserva" proviene del SPEC 7 (RF-003 a RF-005A).
 
@@ -45,8 +45,8 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Reem
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [general-plan]
-**Primary Dependencies**: Spring Boot 4.1.1. Para UC09: Spring Data JPA, Spring AMQP, Resilience4j, cliente HTTP, Flyway, MapStruct, ArchUnit. **Hoy no están en el `pom.xml`**; los agrega `UC11·T001` (incluye AMQP, Resilience4j, WireMock y Awaitility).
-**Storage**: PostgreSQL 16+; `NUMERIC(18,4)`, `timestamptz` [general-plan §4]
+**Primary Dependencies**: Spring Boot 4.1.1. Para UC09: Spring Data JPA, Spring AMQP, Resilience4j, cliente HTTP, Flyway, MapStruct, ArchUnit, WireMock y Awaitility. Se registran en el setup común sin referencias a tareas externas.
+**Storage**: PostgreSQL 16+; `refund_intent` y `refund_record` son tablas propias con DDL exacta en este plan; `NUMERIC(18,4)`, `timestamptz` [general-plan §4]. `operational_failure.reservation_id` es nullable y sin FK; `payload_ref` referencia el mensaje o JSON almacenado.
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), WireMock, Awaitility, ArchUnit [general-plan]
 **Target Platform**: Contenedores Docker (Linux) [general-plan]
 **Project Type**: Servicio backend único (hexagonal) [general-plan]
@@ -113,7 +113,7 @@ src/main/java/com/seashare/seasharem3/
 └── infrastructure/
     ├── adapter/in/messaging/
     │   └── RefundCommandListener.java           # T013  worker de la cola interna
-    ├── adapter/in/webhook/                      # el controlador es de UC05·T019 (compartido); UC09 aporta el mapeo type=refund (T021)
+    ├── adapter/in/webhook/                      # UC05 recibe/verifica; UC09 registra el manejador type=refund (T021)
     ├── adapter/out/gateway/
     │   ├── MercadoPagoRefundAdapter.java        # T011, T022
     │   └── dto/{MercadoPagoRefundRequest, MercadoPagoRefundResponse}.java   # T011
@@ -124,7 +124,7 @@ src/main/java/com/seashare/seasharem3/
         └── RefundIntentPersistenceAdapter.java / RefundRecordPersistenceAdapter.java  # T009
 
 src/main/resources/db/migration/
-└── V3x__create_refund_intent_and_refund_record.sql   # T001  (rango V3x, después de la migración de UC05)
+└── refund_intent_and_refund_record.sql                # T001  DDL exacta de UC09; versionado global abierto
 
 src/test/java/com/seashare/seasharem3/
 ├── domain/service/RefundCalculatorTest.java                              # T003, T015
@@ -134,7 +134,7 @@ src/test/java/com/seashare/seasharem3/
 └── acceptance/Uc09AcceptanceTest.java                                    # T017, T018, T024–T026
 ```
 
-**Puertos expuestos**: `RequestRefundUseCase` lo llaman **UC07** (cancelaciones, bloque B) y **UC08** (`REJECTED`, bloque C). Firma [CONV], a publicar en el canal al terminar T006:
+**Puertos expuestos**: `RequestRefundUseCase` lo llaman UC07 y UC08. Firma [CONV], publicada al completar T006:
 
 ```java
 public interface RequestRefundUseCase {
@@ -200,7 +200,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 | Unitario (`application`) | datos faltantes, cobro original, idempotencia, resultados | `RequestRefundServiceTest`, `RegisterRefundResultServiceTest` |
 | Integración (Testcontainers PostgreSQL) | migración, FK, `UNIQUE(idempotency_key)`, trigger anti-mutación | `RefundPersistenceAdapterTest` |
 | Integración (RabbitMQ + WireMock) | outbox → worker → pasarela, misma clave en reintentos | `RefundCommandListenerTest`, `MercadoPagoRefundAdapterTest` |
-| Arquitectura | reglas §3.4 | `ArchitectureTest` (UC11·T003, ampliado en T027) |
+| Arquitectura | reglas §3.4 | `ArchitectureTest` (base y ampliación T027) |
 
 **Pruebas de aceptación (CE-001…CE-005)**:
 
@@ -214,8 +214,8 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 
 | ID | Descripción | Fuentes en conflicto | Decisión para avanzar | Estado |
 |---|---|---|---|---|
-| **D-UC09-01** | `operational_failure`, `outbox_message`, `FailureRecorderPort`, `OutboxPort` y las dependencias AMQP/Resilience4j debían quedar definidos en las tareas compartidas de UC11 | Reparto de piezas compartidas vs plan UC11 | Se referencian por nombre: `UC11·T001` (dependencias), `UC11·T002` (tablas), `UC11·T007` (puertos) y `UC11·T046` (adaptadores). **Cierre:** el plan UC11 ya los incluye | **Cerrada** |
-| **D-UC09-02** | `refund_intent` (general-plan §4) no tiene `dispute_id` (el registro lo exige, RF-013) ni columna para el detalle del estado externo (HU3 escenario 2) | general-plan §4 vs SPEC 9 | Se agregan `dispute_id` (nullable) y `status_detail` a `refund_intent` en la migración V3x (T001). **Cierre:** `refund_intent` es una tabla propia del bloque B | **Cerrada** |
+| **D-UC09-01** | Las piezas técnicas compartidas no deben coordinarse mediante tareas externas | Auditoría de planes | UC09 consume `FailureRecorderPort`, `OutboxPort` y AMQP por contratos; no los redeclara ni referencia tareas de otro caso de uso | Aplicada |
+| **D-UC09-02** | `refund_intent` necesita `dispute_id` y detalle del estado externo | general-plan §4 vs SPEC 9 | La DDL exacta de UC09 incluye `dispute_id` nullable y `status_detail` | Aplicada |
 | **D-UC09-03** | `sea-share.md` y `consistencia-m2-m3.md` dicen que la cancelación flexible reembolsa "menos costos transaccionales"; el SPEC 9 prohíbe calcularlos (RF-012) | `sea-share.md` §2.2 vs SPEC RF-012 | Rige el SPEC: se solicita el monto íntegro y se registra lo que la pasarela reporte | Decidida |
 | **D-UC09-04** | El contrato describe "reembolso parcial/total" y nada sobre **liberación** de autorizaciones, que el SPEC exige | `pasarela-comando-reembolso.md` vs SPEC RF-002…RF-004 | `RefundOperationType` distingue `RELEASE`/`REFUND`; el adaptador de `RELEASE` queda pendiente (OQ-UC09-01) | **Abierta** |
 | **D-UC09-05** | general-plan §3.5 lista 2 puertos de entrada para UC09; el diseño agrega `SendRefundToGatewayUseCase` y `ReconcileRefundIntentsUseCase` (el worker y el job son adaptadores y solo pueden invocar `port.in`) | general-plan §3.5 vs §3.4 | Se agregan como [CONV]. **Cierre:** son puertos propios de UC09 | **Cerrada** |
@@ -227,7 +227,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 |---|---|---|---|---|
 | **OQ-UC09-01** | ¿Cómo se libera una autorización (total o parcial, p. ej. 50 % del alquiler + depósito) en Mercado Pago? El contrato solo cubre `POST …/refunds` | T011, T013 | Sin definir: el tipo `RELEASE` queda sin adaptador hasta confirmarse | **Abierta** |
 | **OQ-UC09-02** | ¿De qué campo de la respuesta/consulta de la pasarela sale el costo transaccional del reembolso (RF-011)? El contrato no lo incluye | T020 | `transaction_cost` queda `NULL` mientras no haya fuente | **Cerrada** → **Adoptada.** |
-| **OQ-UC09-03** | ¿Quién ejecuta el *compare-and-set* de `deposit_disposition` (tabla del bloque C): UC08 antes de llamar a `RequestRefundUseCase`, o UC09? No hay puerto que lo exponga | T008, T016 | UC08 (dueña de la tabla) lo ejecuta antes de invocar; UC09 solo garantiza idempotencia por `operationKey` | **Abierta** (avisar a C) |
+| **OQ-UC09-03** | ¿Quién ejecuta el *compare-and-set* de `deposit_disposition`? | T008, T016 | UC09 no modifica la tabla propietaria de UC08; la coordinación se realiza mediante el puerto publicado por su dueño | **Abierta** |
 | **OQ-UC09-04** | Redondeo del 50 % del alquiler y escala del monto hacia la pasarela (4 decimales internos; el contrato envía `990000.00`) | T004, T011 | Sin regla fijada; se aplica la que se acuerde para todos | **Abierta** |
 | **OQ-UC09-05** | Formato y derivación de la clave idempotente (el contrato usa `reembolso-<reserva>-<estado>` de ejemplo) y qué `operationKey` aporta UC07/UC08 | T006, T008 | Clave determinística a partir de `reservationId` + `trigger` + `operationKey` | **Cerrada** → **Adoptada.** |
 | **OQ-UC09-06** | ¿Qué hacer si no hay cobro original aprobado? El SPEC solo prevé la ausencia de alquiler/depósito (RF-010), UC08 prevé "cobro no cobrado" | T008 | Registrar fallo en `operational_failure` sin solicitar nada | **Cerrada** → **Adoptada.** |
@@ -237,27 +237,26 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 
 ## Implementation Phases
 
-> **Convención**: tarea `T0NN` · `M` = Módulo (`done`/`partial`/`pending`) · `P` = Aprobación (`approved`/`rejected`/`pending` · `none` si no aplica). Las fases 1 y 2 son **Compartido** y remiten a tareas de UC11; las tareas locales empiezan en la Fase 3.
+> **Convención**: cada tarea `T0NN` es una unidad granular y verificable; su casilla (`[ ]`) es el mecanismo de seguimiento. Las dependencias se expresan mediante puertos, firmas y tablas, no mediante tareas externas.
 
-### Phase 1: Setup — **Compartido**
+### Phase 1: Setup
 
-- [ ] `UC11·T001`–`UC11·T003`: starters (incluye AMQP, Resilience4j, WireMock y Awaitility), migración V1 y `ArchitectureTest`.
+- [ ] **T031** · registrar dependencias AMQP, Resilience4j, WireMock, Awaitility y base de `ArchitectureTest`.
 
-### Phase 2: Foundational — **Compartido**
+### Phase 2: Foundational
 
-- [ ] `UC11·T004`–`UC11·T009`: excepciones base, `ProblemDetailsConfig`, `SecurityConfig`.
-- [ ] `UC11·T046`–`UC11·T047`: `operational_failure`, `outbox_message`, `FailureRecorderPort`, `OutboxPort`, adaptadores y `OutboxRelayJob`.
+- [ ] **T032** · consumir `DomainException`, `FailureRecorderPort`, `OutboxPort` y configuración AMQP común; registro REQUIRES_NEW y reproceso por el catálogo compartido.
 
 ### Phase 3: US1 — Reembolso por cancelación (HU1; RF-001…RF-003A, RF-005, RF-006, RF-010, RF-012; RNF-001…RNF-003)
 
-- [ ] **T001** · Migración `V3x__create_refund_intent_and_refund_record.sql`: `refund_intent` (columnas de general-plan §4 + `dispute_id`, `status_detail`; `scope` con `FULL`/`HALF_RENTAL_PLUS_DEPOSIT`/`DEPOSIT_ONLY`; FK `charge_intent_id` a `charge_intent`; `UNIQUE(idempotency_key)`; índice `(reservation_id)`), `refund_record` (`refund_intent_id NOT NULL` con FK; `transaction_cost` nullable; índices `(owner_id, created_at DESC)`, `(boat_id)`, `(reservation_id)`), trigger anti-`UPDATE`/`DELETE` reutilizando la función de `UC05·T002`. Debe ir **después** de la migración de UC05. · M: `none` · P: `pending`
+- [ ] **T001** · DDL exacta de `refund_intent` y `refund_record`: `dispute_id` nullable, `status_detail`, scopes vigentes, FK e índices, inmutabilidad de `refund_record` y privilegios. La política de versionado global permanece abierta.
 - [ ] **T002** · Dominio: `RefundTrigger`, `RefundScope`, `RefundOperationType`, `RefundIntentStatus`, `RefundIntent` (transiciones), `RefundRecord` (inmutable). · M: `none` · P: `pending`
 - [ ] **T003** · Pruebas de `RefundCalculator` para los 4 estados de cancelación con los importes ilustrativos (`990000.00`, `480000.00`, `30000.00`, `990000.00`), seguro excluido en moderada y tardía, y `BigDecimal` sin pérdida. · M: `none` · P: `pending`
 - [ ] **T004** · `RefundCalculator` (dominio puro). Redondeo condicionado a **OQ-UC09-04**. · M: `none` · P: `pending`
-- [ ] **T005** · Puertos de salida: `RefundIntentRepository`, `RefundRecordRepository`, `RefundGatewayPort` (`send`, `fetchRefund`); solicitar a UC05 el método `ChargeIntentRepository.findApprovedByReservationId` (`UC05·T005`). · M: `none` · P: `pending`
-- [ ] **T006** · Puertos de entrada y `RefundRequestCommand`; **publicar en el canal la firma de `RequestRefundUseCase`**. · M: `none` · P: `pending`
+- [ ] **T005** · Puertos de salida: `RefundIntentRepository`, `RefundRecordRepository`, `RefundGatewayPort` (`send`, `fetchRefund`) y consumo de `ChargeIntentRepository.findApprovedByReservationId` publicado por UC05.
+- [ ] **T006** · Puertos de entrada y `RefundRequestCommand`; publicar la firma de `RequestRefundUseCase`.
 - [ ] **T007** · Pruebas de `RequestRefundService`: 4 triggers; sin depósito o alquiler → fallo registrado y sin llamada a la pasarela (RF-010); sin cobro original aprobado → fallo registrado sin solicitar nada; `operationKey` repetida → sin segunda intención; `AUTHORIZED`→`RELEASE`, `CAPTURED`→`REFUND`. · M: `none` · P: `pending`
-- [ ] **T008** · `RequestRefundService` (transacción única: intención + *outbox*; sin atributo de origen; clave idempotente derivada de `reservationId` + `trigger` + `operationKey`). Depende de `UC11·T007` (`OutboxPort`, `FailureRecorderPort`), `UC05·T005` y, para `reservation_information`, del bloque A. · M: `none` · P: `pending`
+- [ ] **T008** · `RequestRefundService` (transacción única: intención + *outbox*; sin atributo de origen; clave idempotente derivada de `(reservation_id, estado, tipo de operación)`). Solo `PENDING` admite nuevos intentos; estados terminales son idempotentes [D-06]. Consume los puertos compartidos por nombre.
 - [ ] **T009** · Persistencia: entidades JPA, repositorios, mapper MapStruct y adaptadores. · M: `none` · P: `pending`
 - [ ] **T010** · Integración (Testcontainers): FK a `charge_intent`, `UNIQUE(idempotency_key)`, trigger anti-mutación en `refund_record`. · M: `none` · P: `pending`
 - [ ] **T011** · ACL de la pasarela: `RefundGatewayRequest/Result`, `MercadoPagoRefundRequest/Response`, `MercadoPagoRefundAdapter.send` (`POST /v1/payments/{id}/refunds`, `X-Idempotency-Key`, `amount` explícito). Sin cálculo de descuentos (RF-012). Condicionada a **OQ-UC09-01** para `RELEASE`. · M: `none` · P: `pending`
@@ -275,8 +274,8 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 ### Phase 5: US3 — Registrar el resultado del reembolso (HU3; RF-006A, RF-007…RF-009, RF-011, RF-013; CE-003, CE-004)
 
 - [ ] **T019** · Pruebas de `RegisterRefundResultService`: completado, en proceso, rechazado, cancelado, expirado; repetido no altera el registro; sin intención asociada → `operational_failure`; resultado de disputa tras reembolso ya solicitado → no segunda devolución y se registra la inconsistencia; `transaction_cost` informado y ausente (RF-011). · M: `none` · P: `pending`
-- [ ] **T020** · `RegisterRefundResultService`: actualiza siempre la intención; crea `RefundRecord` solo en `COMPLETED`, atómico, con `refund_intent_id`, monto confirmado, detalle, referencia externa, reserva, propietario, embarcación y disputa. `transaction_cost` se registra solo cuando la pasarela lo informa; si no, `NULL`. · M: `none` · P: `pending`
-- [ ] **T021** · Mapeo `type=refund` del webhook compartido (`UC05·T019`/`UC05·T020`) hacia `RegisterRefundResultUseCase`, con pruebas (coordinar con OQ-UC05-07). · M: `none` · P: `pending`
+- [ ] **T020** · `RegisterRefundResultService`: actualiza siempre la intención; crea `RefundRecord` solo en `COMPLETED`, atómico, con `refund_intent_id`, monto confirmado, detalle, referencia externa, reserva, propietario, embarcación y disputa. UC09 registra el monto reembolsado confirmado; los montos liberados pertenecen al caso de uso que ejecuta RELEASE [D-31]. `transaction_cost` se registra solo cuando la pasarela lo informa; si no, `NULL`.
+- [ ] **T021** · Registrar el manejador `type=refund` en el despachador propiedad de UC05 y conectar `RegisterRefundResultUseCase`; UC09 no implementa otro receptor ni verificador [D-12].
 - [ ] **T022** · `MercadoPagoRefundAdapter.fetchRefund` y pruebas WireMock. · M: `none` · P: `pending`
 - [ ] **T023** · `ReconcileRefundIntentsService` + registro en `GatewayReconciliationJob` (compartido, `UC05·T023`): reintenta/consulta intenciones sin resultado con la misma clave. · M: `none` · P: `pending`
 - [ ] **T024** · **`ce003_trazabilidad_intencion_registro_en_reembolsos`** (CE-003, RF-006A, RF-008, RF-013). · M: `none` · P: `pending`
@@ -293,16 +292,19 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 ## Dependencies & Execution Order
 
 ```text
-UC11·T001–T009 + UC11·T046 + UC05·T002–T005 ─> T001 ─> T002 ─> T003 ─> T004 ─> T005 ─> T006 ─> T007 ─> T008 ─> T009 ─> T010
+Núcleo compartido + contratos publicados por UC05 ─> T001 ─> T002 ─> T003 ─> T004 ─> T005 ─> T006 ─> T007 ─> T008 ─> T009 ─> T010
                                                                                           └─> T011 ─> T012 ─> T013 ─> T014
 T015 ─> T016 ─> T017 ─> T018 ─> T019 ─> T020 ─> T021 ─> T022 ─> T023 ─> T024 ─> T025 ─> T026 ─> T027 ─> T028 ─> T029 ─> T030
 ```
 
-- **Depende de**: `UC05·T002` (migración y función de inmutabilidad; FK a `charge_intent`), `UC05·T005` (`findApprovedByReservationId`), `UC05·T019`/`UC05·T023` (webhook y job compartidos) y de bloque A para `reservation_information`.
-- **Bloquea a otros planes**: T006 (firma de `RequestRefundUseCase`) bloquea UC07 (T-cancelaciones) y UC08 (bloque C).
+- **Depende de**: la DDL y función de inmutabilidad publicadas por UC05, `ChargeIntentRepository.findApprovedByReservationId`, el despachador webhook de UC05 y los puertos de información de reserva.
+- **Dependencias externas**: UC07 y UC08 consumen `RequestRefundUseCase` por su firma publicada; no se coordinan mediante tareas externas.
 - **Riesgo de secuencia**: T011/T013 dependen de OQ-UC09-01; T016 de OQ-UC09-03.
 
 ## Notes
+
+- **D-CROSS-09**: `RequestRefundUseCase` usa el catálogo único de puertos y la firma compartida con UC05/UC10; UC09 no crea un webhook propio.
+- **D-CROSS-31**: UC09 es responsable de escribir `released_amount` al confirmar una liberación/reembolso; la transición exacta permanece ligada al resultado de pasarela.
 
 - El SPEC 9 no define metas de rendimiento ni cómo se liberan autorizaciones (OQ-UC09-01).
 - UC09 no decide si hay daños ni retiene parcialmente: solo ejecuta el reembolso total del depósito cuando UC08 informa `REJECTED`.
