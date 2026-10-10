@@ -71,7 +71,7 @@ Mercado Pago responde confirmando la recepción y estado inicial del pago. El re
 
 ## 5. Manejo de Errores
 
-Si la llamada HTTP falla por `Timeout`, `502`, `503`, el worker lanza excepción y el mensaje AMQP interno se reintenta (respetando la `X-Idempotency-Key`). El estado en la `IntenciónDeCobro` se marcará como `FALLA_COMUNICACION` hasta que el worker tenga éxito o se resuelva mediante el webhook. Los errores HTTP `400` por validación de token no son reintentables.
+Si la llamada HTTP falla por `Timeout`, `502`, `503`, el worker lanza excepción y el mensaje AMQP interno se reintenta (respetando la `X-Idempotency-Key`). El estado en la `IntenciónDeCobro` se marcará como `COMMUNICATION_ERROR` hasta que el worker tenga éxito o se resuelva mediante el webhook. Los errores HTTP `400` por validación de token no son reintentables.
 
 ## 6. Trazabilidad
 

@@ -1,4 +1,4 @@
-# Contratos del sistema financiero de SEA-SHARE (Módulo 3)
+﻿# Contratos del sistema financiero de SEA-SHARE (Módulo 3)
 
 Un archivo `.md` por contrato. Todo el contenido se deriva de los SPEC de `docs/features/` (única fuente de verdad). Lo que un SPEC no define **no se inventa**: se marca `[PEND]` y se aplica la propuesta por defecto documentada en el propio contrato.
 
@@ -54,10 +54,10 @@ Los ejemplos usan **valores ilustrativos**.
 Casos de uso **sin contrato propio**:
 
 - **UC02** (Brindar tarifa base): solo interno (RF-003); su única conexión externa es la consulta a Flota.
-- **UC05**: no tiene endpoint público; lo dispara UC07 con el estado `PENDIENTE` (UC07 RF-002A).
+- **UC05**: no tiene endpoint público; lo dispara UC07 con el estado `PENDING` (UC07 RF-002A).
 - **UC09 y UC10**: los invocan UC07, UC08 y los eventos automáticos; solo se comunican hacia afuera con la pasarela.
 - **UC11 "Cancelar"**: no genera petición; descartar cambios no persistidos es una acción del cliente (UC11 RF-010).
-- **Eventos automáticos de UC08** (24 h sin disputa; disputa `PENDIENTE` más de 7 días): los dispara el sistema, no se reciben por cola.
+- **Eventos automáticos de UC08** (24 h sin disputa; disputa `PENDING` más de 7 días): los dispara el sistema, no se reciben por cola.
 
 ## 3. Convenciones comunes
 
@@ -67,7 +67,7 @@ Casos de uso **sin contrato propio**:
 |---|---|---|
 | Rutas | Prefijo `/api/v1/`, segmentos en minúscula con guiones. La ruta del contrato específico es la fuente de verdad (§ inicio) | [CONV] |
 | Cuerpos JSON | UTF-8, claves en `snake_case` (`boat_ids` ya viene fijado por UC01) | [CONV] |
-| Valores de enumeración | En español e idénticos a los SPEC (`PENDIENTE`, `RECHAZADO`, `CANCELADO_TARDIAMENTE`…) | [CONV] |
+| Valores de enumeración | En inglés (fuente canónica del Módulo 2) (`PENDING`, `REJECTED`, `CANCELLED_STRICT`…) | [CONV] |
 | Identificadores | UUID v4 (única excepción: `financial_parameters.id = 1`, entero fijo del singleton) | [CONV] |
 | Fechas | `YYYY-MM-DD` | [CONV] |
 | Instantes | ISO-8601 en UTC, por ejemplo `2026-10-01T15:04:05Z` | [CONV] |
@@ -133,7 +133,7 @@ Ordenado por HTTP. La columna **Fila** remite a la fila de la tabla de decisión
 | `UNAUTHENTICATED` | 401 | Credencial ausente o inválida | No | [PEND] OQ-01 | E1 |
 | `FORBIDDEN` | 403 | Rol no autorizado para el caso de uso | No | [SPEC UC11 RF-008/CE-003, UC12 RF-011] | E2 |
 | `RESERVATION_INFO_NOT_FOUND` | 404 | UC04 sin información de reserva registrada | Sí (posible carrera con UC03, OQ-06) | [SPEC UC04 RF-009] | E5 |
-| `CHARGE_INTENT_NOT_FOUND` | 404 | UC06 sin `IntenciónDeCobro` para la reserva | Sí (UC05 la crea de forma asíncrona tras `PENDIENTE`) | [SPEC UC06 RF-005] + [CONV] | E5 |
+| `CHARGE_INTENT_NOT_FOUND` | 404 | UC06 sin `IntenciónDeCobro` para la reserva | Sí (UC05 la crea de forma asíncrona tras `PENDING`) | [SPEC UC06 RF-005] + [CONV] | E5 |
 | `PARAMETERS_NOT_CONFIGURED` | 404 | UC11 obtener: todavía no existe configuración | Sí (cuando el Administrador Financiero la guarde) | [SPEC UC11 HU3 esc. 2] | E5 |
 | `PAGE_OUT_OF_RANGE` | 404 | UC12: la página solicitada no existe | No | [SPEC UC12 RF-009] | E5 |
 | `METHOD_NOT_ALLOWED` | 405 | Método HTTP no soportado en la ruta | No | [CONV] | E3 |

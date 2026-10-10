@@ -5,9 +5,9 @@
 
 ## Summary
 
-UC09 solicita a la Pasarela de Pago (Mercado Pago) la **liberación** de una autorización o el **reembolso** de un cobro capturado, por el monto que fija la regla de negocio según el estado de cancelación (flexible, moderada, tardía o por anfitrión) o según el estado `RECHAZADO` de la disputa de garantía; registra la `RefundIntent` en curso y, cuando la pasarela confirma el reembolso, crea el `RefundRecord` inmutable. **No calcula ni aplica descuentos por costos transaccionales**, no admite retención parcial del depósito y no recibe montos de Reservas [SPEC HU1, HU2, HU3, RF-001…RF-013, CE-001…CE-005].
+UC09 solicita a la Pasarela de Pago (Mercado Pago) la **liberación** de una autorización o el **reembolso** de un cobro capturado, por el monto que fija la regla de negocio según el estado de cancelación (flexible, moderada, tardía o por anfitrión) o según el estado `REJECTED` de la disputa de garantía; registra la `RefundIntent` en curso y, cuando la pasarela confirma el reembolso, crea el `RefundRecord` inmutable. **No calcula ni aplica descuentos por costos transaccionales**, no admite retención parcial del depósito y no recibe montos de Reservas [SPEC HU1, HU2, HU3, RF-001…RF-013, CE-001…CE-005].
 
-Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. UC09 **no tiene endpoint público**: lo invocan UC07 (cancelaciones) y UC08 (`RECHAZADO`) por `RequestRefundUseCase`. El cálculo del monto es una política de dominio pura (`RefundCalculator`, general-plan §3.3); la intención y el mensaje *outbox* se persisten en una sola transacción y un *worker* llama a la pasarela con una clave idempotente propia (general-plan D-08). El resultado entra por respuesta técnica, webhook (`type=refund`, consulta activa) o conciliación, y converge en `RegisterRefundResultUseCase`. `RefundIntent`/`RefundRecord` son del bloque B; `settlement_*` y `deposit_disposition` son del bloque C y se referencian por nombre.
+Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. UC09 **no tiene endpoint público**: lo invocan UC07 (cancelaciones) y UC08 (`REJECTED`) por `RequestRefundUseCase`. El cálculo del monto es una política de dominio pura (`RefundCalculator`, general-plan §3.3); la intención y el mensaje *outbox* se persisten en una sola transacción y un *worker* llama a la pasarela con una clave idempotente propia (general-plan D-08). El resultado entra por respuesta técnica, webhook (`type=refund`, consulta activa) o conciliación, y converge en `RegisterRefundResultUseCase`. `RefundIntent`/`RefundRecord` son del bloque B; `settlement_*` y `deposit_disposition` son del bloque C y se referencian por nombre.
 
 El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Reembolsar dinero a arrendatario" con el actor *Pasarela de pago* y con un `<<extend>>` desde "Brindar información de disputa garantía". El disparo desde "Brindar el estado de la reserva" proviene del SPEC 7 (RF-003 a RF-005A).
 
@@ -19,7 +19,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Reem
 | **RF-002** flexible y anfitrión: 100 % del total | `RefundCalculator` | T004, T008 | T003, T007 |
 | **RF-003** moderada: 50 % del alquiler + 100 % del depósito, sin seguro | `RefundCalculator` | T004 | T003 |
 | **RF-003A** tardía: 100 % del depósito | `RefundCalculator` | T004 | T003 |
-| **RF-004** `RECHAZADO` de disputa: depósito íntegro | `RefundCalculator`, `RequestRefundService` (trigger `DISPUTA_RECHAZADO`) | T016 | T015, T017 |
+| **RF-004** `REJECTED` de disputa: depósito íntegro | `RefundCalculator`, `RequestRefundService` (trigger `DISPUTA_RECHAZADO`) | T016 | T015, T017 |
 | **RF-005** sin retención parcial del depósito | `RefundCalculator` (el depósito siempre al 100 %) | T004, T016 | T015, T026 |
 | **RF-006** intención con cobro original y clave idempotente | `RefundIntent`, `RefundIntentRepository`, `charge_intent_id` | T001, T002, T008, T009 | T007, T010 |
 | **RF-006A** `RegistroDeReembolso` con `intencionDeReembolsoId` | `refund_record.refund_intent_id` (FK `NOT NULL`) | T001, T002, T020 | T010, T024 |
@@ -32,12 +32,12 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Reem
 | **RF-013** reserva, propietario, embarcación y disputa en el registro | `RefundRecord` | T001, T002, T020 | T019, T024 |
 | **RNF-001** DTOs con la pasarela | `RefundGatewayRequest/Result`, `MercadoPagoRefundRequest/Response` | T011 | T012 |
 | **RNF-002** `BigDecimal` | `RefundCalculator`, `Money`, `NUMERIC(18,4)` | T002, T004 | T003, T012 |
-| **RNF-003** manejo de errores, timeouts, fallbacks | Worker, `FALLA_COMUNICACION`, conciliación | T013, T023 | T014, T023, T025 |
+| **RNF-003** manejo de errores, timeouts, fallbacks | Worker, `COMMUNICATION_ERROR`, conciliación | T013, T023 | T014, T023, T025 |
 | **CE-001** reembolso del depósito rechazado = 100 % | `RefundCalculator` | T016 | **T017** |
 | **CE-002** 0 decisiones de daños, 0 retenciones parciales, 0 descuentos | `RefundCalculator`, adaptador | T004, T016 | **T026** |
 | **CE-003** trazabilidad intención → registro | FK `refund_intent_id` | T001, T020 | **T024** |
 | **CE-004** fallas de comunicación sin estado indefinido | Worker + conciliación | T013, T023 | **T025** |
-| **CE-005** historias unificadas para `RECHAZADO` | Un solo trigger `DISPUTA_RECHAZADO` sin atributo de origen | T016 | **T018** |
+| **CE-005** historias unificadas para `REJECTED` | Un solo trigger `DISPUTA_RECHAZADO` sin atributo de origen | T016 | **T018** |
 | **HU1** reembolso por cancelación (P1) | Fase 3 | T001–T014 | T003, T007, T010, T012, T014 |
 | **HU2** reembolso del depósito por disputa rechazada (P1) | Fase 4 | T015–T018 | T015, T017, T018 |
 | **HU3** registrar resultado de la pasarela (P1) | Fase 5 | T019–T026 | T019, T021–T026 |
@@ -134,7 +134,7 @@ src/test/java/com/seashare/seasharem3/
 └── acceptance/Uc09AcceptanceTest.java                                    # T017, T018, T024–T026
 ```
 
-**Puertos expuestos**: `RequestRefundUseCase` lo llaman **UC07** (cancelaciones, bloque B) y **UC08** (`RECHAZADO`, bloque C). Firma [CONV], a publicar en el canal al terminar T006:
+**Puertos expuestos**: `RequestRefundUseCase` lo llaman **UC07** (cancelaciones, bloque B) y **UC08** (`REJECTED`, bloque C). Firma [CONV], a publicar en el canal al terminar T006:
 
 ```java
 public interface RequestRefundUseCase {
@@ -142,8 +142,8 @@ public interface RequestRefundUseCase {
 }
 public record RefundRequestCommand(
     UUID reservationId,
-    RefundTrigger trigger,   // CANCELADO_FLEXIBLEMENTE | CANCELADO_MODERADAMENTE | CANCELADO_TARDIAMENTE
-                             // | CANCELADO_POR_ANFITRION | DISPUTA_RECHAZADO
+    RefundTrigger trigger,   // CANCELLED_FLEXIBLE | CANCELLED_MODERATE | CANCELLED_STRICT
+                             // | CANCELLED_BY_HOST | DISPUTA_RECHAZADO
     UUID disputeId,          // nullable; solo con DISPUTA_RECHAZADO [SPEC RF-013]
     String operationKey      // identidad de operación de UC07 (RF-009A) o event_key de UC08 (RF-008), tomada tal cual [CONV]
 ) {}
@@ -161,21 +161,21 @@ Todas provienen del SPEC 9 salvo indicación. Los importes del ejemplo salen del
 
 | `trigger` | Monto solicitado | `scope` | Ejemplo |
 |---|---|---|---|
-| `CANCELADO_FLEXIBLEMENTE` | 100 % del valor total pagado (alquiler + seguro + depósito) | `FULL` | `990000.00` |
-| `CANCELADO_POR_ANFITRION` | 100 % del valor total pagado | `FULL` | `990000.00` |
-| `CANCELADO_MODERADAMENTE` | 50 % del alquiler + 100 % del depósito; **el seguro no se reembolsa** | `HALF_RENTAL_PLUS_DEPOSIT` | `450000.00 + 30000.00 = 480000.00` |
-| `CANCELADO_TARDIAMENTE` | 100 % del depósito; alquiler y seguro no se reembolsan | `DEPOSIT_ONLY` | `30000.00` |
+| `CANCELLED_FLEXIBLE` | 100 % del valor total pagado (alquiler + seguro + depósito) | `FULL` | `990000.00` |
+| `CANCELLED_BY_HOST` | 100 % del valor total pagado | `FULL` | `990000.00` |
+| `CANCELLED_MODERATE` | 50 % del alquiler + 100 % del depósito; **el seguro no se reembolsa** | `HALF_RENTAL_PLUS_DEPOSIT` | `450000.00 + 30000.00 = 480000.00` |
+| `CANCELLED_STRICT` | 100 % del depósito; alquiler y seguro no se reembolsan | `DEPOSIT_ONLY` | `30000.00` |
 | `DISPUTA_RECHAZADO` | 100 % del depósito cobrado y registrado; sin retención parcial | `DEPOSIT_ONLY` | `30000.00` |
 
    Rendimiento del 50 %: escala interna de 4 decimales; redondeo final hacia la pasarela **[PEND OQ-UC09-04]**.
 2. **Origen único del monto** [SPEC RF-001; UC08 RF-007]: los importes salen de `reservation_information` (`rental_amount`, `insurance_amount`, `deposit_amount`, `total_amount`). Reservas nunca envía montos.
-3. **Liberar o reembolsar** [SPEC RF-002…RF-004]: "según el estado del cobro original". La `ChargeIntent` original se identifica por el cobro aprobado de la reserva (`AUTORIZADO` → `RELEASE`; `CAPTURADO` → `REFUND`) y se guarda como `charge_intent_id`. Cómo se ejecuta la liberación parcial de una autorización **[PEND OQ-UC09-01]**.
+3. **Liberar o reembolsar** [SPEC RF-002…RF-004]: "según el estado del cobro original". La `ChargeIntent` original se identifica por el cobro aprobado de la reserva (`AUTHORIZED` → `RELEASE`; `CAPTURED` → `REFUND`) y se guarda como `charge_intent_id`. Cómo se ejecuta la liberación parcial de una autorización **[PEND OQ-UC09-01]**.
 4. **Sin descuentos** [SPEC RF-012; caso extremo]: el sistema solicita el monto de negocio y solo registra el costo o monto neto que la pasarela reporte. La nota "menos costos transaccionales" de `sea-share.md` §2.2 y `consistencia-m2-m3.md` no se calcula aquí (D-UC09-03).
 5. **Datos faltantes** [SPEC RF-010, caso extremo]: sin el monto de alquiler o el depósito requerido por el `trigger`, o sin cobro original aprobado, no se calcula nada parcial: se registra el fallo en `operational_failure` y no se contacta a la pasarela **[CONV]**.
-6. **Intención** [SPEC RF-006]: `RefundIntent` en `PENDIENTE_ENVIO` con `trigger`, `scope`, `amount`, `charge_intent_id`, clave idempotente y, cuando aplique, `dispute_id` (D-UC09-02); más el mensaje *outbox* en la **misma transacción**. La clave idempotente se deriva de forma determinística de `reservationId` + `trigger` + `operationKey` **[CONV]**. Reintentos técnicos usan la misma clave [general-plan §7.2].
+6. **Intención** [SPEC RF-006]: `RefundIntent` en `PENDING_SEND` con `trigger`, `scope`, `amount`, `charge_intent_id`, clave idempotente y, cuando aplique, `dispute_id` (D-UC09-02); más el mensaje *outbox* en la **misma transacción**. La clave idempotente se deriva de forma determinística de `reservationId` + `trigger` + `operationKey` **[CONV]**. Reintentos técnicos usan la misma clave [general-plan §7.2].
 7. **Resultado** [SPEC RF-007, RF-009; general-plan §10]: la intención se actualiza siempre. `RefundRecord` solo con reembolso/liberación **completado** y confirmado, en la misma transacción, con `refund_intent_id`, monto confirmado, detalle, referencia externa, reserva, propietario, embarcación y disputa si aplica. Nunca para rechazado, cancelado, expirado o en proceso. Una notificación repetida no altera lo registrado [SPEC caso extremo]. El costo transaccional (`transaction_cost`) es nullable: se registra cuando la respuesta o consulta de la pasarela lo informa y queda `NULL` cuando no **[CONV]**.
 8. **Idempotencia y exclusión mutua del depósito** [SPEC casos extremos; UC07 RF-009A/RF-009B; UC08 RF-008]: la misma `operationKey` no genera una segunda solicitud. Quién ejecuta el *compare-and-set* de `deposit_disposition` (dueño: bloque C) **[PEND OQ-UC09-03]**.
-9. **Fallas de la pasarela** [SPEC RNF-003, caso extremo]: timeout, `5xx`, caída → la intención queda en `FALLA_COMUNICACION` (no exitosa ni rechazada) y se reintenta con la misma clave; un `4xx` de negocio (por ejemplo, fondos insuficientes o plazo excedido) detiene los reintentos y deja la intención en error para revisión manual [contrato §5].
+9. **Fallas de la pasarela** [SPEC RNF-003, caso extremo]: timeout, `5xx`, caída → la intención queda en `COMMUNICATION_ERROR` (no exitosa ni rechazada) y se reintenta con la misma clave; un `4xx` de negocio (por ejemplo, fondos insuficientes o plazo excedido) detiene los reintentos y deja la intención en error para revisión manual [contrato §5].
 10. **No definido por el SPEC 9** `[NEEDS CLARIFICATION]` (siguen abiertas): OQ-UC09-01, OQ-UC09-03 y OQ-UC09-04.
 
 ## Contratos de API
@@ -256,14 +256,14 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 - [ ] **T004** · `RefundCalculator` (dominio puro). Redondeo condicionado a **OQ-UC09-04**. · M: `none` · P: `pending`
 - [ ] **T005** · Puertos de salida: `RefundIntentRepository`, `RefundRecordRepository`, `RefundGatewayPort` (`send`, `fetchRefund`); solicitar a UC05 el método `ChargeIntentRepository.findApprovedByReservationId` (`UC05·T005`). · M: `none` · P: `pending`
 - [ ] **T006** · Puertos de entrada y `RefundRequestCommand`; **publicar en el canal la firma de `RequestRefundUseCase`**. · M: `none` · P: `pending`
-- [ ] **T007** · Pruebas de `RequestRefundService`: 4 triggers; sin depósito o alquiler → fallo registrado y sin llamada a la pasarela (RF-010); sin cobro original aprobado → fallo registrado sin solicitar nada; `operationKey` repetida → sin segunda intención; `AUTORIZADO`→`RELEASE`, `CAPTURADO`→`REFUND`. · M: `none` · P: `pending`
+- [ ] **T007** · Pruebas de `RequestRefundService`: 4 triggers; sin depósito o alquiler → fallo registrado y sin llamada a la pasarela (RF-010); sin cobro original aprobado → fallo registrado sin solicitar nada; `operationKey` repetida → sin segunda intención; `AUTHORIZED`→`RELEASE`, `CAPTURED`→`REFUND`. · M: `none` · P: `pending`
 - [ ] **T008** · `RequestRefundService` (transacción única: intención + *outbox*; sin atributo de origen; clave idempotente derivada de `reservationId` + `trigger` + `operationKey`). Depende de `UC11·T007` (`OutboxPort`, `FailureRecorderPort`), `UC05·T005` y, para `reservation_information`, del bloque A. · M: `none` · P: `pending`
 - [ ] **T009** · Persistencia: entidades JPA, repositorios, mapper MapStruct y adaptadores. · M: `none` · P: `pending`
 - [ ] **T010** · Integración (Testcontainers): FK a `charge_intent`, `UNIQUE(idempotency_key)`, trigger anti-mutación en `refund_record`. · M: `none` · P: `pending`
 - [ ] **T011** · ACL de la pasarela: `RefundGatewayRequest/Result`, `MercadoPagoRefundRequest/Response`, `MercadoPagoRefundAdapter.send` (`POST /v1/payments/{id}/refunds`, `X-Idempotency-Key`, `amount` explícito). Sin cálculo de descuentos (RF-012). Condicionada a **OQ-UC09-01** para `RELEASE`. · M: `none` · P: `pending`
 - [ ] **T012** · Pruebas WireMock del envío: cuerpo y cabeceras del contrato, monto exacto, sin deducciones. · M: `none` · P: `pending`
-- [ ] **T013** · *Worker*: `RefundCommandListener` + `SendRefundToGatewayService` con timeout 10 s y *circuit breaker*; timeout/`5xx` → `FALLA_COMUNICACION` y reintento con la misma clave; `4xx` de negocio → sin reintento y en error. Cola/exchange: **OQ-UC05-08**. · M: `none` · P: `pending`
-- [ ] **T014** · Pruebas del *worker*: reintentos con la misma clave, `FALLA_COMUNICACION` no es rechazo, `4xx` no se reintenta (RNF-003). · M: `none` · P: `pending`
+- [ ] **T013** · *Worker*: `RefundCommandListener` + `SendRefundToGatewayService` con timeout 10 s y *circuit breaker*; timeout/`5xx` → `COMMUNICATION_ERROR` y reintento con la misma clave; `4xx` de negocio → sin reintento y en error. Cola/exchange: **OQ-UC05-08**. · M: `none` · P: `pending`
+- [ ] **T014** · Pruebas del *worker*: reintentos con la misma clave, `COMMUNICATION_ERROR` no es rechazo, `4xx` no se reintenta (RNF-003). · M: `none` · P: `pending`
 
 ### Phase 4: US2 — Reembolso del depósito por disputa rechazada (HU2; RF-004, RF-005; CE-001, CE-005)
 
@@ -275,7 +275,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 ### Phase 5: US3 — Registrar el resultado del reembolso (HU3; RF-006A, RF-007…RF-009, RF-011, RF-013; CE-003, CE-004)
 
 - [ ] **T019** · Pruebas de `RegisterRefundResultService`: completado, en proceso, rechazado, cancelado, expirado; repetido no altera el registro; sin intención asociada → `operational_failure`; resultado de disputa tras reembolso ya solicitado → no segunda devolución y se registra la inconsistencia; `transaction_cost` informado y ausente (RF-011). · M: `none` · P: `pending`
-- [ ] **T020** · `RegisterRefundResultService`: actualiza siempre la intención; crea `RefundRecord` solo en `COMPLETADO`, atómico, con `refund_intent_id`, monto confirmado, detalle, referencia externa, reserva, propietario, embarcación y disputa. `transaction_cost` se registra solo cuando la pasarela lo informa; si no, `NULL`. · M: `none` · P: `pending`
+- [ ] **T020** · `RegisterRefundResultService`: actualiza siempre la intención; crea `RefundRecord` solo en `COMPLETED`, atómico, con `refund_intent_id`, monto confirmado, detalle, referencia externa, reserva, propietario, embarcación y disputa. `transaction_cost` se registra solo cuando la pasarela lo informa; si no, `NULL`. · M: `none` · P: `pending`
 - [ ] **T021** · Mapeo `type=refund` del webhook compartido (`UC05·T019`/`UC05·T020`) hacia `RegisterRefundResultUseCase`, con pruebas (coordinar con OQ-UC05-07). · M: `none` · P: `pending`
 - [ ] **T022** · `MercadoPagoRefundAdapter.fetchRefund` y pruebas WireMock. · M: `none` · P: `pending`
 - [ ] **T023** · `ReconcileRefundIntentsService` + registro en `GatewayReconciliationJob` (compartido, `UC05·T023`): reintenta/consulta intenciones sin resultado con la misma clave. · M: `none` · P: `pending`
@@ -305,7 +305,7 @@ T015 ─> T016 ─> T017 ─> T018 ─> T019 ─> T020 ─> T021 ─> T022 ─> 
 ## Notes
 
 - El SPEC 9 no define metas de rendimiento ni cómo se liberan autorizaciones (OQ-UC09-01).
-- UC09 no decide si hay daños ni retiene parcialmente: solo ejecuta el reembolso total del depósito cuando UC08 informa `RECHAZADO`.
+- UC09 no decide si hay daños ni retiene parcialmente: solo ejecuta el reembolso total del depósito cuando UC08 informa `REJECTED`.
 - Etiquetas: `[SPEC]`, `[CONV]`, `[PEND]`/`[NEEDS CLARIFICATION]`.
 - Los valores numéricos de los ejemplos son ilustrativos.
 

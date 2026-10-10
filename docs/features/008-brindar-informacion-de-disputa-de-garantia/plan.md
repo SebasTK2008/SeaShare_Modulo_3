@@ -7,7 +7,7 @@
 
 UC08 es el consumidor asíncrono y unidireccional que recibe desde Reservas el estado de una disputa de garantía. El mensaje solo contiene `reservation_id`, `dispute_id`, `status`, `status_changed_at` y `event_key`; nunca recibe motivos, orígenes, montos ni instrucciones de pasarela [SPEC RF-001, RF-003, RF-007, RNF-001].
 
-`PENDIENTE` registra el evento sin mover dinero. `RECHAZADO` consulta el depósito y cobro internos y solicita a UC09 el reembolso/liberación total; `COMPLETADO` solicita a UC10 la liquidación total. Los eventos se procesan con idempotencia, exclusión mutua y control de concurrencia. UC08 no calcula la ventana de 24 horas ni ejecuta jobs [SPEC RF-004..RF-010].
+`PENDING` registra el evento sin mover dinero. `REJECTED` consulta el depósito y cobro internos y solicita a UC09 el reembolso/liberación total; `COMPLETED` solicita a UC10 la liquidación total. Los eventos se procesan con idempotencia, exclusión mutua y control de concurrencia. UC08 no calcula la ventana de 24 horas ni ejecuta jobs [SPEC RF-004..RF-010].
 
 Enfoque técnico: Spring Boot único con arquitectura hexagonal (`domain` / `application` / `infrastructure`), listener AMQP, PostgreSQL, `deposit_disposition`, `dispute_event_log`, `FailureRecorderPort`, y puertos de entrada de UC09/UC10. Los errores siguen `contracts/README.md` §3.5 y §4.4: `ack` para mensajes inválidos, desconocidos, duplicados o sin datos financieros; `nack`/backoff/DLQ para fallas transitorias.
 
@@ -17,7 +17,7 @@ Enfoque técnico: Spring Boot único con arquitectura hexagonal (`domain` / `app
 |---|---|---|---|
 | RF-001, RF-007 | `DisputeNotificationMessage`, `DisputeNotificationCommand`, listener | T006-T010 | T011, T015 |
 | RF-002, RF-003, RF-010 | `DisputeStatus`, `DisputeInformationService` | T004, T008 | T012, T017 |
-| RF-004 | Rama `PENDIENTE` | T008 | **T013 `ce002_…`** |
+| RF-004 | Rama `PENDING` | T008 | **T013 `ce002_…`** |
 | RF-005, RF-009A | `RequestRefundUseCase` vía `port.in` | T005, T009 | **T014 `ce003_…`** |
 | RF-006 | `RequestSettlementUseCase` vía `port.in` | T005, T009 | **T014 `ce003_…`** |
 | RF-008 | clave idempotente, lock y restricción única | T004, T008 | **T016 `ce005_…`** |
@@ -26,7 +26,7 @@ Enfoque técnico: Spring Boot único con arquitectura hexagonal (`domain` / `app
 | RNF-002 | `BigDecimal`/`Money` de registros internos | T005, T009 | T014, T015 |
 | RNF-003 | ack/nack, DLQ, `FailureRecorderPort` | T003, T010 | T016, T018 |
 | CE-001 | estados canónicos | T004, T008 | **T012 `ce001_…`** |
-| CE-002 | rama `PENDIENTE` | T008 | **T013 `ce002_…`** |
+| CE-002 | rama `PENDING` | T008 | **T013 `ce002_…`** |
 | CE-003 | consecuencias finales | T009 | **T014 `ce003_…`** |
 | CE-004 | DTO estricto y consultas internas | T005, T006 | **T015 `ce004_…`** |
 | CE-005 | deduplicación/concurrencia | T008 | **T016 `ce005_…`** |
@@ -43,7 +43,7 @@ Enfoque técnico: Spring Boot único con arquitectura hexagonal (`domain` / `app
 **Target Platform**: contenedores Docker sobre Linux; desarrollo con Docker Compose [SPEC general-plan].  
 **Project Type**: servicio backend único hexagonal, sin frontend propio.  
 **Performance Goals**: el SPEC no define SLA numérico [NEEDS CLARIFICATION OQ-UC08-01]; se exige idempotencia, backoff y ausencia de bloqueo permanente.  
-**Constraints**: `BigDecimal` a 4 decimales; importes solo desde registros internos; `PENDIENTE` no mueve dinero; finales son tratamientos del 100 %; un depósito tiene un solo desenlace; sin respuesta al productor; sin sub-resultados parciales ni cron de 24 horas [SPEC RF-004..RF-010].  
+**Constraints**: `BigDecimal` a 4 decimales; importes solo desde registros internos; `PENDING` no mueve dinero; finales son tratamientos del 100 %; un depósito tiene un solo desenlace; sin respuesta al productor; sin sub-resultados parciales ni cron de 24 horas [SPEC RF-004..RF-010].  
 **Scale/Scope**: un consumidor AMQP, dos tablas propietarias, dos puertos consumidos de UC09/UC10, 10 RF + 3 RNF + 6 CE + 1 HU [SPEC 08].
 
 ## Project Structure
@@ -106,14 +106,14 @@ src/test/java/com/seashare/seasharem3/
 ## Reglas de negocio
 
 1. **Mensaje mínimo** [SPEC RF-001, RF-007]: aceptar solo los cinco campos del contrato; no mapear motivos, origen, montos ni instrucciones.
-2. **Estados canónicos** [SPEC RF-002, RF-010]: solo `PENDIENTE`, `RECHAZADO`, `COMPLETADO`; desconocidos/parciales → fallo registrado, `ack`, cero operaciones.
+2. **Estados canónicos** [SPEC RF-002, RF-010]: solo `PENDING`, `REJECTED`, `COMPLETED`; desconocidos/parciales → fallo registrado, `ack`, cero operaciones.
 3. **Idempotencia** [SPEC RF-008; contrato §3.2]: clave `(reservation_id, dispute_id, event_key)`; repetidos no llaman UC09/UC10.
 4. **Pendiente** [SPEC RF-004]: registra y no reembolsa/liquida.
 5. **Rechazado** [SPEC RF-003, RF-005, RF-009A]: recupera depósito/cobro internos y solicita 100 % a UC09; el estado del cobro determina liberación o reembolso.
 6. **Completado** [SPEC RF-006]: recupera depósito interno y solicita 100 % a UC10.
 7. **Sin montos asumidos** [SPEC RF-007]: ausencia de depósito/cobro confirmado → fallo controlado sin llamada financiera.
 8. **Exclusión mutua** [SPEC RF-008; general-plan §3.2]: un depósito solo termina en reembolso o liquidación.
-9. **Ventana de 24 horas** [SPEC RF-009, RF-009A]: Reservas envía `RECHAZADO`; UC08 no calcula vencimientos ni ejecuta jobs.
+9. **Ventana de 24 horas** [SPEC RF-009, RF-009A]: Reservas envía `REJECTED`; UC08 no calcula vencimientos ni ejecuta jobs.
 10. **Ack/nack** [CONV README §4.4]: inválidos/desconocidos/ausencia/duplicado → `ack` + fallo; BD/broker transitorio → `nack`, backoff y DLQ tras 3–5 reintentos.
 11. **Unidireccional** [SPEC RF-009; contrato §4]: no se publica respuesta de negocio.
 12. **Precisión** [SPEC RNF-002; README §3.1]: montos `BigDecimal`/`NUMERIC(18,4)`, sin redondeo prematuro.
@@ -134,7 +134,7 @@ Respuesta: ninguna; ack para errores no reintentables, nack/DLQ para fallas tran
 {
   "reservation_id": "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10",
   "dispute_id": "d8e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a",
-  "status": "RECHAZADO",
+  "status": "REJECTED",
   "status_changed_at": "2026-12-23T10:00:00Z",
   "event_key": "v1.0-4a5b6c"
 }

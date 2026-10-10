@@ -5,7 +5,7 @@
 
 ## Summary
 
-El Sistema de Reservas y Operaciones notifica por RabbitMQ el estado vigente de una reserva (uno de **10 estados**) y UC07 decide la operación financiera que corresponde: ninguna (`DISPONIBLE`, `INICIADA`, `RESERVADO`, `EN_NAVEGACION`), **cobro** (`PENDIENTE`, con el token de pago), **reembolso y/o liquidación** (las cuatro cancelaciones) o **liquidación estándar del alquiler con el depósito retenido** (`COMPLETADA`). UC07 es el orquestador: **no calcula montos ni habla con la pasarela**; invoca por `port.in` a UC05, UC09 y UC10 [SPEC HU1, HU2, HU3, RF-001…RF-010]. Es **unidireccional**: no devuelve nada a Reservas y los fallos se registran en `operational_failure` [SPEC RF-009, RF-010, RNF-003].
+El Sistema de Reservas y Operaciones notifica por RabbitMQ el estado vigente de una reserva (uno de **10 estados**) y UC07 decide la operación financiera que corresponde: ninguna (`AVAILABLE`, `INITIATED`, `RESERVED`, `IN_NAVIGATION`), **cobro** (`PENDING`, con el token de pago), **reembolso y/o liquidación** (las cuatro cancelaciones) o **liquidación estándar del alquiler con el depósito retenido** (`COMPLETED`). UC07 es el orquestador: **no calcula montos ni habla con la pasarela**; invoca por `port.in` a UC05, UC09 y UC10 [SPEC HU1, HU2, HU3, RF-001…RF-010]. Es **unidireccional**: no devuelve nada a Reservas y los fallos se registran en `operational_failure` [SPEC RF-009, RF-010, RNF-003].
 
 Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. Un *listener* AMQP (`finance.reservation-status.v1`, routing key `reservation.status.changed`, exchange `seashare.reservations`) deserializa el mensaje y llama a `HandleReservationStatusUseCase`. La decisión *estado → operaciones* es una política de dominio pura; el servicio toma un bloqueo asesor por reserva (general-plan D-15), valida los prerrequisitos, aplica la **identidad única de operación** (reserva + estado + tipo de operación + clave idempotente, RF-009A) mediante `reservation_status_log` y delega, todo en una transacción. Errores de lógica: `ack` + `operational_failure`; errores transitorios: `nack` con reintentos y DLQ (README §4.4). `reservation_status_log` es del bloque B. `RequestSettlementUseCase` (UC10) y `OpenDepositTrackingUseCase` (UC08) son del bloque C y se referencian por nombre.
 
@@ -16,18 +16,18 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Brin
 | Requisito | Componente (rutas en §Project Structure) | Tareas | Prueba |
 |---|---|---|---|
 | **RF-001** recibir estado de uno de 10 valores | `ReservationStatusListener`, `ReservationStatusMessage`, `ReservationStatus`, `ReservationStatusPolicy` | T002, T006, T008 | T003, T005, T009 |
-| **RF-002** estados sin acción financiera | `ReservationStatusPolicy` (plan vacío); `INICIADA` reconocida como inicio del TTL sin administrarlo | T002, T006 | T003, T005, T011 |
-| **RF-002A** `PENDIENTE` → "Procesar cobro" con el token | `HandleReservationStatusService` → `ProcessChargeUseCase` (UC05) | T006 | T005, T011 |
-| **RF-003** flexible: 100 % del total | Plan: `RequestRefundUseCase(CANCELADO_FLEXIBLEMENTE)` | T013 | T012, T015 |
+| **RF-002** estados sin acción financiera | `ReservationStatusPolicy` (plan vacío); `INITIATED` reconocida como inicio del TTL sin administrarlo | T002, T006 | T003, T005, T011 |
+| **RF-002A** `PENDING` → "Procesar cobro" con el token | `HandleReservationStatusService` → `ProcessChargeUseCase` (UC05) | T006 | T005, T011 |
+| **RF-003** flexible: 100 % del total | Plan: `RequestRefundUseCase(CANCELLED_FLEXIBLE)` | T013 | T012, T015 |
 | **RF-004** moderada: reembolso 50 % alquiler + 100 % depósito y liquidación 50 % alquiler | Plan: `RequestRefundUseCase` + `RequestSettlementUseCase` | T013 | T012, T015 |
 | **RF-005** tardía: liquidación 100 % alquiler y reembolso 100 % depósito | Plan: `RequestSettlementUseCase` + `RequestRefundUseCase` | T013 | T012, T015 |
-| **RF-005A** anfitrión: 100 % del valor pagado | Plan: `RequestRefundUseCase(CANCELADO_POR_ANFITRION)` | T013 | T012, T015 |
+| **RF-005A** anfitrión: 100 % del valor pagado | Plan: `RequestRefundUseCase(CANCELLED_BY_HOST)` | T013 | T012, T015 |
 | **RF-006** completada: liquidación estándar, depósito pendiente | Plan: `RequestSettlementUseCase` + `OpenDepositTrackingUseCase` (UC08) | T018 | T017, T020 |
-| **RF-007** sin operación sobre el depósito por `COMPLETADA` | `ReservationStatusPolicy` no incluye operación sobre el depósito | T018 | T017, T019 |
-| **RF-008** sin reembolso/liquidación del depósito en estados operativos, `PENDIENTE` y `COMPLETADA` | Política de dominio | T002, T006 | T003, T019 |
+| **RF-007** sin operación sobre el depósito por `COMPLETED` | `ReservationStatusPolicy` no incluye operación sobre el depósito | T018 | T017, T019 |
+| **RF-008** sin reembolso/liquidación del depósito en estados operativos, `PENDING` y `COMPLETED` | Política de dominio | T002, T006 | T003, T019 |
 | **RF-009** sin respuesta a Reservas | Listener unidireccional; el caso de uso retorna `void` | T004, T008 | T009 |
 | **RF-009A** identidad única de operación | `reservation_status_log` `UNIQUE(reservation_id, status, operation_type, idempotency_key)` | T001, T014 | T014, T011 |
-| **RF-009B** exclusión mutua del depósito | UC07 no opera sobre el depósito en `COMPLETADA`; bloqueo por reserva; *compare-and-set* en C | T014, T018 | T017, T011 |
+| **RF-009B** exclusión mutua del depósito | UC07 no opera sobre el depósito en `COMPLETED`; bloqueo por reserva; *compare-and-set* en C | T014, T018 | T017, T011 |
 | **RF-010** registrar fallos, pendientes y no concluyentes | `FailureRecorderPort` (`operational_failure`) | T006, T013, T018 | T005, T012, T016 |
 | **RNF-001** DTO mínimo | `ReservationStatusMessage` (HTTP/AMQP), `ReservationStatusCommand` | T004, T008 | T009 |
 | **RNF-002** `BigDecimal` en lo monetario consultado | `reservation_information` leída con `Money`; UC07 no calcula | T006 | T005 |
@@ -36,10 +36,10 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Brin
 | **CE-002** cancelaciones exactas | Plan por estado | T013 | **T015** |
 | **CE-003** 0 operaciones sobre el depósito | Política | T018 | **T019** |
 | **CE-004** fallos registrados sin ejecuciones parciales | Prerrequisitos + transacción única | T006, T013 | **T016** |
-| **CE-005** liquidación al completar | Plan `COMPLETADA` | T018 | **T020** |
+| **CE-005** liquidación al completar | Plan `COMPLETED` | T018 | **T020** |
 | **CE-006** 0 decisiones sobre daños | Política | T018 | **T021** |
-| **CE-007** origen del TTL, identidad y exclusión mutua | `INICIADA`/`PENDIENTE` sin reinicio; log | T006, T014 | **T011** |
-| **HU1** estados operativos, `INICIADA` y `PENDIENTE` (P1) | Fase 3 | T001–T011 | T003, T005, T009–T011 |
+| **CE-007** origen del TTL, identidad y exclusión mutua | `INITIATED`/`PENDING` sin reinicio; log | T006, T014 | **T011** |
+| **HU1** estados operativos, `INITIATED` y `PENDING` (P1) | Fase 3 | T001–T011 | T003, T005, T009–T011 |
 | **HU2** cancelaciones (P1) | Fase 4 | T012–T016 | T012–T016 |
 | **HU3** completada y espera de disputa (P1) | Fase 5 | T017–T021 | T017–T021 |
 
@@ -141,7 +141,7 @@ public record ReservationStatusCommand(
     UUID reservationId,
     String status,                          // texto crudo: un valor desconocido es una inconsistencia, no un error de parseo
     Instant statusChangedAt,                // fechaHoraEstado [SPEC RNF-001]
-    String paymentTokenRef,                 // solo con PENDIENTE [SPEC RF-002A]
+    String paymentTokenRef,                 // solo con PENDING [SPEC RF-002A]
     String paymentMethodType,               // nullable
     Map<String, String> paymentMetadata     // nullable, no sensibles
 ) {}
@@ -155,23 +155,23 @@ La clave de operación (RF-009A) no viaja en el comando: el servicio la deriva d
 
 Todas provienen del SPEC 7 y del contrato `UC07-estado-reserva.md` salvo indicación.
 
-1. **Reconocimiento** [SPEC RF-001; contrato §3.1]: solo `DISPONIBLE`, `INICIADA`, `RESERVADO`, `EN_NAVEGACION`, `PENDIENTE`, `CANCELADO_FLEXIBLEMENTE`, `CANCELADO_MODERADAMENTE`, `CANCELADO_TARDIAMENTE`, `CANCELADO_POR_ANFITRION`, `COMPLETADA`. Cualquier otro valor: no se ejecuta ninguna operación y se registra la inconsistencia (`operational_failure`), con `ack`.
-2. **Estados sin acción financiera** [SPEC RF-002, RF-008]: `DISPONIBLE`, `RESERVADO`, `EN_NAVEGACION` y `INICIADA` se reconocen sin operaciones. `INICIADA` marca el comienzo del TTL de 15 minutos; UC07 no lo administra ni lo reinicia.
-3. **`PENDIENTE`** [SPEC RF-002A; HU1 escenario 3]: invoca `ProcessChargeUseCase` con el token recibido; no reinicia el TTL y no dispara reembolso ni liquidación. Si el mensaje no trae `payment_token_ref` (obligatorio con `PENDIENTE`, contrato §2) se trata como mensaje inválido: `ack` + `operational_failure`, sin llamar a UC05 **[CONV]**.
+1. **Reconocimiento** [SPEC RF-001; contrato §3.1]: solo `AVAILABLE`, `INITIATED`, `RESERVED`, `IN_NAVIGATION`, `PENDING`, `CANCELLED_FLEXIBLE`, `CANCELLED_MODERATE`, `CANCELLED_STRICT`, `CANCELLED_BY_HOST`, `COMPLETED`. Cualquier otro valor: no se ejecuta ninguna operación y se registra la inconsistencia (`operational_failure`), con `ack`.
+2. **Estados sin acción financiera** [SPEC RF-002, RF-008]: `AVAILABLE`, `RESERVED`, `IN_NAVIGATION` y `INITIATED` se reconocen sin operaciones. `INITIATED` marca el comienzo del TTL de 15 minutos; UC07 no lo administra ni lo reinicia.
+3. **`PENDING`** [SPEC RF-002A; HU1 escenario 3]: invoca `ProcessChargeUseCase` con el token recibido; no reinicia el TTL y no dispara reembolso ni liquidación. Si el mensaje no trae `payment_token_ref` (obligatorio con `PENDING`, contrato §2) se trata como mensaje inválido: `ack` + `operational_failure`, sin llamar a UC05 **[CONV]**.
 4. **Cancelaciones** [SPEC RF-003, RF-004, RF-005, RF-005A; contrato §3.4]:
 
 | Estado | Operaciones que dispara UC07 |
 |---|---|
-| `CANCELADO_FLEXIBLEMENTE` | Reembolso del 100 % del valor total (alquiler, seguro, depósito); sin liquidación |
-| `CANCELADO_MODERADAMENTE` | Reembolso del 50 % del alquiler + 100 % del depósito (sin seguro) **y** liquidación del 50 % del alquiler; resultados independientes |
-| `CANCELADO_TARDIAMENTE` | Liquidación del 100 % del alquiler **y** reembolso del 100 % del depósito; sin reembolso de alquiler ni seguro |
-| `CANCELADO_POR_ANFITRION` | Reembolso del 100 % del valor pagado; sin liquidación |
+| `CANCELLED_FLEXIBLE` | Reembolso del 100 % del valor total (alquiler, seguro, depósito); sin liquidación |
+| `CANCELLED_MODERATE` | Reembolso del 50 % del alquiler + 100 % del depósito (sin seguro) **y** liquidación del 50 % del alquiler; resultados independientes |
+| `CANCELLED_STRICT` | Liquidación del 100 % del alquiler **y** reembolso del 100 % del depósito; sin reembolso de alquiler ni seguro |
+| `CANCELLED_BY_HOST` | Reembolso del 100 % del valor pagado; sin liquidación |
 
    UC07 solo elige la operación; los montos los calculan UC09 y UC10 desde registros internos.
-5. **`COMPLETADA`** [SPEC RF-006, RF-007; general-plan §3.5]: liquidación estándar del alquiler (alquiler − comisión − seguro, a cargo de UC10) manteniendo el depósito asociado, y apertura del seguimiento del depósito en `OpenDepositTrackingUseCase` (UC08, con `statusChangedAt` como `completed_at`). **Ninguna operación monetaria sobre el depósito**: espera el estado de la disputa (UC08).
-6. **Prerrequisitos** [SPEC RNF-003, casos extremos]: se exige `reservation_information` registrada y con los montos calculados por UC04 (alquiler, seguro, depósito y total; se escriben juntos, general-plan §4). Si faltan, no se ejecuta nada parcial: `operational_failure` y `ack`. El `PENDIENTE` exige además el valor total (lo valida UC05, RF-009).
-7. **Identidad única de operación** [SPEC RF-009A; general-plan §3.5]: reserva + estado notificado + tipo de operación + clave idempotente. La clave idempotente se deriva de `reservationId` + `statusChangedAt` **[CONV]**: es igual en un reenvío de la misma transición y distinta en una nueva transición (por ejemplo, un segundo `PENDIENTE` tras un rechazo de pago permite un nuevo intento de cobro, UC05 RF-004A); no se usa `Message-Id` (general-plan D-07). Antes de cada operación se inserta una fila en `reservation_status_log` con `INSERT … ON CONFLICT DO NOTHING` **[CONV]**; si ya existía, la operación no se repite. Las notificaciones repetidas no duplican cobros (UC05 RNF-003), reembolsos ni liquidaciones. Una notificación con dos operaciones (moderada, tardía) crea **dos filas**. La misma clave se entrega como `operationKey` a UC05, UC09 y UC10.
-8. **Persistencia** [SPEC Entidades Clave; general-plan D-25]: el estado operativo de la reserva **no** se persiste; `reservation_status_log` solo guarda lo necesario para idempotencia, y solo para los estados que disparan operaciones monetarias (`PENDIENTE`, las cancelaciones y `COMPLETADA`) **[CONV]**. `operation_type` toma los valores `CHARGE`, `REFUND` y `SETTLEMENT`; `outcome` es un texto corto sin valores fijados **[CONV]**.
+5. **`COMPLETED`** [SPEC RF-006, RF-007; general-plan §3.5]: liquidación estándar del alquiler (alquiler − comisión − seguro, a cargo de UC10) manteniendo el depósito asociado, y apertura del seguimiento del depósito en `OpenDepositTrackingUseCase` (UC08, con `statusChangedAt` como `completed_at`). **Ninguna operación monetaria sobre el depósito**: espera el estado de la disputa (UC08).
+6. **Prerrequisitos** [SPEC RNF-003, casos extremos]: se exige `reservation_information` registrada y con los montos calculados por UC04 (alquiler, seguro, depósito y total; se escriben juntos, general-plan §4). Si faltan, no se ejecuta nada parcial: `operational_failure` y `ack`. El `PENDING` exige además el valor total (lo valida UC05, RF-009).
+7. **Identidad única de operación** [SPEC RF-009A; general-plan §3.5]: reserva + estado notificado + tipo de operación + clave idempotente. La clave idempotente se deriva de `reservationId` + `statusChangedAt` **[CONV]**: es igual en un reenvío de la misma transición y distinta en una nueva transición (por ejemplo, un segundo `PENDING` tras un rechazo de pago permite un nuevo intento de cobro, UC05 RF-004A); no se usa `Message-Id` (general-plan D-07). Antes de cada operación se inserta una fila en `reservation_status_log` con `INSERT … ON CONFLICT DO NOTHING` **[CONV]**; si ya existía, la operación no se repite. Las notificaciones repetidas no duplican cobros (UC05 RNF-003), reembolsos ni liquidaciones. Una notificación con dos operaciones (moderada, tardía) crea **dos filas**. La misma clave se entrega como `operationKey` a UC05, UC09 y UC10.
+8. **Persistencia** [SPEC Entidades Clave; general-plan D-25]: el estado operativo de la reserva **no** se persiste; `reservation_status_log` solo guarda lo necesario para idempotencia, y solo para los estados que disparan operaciones monetarias (`PENDING`, las cancelaciones y `COMPLETED`) **[CONV]**. `operation_type` toma los valores `CHARGE`, `REFUND` y `SETTLEMENT`; `outcome` es un texto corto sin valores fijados **[CONV]**.
 9. **Concurrencia** [general-plan D-15]: bloqueo asesor por reserva y **una sola transacción** por mensaje (log + delegaciones), de modo que las dos operaciones de una cancelación moderada/tardía se confirman o se revierten juntas.
 10. **Unidireccional y errores** [SPEC RF-009, RF-010; README §4.4]: nunca se responde a Reservas. Mensaje inválido, estado desconocido, reserva sin información o sin cálculo → `ack` + `operational_failure`. Falla transitoria (BD, broker) → `nack` con reintentos y *backoff* (3–5) y, al agotarlos, DLQ y registro en `operational_failure` **[general-plan §7.2]**. Mensaje repetido (misma identidad) → `ack` sin operación adicional.
 11. **No definido por el SPEC 7** `[NEEDS CLARIFICATION]` (siguen abiertas): OQ-UC07-03, OQ-UC07-04, OQ-UC07-05 y OQ-UC07-06.
@@ -182,7 +182,7 @@ UC07 **no expone endpoints REST**. Contrato: `contracts/events/UC07-estado-reser
 
 - **Exchange** `seashare.reservations` (`topic`, durable), **routing key** `reservation.status.changed`, **cola consumidora** `finance.reservation-status.v1` [contrato §2; README §3.5].
 - **Propiedades AMQP**: `Content-Type: application/json`, `Message-Id` obligatorio (no se usa para deduplicar: general-plan D-07), `delivery_mode 2`.
-- **Cuerpo**: `reservation_id` (UUID), `status`, `status_changed_at` (ISO 8601), `payment_token_ref` (obligatorio con `PENDIENTE`), `payment_method_type`, `payment_metadata` (opcionales).
+- **Cuerpo**: `reservation_id` (UUID), `status`, `status_changed_at` (ISO 8601), `payment_token_ref` (obligatorio con `PENDING`), `payment_method_type`, `payment_metadata` (opcionales).
 - **Respuesta**: ninguna.
 
 | Situación | Acción | Origen |
@@ -211,7 +211,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. Hasta que C
 - **`ce004_fallos_por_informacion_ausente_se_registran_sin_ejecuciones_parciales`** (T016).
 - **`ce005_completada_liquida_estandar_y_conserva_el_deposito`** (T020).
 - **`ce006_cero_decisiones_sobre_danos_o_destino_del_deposito`** (T021).
-- **`ce007_iniciada_pendiente_sin_reinicio_ttl_identidad_y_exclusion_mutua`** (T011): `INICIADA` sin operaciones, `PENDIENTE` solo cobro, notificación repetida sin cobro adicional, un solo desenlace del depósito.
+- **`ce007_iniciada_pendiente_sin_reinicio_ttl_identidad_y_exclusion_mutua`** (T011): `INITIATED` sin operaciones, `PENDING` solo cobro, notificación repetida sin cobro adicional, un solo desenlace del depósito.
 
 ## Discrepancias y puntos abiertos
 
@@ -221,20 +221,20 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. Hasta que C
 | **D-UC07-02** | RF-009A incluye una **clave idempotente** en la identidad de operación, pero RNF-001 y el contrato no la envían (solo `Message-Id`); `reservation_status_log` sí tiene `idempotency_key` | SPEC 7 RF-009A vs RNF-001 vs contrato §2 | UC07 la deriva internamente de `reservationId` + `statusChangedAt`; no se usa `Message-Id` (D-07). **Cierre:** decisión interna de UC07 | **Cerrada** |
 | **D-UC07-03** | El SPEC dice que el sistema **no persiste** el estado operativo; general-plan §4 define `reservation_status_log` | SPEC 7 Entidades Clave vs general-plan §4, D-25 | Prevalece D-25: solo idempotencia, no estado operativo | Resuelta |
 | **D-UC07-04** | El contrato §5 dice "Nack con requeue o DLQ tras N intentos"; README §4.4 y general-plan §7.2 definen `nack` con reintentos y *backoff* (3–5) y DLQ | `UC07-estado-reserva.md` §5 vs README §4.4 | Se sigue README §4.4 | Resuelta |
-| **D-UC07-05** | `COMPLETADA` (UC07) y `COMPLETADO` (UC08) son valores distintos de dominios distintos | contratos UC07 y UC08 | Enumeraciones separadas (`ReservationStatus` y el de disputas, del bloque C) | Resuelta |
+| **D-UC07-05** | `COMPLETED` (UC07) y `COMPLETED` (UC08) son valores distintos de dominios distintos | contratos UC07 y UC08 | Enumeraciones separadas (`ReservationStatus` y el de disputas, del bloque C) | Resuelta |
 | **D-UC07-06** | El SPEC 7 no menciona la apertura del seguimiento del depósito; general-plan §3.5 la asigna a UC07 (`OpenDepositTrackingUseCase`) | SPEC 7 RF-006/RF-007 vs general-plan §3.5 | Se mantiene, sin operación monetaria (RF-007) | **Abierta** (confirmar con C) |
 
 ## Preguntas abiertas (OQ-UC07-xx)
 
 | ID | Pregunta | Afecta | Propuesta por defecto | Estado |
 |---|---|---|---|---|
-| **OQ-UC07-01** | ¿De dónde sale la clave idempotente de RF-009A? Si se deriva solo de reserva + estado, un segundo `PENDIENTE` legítimo tras un rechazo de pago se confundiría con una repetición e impediría el reintento de cobro (UC05 RF-004A) | T001, T006, T014 | Derivarla de `reservationId` + `status_changed_at`: igual en un reenvío, distinta en una nueva transición **[CONV]** | **Cerrada** → **Adoptada.** |
+| **OQ-UC07-01** | ¿De dónde sale la clave idempotente de RF-009A? Si se deriva solo de reserva + estado, un segundo `PENDING` legítimo tras un rechazo de pago se confundiría con una repetición e impediría el reintento de cobro (UC05 RF-004A) | T001, T006, T014 | Derivarla de `reservationId` + `status_changed_at`: igual en un reenvío, distinta en una nueva transición **[CONV]** | **Cerrada** → **Adoptada.** |
 | **OQ-UC07-02** | Valores de `operation_type` y `outcome` de `reservation_status_log`, y si los estados sin operación monetaria se registran | T001, T014 | `CHARGE`/`REFUND`/`SETTLEMENT`; solo estados monetarios; `outcome` sin valores fijados | **Cerrada** → **Adoptada.** |
-| **OQ-UC07-03** | RF-009B: ¿el seguimiento del depósito (`deposit_disposition`, del bloque C) también cubre los depósitos reembolsados por cancelación? Hoy solo se abre con `COMPLETADA` | T014, T018 | No; solo `COMPLETADA`. Enlaza con OQ-UC09-03 | **Abierta** (avisar a C) |
+| **OQ-UC07-03** | RF-009B: ¿el seguimiento del depósito (`deposit_disposition`, del bloque C) también cubre los depósitos reembolsados por cancelación? Hoy solo se abre con `COMPLETED` | T014, T018 | No; solo `COMPLETED`. Enlaza con OQ-UC09-03 | **Abierta** (avisar a C) |
 | **OQ-UC07-04** | Dueño de `ReservationLockPort` (bloqueo asesor por reserva, D-15), que también necesitan UC08 y UC10 | T004, T007 | B (UC07) lo define y C lo referencia | **Abierta** (acordar con C) |
 | **OQ-UC07-05** | Firmas de `RequestSettlementUseCase` y `OpenDepositTrackingUseCase` (las publica C) | T013, T018 | Dobles de prueba hasta entonces | **Abierta** |
 | **OQ-UC07-06** | Nombres/topología de reintentos y DLQ de `finance.reservation-status.v1` (equivale a OQ-09 del plan general) | T008 | Sin nombre fijado | **Abierta** |
-| **OQ-UC07-07** | `PENDIENTE` sin `payment_token_ref`: el contrato lo marca obligatorio pero el SPEC no define la reacción | T008 | `ack` + `operational_failure` sin llamar a UC05 | **Cerrada** → **Adoptada.** |
+| **OQ-UC07-07** | `PENDING` sin `payment_token_ref`: el contrato lo marca obligatorio pero el SPEC no define la reacción | T008 | `ack` + `operational_failure` sin llamar a UC05 | **Cerrada** → **Adoptada.** |
 
 **`[NEEDS CLARIFICATION]` consolidado (abiertas):** OQ-UC07-03, OQ-UC07-04, OQ-UC07-05 y OQ-UC07-06. Discrepancia abierta: D-UC07-06.
 
@@ -251,16 +251,16 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. Hasta que C
 - [ ] `UC11·T004`–`UC11·T009`: excepciones base, `ProblemDetailsConfig`, `SecurityConfig`.
 - [ ] `UC11·T046`–`UC11·T047`: `operational_failure`, `FailureRecorderPort` y sus adaptadores.
 
-### Phase 3: US1 — Estados operativos, `INICIADA` y `PENDIENTE` (HU1; RF-001, RF-002, RF-002A, RF-008, RF-009, RF-010; RNF-001, RNF-003; CE-001, CE-004, CE-007)
+### Phase 3: US1 — Estados operativos, `INITIATED` y `PENDING` (HU1; RF-001, RF-002, RF-002A, RF-008, RF-009, RF-010; RNF-001, RNF-003; CE-001, CE-004, CE-007)
 
 - [ ] **T001** · Migración `V3x__create_reservation_status_log.sql`: `reservation_id`, `status`, `operation_type` (`CHARGE`/`REFUND`/`SETTLEMENT`), `idempotency_key`, `status_changed_at`, `processed_at`, `outcome` (texto corto sin valores fijados); `UNIQUE(reservation_id, status, operation_type, idempotency_key)` (general-plan §4). · M: `none` · P: `pending`
-- [ ] **T002** · Dominio: `ReservationStatus` (10 valores), `FinancialOperationType`, `PlannedOperation` y `ReservationStatusPolicy` (estado → operaciones: ninguna / cobro / reembolso y/o liquidación / liquidación estándar). Nunca incluye una operación sobre el depósito por `COMPLETADA`. · M: `none` · P: `pending`
+- [ ] **T002** · Dominio: `ReservationStatus` (10 valores), `FinancialOperationType`, `PlannedOperation` y `ReservationStatusPolicy` (estado → operaciones: ninguna / cobro / reembolso y/o liquidación / liquidación estándar). Nunca incluye una operación sobre el depósito por `COMPLETED`. · M: `none` · P: `pending`
 - [ ] **T003** · Pruebas de `ReservationStatusPolicy`: los 10 estados con su plan exacto (cancelaciones de la tabla de §Reglas, punto 4); valor desconocido → sin plan. · M: `none` · P: `pending`
 - [ ] **T004** · Puertos: `HandleReservationStatusUseCase` + `ReservationStatusCommand`, `ReservationStatusLogRepository`, `ReservationLockPort` (OQ-UC07-04). · M: `none` · P: `pending`
-- [ ] **T005** · Pruebas de `HandleReservationStatusService`: estados operativos sin delegación; `PENDIENTE` → `ProcessChargeUseCase` con token; estado desconocido → `operational_failure`; reserva sin información o sin cálculo → fallo sin delegar; `INICIADA` repetida sin efectos; montos leídos como `BigDecimal` (RNF-002). · M: `none` · P: `pending`
-- [ ] **T006** · `HandleReservationStatusService` (reconocimiento, prerrequisitos, `PENDIENTE`, registro de fallos con `FailureRecorderPort`; deriva la clave de operación de `reservationId` + `statusChangedAt`). Depende de `UC05·T006` y de `UC11·T007`. · M: `none` · P: `pending`
+- [ ] **T005** · Pruebas de `HandleReservationStatusService`: estados operativos sin delegación; `PENDING` → `ProcessChargeUseCase` con token; estado desconocido → `operational_failure`; reserva sin información o sin cálculo → fallo sin delegar; `INITIATED` repetida sin efectos; montos leídos como `BigDecimal` (RNF-002). · M: `none` · P: `pending`
+- [ ] **T006** · `HandleReservationStatusService` (reconocimiento, prerrequisitos, `PENDING`, registro de fallos con `FailureRecorderPort`; deriva la clave de operación de `reservationId` + `statusChangedAt`). Depende de `UC05·T006` y de `UC11·T007`. · M: `none` · P: `pending`
 - [ ] **T007** · Persistencia: entidad, repositorio, mapper y adaptador de `reservation_status_log` (`INSERT … ON CONFLICT DO NOTHING`) y bloqueo asesor de PostgreSQL por `reservation_id`; prueba de integración (Testcontainers) del `UNIQUE` y del bloqueo. · M: `none` · P: `pending`
-- [ ] **T008** · `ReservationStatusListener` + `ReservationStatusMessage` + `ReservationStatusMessagingConfig`: cola y *binding* del contrato, mensaje inválido/`PENDIENTE` sin token → `ack` + fallo, fallas transitorias → `nack` con reintentos y DLQ, sin respuesta a Reservas (RF-009). Condicionada a **OQ-UC07-06**. · M: `none` · P: `pending`
+- [ ] **T008** · `ReservationStatusListener` + `ReservationStatusMessage` + `ReservationStatusMessagingConfig`: cola y *binding* del contrato, mensaje inválido/`PENDING` sin token → `ack` + fallo, fallas transitorias → `nack` con reintentos y DLQ, sin respuesta a Reservas (RF-009). Condicionada a **OQ-UC07-06**. · M: `none` · P: `pending`
 - [ ] **T009** · Pruebas del *listener* (Testcontainers RabbitMQ): `ack` en errores lógicos, `nack` y DLQ en transitorios, ninguna respuesta publicada. · M: `none` · P: `pending`
 - [ ] **T010** · **`ce001_decision_financiera_correcta_por_estado`** (CE-001). · M: `none` · P: `pending`
 - [ ] **T011** · **`ce007_iniciada_pendiente_sin_reinicio_ttl_identidad_y_exclusion_mutua`** (CE-007). · M: `none` · P: `pending`
@@ -269,14 +269,14 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. Hasta que C
 
 - [ ] **T012** · Pruebas con dobles de UC09 y UC10: las 4 cancelaciones disparan exactamente las operaciones de §Reglas, punto 4 (moderada y tardía con dos operaciones); sin valor total calculado → fallo y sin delegar. · M: `none` · P: `pending`
 - [ ] **T013** · Implementar la delegación de cancelaciones: `RequestRefundUseCase` (`UC09·T006`) y `RequestSettlementUseCase` (C; OQ-UC07-05), en una sola transacción con bloqueo por reserva. · M: `none` · P: `pending`
-- [ ] **T014** · Identidad única de operación: una fila por (estado, tipo de operación) antes de delegar; reenvío con la misma identidad → `ack` sin operación; pruebas de duplicados, de dos operaciones por notificación, de un segundo `PENDIENTE` legítimo con distinto `statusChangedAt` y de la exclusión mutua del depósito (RF-009A, RF-009B). · M: `none` · P: `pending`
+- [ ] **T014** · Identidad única de operación: una fila por (estado, tipo de operación) antes de delegar; reenvío con la misma identidad → `ack` sin operación; pruebas de duplicados, de dos operaciones por notificación, de un segundo `PENDING` legítimo con distinto `statusChangedAt` y de la exclusión mutua del depósito (RF-009A, RF-009B). · M: `none` · P: `pending`
 - [ ] **T015** · **`ce002_cancelaciones_disparan_exactamente_las_operaciones_esperadas`** (CE-002). · M: `none` · P: `pending`
 - [ ] **T016** · **`ce004_fallos_por_informacion_ausente_se_registran_sin_ejecuciones_parciales`** (CE-004). · M: `none` · P: `pending`
 
 ### Phase 5: US3 — Completada y espera de la disputa (HU3; RF-006, RF-007, RF-009B; CE-003, CE-005, CE-006)
 
-- [ ] **T017** · Pruebas: `COMPLETADA` → liquidación estándar + apertura del seguimiento del depósito; ninguna operación monetaria sobre el depósito; sin monto de alquiler o seguro → fallo sin liquidaciones parciales; repetida → no se vuelve a liquidar. · M: `none` · P: `pending`
-- [ ] **T018** · Implementar `COMPLETADA`: `RequestSettlementUseCase` + `OpenDepositTrackingUseCase` (UC08; OQ-UC07-05, D-UC07-06). · M: `none` · P: `pending`
+- [ ] **T017** · Pruebas: `COMPLETED` → liquidación estándar + apertura del seguimiento del depósito; ninguna operación monetaria sobre el depósito; sin monto de alquiler o seguro → fallo sin liquidaciones parciales; repetida → no se vuelve a liquidar. · M: `none` · P: `pending`
+- [ ] **T018** · Implementar `COMPLETED`: `RequestSettlementUseCase` + `OpenDepositTrackingUseCase` (UC08; OQ-UC07-05, D-UC07-06). · M: `none` · P: `pending`
 - [ ] **T019** · **`ce003_cero_operaciones_sobre_el_deposito_por_completada_o_estados_operativos`** (CE-003). · M: `none` · P: `pending`
 - [ ] **T020** · **`ce005_completada_liquida_estandar_y_conserva_el_deposito`** (CE-005). · M: `none` · P: `pending`
 - [ ] **T021** · **`ce006_cero_decisiones_sobre_danos_o_destino_del_deposito`** (CE-006). · M: `none` · P: `pending`

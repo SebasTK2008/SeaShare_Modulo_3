@@ -5,7 +5,7 @@
 
 ## Summary
 
-UC10 es el caso de uso interno que solicita dispersiones al propietario por tres motivos: cancelación moderada (50 % del alquiler), cancelación tardía (100 % del alquiler), liquidación estándar de una reserva `COMPLETADA` y liquidación total del depósito cuando una disputa termina en `COMPLETADO`. No recibe montos desde Reservas: recupera los valores de `reservation_information` y conserva la comisión calculada en la intención de dispersión [SPEC RF-001..RF-009, RF-016].
+UC10 es el caso de uso interno que solicita dispersiones al propietario por tres motivos: cancelación moderada (50 % del alquiler), cancelación tardía (100 % del alquiler), liquidación estándar de una reserva `COMPLETED` y liquidación total del depósito cuando una disputa termina en `COMPLETED`. No recibe montos desde Reservas: recupera los valores de `reservation_information` y conserva la comisión calculada en la intención de dispersión [SPEC RF-001..RF-009, RF-016].
 
 El sistema registra una `SettlementIntent` antes de enviar el comando a Mercado Pago. La respuesta/webhook actualiza siempre la intención; solo un resultado externo exitoso crea un `SettlementRecord` inmutable y, únicamente para liquidación estándar, un `CommissionRecord` inmutable en la misma transacción. Operaciones rechazadas, canceladas, expiradas o pendientes no crean registros exitosos [SPEC RF-010..RF-014].
 

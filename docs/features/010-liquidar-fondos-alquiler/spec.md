@@ -45,11 +45,11 @@ Como el sistema, al ser invocado internamente por "Brindar el estado de la reser
 
 ### Historia de Usuario 3 - Liquidar el depósito retenido tras una disputa completada (Prioridad: P1)
 
-Como el sistema, al recibir desde "Brindar información de disputa de garantía" el estado `COMPLETADO`, quiero recuperar internamente el depósito fijo cobrado y registrado y solicitar su liquidación total al Propietario, sin recibir montos ni instrucciones de pago desde el Sistema de Reservas y Operaciones.
+Como el sistema, al recibir desde "Brindar información de disputa de garantía" el estado `COMPLETED`, quiero recuperar internamente el depósito fijo cobrado y registrado y solicitar su liquidación total al Propietario, sin recibir montos ni instrucciones de pago desde el Sistema de Reservas y Operaciones.
 
 **Por qué esta prioridad**: La liquidación del alquiler ya ocurre al completar la reserva; esta operación se limita a aplicar la retención total del depósito decidida por la disputa.
 
-**Prueba Independiente**: Con una reserva completada que cuenta con un depósito cobrado y registrado, recibir `COMPLETADO` desde la disputa y validar que el sistema solicita una liquidación idempotente por el depósito completo, vinculada al cobro original y a la disputa.
+**Prueba Independiente**: Con una reserva completada que cuenta con un depósito cobrado y registrado, recibir `COMPLETED` desde la disputa y validar que el sistema solicita una liquidación idempotente por el depósito completo, vinculada al cobro original y a la disputa.
 
 **Escenarios de Aceptación**:
 
@@ -107,14 +107,14 @@ Como el sistema, al recibir la confirmación exitosa de la liquidación estánda
 - **¿Qué sucede si este caso de uso es invocado para una reserva que no cuenta con el monto de alquiler o el monto del seguro náutico previamente registrados?**
    El sistema no ejecuta ningún cálculo parcial ni envía una solicitud a la Pasarela de Pago con un monto asumido; registra internamente un fallo, dado que la validación de existencia de dicha información corresponde previamente a "Brindar el estado de la reserva" o a "Brindar información de disputa de garantía".
 
-- **¿Qué sucede si la disputa informa `COMPLETADO` pero no existe un depósito cobrado y registrado internamente?**
+- **¿Qué sucede si la disputa informa `COMPLETED` pero no existe un depósito cobrado y registrado internamente?**
    El sistema trata la información como incompleta y registra el fallo sin enviar una solicitud a la Pasarela de Pago con un monto asumido.
 
 - **¿Por qué la dispersión por penalidad de cancelación (moderada o tardía) no aplica el descuento de comisión de la plataforma ni de seguro náutico, a diferencia de la liquidación estándar?**
    La Matriz de Liquidación distingue "Penalidad por Cancelación" como un concepto propio, separado de "Pago al Propietario": el porcentaje correspondiente (50% o 100% del monto de alquiler) se dispersa íntegramente al propietario como compensación, sin pasar por el cálculo de comisión y seguro que sí aplica a la liquidación estándar de una reserva finalizada.
 
 - **¿Qué diferencia existe entre la liquidación estándar al completar y la liquidación del depósito retenido?**
-   La primera se ejecuta al recibir `completada` y calcula Valor Bruto menos Comisión menos Seguro, manteniendo asociado el depósito. La segunda se ejecuta únicamente al recibir `COMPLETADO` desde la disputa y liquida el depósito fijo completo como una operación separada o relacionada.
+   La primera se ejecuta al recibir `completada` y calcula Valor Bruto menos Comisión menos Seguro, manteniendo asociado el depósito. La segunda se ejecuta únicamente al recibir `COMPLETED` desde la disputa y liquida el depósito fijo completo como una operación separada o relacionada.
 
 - **¿Qué sucede si el porcentaje de comisión de la plataforma configurado en los parámetros financieros globales no está disponible al momento de calcular la liquidación estándar?**
   Al no poder completar el cálculo de la comisión, el sistema considera la información necesaria para la liquidación como incompleta. No continúa el cálculo con un valor asumido o parcial; en su lugar, registra el fallo internamente, de la misma forma que ante la ausencia de monto de alquiler o de seguro náutico registrados.
@@ -128,7 +128,7 @@ Como el sistema, al recibir la confirmación exitosa de la liquidación estánda
 - **¿Qué sucede si una confirmación exitosa, un reintento o una notificación duplicada intenta crear dos `RegistroDeComisión` para la misma liquidación estándar?**
    El sistema valida la identidad de la `IntenciónDeDispersión`, la reserva y la operación de dispersión confirmada antes de crear el registro. Si ya existe un `RegistroDeComisión` para esa liquidación, no crea otro ni modifica el existente; registra la repetición para conciliación. La creación del `RegistroDeDispersión` y del `RegistroDeComisión` debe ser atómica: ambos se crean o ninguno queda registrado.
 
-- **¿Qué sucede si se recibe más de una notificación `COMPLETADO` desde la misma disputa?**
+- **¿Qué sucede si se recibe más de una notificación `COMPLETED` desde la misma disputa?**
    La clave idempotente y la asociación con la reserva impiden crear una segunda liquidación del depósito ya aplicado. La repetición se registra para conciliación.
 
 - **¿Por qué no se crea un `RegistroDeComisión` para las dispersiones por cancelación o para la liquidación del depósito?
@@ -143,7 +143,7 @@ Como el sistema, al recibir la confirmación exitosa de la liquidación estánda
 - **RF-003**: El sistema DEBE, cuando el estado sea cancelado tardíamente, solicitar el 100% del monto de alquiler previamente registrado como compensación al Propietario.
 - **RF-004**: El sistema DEBE conservar en la solicitud o intención de dispersión el monto de comisión calculado y cobrado previamente como parte de la operación de la reserva. Este valor es un dato operativo no inmutable y todavía no es un `RegistroDeComisión`.
 - **RF-005**: El sistema DEBE, cuando el estado de la reserva sea `completada`, calcular la liquidación estándar del alquiler al Propietario y solicitarla utilizando la comisión calculada en la `IntenciónDeDispersión`. La operación debe conservar y considerar el depósito de garantía asociado a la reserva, aunque el destino del depósito se resuelva posteriormente mediante reembolso o liquidación.
-- **RF-006**: El sistema DEBE, cuando reciba `COMPLETADO` desde una disputa, recuperar internamente el depósito cobrado y registrado y solicitar su liquidación total al Propietario mediante una operación consolidada o relacionada según la capacidad de la Pasarela de Pago.
+- **RF-006**: El sistema DEBE, cuando reciba `COMPLETED` desde una disputa, recuperar internamente el depósito cobrado y registrado y solicitar su liquidación total al Propietario mediante una operación consolidada o relacionada según la capacidad de la Pasarela de Pago.
 - **RF-007**: El sistema NO DEBE aplicar la comisión de la plataforma ni el descuento del monto de seguro náutico sobre los montos calculados por penalidad de cancelación (RF-002 y RF-003).
 - **RF-008**: El sistema DEBE enviar a la Pasarela de Pago la solicitud de captura y/o liquidación por el monto total calculado según el estado o resolución correspondiente, únicamente mediante una capacidad soportada por la integración configurada.
 - **RF-009**: El sistema DEBE registrar internamente la `IntenciónDeDispersión` en curso, indicando el estado o resolución que la desencadenó, el monto, el monto de comisión calculado y cobrado previamente cuando corresponda, el depósito de garantía asociado, el cobro original, la capacidad utilizada y una clave idempotente.

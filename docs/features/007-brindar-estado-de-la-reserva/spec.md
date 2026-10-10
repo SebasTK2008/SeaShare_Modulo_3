@@ -1,4 +1,4 @@
-﻿# Especificación de Funcionalidad: UC07 - Brindar el Estado de la Reserva
+# Especificación de Funcionalidad: UC07 - Brindar el Estado de la Reserva
 
 **Creado**: 2026-09-06 (v3 — se incorpora "iniciada" como el décimo estado reconocido y como el verdadero origen del bloqueo temporal (TTL) de 15 minutos; "pendiente" ya no origina el TTL, únicamente indica que este continúa vigente mientras se ejecuta la confirmación de pago)
 
@@ -93,7 +93,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones el único esta
   El sistema no ejecuta "Liquidar fondos de alquiler" con montos asumidos. Dado que la liquidación estándar (monto bruto de alquiler menos Comisión de la Plataforma menos Seguro) requiere tanto el monto de alquiler como el monto del seguro, la ausencia de cualquiera de los dos impide ejecutar la operación correspondiente sobre información incompleta. De forma análoga a los casos anteriores, y al no existir canal de respuesta hacia el Sistema de Reservas y Operaciones, el sistema registra internamente el fallo sin ejecutar liquidaciones parciales o inconsistentes.
 
 - **¿Qué sucede si, tras recibir la notificación "completada", no se recibe la resolución de la disputa de garantía de inmediato?**
-  El depósito de garantía permanece retenido y asociado a la reserva en Finanzas. El Sistema de Finanzas no ejecuta temporizadores o cron jobs en segundo plano. Cuando transcurre la ventana de 24 horas o concluye la revisión de una disputa en `PENDIENTE`, el Sistema de Reservas y Operaciones notifica el estado correspondiente (`RECHAZADO` o `COMPLETADO`) a través de "Brindar información de disputa de garantía" (SPEC 8), disparando entonces el reembolso total al Arrendatario o la liquidación al Propietario.
+  El depósito de garantía permanece retenido y asociado a la reserva en Finanzas. El Sistema de Finanzas no ejecuta temporizadores o cron jobs en segundo plano. Cuando transcurre la ventana de 24 horas o concluye la revisión de una disputa en `PENDING`, el Sistema de Reservas y Operaciones notifica el estado correspondiente (`REJECTED` o `COMPLETED`) a través de "Brindar información de disputa de garantía" (SPEC 8), disparando entonces el reembolso total al Arrendatario o la liquidación al Propietario.
 
 - **¿Qué sucede si el Sistema de Reservas y Operaciones notifica el estado "iniciada" o "pendiente" para una reserva que ya había recibido esa misma notificación (notificación repetida)?**
   Este caso de uso no define un mecanismo de deduplicación explícito. Una notificación repetida del estado "iniciada" no desencadena ninguna operación financiera, ya que dicho estado no dispara ninguna acción financiera por sí mismo. Una notificación repetida del estado "pendiente" no debe generar un cobro adicional: "Procesar cobro" aplica idempotencia (SPEC 5, RNF-003).

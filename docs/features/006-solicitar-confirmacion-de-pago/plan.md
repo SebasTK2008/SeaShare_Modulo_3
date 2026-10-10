@@ -5,7 +5,7 @@
 
 ## Summary
 
-El Sistema de Reservas y Operaciones consulta el estado vigente del cobro de una reserva para decidir si la avanza a `RESERVADO` o revierte el bloqueo temporal. UC06 es una **consulta de solo lectura** sobre la `ChargeIntent` creada por UC05: devuelve el estado (`EN_PROCESO`, `APROBADO`, `RECHAZADO`, `CANCELADO`, `EXPIRADO` o `DESCONOCIDO`), el detalle y los montos y la referencia externa cuando existan. **No contacta a la pasarela** [SPEC HU1, RF-001…RF-006, CE-002].
+El Sistema de Reservas y Operaciones consulta el estado vigente del cobro de una reserva para decidir si la avanza a `RESERVED` o revierte el bloqueo temporal. UC06 es una **consulta de solo lectura** sobre la `ChargeIntent` creada por UC05: devuelve el estado (`IN_PROCESS`, `APPROVED`, `REJECTED`, `CANCELLED`, `EXPIRED` o `UNKNOWN`), el detalle y los montos y la referencia externa cuando existan. **No contacta a la pasarela** [SPEC HU1, RF-001…RF-006, CE-002].
 
 Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. Adaptador de entrada REST (`GET /api/v1/reservations/{reservation_id}/payment-confirmation`) que invoca únicamente `application.port.in`; el servicio lee la intención por el puerto de salida `ChargeIntentRepository` (dueño: UC05) y traduce los estados internos al vocabulario del SPEC con el mapeo de general-plan §10. Errores en *Problem Details* (RFC 9457). El diagrama de casos de uso asocia "Solicitar confirmación de pago" únicamente con el *Sistema de Reservas y Operaciones* (`MODULO 2`), sin `<<include>>`/`<<extend>>`.
 
@@ -105,17 +105,17 @@ Todas provienen del SPEC 6 y del contrato `UC06-confirmacion-pago.md`, salvo ind
 
 | Estado interno (`ChargeIntent`) | `status` devuelto |
 |---|---|
-| `PENDIENTE_ENVIO`, `EN_PROCESO` | `EN_PROCESO` |
-| `AUTORIZADO`, `CAPTURADO` | `APROBADO` |
-| `RECHAZADO` | `RECHAZADO` |
-| `CANCELADO` | `CANCELADO` |
-| `EXPIRADO` | `EXPIRADO` |
-| `FALLA_COMUNICACION` | `DESCONOCIDO` (**OQ-12 del plan general**) |
+| `PENDING_SEND`, `IN_PROCESS` | `IN_PROCESS` |
+| `AUTHORIZED`, `CAPTURED` | `APPROVED` |
+| `REJECTED` | `REJECTED` |
+| `CANCELLED` | `CANCELLED` |
+| `EXPIRED` | `EXPIRED` |
+| `COMMUNICATION_ERROR` | `UNKNOWN` (**OQ-12 del plan general**) |
 
-4. **Fidelidad** [SPEC RF-003, caso extremo "en proceso"]: se devuelve el estado registrado sin anticipar un resultado. Un cobro `RECHAZADO`, `CANCELADO` o `EXPIRADO` jamás se reporta como aprobado. `APROBADO` **no implica** que la captura o la liquidación ya se ejecutaron [SPEC escenario 1].
+4. **Fidelidad** [SPEC RF-003, caso extremo "en proceso"]: se devuelve el estado registrado sin anticipar un resultado. Un cobro `REJECTED`, `CANCELLED` o `EXPIRED` jamás se reporta como aprobado. `APPROVED` **no implica** que la captura o la liquidación ya se ejecutaron [SPEC escenario 1].
 5. **Montos y referencia** [SPEC RF-004]: `authorized_amount`, `captured_amount`, `released_amount`, `charged_amount`, `external_reference` y `detail` salen de la intención; los no disponibles van como `null`. Detalle: la columna `status_detail` la agrega UC05 (D-UC05-02). Escala de los montos en JSON `[PEND OQ-UC06-02]`.
 6. **Solo lectura** [SPEC RF-002, caso extremo "solicitud repetida"]: cada consulta devuelve el estado vigente, sin crear ni modificar registros.
-7. **Sin intención** [SPEC RF-005, RNF-003]: `404 CHARGE_INTENT_NOT_FOUND`, `retryable: true` (UC05 la crea de forma asíncrona tras `PENDIENTE`) [contrato; README E5].
+7. **Sin intención** [SPEC RF-005, RNF-003]: `404 CHARGE_INTENT_NOT_FOUND`, `retryable: true` (UC05 la crea de forma asíncrona tras `PENDING`) [contrato; README E5].
 8. **Orden de validación** [README §4.3]: E1 (`401`) → E2 (`403`) → E3 → E4 (`400`, `reservation_id` con formato inválido) → E5 (`404`). No se consulta la base antes de validar el formato.
 9. **No definido por el SPEC 6** `[NEEDS CLARIFICATION]` (siguen abiertas): OQ-UC06-01 y OQ-UC06-02.
 
@@ -130,7 +130,7 @@ Fuente: `contracts/rest/UC06-confirmacion-pago.md` [general-plan §6]. El SPEC n
 ```json
 {
   "reservation_id": "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10",
-  "status": "APROBADO",
+  "status": "APPROVED",
   "detail": null,
   "authorized_amount": "990000.00",
   "captured_amount": null,
@@ -173,7 +173,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 |---|---|---|---|---|
 | **D-UC06-01** | El SPEC 6 consulta "la `IntenciónDeCobro`" (singular); el SPEC 5 RF-004A permite varias por reserva | SPEC 6 RF-002 vs SPEC 5 RF-004A | Se devuelve la más reciente por `created_at` (índice `(reservation_id, created_at DESC)`, general-plan §4). **Cierre:** UC05 y UC06 son del mismo bloque | **Cerrada** |
 | **D-UC06-02** | `findLatestByReservationId` y `status_detail` no existen todavía: dependen de `UC05·T005` y `UC05·T002` | UC06 vs plan UC05 | Se pidieron en el plan UC05 (mismo bloque); UC06 queda bloqueada hasta que existan | Resuelta en diseño |
-| **D-UC06-03** | Los estados `EN_PROCESO` y `DESCONOCIDO` del SPEC 6 no equivalen uno a uno a los 8 estados internos de general-plan §10 | SPEC 6 RF-003 vs general-plan §10 | Mapeo de la tabla de §Reglas, punto 3; sin estado nuevo | Resuelta; `FALLA_COMUNICACION`→`DESCONOCIDO` pendiente de OQ-12 |
+| **D-UC06-03** | Los estados `IN_PROCESS` y `UNKNOWN` del SPEC 6 no equivalen uno a uno a los 8 estados internos de general-plan §10 | SPEC 6 RF-003 vs general-plan §10 | Mapeo de la tabla de §Reglas, punto 3; sin estado nuevo | Resuelta; `COMMUNICATION_ERROR`→`UNKNOWN` pendiente de OQ-12 |
 
 ## Preguntas abiertas (OQ-UC06-xx)
 
@@ -200,7 +200,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 ### Phase 3: US1 — Consultar el resultado de un cobro (HU1; RF-001…RF-006; RNF-001…RNF-003; CE-001…CE-003)
 
 - [ ] **T001** · Dominio: `PaymentConfirmationStatus` con el mapeo de §10 y `ChargeIntentNotFoundException`. Depende de `UC05·T003` (`ChargeIntentStatus`). · M: `none` · P: `pending`
-- [ ] **T002** · Pruebas del mapeo: los 8 estados internos → los 6 estados devueltos (incluye `FALLA_COMUNICACION`→`DESCONOCIDO`). · M: `none` · P: `pending`
+- [ ] **T002** · Pruebas del mapeo: los 8 estados internos → los 6 estados devueltos (incluye `COMMUNICATION_ERROR`→`UNKNOWN`). · M: `none` · P: `pending`
 - [ ] **T003** · `GetPaymentConfirmationUseCase`, `PaymentConfirmationQuery`, `PaymentConfirmationResult` (montos `BigDecimal` anulables). · M: `none` · P: `pending`
 - [ ] **T004** · Pruebas de `GetPaymentConfirmationService` (Mockito): intención aprobada (escenario 1), rechazada (2), en proceso (3), sin intención (RF-005), montos nulos, la más reciente. · M: `none` · P: `pending`
 - [ ] **T005** · `GetPaymentConfirmationService`: lee por `ChargeIntentRepository.findLatestByReservationId`, traduce el estado, lanza `ChargeIntentNotFoundException`. Sin dependencia de la pasarela. Depende de `UC05·T005`. · M: `none` · P: `pending`
@@ -231,6 +231,6 @@ UC11·T001–T009 (compartido) ─> [UC05·T003, T005, T010] ─> T001 ─> T002
 ## Notes
 
 - El SPEC 6 no define metas de rendimiento (Technical Context).
-- `DESCONOCIDO` para fallas de comunicación está sujeto a OQ-12 del plan general (no definida en el documento entregado: general-plan salta de §7 a §10).
+- `UNKNOWN` para fallas de comunicación está sujeto a OQ-12 del plan general (no definida en el documento entregado: general-plan salta de §7 a §10).
 - Etiquetas: `[SPEC]`, `[CONV]`, `[PEND]`/`[NEEDS CLARIFICATION]`.
 - Los valores numéricos de los ejemplos son ilustrativos.

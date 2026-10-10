@@ -13,7 +13,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-Reservas consulta el estado vigente del cobro de una reserva para decidir si avanza a `RESERVADO` o revierte el bloqueo temporal. Solo un estado aprobado y verificable permite avanzar la reserva (`docs/context/contexto-modulo3.md`, flujo paso 6).
+Reservas consulta el estado vigente del cobro de una reserva para decidir si avanza a `RESERVED` o revierte el bloqueo temporal. Solo un estado aprobado y verificable permite avanzar la reserva (`docs/context/contexto-modulo3.md`, flujo paso 6).
 
 ## 2. Petición
 
@@ -38,8 +38,8 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
 1. El sistema busca la `IntenciónDeCobro` creada por "Procesar cobro" para esa reserva [SPEC RF-002].
 2. Devuelve fielmente el estado registrado, sin anticipar ni inventar un resultado que la pasarela aún no reportó [SPEC RF-003, casos extremos].
 3. Incluye los montos autorizado, capturado, liberado o cobrado y la referencia externa **cuando estén disponibles** [SPEC RF-004]; los no disponibles van como `null`.
-4. `APROBADO` **no implica** que la captura o la liquidación posterior ya se haya ejecutado [SPEC escenario 1].
-5. Un cobro `RECHAZADO`, `CANCELADO` o `EXPIRADO` nunca se reporta como aprobado [SPEC escenario 2].
+4. `APPROVED` **no implica** que la captura o la liquidación posterior ya se haya ejecutado [SPEC escenario 1].
+5. Un cobro `REJECTED`, `CANCELLED` o `EXPIRED` nunca se reporta como aprobado [SPEC escenario 2].
 6. Consultas repetidas devuelven el estado vigente en ese momento, sin crear ni modificar registros [SPEC casos extremos].
 7. Sin `IntenciónDeCobro` para la reserva → error controlado, sin asumir ningún estado [SPEC RF-005].
 
@@ -60,17 +60,17 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
 
 | `status` | Significado |
 |---|---|
-| `EN_PROCESO` | La pasarela aún no reportó un resultado definitivo [SPEC escenario 3] |
-| `APROBADO` | La pasarela aprobó la autorización o el cobro |
-| `RECHAZADO` | La pasarela rechazó la operación |
-| `CANCELADO` | La operación fue cancelada |
-| `EXPIRADO` | La autorización venció sin captura (UC05 RF-014) |
-| `DESCONOCIDO` | Estado externo no determinado (incluye la falla de comunicación, [PEND] OQ-12) |
+| `IN_PROCESS` | La pasarela aún no reportó un resultado definitivo [SPEC escenario 3] |
+| `APPROVED` | La pasarela aprobó la autorización o el cobro |
+| `REJECTED` | La pasarela rechazó la operación |
+| `CANCELLED` | La operación fue cancelada |
+| `EXPIRED` | La autorización venció sin captura (UC05 RF-014) |
+| `UNKNOWN` | Estado externo no determinado (incluye la falla de comunicación, [PEND] OQ-12) |
 
 ```json
 {
   "reservation_id": "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10",
-  "status": "APROBADO",
+  "status": "APPROVED",
   "detail": null,
   "authorized_amount": "990000.00",
   "captured_amount": null,
@@ -103,7 +103,7 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
 
 ## 6. Idempotencia y reintentos
 
-Solo lectura. `CHARGE_INTENT_NOT_FOUND` es reintentable porque la intención la crea UC05 de forma asíncrona al recibir el estado `PENDIENTE` (UC07).
+Solo lectura. `CHARGE_INTENT_NOT_FOUND` es reintentable porque la intención la crea UC05 de forma asíncrona al recibir el estado `PENDING` (UC07).
 
 ## 7. Trazabilidad
 
