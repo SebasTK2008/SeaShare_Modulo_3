@@ -11,7 +11,7 @@
 | Módulo 2 (como sistema) | "Módulo 2: Operación de Reservas, Tiempos y Cancelaciones" | "Sistema de Reservas y Operaciones" | Ambos son equivalentes; en interacciones con Finanzas usar **"Sistema de Reservas y Operaciones"** |
 | Módulo 3 (como sistema) | "Módulo 3: Liquidación, Seguros y Dispersión de Fondos" | Se autodenomina **"el sistema"** | Equivalentes; en todo contenido de SPEC/Finanzas usar **"el sistema"**, nunca "Módulo 3" |
 
-**Actores no compartidos** (existen solo del lado de Finanzas y no requieren nombre común con Módulo 2): Administrador Financiero, Pasarela de Pago. Módulo 2 no los menciona porque no interactúa directamente con ellos.
+**Actores no compartidos** (existen solo del lado de Finanzas y no requieren nombre común con Módulo 2): Administrador Financiero, Pasarela de Pago (Mercado Pago). Módulo 2 no los menciona porque no interactúa directamente con ellos.
 
 ---
 
