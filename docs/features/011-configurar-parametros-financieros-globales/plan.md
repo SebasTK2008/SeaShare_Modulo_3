@@ -146,7 +146,7 @@ src/test/java/com/seashare/seasharem3/
 
 `HighSeasonCalendar` (`domain/service`) **no forma parte de este caso de uso**: es del UC02 (general-plan §3.3 y §3.5). UC11 solo lo consume en `FinancialParametersService.load` (T029, T031) para poblar `high_season_windows`; no lo implementa ni lo prueba (OQ-UC11-05).
 
-**Puertos expuestos** (guía `guia-para-planes-especificos.md` §3.1 y §3.4): `application.port.out.FinancialParametersRepository` es un puerto de **salida** de UC11 (dueño: bloque B) y los demás bloques lo referencian **por nombre**; UC11 publica su firma aquí. Firma [CONV]:
+**Puertos expuestos** : `application.port.out.FinancialParametersRepository` es un puerto de **salida** de UC11 (dueño: bloque B) y los demás bloques lo referencian **por nombre**; UC11 publica su firma aquí. Firma [CONV]:
 
 ```java
 public interface FinancialParametersRepository {
@@ -413,17 +413,3 @@ T001 ─┬─> T002 ─> T003 ─┬─> T004 ─> T005 ─> T006 ─┬─> T0
 - Los consumidores del singleton (UC01/UC02/UC04, bloque A) **están fuera de este plan**: RF-006 solo expone el puerto; UC10 usa la comisión congelada (general-plan D-27), no lee el singleton; su ausencia se maneja en cada HU correspondiente.
 - Etiquetas usadas: `[SPEC]` (SPEC 11 y contratos), `[CONV]` (general-plan, inferido), `[PEND]`/`[NEEDS CLARIFICATION]` (sin definir).
 
-## Checklist de auto-revisión
-
-- [x] Estructura idéntica a `plan-template.md` (Summary con tabla de trazabilidad, Technical Context, Project Structure, fases con `T0NN`/`M`/`P`, Dependencies, Notes).
-- [x] Sin placeholders ni tareas de ejemplo; sin etiquetas "Option 1/2".
-- [x] Fecha `2026-10-08` (revisión `2026-10-09`) y enlace a `spec.md`.
-- [x] Toda regla marcada `[SPEC]`, `[CONV]`, `[PEND]` o `[NEEDS CLARIFICATION]`.
-- [x] Contradicciones D-UC11-04, D-UC11-06, D-UC11-08 a D-UC11-12 en "Discrepancias y puntos abiertos" con decisión explícita; las internas del bloque B están cerradas y D-UC11-11 sigue abierta.
-- [x] Preguntas abiertas definidas en el propio plan (OQ-UC11-01 a OQ-UC11-05); quedan abiertas OQ-UC11-01 y OQ-UC11-05.
-- [x] Numeración de tareas del árbol de código coherente con las fases; `HighSeasonCalendar` solo consumido, no implementado.
-- [x] Sin nombres de tablas/campos inventados: `financial_parameters`, `operational_failure`, `outbox_message` y columnas de `general-plan` §4; claves JSON de los contratos UC11.
-- [x] Cada RF/RNF/CE/HU del SPEC 11 trazado a componente y tarea; base compartida trazada a T001, T002, T007, T046, T047.
-- [x] Pruebas CE-001…CE-004 con nombre `ce00X_…`.
-- [x] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§13) aplicadas.
-- [ ] Pendiente: acordar con A y C D-UC11-11, OQ-UC11-01 y OQ-UC11-05.

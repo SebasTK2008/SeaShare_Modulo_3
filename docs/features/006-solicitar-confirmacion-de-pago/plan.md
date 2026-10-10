@@ -7,7 +7,7 @@
 
 El Sistema de Reservas y Operaciones consulta el estado vigente del cobro de una reserva para decidir si la avanza a `RESERVADO` o revierte el bloqueo temporal. UC06 es una **consulta de solo lectura** sobre la `ChargeIntent` creada por UC05: devuelve el estado (`EN_PROCESO`, `APROBADO`, `RECHAZADO`, `CANCELADO`, `EXPIRADO` o `DESCONOCIDO`), el detalle y los montos y la referencia externa cuando existan. **No contacta a la pasarela** [SPEC HU1, RF-001…RF-006, CE-002].
 
-Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. Adaptador de entrada REST (`GET /api/v1/reservations/{reservation_id}/payment-confirmation`) que invoca únicamente `application.port.in`; el servicio lee la intención por el puerto de salida `ChargeIntentRepository` (dueño: UC05, guía §3.1) y traduce los estados internos al vocabulario del SPEC con el mapeo de general-plan §10. Errores en *Problem Details* (RFC 9457). El diagrama de casos de uso asocia "Solicitar confirmación de pago" únicamente con el *Sistema de Reservas y Operaciones* (`MODULO 2`), sin `<<include>>`/`<<extend>>`.
+Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. Adaptador de entrada REST (`GET /api/v1/reservations/{reservation_id}/payment-confirmation`) que invoca únicamente `application.port.in`; el servicio lee la intención por el puerto de salida `ChargeIntentRepository` (dueño: UC05) y traduce los estados internos al vocabulario del SPEC con el mapeo de general-plan §10. Errores en *Problem Details* (RFC 9457). El diagrama de casos de uso asocia "Solicitar confirmación de pago" únicamente con el *Sistema de Reservas y Operaciones* (`MODULO 2`), sin `<<include>>`/`<<extend>>`.
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -100,7 +100,7 @@ El puerto de salida `ChargeIntentRepository` **no** se crea aquí: es del bloque
 Todas provienen del SPEC 6 y del contrato `UC06-confirmacion-pago.md`, salvo indicación.
 
 1. **Quién puede llamarlo** [SPEC RF-001; contrato]: solo el Sistema de Reservas y Operaciones. Mecanismo de autenticación `[PEND OQ-01 del plan general; ver OQ-UC06-01]`.
-2. **Búsqueda** [SPEC RF-002]: se consulta la `ChargeIntent` de la reserva. Una reserva puede tener varias (UC05 RF-004A); se devuelve **la más reciente por `created_at`** **[PEND OQ-UC06-03]** (el SPEC 6 habla de "la" intención, en singular).
+2. **Búsqueda** [SPEC RF-002]: se consulta la `ChargeIntent` de la reserva. Una reserva puede tener varias (UC05 RF-004A); se devuelve **la más reciente por `created_at`** **[CONV]** (el SPEC 6 habla de "la" intención, en singular).
 3. **Estados** [SPEC RF-003; general-plan §10]:
 
 | Estado interno (`ChargeIntent`) | `status` devuelto |
@@ -117,7 +117,7 @@ Todas provienen del SPEC 6 y del contrato `UC06-confirmacion-pago.md`, salvo ind
 6. **Solo lectura** [SPEC RF-002, caso extremo "solicitud repetida"]: cada consulta devuelve el estado vigente, sin crear ni modificar registros.
 7. **Sin intención** [SPEC RF-005, RNF-003]: `404 CHARGE_INTENT_NOT_FOUND`, `retryable: true` (UC05 la crea de forma asíncrona tras `PENDIENTE`) [contrato; README E5].
 8. **Orden de validación** [README §4.3]: E1 (`401`) → E2 (`403`) → E3 → E4 (`400`, `reservation_id` con formato inválido) → E5 (`404`). No se consulta la base antes de validar el formato.
-9. **No definido por el SPEC 6** `[NEEDS CLARIFICATION]`: OQ-UC06-01 a OQ-UC06-03.
+9. **No definido por el SPEC 6** `[NEEDS CLARIFICATION]` (siguen abiertas): OQ-UC06-01 y OQ-UC06-02.
 
 ## Contratos de API
 
@@ -171,7 +171,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 
 | ID | Descripción | Fuentes en conflicto | Decisión para avanzar | Estado |
 |---|---|---|---|---|
-| **D-UC06-01** | El SPEC 6 consulta "la `IntenciónDeCobro`" (singular); el SPEC 5 RF-004A permite varias por reserva | SPEC 6 RF-002 vs SPEC 5 RF-004A | Se devuelve la más reciente por `created_at` (índice `(reservation_id, created_at DESC)`, general-plan §4) | Abierta: OQ-UC06-03 |
+| **D-UC06-01** | El SPEC 6 consulta "la `IntenciónDeCobro`" (singular); el SPEC 5 RF-004A permite varias por reserva | SPEC 6 RF-002 vs SPEC 5 RF-004A | Se devuelve la más reciente por `created_at` (índice `(reservation_id, created_at DESC)`, general-plan §4). **Cierre:** UC05 y UC06 son del mismo bloque | **Cerrada** |
 | **D-UC06-02** | `findLatestByReservationId` y `status_detail` no existen todavía: dependen de `UC05·T005` y `UC05·T002` | UC06 vs plan UC05 | Se pidieron en el plan UC05 (mismo bloque); UC06 queda bloqueada hasta que existan | Resuelta en diseño |
 | **D-UC06-03** | Los estados `EN_PROCESO` y `DESCONOCIDO` del SPEC 6 no equivalen uno a uno a los 8 estados internos de general-plan §10 | SPEC 6 RF-003 vs general-plan §10 | Mapeo de la tabla de §Reglas, punto 3; sin estado nuevo | Resuelta; `FALLA_COMUNICACION`→`DESCONOCIDO` pendiente de OQ-12 |
 
@@ -179,15 +179,15 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 
 | ID | Pregunta | Afecta | Propuesta por defecto | Estado |
 |---|---|---|---|---|
-| **OQ-UC06-01** | ¿Cómo se identifica y autoriza al "Sistema de Reservas y Operaciones" (credencial de servicio)? Equivale a OQ-01 del plan general; el SPEC fija quién, no cómo | T008 | OAuth2 Resource Server (JWT) con credencial de servicio de Reservas (general-plan §7.1) **[CONV]** | Abierta |
-| **OQ-UC06-02** | Escala y modo de redondeo de los montos en el JSON (los ejemplos muestran 2 decimales; internamente son 4). Afecta a todos los bloques | T006 | Sin regla fijada; se aplica la que se acuerde para todos los contratos | Abierta |
-| **OQ-UC06-03** | Si hay varias intenciones, ¿se devuelve siempre la más reciente? | T005, T010 | La más reciente por `created_at` | Abierta |
+| **OQ-UC06-01** | ¿Cómo se identifica y autoriza al "Sistema de Reservas y Operaciones" (credencial de servicio)? Equivale a OQ-01 del plan general; el SPEC fija quién, no cómo | T008 | OAuth2 Resource Server (JWT) con credencial de servicio de Reservas (general-plan §7.1) **[CONV]** | **Abierta** |
+| **OQ-UC06-02** | Escala y modo de redondeo de los montos en el JSON (los ejemplos muestran 2 decimales; internamente son 4). Afecta a todos los bloques | T006 | Sin regla fijada; se aplica la que se acuerde para todos los contratos | **Abierta** |
+| **OQ-UC06-03** | Si hay varias intenciones, ¿se devuelve siempre la más reciente? | T005, T010 | La más reciente por `created_at` | **Cerrada** → **Adoptada.** |
 
-**`[NEEDS CLARIFICATION]` consolidado:** OQ-UC06-01 a OQ-UC06-03.
+**`[NEEDS CLARIFICATION]` consolidado (abiertas):** OQ-UC06-01 y OQ-UC06-02.
 
 ## Implementation Phases
 
-> **Convención**: tarea `T0NN` · `M` = Módulo (`done`/`partial`/`pending`) · `P` = Aprobación (`approved`/`rejected`/`pending` · `none` si no aplica). Las fases 1 y 2 son **Compartido** y remiten a `UC11·T001–T009`; las tareas locales empiezan en la Fase 3.
+> **Convención**: tarea `T0NN` · `M` = Módulo (`done`/`partial`/`pending`) · `P` = Aprobación (`approved`/`rejected`/`pending` · `none` si no aplica). Las fases 1 y 2 son **Compartido** y remiten a tareas de UC11; las tareas locales empiezan en la Fase 3.
 
 ### Phase 1: Setup — **Compartido**
 
@@ -234,15 +234,3 @@ UC11·T001–T009 (compartido) ─> [UC05·T003, T005, T010] ─> T001 ─> T002
 - `DESCONOCIDO` para fallas de comunicación está sujeto a OQ-12 del plan general (no definida en el documento entregado: general-plan salta de §7 a §10).
 - Etiquetas: `[SPEC]`, `[CONV]`, `[PEND]`/`[NEEDS CLARIFICATION]`.
 - Los valores numéricos de los ejemplos son ilustrativos.
-
-## Checklist de auto-revisión
-
-- [x] Estructura idéntica a `plan-template.md` (Summary con trazabilidad, Technical Context, Project Structure, fases `T0NN`/`M`/`P`, Dependencies, Notes).
-- [x] Sin placeholders ni tareas de ejemplo; sin etiquetas "Option 1/2".
-- [x] Fecha `2026-10-09` y enlace a `spec.md`.
-- [x] Reglas marcadas con `[SPEC]`, `[CONV]`, `[PEND]` o `[NEEDS CLARIFICATION]`.
-- [x] Discrepancias D-UC06-01 a D-UC06-03 y OQ-UC06-01 a OQ-UC06-03 con ID, sin resolver en silencio.
-- [x] Cada RF/RNF/CE/HU trazado a componente y tarea; cada CE con prueba `ceXXX_…`.
-- [x] Sin tablas ni campos inventados: `charge_intent` de general-plan §4 (más `status_detail` pedido a UC05) y claves JSON del contrato UC06.
-- [x] Referencias a tareas de otro plan con la forma `UC05·T0NN`.
-- [ ] Pendiente del responsable: confirmar OQ-UC06-03 junto con UC05 antes de la consolidación.

@@ -7,7 +7,7 @@
 
 UC05 envía a la Pasarela de Pago (Mercado Pago) la solicitud de autorización o cobro por el **valor total ya calculado** de una reserva (alquiler + seguro + depósito, un único monto), registra la operación operativa en curso como `ChargeIntent` y, cuando la pasarela confirma un cobro o captura exitosos, crea el `ChargeRecord` inmutable de auditoría. También registra el rechazo, la falla de comunicación y la **expiración** de autorizaciones no capturadas [SPEC HU1, HU2, RF-001…RF-015, RNF-003, RNF-005].
 
-Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. UC05 **no tiene endpoint público**: lo invoca UC07 con el estado `PENDIENTE` y el token del medio de pago (UC07 RF-002A; general-plan D-09). Persiste la intención y publica el comando por *outbox* en la misma transacción; un *worker* llama a la pasarela (general-plan D-08). El resultado entra por tres vías que convergen en `RegisterChargeResultUseCase`: respuesta técnica de la llamada, webhook (que dispara una consulta activa a la API de Mercado Pago) y conciliación. Cada intento de cobro tiene **su propia clave idempotente** y una reserva puede acumular varias `ChargeIntent` [SPEC RF-004A; general-plan D-28]. `ChargeIntent` y `ChargeRecord` son del bloque B (guía §3.1): los demás bloques las referencian por nombre.
+Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. UC05 **no tiene endpoint público**: lo invoca UC07 con el estado `PENDIENTE` y el token del medio de pago (UC07 RF-002A; general-plan D-09). Persiste la intención y publica el comando por *outbox* en la misma transacción; un *worker* llama a la pasarela (general-plan D-08). El resultado entra por tres vías que convergen en `RegisterChargeResultUseCase`: respuesta técnica de la llamada, webhook (que dispara una consulta activa a la API de Mercado Pago) y conciliación. Cada intento de cobro tiene **su propia clave idempotente** y una reserva puede acumular varias `ChargeIntent` [SPEC RF-004A; general-plan D-28]. `ChargeIntent` y `ChargeRecord` son del bloque B: los demás bloques las referencian por nombre.
 
 El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Procesar cobro" con los actores *Arrendatario* y *Pasarela de pago*, sin relaciones `<<include>>`/`<<extend>>`. El disparo desde "Brindar el estado de la reserva" proviene del SPEC 7 (RF-002A), no del diagrama.
 
@@ -50,7 +50,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Proc
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [general-plan]
-**Primary Dependencies**: Spring Boot 4.1.1. Para UC05: Spring Data JPA, Spring AMQP (cola interna del comando, *outbox*), Resilience4j (timeout/*circuit breaker*, §7.2), cliente HTTP, Flyway, MapStruct, ArchUnit; ShedLock opcional (§5.3). **Hoy no están en el `pom.xml`** (solo `data-jpa`, `postgresql`, `mapstruct`, `lombok-mapstruct-binding` y Testcontainers). `UC11·T001` agrega web, validation, security, flyway, test y ArchUnit, **pero no AMQP, Resilience4j, WireMock ni Awaitility** → ver D-UC05-01 y T001.
+**Primary Dependencies**: Spring Boot 4.1.1. Para UC05: Spring Data JPA, Spring AMQP (cola interna del comando, *outbox*), Resilience4j (timeout/*circuit breaker*, §7.2), cliente HTTP, Flyway, MapStruct, ArchUnit; ShedLock opcional (§5.3). **Hoy no están en el `pom.xml`** (solo `data-jpa`, `postgresql`, `mapstruct`, `lombok-mapstruct-binding` y Testcontainers); `UC11·T001` agrega web, validation, security, flyway, test, ArchUnit, AMQP, Resilience4j, WireMock y Awaitility.
 **Storage**: PostgreSQL 16+; `NUMERIC(18,4)` para dinero, `timestamptz` para instantes [general-plan §4]
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), WireMock (pasarela), Awaitility, MockMvc, ArchUnit [general-plan]
 **Target Platform**: Contenedores Docker (Linux) [general-plan]
@@ -99,10 +99,10 @@ src/main/java/com/seashare/seasharem3/
 ├── application/
 │   ├── port/in/
 │   │   ├── ProcessChargeUseCase.java            # T006  [general-plan §3.5]  (puerto expuesto)
-│   │   ├── SendChargeToGatewayUseCase.java      # T006  [CONV] ver D-UC05-03
+│   │   ├── SendChargeToGatewayUseCase.java      # T006  [CONV] el worker es un adaptador y solo puede invocar port.in (general-plan §3.4)
 │   │   ├── RegisterChargeResultUseCase.java     # T006  [general-plan §3.5]
 │   │   ├── ExpireStaleAuthorizationsUseCase.java# T006  [general-plan §3.5]
-│   │   └── ReconcileChargeIntentsUseCase.java   # T006  [CONV] ver D-UC05-03
+│   │   └── ReconcileChargeIntentsUseCase.java   # T006  [CONV] job de conciliación
 │   ├── port/out/
 │   │   ├── ChargeIntentRepository.java          # T005  (lo consume UC06, UC09, UC10)
 │   │   ├── ChargeRecordRepository.java          # T005  [CONV]
@@ -136,7 +136,7 @@ src/main/java/com/seashare/seasharem3/
         └── ChargeIntentPersistenceAdapter.java / ChargeRecordPersistenceAdapter.java  # T009
 
 src/main/resources/db/migration/
-└── V3x__create_charge_intent_and_charge_record.sql   # T002  (rango V3x del bloque B, guía §3.3)
+└── V3x__create_charge_intent_and_charge_record.sql   # T002  (rango V3x del bloque B)
 
 src/test/java/com/seashare/seasharem3/
 ├── domain/model/{ChargeIntentTest, ChargeRecordTest}.java                    # T004
@@ -147,7 +147,7 @@ src/test/java/com/seashare/seasharem3/
 └── acceptance/Uc05AcceptanceTest.java                                        # T016, T022, T025–T029
 ```
 
-**Puertos expuestos** (guía §3.2 y §3.4): `ProcessChargeUseCase` es llamado por **UC07** (mismo bloque). Firma [CONV], a publicar en el canal al terminar T006:
+**Puertos expuestos**: `ProcessChargeUseCase` es llamado por **UC07** (mismo bloque). Firma [CONV], a publicar en el canal al terminar T006:
 
 ```java
 public interface ProcessChargeUseCase {
@@ -158,7 +158,7 @@ public record ProcessChargeCommand(
     String paymentTokenRef,                 // obligatorio con PENDIENTE [SPEC UC07 RF-002A]
     String paymentMethodType,               // nullable [SPEC RF-001]
     Map<String, String> paymentMetadata,    // nullable, solo no sensibles [SPEC RF-001, RF-012]
-    String operationKey                     // [PEND OQ-UC05-04] identidad de operación de UC07 (RF-009A)
+    String operationKey                     // identidad de operación de UC07 (RF-009A): derivada de reservationId + statusChangedAt [CONV]
 ) {}
 ```
 
@@ -172,16 +172,16 @@ Todas provienen del SPEC 5 salvo indicación.
 
 1. **Disparo y entrada** [SPEC RF-001; UC07 RF-002A]: UC07 invoca `ProcessChargeUseCase` con el estado `PENDIENTE`. UC05 no valida ni administra el TTL (lo administra Reservas).
 2. **Valor a cobrar** [SPEC RF-002, RF-015]: un **único monto** = valor total registrado por UC04 (alquiler + seguro + depósito). Ejemplo ilustrativo (contrato UC04): alquiler `900000.00` + seguro `60000.00` + depósito `30000.00` = `990000.00`. No se generan solicitudes separadas por componente; la distinción se conserva en `charge_record` (`rental_amount`, `insurance_amount`, `deposit_amount`). Sin valor total registrado → `ReservationValueNotCalculatedException` y **no** se contacta a la pasarela [RF-009].
-3. **Una intención por intento** [SPEC RF-004, RF-004A; general-plan D-28]: cada invocación con una `operationKey` nueva crea una `ChargeIntent` con su propia clave idempotente (reintento tras rechazo o expiración = intención nueva). La unicidad la da `UNIQUE(idempotency_key)`, no la reserva. Una invocación con una clave ya existente no crea otra intención ni cobra dos veces (UC07, caso extremo "pendiente repetido") **[PEND OQ-UC05-04: derivación y formato de la clave]**.
+3. **Una intención por intento** [SPEC RF-004, RF-004A; general-plan D-28]: cada invocación con una `operationKey` nueva crea una `ChargeIntent` con su propia clave idempotente (reintento tras rechazo o expiración = intención nueva). La clave idempotente del intento se deriva de forma determinística de `reservationId` + `operationKey` **[CONV]**; la unicidad la da `UNIQUE(idempotency_key)`, no la reserva. Una invocación con una clave ya existente no crea otra intención ni cobra dos veces (UC07, caso extremo "pendiente repetido").
 4. **Envío asíncrono** [general-plan D-08, §7.2]: `ProcessChargeService` persiste la intención en `PENDIENTE_ENVIO` y el mensaje *outbox* en la **misma transacción**; el *worker* envía a la pasarela (timeout 10 s [CONV]). El reintento técnico reutiliza **la misma** clave idempotente [SPEC RNF-003].
 5. **Resultado y estados** [general-plan §10]: `PENDIENTE_ENVIO`, `EN_PROCESO`, `AUTORIZADO`, `CAPTURADO`, `RECHAZADO`, `CANCELADO`, `EXPIRADO`, `FALLA_COMUNICACION`. Estados de Mercado Pago del contrato: `approved`, `in_process`, `rejected` (respuesta); `approved`, `rejected`/`expired` (webhook `payment.updated`).
    - Timeout, `502`, `503` o caída → `FALLA_COMUNICACION`; **no** se interpreta como rechazo ni como éxito [SPEC RNF-003, caso extremo].
-   - `400` por validación de token: no reintentable [contrato §5]; no se marca la reserva como cobrada [SPEC RF-013]. Estado resultante **[PEND OQ-UC05-06]**.
+   - `400` por validación de token: no reintentable [contrato §5]; no se marca la reserva como cobrada [SPEC RF-013]. La intención queda en `RECHAZADO` con `status_detail` técnico y no se crea `ChargeRecord` **[CONV]**.
 6. **Registro inmutable** [SPEC RF-006, RF-008, RF-010, RF-004B; general-plan §3.5]: `ChargeRecord` solo cuando el cobro/captura queda confirmado (`CAPTURADO`); nunca para `RECHAZADO`, `CANCELADO`, `EXPIRADO`, `EN_PROCESO` ni `FALLA_COMUNICACION`. Se crea en la **misma transacción** que la actualización de la intención, con `charge_intent_id`, y copia `owner_id` y `boat_id` de `reservation_information`. Si la integración solo autoriza (sin captura), el registro espera la captura **[PEND OQ-UC05-02]**.
 7. **Datos de pago** [SPEC RF-011, RF-012, RNF-004]: solo se recibe/envía/persiste el token (`payment_token_ref`), el tipo de medio, los últimos 4 y metadatos no sensibles; el token no se escribe en logs. El `outbox_message` lleva solo el identificador de la intención (el token se lee de `charge_intent` en el *worker*) **[CONV]**.
 8. **Expiración** [SPEC RF-014, RNF-005; general-plan §5.2]: `AuthorizationExpiryJob` marca `EXPIRADO` las intenciones `AUTORIZADO` con `authorization_expires_at` vencido, registra el hecho y deja la intención disponible para conciliación o un nuevo intento. No asume fondos disponibles. Origen de `authorization_expires_at` **[PEND OQ-UC05-03]**.
-9. **Notificaciones repetidas / desconocidas** [SPEC casos extremos]: un resultado repetido igual al ya registrado no altera nada; un resultado sin intención asociada se registra en `operational_failure` sin crear `ChargeRecord`. Respuesta HTTP del webhook en ese caso **[PEND OQ-UC05-07]** (propuesta del README §4.4: `200 OK`).
-10. **No definido por el SPEC 5** `[NEEDS CLARIFICATION]`: OQ-UC05-01 a OQ-UC05-09.
+9. **Resultado de la pasarela y asociación** [SPEC casos extremos]: la respuesta técnica y el webhook pasan por el mismo `RegisterChargeResultService`; el segundo resultado igual al ya registrado es idempotente y no altera nada **[CONV]**. El id del pago de Mercado Pago (`data.id`) se guarda en `charge_intent.external_reference` y con él se asocia el resultado a su intención; un resultado sin intención asociada se registra en `operational_failure` sin crear `ChargeRecord` **[CONV]**. Respuesta HTTP del webhook en ese caso **[PEND OQ-UC05-07]** (propuesta del README §4.4: `200 OK`).
+10. **No definido por el SPEC 5** `[NEEDS CLARIFICATION]` (siguen abiertas): OQ-UC05-01, OQ-UC05-02, OQ-UC05-03, OQ-UC05-07, OQ-UC05-08 y OQ-UC05-09.
 
 ## Contratos de API
 
@@ -230,60 +230,61 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 
 | ID | Descripción | Fuentes en conflicto | Decisión para avanzar | Estado |
 |---|---|---|---|---|
-| **D-UC05-01** | La guía §3.1 dice que `operational_failure`, `outbox_message`, `FailureRecorderPort`, `OutboxPort` se definen en `UC11·T001–T009`, pero el plan de UC11 no los incluye (`T002` solo crea `financial_parameters`; `T007` solo define puertos de parámetros). Tampoco agrega AMQP, Resilience4j, WireMock ni Awaitility (`T001`) | Guía §3.1 vs plan UC11 | UC05 los **referencia por nombre** como `UC11·T002`/`UC11·T007` y asume que se agregarán allí; hasta entonces, T001 y las tareas de outbox quedan bloqueadas | Abierta: ajustar el plan UC11 (mismo responsable) |
-| **D-UC05-02** | `charge_intent` (general-plan §4) no tiene columna para el **detalle** del estado externo (SPEC RF-006 y UC06 RF-003 lo exigen) ni para el **monto solicitado** (CE-001 compara contra el valor calculado, que UC03 puede invalidar) | general-plan §4 vs SPEC 5/6 | Agregar `status_detail` y `requested_amount` a `charge_intent` en la migración V3x (T002) | Abierta: confirmar y actualizar general-plan §4 |
-| **D-UC05-03** | general-plan §3.5 lista 3 puertos de entrada para UC05; el diseño necesita 2 más: `SendChargeToGatewayUseCase` (el *worker* es un adaptador y solo puede invocar `port.in`, §3.4) y `ReconcileChargeIntentsUseCase` (job de conciliación) | general-plan §3.5 vs §3.4 | Se agregan ambos como [CONV] | Abierta: actualizar §3.5 |
-| **D-UC05-04** | El contrato de cobro usa `X-Idempotency-Key` de ejemplo `cobro-<reservation_id>`, igual para todos los intentos de una reserva; contradice RF-004A / D-28 (nuevo intento = clave nueva) | `pasarela-comando-cobro.md` §2 vs SPEC RF-004A | Rige el SPEC: clave por intento (OQ-UC05-04). T031 corrige el ejemplo del contrato | Abierta |
-| **D-UC05-05** | Webhook: la regla 2 dice responder `200` "inmediatamente sin esperar el procesamiento", la regla 7 dice responder `500` si el procesamiento interno falla | `pasarela-webhook-resultados.md` §3.2 vs §3.7 | Se acusa recibo (`200`) **después** de persistir de forma durable la notificación para su procesamiento (outbox); si eso falla, `500`. El procesamiento del paso 2 es asíncrono | Abierta: confirmar |
+| **D-UC05-01** | `operational_failure`, `outbox_message`, `FailureRecorderPort`, `OutboxPort` y las dependencias AMQP, Resilience4j, WireMock y Awaitility debían quedar definidos en las tareas compartidas de UC11 | Reparto de piezas compartidas vs plan UC11 | UC05 los referencia por nombre: `UC11·T001` (dependencias), `UC11·T002` (tablas), `UC11·T007` (puertos) y `UC11·T046` (adaptadores y relay). **Cierre:** el plan UC11 ya los incluye | **Cerrada** |
+| **D-UC05-02** | `charge_intent` (general-plan §4) no tiene columna para el **detalle** del estado externo (SPEC RF-006 y UC06 RF-003 lo exigen) ni para el **monto solicitado** (CE-001 compara contra el valor calculado, que UC03 puede invalidar) | general-plan §4 vs SPEC 5/6 | Se agregan `status_detail` y `requested_amount` a `charge_intent` en la migración V3x (T002). **Cierre:** `charge_intent` es una tabla propia del bloque B | **Cerrada** |
+| **D-UC05-03** | general-plan §3.5 lista 3 puertos de entrada para UC05; el diseño necesita 2 más: `SendChargeToGatewayUseCase` (el *worker* es un adaptador y solo puede invocar `port.in`, §3.4) y `ReconcileChargeIntentsUseCase` (job de conciliación) | general-plan §3.5 vs §3.4 | Se agregan ambos como [CONV]. **Cierre:** son puertos propios de UC05 | **Cerrada** |
+| **D-UC05-04** | El contrato de cobro usa `X-Idempotency-Key` de ejemplo `cobro-<reservation_id>`, igual para todos los intentos de una reserva; contradice RF-004A / D-28 (nuevo intento = clave nueva) | `pasarela-comando-cobro.md` §2 vs SPEC RF-004A | Rige el SPEC: clave por intento (derivada de `reservationId` + `operationKey`). T031 corrige el ejemplo del contrato. **Cierre:** el contrato de cobro es de UC05 | **Cerrada** |
+| **D-UC05-05** | Webhook: la regla 2 dice responder `200` "inmediatamente sin esperar el procesamiento", la regla 7 dice responder `500` si el procesamiento interno falla | `pasarela-webhook-resultados.md` §3.2 vs §3.7 | Se acusa recibo (`200`) **después** de persistir de forma durable la notificación para su procesamiento (outbox); si eso falla, `500`. El procesamiento del paso 2 es asíncrono | **Abierta**: el webhook lo comparten UC05, UC09 y UC10 (bloque C) |
 | **D-UC05-06** | RF-006 dice crear el registro "si la operación es exitosa"; la entidad dice "capturada o cobrada exitosamente"; UC06 aclara que `APROBADO` no implica captura | SPEC 5 RF-006 vs Entidades Clave vs UC06 | Se crea `ChargeRecord` solo en `CAPTURADO` (general-plan §3.5: "solo con cobro/captura confirmados") | Decidida; ver OQ-UC05-02 |
 | **D-UC05-07** | RF-009/RF-013 piden "responder con un error controlado", pero UC05 no tiene canal de respuesta (lo invoca UC07, unidireccional) | SPEC 5 vs UC07 RF-009/RF-010 | `ProcessChargeUseCase` lanza excepción de dominio; UC07 la registra en `operational_failure` | Resuelta en diseño |
-| **D-UC05-08** | El contrato dice que el resultado "definitivo" llega por webhook, pero la respuesta técnica puede ser `approved` | `pasarela-comando-cobro.md` §4 vs SPEC RF-005 | Provisional: la respuesta técnica y el webhook pasan por el mismo `RegisterChargeResultService`; el segundo resultado igual es idempotente | Abierta: confirmar |
+| **D-UC05-08** | El contrato dice que el resultado "definitivo" llega por webhook, pero la respuesta técnica puede ser `approved` | `pasarela-comando-cobro.md` §4 vs SPEC RF-005 | La respuesta técnica y el webhook pasan por el mismo `RegisterChargeResultService`; el segundo resultado igual es idempotente. **Cierre:** es el diseño del servicio de UC05 | **Cerrada** |
 
 ## Preguntas abiertas (OQ-UC05-xx)
 
 | ID | Pregunta | Afecta | Propuesta por defecto | Estado |
 |---|---|---|---|---|
-| **OQ-UC05-01** | El contrato exige `payer.email`, `payment_method_id`, `installments` y `description`, pero ni el SPEC 5 ni el mensaje de UC07 (`payment_token_ref`, `payment_method_type`, `payment_metadata`) los proveen. ¿De dónde salen? | T012 | Ninguna: no se inventa. Mientras no se confirme, `MercadoPagoPaymentRequest` queda con esos campos sin origen | Abierta |
-| **OQ-UC05-02** | ¿Se usa autorización + captura o cobro directo? El contrato no envía indicador de captura; el SPEC dice "según la capacidad configurada". Si se autoriza, ¿quién solicita la captura y cuándo se crea `ChargeRecord`? (UC10 solicita "captura y/o liquidación") | T018, T012 | Propiedad de configuración `seashare.gateway.charge-mode` **[CONV]**; `ChargeRecord` solo en `CAPTURADO` | Abierta (afecta a bloque C) |
-| **OQ-UC05-03** | ¿De dónde sale `authorization_expires_at`? El contrato de cobro no devuelve vigencia | T022 | Sin fuente: el job queda condicionado | Abierta |
-| **OQ-UC05-04** | Derivación y formato de la clave idempotente por intento y su relación con la identidad de operación de UC07 (RF-009A); ver también OQ-UC07-01 | T006, T008 | Clave determinística a partir de `reservationId` + `operationKey` | Abierta (coordinar con UC07) |
-| **OQ-UC05-05** | ¿Cómo se asocia un recurso de Mercado Pago (`data.id`) a una intención? El contrato envía `external_reference` = id de la reserva, igual para todas las intenciones; si la respuesta técnica se pierde, la intención no conoce el id de MP | T019, T021 | Buscar por id externo guardado; si no existe, `operational_failure` (sin adivinar) | Abierta |
-| **OQ-UC05-06** | Estado de la intención ante `400` por token inválido: el SPEC dice que no se asume rechazo financiero y no define estado | T014 | `RECHAZADO` con `status_detail` técnico (no crea registro) | Abierta |
-| **OQ-UC05-07** | El endpoint webhook y `GatewayReconciliationJob` los comparten UC05, UC09 y UC10 (bloques B y C). La guía no asigna dueño. Respuesta ante `data.id` desconocido (README §4.4 `[PEND]`) | T019, T023 | UC05 define el controlador/verificador y el mapeo `type=payment`; UC09 y UC10 agregan su `type`. Respuesta `200` + `operational_failure` | Abierta: acordar en el canal |
-| **OQ-UC05-08** | Nombres de exchange, cola y DLQ internos del comando (equivale a OQ-09 del plan general) | T012, T014 | Sin nombre fijado | Abierta |
-| **OQ-UC05-09** | Dueño de los objetos de valor compartidos (`Money`, `ReservationId`) y escala/redondeo de salida hacia la pasarela (el contrato envía `990000.00`) | T003, T012 | UC05 define solo `IdempotencyKey` y `PaymentMethodReference`; el resto se referencia por nombre | Abierta |
+| **OQ-UC05-01** | El contrato exige `payer.email`, `payment_method_id`, `installments` y `description`, pero ni el SPEC 5 ni el mensaje de UC07 (`payment_token_ref`, `payment_method_type`, `payment_metadata`) los proveen. ¿De dónde salen? | T012 | Ninguna: no se inventa. Mientras no se confirme, `MercadoPagoPaymentRequest` queda con esos campos sin origen | **Abierta** |
+| **OQ-UC05-02** | ¿Se usa autorización + captura o cobro directo? El contrato no envía indicador de captura; el SPEC dice "según la capacidad configurada". Si se autoriza, ¿quién solicita la captura y cuándo se crea `ChargeRecord`? (UC10 solicita "captura y/o liquidación") | T018, T012 | Propiedad de configuración `seashare.gateway.charge-mode` **[CONV]**; `ChargeRecord` solo en `CAPTURADO` | **Abierta** (afecta a bloque C) |
+| **OQ-UC05-03** | ¿De dónde sale `authorization_expires_at`? El contrato de cobro no devuelve vigencia | T022 | Sin fuente: el job queda condicionado | **Abierta** |
+| **OQ-UC05-04** | Derivación y formato de la clave idempotente por intento y su relación con la identidad de operación de UC07 (RF-009A) | T006, T008 | Clave determinística a partir de `reservationId` + `operationKey`; `operationKey` = `reservationId` + `statusChangedAt` (UC07) | **Cerrada** → **Adoptada.** |
+| **OQ-UC05-05** | ¿Cómo se asocia un recurso de Mercado Pago (`data.id`) a una intención? El contrato envía `external_reference` = id de la reserva, igual para todas las intenciones; si la respuesta técnica se pierde, la intención no conoce el id de MP | T019, T021 | Buscar por id externo guardado en `charge_intent.external_reference`; si no existe, `operational_failure` (sin adivinar) | **Cerrada** → **Adoptada.** |
+| **OQ-UC05-06** | Estado de la intención ante `400` por token inválido: el SPEC dice que no se asume rechazo financiero y no define estado | T014 | `RECHAZADO` con `status_detail` técnico (no crea registro) | **Cerrada** → **Adoptada.** |
+| **OQ-UC05-07** | El endpoint webhook y `GatewayReconciliationJob` los comparten UC05, UC09 y UC10 (bloques B y C). No hay dueño asignado. Respuesta ante `data.id` desconocido (README §4.4 `[PEND]`) | T019, T023 | UC05 define el controlador/verificador y el mapeo `type=payment`; UC09 y UC10 agregan su `type`. Respuesta `200` + `operational_failure` | **Abierta**: acordar con C |
+| **OQ-UC05-08** | Nombres de exchange, cola y DLQ internos del comando (equivale a OQ-09 del plan general) | T012, T014 | Sin nombre fijado | **Abierta** |
+| **OQ-UC05-09** | Dueño de los objetos de valor compartidos (`Money`, `ReservationId`) y escala/redondeo de salida hacia la pasarela (el contrato envía `990000.00`) | T003, T012 | UC05 define solo `IdempotencyKey` y `PaymentMethodReference`; el resto se referencia por nombre | **Abierta** |
 
-**`[NEEDS CLARIFICATION]` consolidado:** OQ-UC05-01 a OQ-UC05-09.
+**`[NEEDS CLARIFICATION]` consolidado (abiertas):** OQ-UC05-01, OQ-UC05-02, OQ-UC05-03, OQ-UC05-07, OQ-UC05-08 y OQ-UC05-09. Discrepancia abierta: D-UC05-05.
 
 ## Implementation Phases
 
-> **Convención**: tarea `T0NN` · `M` = Módulo (`done`/`partial`/`pending`) · `P` = Aprobación (`approved`/`rejected`/`pending` · `none` si no aplica). Las fases 1 y 2 son **Compartido** y remiten a `UC11·T001–T009`; no se duplican. Las tareas locales empiezan en la Fase 3.
+> **Convención**: tarea `T0NN` · `M` = Módulo (`done`/`partial`/`pending`) · `P` = Aprobación (`approved`/`rejected`/`pending` · `none` si no aplica). Las fases 1 y 2 son **Compartido** y remiten a tareas de UC11; no se duplican. Las tareas locales empiezan en la Fase 3.
 
 ### Phase 1: Setup — **Compartido**
 
-- [ ] `UC11·T001`–`UC11·T003`: starters, migración V1 y `ArchitectureTest`. **Falta** (D-UC05-01): AMQP, Resilience4j, WireMock, Awaitility → T001.
+- [ ] `UC11·T001`–`UC11·T003`: starters (incluye AMQP, Resilience4j, WireMock y Awaitility), migración V1 y `ArchitectureTest`.
 
 ### Phase 2: Foundational — **Compartido**
 
-- [ ] `UC11·T004`–`UC11·T009`: excepciones base, `ProblemDetailsConfig`, seguridad. **Falta** (D-UC05-01): `operational_failure`, `outbox_message`, `FailureRecorderPort`, `OutboxPort`.
+- [ ] `UC11·T004`–`UC11·T009`: excepciones base, `ProblemDetailsConfig`, seguridad.
+- [ ] `UC11·T046`–`UC11·T047`: `operational_failure`, `outbox_message`, `FailureRecorderPort`, `OutboxPort`, adaptadores y `OutboxRelayJob`.
 
 ### Phase 3: US1 — Enviar la solicitud de cobro (HU1; RF-001…RF-004B, RF-009…RF-011, RF-013, RF-015; CE-002, CE-003, CE-005)
 
-- [ ] **T001** · Agregar al `pom.xml` `spring-boot-starter-amqp`, Resilience4j, WireMock y Awaitility (coordinar con UC03 y UC07, que también usan AMQP). Condicionada a D-UC05-01. · M: `none` · P: `pending`
+- [ ] **T001** · Propiedades de configuración de la pasarela en `application.properties` (`seashare.gateway.*`: URL base, *access token*, secreto del webhook, timeout de 10 s y `charge-mode` de OQ-UC05-02), sin valores sensibles en el repositorio. · M: `none` · P: `pending`
 - [ ] **T002** · Migración `V3x__create_charge_intent_and_charge_record.sql`: `charge_intent` (columnas de general-plan §4 + `status_detail`, `requested_amount`; `UNIQUE(idempotency_key)`; **sin** `UNIQUE(reservation_id)`; índice `(reservation_id, created_at DESC)`), `charge_record` (`charge_intent_id NOT NULL` con FK; índices `(owner_id, created_at DESC)`, `(boat_id)`, `(reservation_id)`), función y trigger que rechazan `UPDATE`/`DELETE` en `charge_record` y retiro de privilegios (D-13). **Aviso al canal**: la función de inmutabilidad la reutilizan las tablas de UC09 y del bloque C. · M: `none` · P: `pending`
 - [ ] **T003** · Dominio: `ChargeIntentStatus`, `ChargeIntent` (transiciones válidas), `ChargeRecord` (inmutable, sin *setters*), `PaymentMethodReference`, `IdempotencyKey` (`BigDecimal`, RNF-002). · M: `none` · P: `pending`
 - [ ] **T004** · Excepciones `ReservationValueNotCalculatedException`, `InvalidPaymentTokenException` y pruebas unitarias de dominio (transiciones, inmutabilidad, `BigDecimal`). · M: `none` · P: `pending`
 - [ ] **T005** · Puertos de salida: `ChargeIntentRepository` (guardar, por id, por clave idempotente, por id externo, `findLatestByReservationId` para UC06, `findApprovedByReservationId` para UC09/UC10, intenciones vencidas, intenciones sin resultado), `ChargeRecordRepository`, `ChargeGatewayPort` (`send`, `fetchPayment`). · M: `none` · P: `pending`
-- [ ] **T006** · Puertos de entrada y `ProcessChargeCommand`; **publicar en el canal la firma de `ProcessChargeUseCase`** (guía §3.2). · M: `none` · P: `pending`
+- [ ] **T006** · Puertos de entrada y `ProcessChargeCommand`; **publicar en el canal la firma de `ProcessChargeUseCase`**. · M: `none` · P: `pending`
 - [ ] **T007** · Pruebas de `ProcessChargeService`: valor total registrado → intención + outbox; sin valor total → `ReservationValueNotCalculatedException` sin tocar la pasarela (RF-009); token ausente → `InvalidPaymentTokenException` (RF-013); misma clave → no duplica (RF-004A); un solo monto (RF-015). · M: `none` · P: `pending`
-- [ ] **T008** · `ProcessChargeService` (transacción única: intención + outbox). Depende de `UC11·T007` (`OutboxPort`). · M: `none` · P: `pending`
+- [ ] **T008** · `ProcessChargeService` (transacción única: intención + outbox; clave idempotente derivada de `reservationId` + `operationKey`). Depende de `UC11·T007` (`OutboxPort`). · M: `none` · P: `pending`
 - [ ] **T009** · Persistencia: entidades JPA, repositorios, mapper MapStruct y adaptadores (las entidades no salen de `adapter/out/persistence`). · M: `none` · P: `pending`
 - [ ] **T010** · Integración (Testcontainers): FK, `UNIQUE(idempotency_key)`, varias intenciones por reserva, trigger anti-mutación en `charge_record`. · M: `none` · P: `pending`
 - [ ] **T011** · Prueba de publicación en *outbox* en la misma transacción que la intención (si falla una, falla la otra). · M: `none` · P: `pending`
 - [ ] **T012** · ACL de la pasarela: `ChargeGatewayRequest/Result`, `MercadoPagoPaymentRequest/Response`, `MercadoPagoChargeAdapter.send` con `X-Idempotency-Key` por intento, sin PAN/CVV/vencimiento. Condicionada a **OQ-UC05-01** (`payer.email`, `payment_method_id`…) y **OQ-UC05-08**. · M: `none` · P: `pending`
 - [ ] **T013** · Pruebas WireMock del envío: cuerpo según contrato, un solo `transaction_amount`, cabecera idempotente, `BigDecimal` sin pérdida (RNF-001, RNF-002, RF-011, RF-015). · M: `none` · P: `pending`
-- [ ] **T014** · *Worker*: `ChargeCommandListener` + `SendChargeToGatewayService` con timeout 10 s y *circuit breaker*; timeout/`502`/`503` → `FALLA_COMUNICACION` y reintento con la **misma** clave; `400` de token → sin reintento (OQ-UC05-06). · M: `none` · P: `pending`
-- [ ] **T015** · Pruebas del *worker*: reintentos con misma clave, `FALLA_COMUNICACION` no es rechazo, `400` no se reintenta (RF-013, RNF-003). · M: `none` · P: `pending`
+- [ ] **T014** · *Worker*: `ChargeCommandListener` + `SendChargeToGatewayService` con timeout 10 s y *circuit breaker*; guarda el id de pago de MP en `external_reference`; timeout/`502`/`503` → `FALLA_COMUNICACION` y reintento con la **misma** clave; `400` de token → sin reintento y la intención queda `RECHAZADO` con `status_detail` técnico. · M: `none` · P: `pending`
+- [ ] **T015** · Pruebas del *worker*: reintentos con misma clave, `FALLA_COMUNICACION` no es rechazo, `400` no se reintenta y deja `RECHAZADO` técnico (RF-013, RNF-003). · M: `none` · P: `pending`
 - [ ] **T016** · **`ce005_sin_datos_sensibles_persistidos_ni_en_logs`** (CE-005): el esquema no tiene columnas de PAN/CVV/vencimiento; el token no aparece en logs ni en `outbox_message`; solo tokens y metadatos no sensibles. · M: `none` · P: `pending`
 
 ### Phase 4: US2 — Registrar el resultado del cobro (HU2; RF-005…RF-008, RF-012, RF-014; RNF-003, RNF-005; CE-001, CE-003, CE-004, CE-006, CE-007)
@@ -291,7 +292,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 - [ ] **T017** · Pruebas de `RegisterChargeResultService`: aprobado/capturado, en proceso, rechazado, cancelado, expirado; repetido no altera el registro; resultado sin intención → `operational_failure` y sin `ChargeRecord`. · M: `none` · P: `pending`
 - [ ] **T018** · `RegisterChargeResultService`: actualiza siempre la intención; crea `ChargeRecord` solo en `CAPTURADO`, en la misma transacción, con `charge_intent_id`, propietario, embarcación y desglose (D-UC05-06). Respuesta técnica y webhook pasan por aquí (D-UC05-08). · M: `none` · P: `pending`
 - [ ] **T019** · Webhook: `GatewayWebhookController` + `MercadoPagoSignatureVerifier` (HMAC-SHA256 del contrato), validación de payload, acuse tras persistencia durable (D-UC05-05) y pruebas MockMvc (401, 400, 200 duplicado, 500). Compartido, ver OQ-UC05-07. · M: `none` · P: `pending`
-- [ ] **T020** · Procesamiento asíncrono de la notificación: consume el mensaje, consulta `fetchPayment` y llama a `RegisterChargeResultUseCase`. Condicionada a **OQ-UC05-05**. · M: `none` · P: `pending`
+- [ ] **T020** · Procesamiento asíncrono de la notificación: consume el mensaje, localiza la intención por `external_reference`, consulta `fetchPayment` y llama a `RegisterChargeResultUseCase`; sin intención asociada → `operational_failure`. · M: `none` · P: `pending`
 - [ ] **T021** · `MercadoPagoChargeAdapter.fetchPayment` y pruebas WireMock (`approved`, `rejected`, `expired`, `in_process`). · M: `none` · P: `pending`
 - [ ] **T022** · `ExpireStaleAuthorizationsService` + `AuthorizationExpiryJob` (ShedLock opcional) y **`ce007_autorizacion_expirada_registrada_sin_asumir_fondos`** (RF-014, RNF-005, CE-007). Condicionada a **OQ-UC05-03**. · M: `none` · P: `pending`
 - [ ] **T023** · `ReconcileChargeIntentsService` + registro en `GatewayReconciliationJob` (compartido): reintenta/consulta intenciones sin resultado definitivo **con la misma clave** (RNF-003). · M: `none` · P: `pending`
@@ -305,20 +306,20 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 ### Phase 5: Polish & Cross-Cutting Concerns
 
 - [ ] **T030** · ArchUnit: `domain` sin Spring/JPA/Jackson; `application` sin JPA/MapStruct; webhook/listener/jobs sin repositorios; `ChargeRecord` sin *setters*; ningún otro UC calcula tarifas aquí. · M: `none` · P: `pending`
-- [ ] **T031** · Alinear contratos: ejemplo de `X-Idempotency-Key` en `pasarela-comando-cobro.md` (D-UC05-04), `status_detail`/`requested_amount` en general-plan §4 (D-UC05-02). Cambios solo tras acuerdo de los tres (guía §6). · M: `none` · P: `pending`
+- [ ] **T031** · Alinear documentos: ejemplo de `X-Idempotency-Key` en `pasarela-comando-cobro.md` (clave por intento) y columnas `status_detail`/`requested_amount` en general-plan §4. · M: `none` · P: `pending`
 - [ ] **T032** · Cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]). · M: `none` · P: `pending`
 - [ ] **T033** · `./mvnw clean verify` y ejecución de CE-001…CE-007. · M: `none` · P: `pending`
 
 ## Dependencies & Execution Order
 
 ```text
-UC11·T001–T009 (compartido) ─> T001 ─> T002 ─> T003 ─> T004 ─> T005 ─> T006 ─> T007 ─> T008 ─> T009 ─> T010 ─> T011
-                                                                                            └──────────────> T012 ─> T013 ─> T014 ─> T015 ─> T016
+UC11·T001–T009 + UC11·T046 (compartido) ─> T001 ─> T002 ─> T003 ─> T004 ─> T005 ─> T006 ─> T007 ─> T008 ─> T009 ─> T010 ─> T011
+                                                                                                    └──────────────> T012 ─> T013 ─> T014 ─> T015 ─> T016
 T017 (pruebas) ─> T018 ─> T019 ─> T020 ─> T021 ─> T022 ─> T023 ─> T024 ─> T025 ─> T026…T029 ─> T030 ─> T031 ─> T032 ─> T033
 ```
 
 - **Bloquea a otros planes**: T005 (métodos de `ChargeIntentRepository`) bloquea UC06 y UC09; T006 (firma de `ProcessChargeUseCase`) bloquea UC07; T002 (migración V3x y función de inmutabilidad) debe ir antes de UC09 y del bloque C (FK de `refund_intent` y `settlement_intent` a `charge_intent`).
-- **Riesgos de secuencia**: T001/T008 dependen de D-UC05-01; T012 de OQ-UC05-01; T020 de OQ-UC05-05; T022 de OQ-UC05-03.
+- **Riesgos de secuencia**: T012 depende de OQ-UC05-01; T022 de OQ-UC05-03.
 
 ## Notes
 
@@ -327,14 +328,3 @@ T017 (pruebas) ─> T018 ─> T019 ─> T020 ─> T021 ─> T022 ─> T023 ─> 
 - Etiquetas: `[SPEC]`, `[CONV]` (general-plan o inferido), `[PEND]`/`[NEEDS CLARIFICATION]` (sin definir).
 - Los valores numéricos de los ejemplos son ilustrativos.
 
-## Checklist de auto-revisión
-
-- [x] Estructura idéntica a `plan-template.md` (Summary con trazabilidad, Technical Context, Project Structure, fases `T0NN`/`M`/`P`, Dependencies, Notes).
-- [x] Sin placeholders ni tareas de ejemplo; sin etiquetas "Option 1/2".
-- [x] Fecha `2026-10-09` y enlace a `spec.md`.
-- [x] Reglas marcadas con `[SPEC]`, `[CONV]`, `[PEND]` o `[NEEDS CLARIFICATION]`.
-- [x] Discrepancias D-UC05-01 a D-UC05-08 y OQ-UC05-01 a OQ-UC05-09 con IDs, sin resolver en silencio.
-- [x] Cada RF/RNF/CE/HU trazado a componente y tarea; cada CE con prueba `ceXXX_…`.
-- [x] Puertos expuestos con firma (`ProcessChargeUseCase`).
-- [x] Referencias a tareas de otro plan con la forma `UC11·T0NN`.
-- [ ] Pendiente del responsable: confirmar D-UC05-01 a D-UC05-03 en el canal antes de la consolidación.
