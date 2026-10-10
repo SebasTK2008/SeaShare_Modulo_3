@@ -198,7 +198,7 @@ seashare-m3/
 | UC13 | `GetFinancialReportUseCase`, `ExportFinancialReportUseCase` | `FinancialReportQueryPort` | `web` | agregación sobre las 4 tablas inmutables | Períodos fijos; neto sin doble contabilizar la comisión; variación porcentual no calculable si el anterior es 0 |
 
 
-## 4. Modelo de datos (PostgreSQL)
+## 4.1 Modelo de datos (PostgreSQL)
 
 Convenciones: `NUMERIC(18,4)` para dinero y porcentajes, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de los UC 02, 03, 04, 05, 09, 10, 11, 12 y 13]**, `timestamptz` para instantes, UUID v4 como identificadores (única excepción: `financial_parameters.id = 1`, entero fijo del singleton), migraciones versionadas con Flyway.
 
@@ -235,6 +235,203 @@ Una intención que no alcanza éxito confirmado (rechazada, cancelada, expirada,
 
 **Inmutabilidad**: además de no exponer *setters* en el dominio, las cuatro tablas `*_record` tienen un trigger que rechaza `UPDATE` y `DELETE`, y el usuario de la aplicación no recibe esos privilegios.
 
+### 4.2 Diagrama Entidad-Relación
+
+```mermaid
+%%{init: {"theme": "dark"}}%%
+erDiagram
+    financial_parameters {
+        int id PK
+        numeric commission_pct
+        numeric insurance_fee_per_passenger
+        numeric weekend_increase_pct
+        numeric high_season_increase_pct
+        datetime updated_at
+        string updated_by
+    }
+
+    reservation_information {
+        uuid reservation_id PK
+        uuid boat_id
+        numeric base_rate
+        datetime start_date
+        datetime end_date
+        int passengers
+        uuid owner_id
+        int max_capacity
+        numeric rental_amount
+        numeric insurance_amount
+        numeric deposit_amount
+        numeric total_amount
+        numeric commission_pct_applied
+        numeric insurance_fee_per_passenger_applied
+        datetime calculated_at
+    }
+
+    operational_failure {
+        uuid id PK
+        string use_case
+        uuid reservation_id FK
+        string reason
+        string payload_ref
+        datetime created_at
+        boolean resolved
+    }
+
+    deposit_disposition {
+        uuid reservation_id PK, FK
+        datetime completed_at
+        string dispute_id
+        string dispute_status
+        string disposition
+    }
+
+    dispute_event_log {
+        uuid id PK
+        uuid reservation_id FK
+        string dispute_id
+        string event_key
+        string status
+        datetime status_changed_at
+        datetime processed_at
+    }
+
+    reservation_status_log {
+        uuid id PK
+        uuid reservation_id FK
+        string status
+        string operation_type
+        string idempotency_key
+        datetime status_changed_at
+        datetime processed_at
+        string outcome
+    }
+
+    charge_intent {
+        uuid id PK
+        uuid reservation_id FK
+        string idempotency_key
+        string status
+        numeric amount
+        string payment_token_ref
+        string payment_method_type
+        string last_four
+        string external_reference
+        datetime authorization_expires_at
+        datetime created_at
+        int version
+    }
+
+    charge_record {
+        uuid id PK
+        uuid charge_intent_id FK
+        uuid reservation_id FK
+        uuid owner_id
+        uuid boat_id
+        numeric amount
+        numeric rental_amount
+        numeric insurance_amount
+        numeric deposit_amount
+        string payment_method_type
+        string last_four
+        string external_reference
+        datetime created_at
+    }
+
+    refund_intent {
+        uuid id PK
+        uuid reservation_id FK
+        string trigger
+        string scope
+        numeric amount
+        uuid charge_intent_id FK
+        string idempotency_key
+        string status
+        string external_reference
+    }
+
+    refund_record {
+        uuid id PK
+        uuid refund_intent_id FK
+        uuid reservation_id FK
+        uuid owner_id
+        uuid boat_id
+        string dispute_id
+        numeric amount
+        string detail
+        numeric transaction_cost
+        string external_reference
+        datetime created_at
+    }
+
+    settlement_intent {
+        uuid id PK
+        uuid reservation_id FK
+        string trigger
+        string scope
+        numeric amount
+        numeric commission_amount
+        numeric deposit_amount
+        uuid charge_intent_id FK
+        string idempotency_key
+        string status
+    }
+
+    settlement_record {
+        uuid id PK
+        uuid settlement_intent_id FK
+        uuid reservation_id FK
+        uuid owner_id
+        uuid boat_id
+        numeric amount
+        string detail
+        numeric rental_gross_amount
+        numeric insurance_amount
+        numeric deposit_amount
+        string external_reference
+        datetime created_at
+    }
+
+    commission_record {
+        uuid id PK
+        uuid settlement_record_id FK
+        uuid settlement_intent_id FK
+        uuid reservation_id FK
+        uuid owner_id
+        uuid boat_id
+        numeric amount
+        datetime created_at
+    }
+
+    outbox_message {
+        uuid id PK
+        string exchange
+        string routing_key
+        string payload
+        datetime created_at
+        datetime published_at
+    }
+
+    shedlock {
+        string name PK
+    }
+
+    financial_parameters ||--o{ reservation_information : configures
+    reservation_information ||--o{ charge_intent : has
+    reservation_information ||--o| deposit_disposition : resolves
+    reservation_information ||--o{ dispute_event_log : records
+    reservation_information ||--o{ reservation_status_log : tracks
+    reservation_information ||--o{ operational_failure : reports
+
+    charge_intent ||--o| charge_record : records
+    charge_intent ||--o{ refund_intent : originates
+    charge_intent ||--o{ settlement_intent : originates
+
+    refund_intent ||--o| refund_record : records
+    settlement_intent ||--o| settlement_record : records
+    settlement_intent ||--o| commission_record : determines
+    settlement_record ||--o| commission_record : contains
+```
 ---
 
 ## 5. Conexiones con otros módulos y mensajería (RabbitMQ)
