@@ -1,0 +1,37 @@
+name: Git Flow Enforcer
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - develop
+
+jobs:
+  validate-branches:
+    name: Validar ramas de origen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comprobar nomenclatura de Git Flow
+        run: |
+          TARGET="${{ github.base_ref }}"
+          SOURCE="${{ github.head_ref }}"
+          
+          echo "Evaluando PR desde '$SOURCE' hacia '$TARGET'"
+          
+          if [[ "$TARGET" == "develop" ]]; then
+            # Hacia develop solo se permite feature/*, bugfix/* o hotfix/*
+            if [[ ! "$SOURCE" =~ ^(feature|bugfix|hotfix)/.*$ ]]; then
+              echo " ERROR: Los PRs hacia 'develop' solo pueden venir de ramas 'feature/*', 'bugfix/*' o 'hotfix/*'."
+              exit 1
+            fi
+            echo " Validación exitosa para develop."
+            
+          elif [[ "$TARGET" == "main" ]]; then
+            # Hacia main solo se permite release/* o hotfix/*
+            if [[ ! "$SOURCE" =~ ^(release|hotfix)/.*$ ]]; then
+              echo " ERROR: Los PRs hacia 'main' solo pueden venir de ramas 'release/*' o 'hotfix/*'."
+              exit 1
+            fi
+            echo " Validación exitosa para main."
+          fi
