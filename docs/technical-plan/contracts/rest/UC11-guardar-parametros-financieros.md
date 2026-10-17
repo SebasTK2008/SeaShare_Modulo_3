@@ -60,7 +60,7 @@ El Administrador Financiero guarda la configuración financiera global (comisió
 `200 OK` — `Content-Type: application/json`:
 
 ```json
-{ "version": 8 }
+{ "version_number": 8 }
 ```
 
 **[CONV]** Devuelve el número de la nueva versión vigente para facilitar la trazabilidad (general-plan D-24). Un `204 No Content` también sería válido; se prefiere exponer la versión.

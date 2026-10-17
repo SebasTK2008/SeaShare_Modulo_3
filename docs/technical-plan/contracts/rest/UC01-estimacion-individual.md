@@ -17,7 +17,7 @@ Reservas delega el cálculo exacto de una embarcación para un rango de fechas y
 
 ## 2. Petición
 
-`POST /api/v1/estimates/individual` **[CONV]** (OQ-02; el SPEC RF-004 habla de "un *endpoint*" para ambas modalidades)
+`POST /api/v1/estimates/individual` **[CONV]** (el SPEC RF-004 habla de "un *endpoint*" para ambas modalidades)
 
 ### Headers
 
@@ -34,7 +34,7 @@ Reservas delega el cálculo exacto de una embarcación para un rango de fechas y
 | `boat_id` | UUID | Sí | Embarcación a estimar | [SPEC HU2: "enviando el ID"] |
 | `start_date` | date | Sí | Fecha de inicio. Define la tarifa base aplicada a toda la duración | [SPEC HU2, RF-003] |
 | `end_date` | date | Sí | Fecha de fin. Puede ser igual a `start_date` (1 día) | [SPEC HU2, casos extremos] |
-| `passengers` | integer | Sí | Número de pasajeros. El SPEC no fija un rango para UC01 (la capacidad máxima no es un insumo de este caso de uso) | [SPEC HU2] — rango [PEND] |
+| `passengers` | integer | Sí | Número de pasajeros (entero ≥ 1; el SPEC no fija un máximo y la capacidad no es un insumo de UC01) | [SPEC HU2] + [CONV] |
 
 ```json
 {
@@ -47,13 +47,13 @@ Reservas delega el cálculo exacto de una embarcación para un rango de fechas y
 
 ## 3. Reglas de procesamiento
 
-1. **Validación previa a cualquier cálculo** [SPEC casos extremos]: formato de fecha inválido, `start_date` en el pasado o `end_date` anterior a `start_date` ⇒ solicitud inválida, error controlado, sin cálculo. La comparación con "hoy" usa la zona horaria de negocio ([PEND] OQ-04).
+1. **Validación previa a cualquier cálculo** [SPEC casos extremos]: formato de fecha inválido, `start_date` en el pasado o `end_date` anterior a `start_date` ⇒ solicitud inválida, error controlado, sin cálculo. La comparación con "hoy" usa la zona horaria de negocio (`America/Bogota`; general-plan D-12).
 2. `start_date == end_date` es **válido** y equivale a 1 día; solo es inválida una fecha de fin anterior [SPEC casos extremos].
 3. **Días** = cantidad **inclusiva** entre inicio y fin: del 20 al 22 son 3 días [SPEC RF-003; UC04 RF-003 usa la misma regla].
 4. La tarifa base se consulta a Flota por el identificador y se le aplica la tarifa dinámica **de la fecha de inicio**; esa tarifa se usa para toda la duración [SPEC RF-003, UC02].
 5. **Fórmula**: `estimated_total = (tarifa base final × días) + (tarifa de seguro × pasajeros)` [SPEC RF-002/RF-003].
 6. El campo `warning` es **obligatorio** y su texto proviene del sistema [SPEC HU2, escenario 1].
-7. Embarcación sin tarifa base ⇒ error controlado [SPEC casos extremos]. El SPEC no distingue "sin tarifa" de "no reconocida por Flota" en la modalidad individual; ambos devuelven `BASE_RATE_NOT_AVAILABLE` ([PEND] OQ-11).
+7. Embarcación sin tarifa base ⇒ error controlado [SPEC casos extremos]. El SPEC no distingue "sin tarifa" de "no reconocida por Flota" en la modalidad individual; ambos devuelven `BASE_RATE_NOT_AVAILABLE`.
 8. Falla de Flota (caída, *timeout*, inalcanzable o respuesta inválida) ⇒ `503 FLEET_UNAVAILABLE`, sin valores asumidos [SPEC casos extremos, RNF-003].
 9. No existe **versión vigente** de los parámetros financieros o falta el valor requerido (tarifa de seguro o incremento que exige la fecha de inicio) ⇒ `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`, sin estimación parcial [SPEC casos extremos].
 
@@ -91,13 +91,13 @@ Texto exacto de `warning` (sin punto final, como en el SPEC):
 
 ## 5. Respuestas de error
 
-**Orden de validación** [CONV] (§4.3 del índice): E3 → E4 → E6 → E7 → E8 (E1/E2 retiradas: sin autenticación; E5 no aplica: no hay recurso en la URL). Las validaciones de E4 (fechas y tipos) ocurren antes de consultar los parámetros financieros (E6) o llamar a Flota (E7); si Flota responde y la embarcación no tiene tarifa o no la conoce, es E8, no E7.
+**Orden de validación** [CONV] (§4.3 del índice): E1 → E2 → E4 → E5 → E6 (E3 no aplica: no hay recurso en la URL). Las validaciones de E2 (fechas y tipos) ocurren antes de consultar los parámetros financieros (E4) o llamar a Flota (E5); si Flota responde y la embarcación no tiene tarifa o no la conoce, es E6, no E5.
 
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `INVALID_DATE_RANGE` | Formato de fecha inválido, inicio en el pasado o fin anterior al inicio | No | [SPEC casos extremos] |
 | 400 | `VALIDATION_ERROR` | Cuerpo no es JSON o faltan/tienen tipo incorrecto `boat_id` o `passengers` | No | [CONV] |
-| 422 | `BASE_RATE_NOT_AVAILABLE` | Embarcación sin tarifa base o no reconocida por Flota | No | [SPEC casos extremos] + OQ-11 |
+| 422 | `BASE_RATE_NOT_AVAILABLE` | Embarcación sin tarifa base o no reconocida por Flota | No | [SPEC casos extremos] + [CONV] |
 | 503 | `FLEET_UNAVAILABLE` | Flota caída, *timeout*, inalcanzable o con respuesta inválida | Sí | [SPEC casos extremos, RNF-003] |
 | 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | No existe versión vigente de los parámetros o falta el valor requerido | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |

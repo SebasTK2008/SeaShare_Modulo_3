@@ -17,7 +17,7 @@ Reservas envía una lista de identificadores de embarcación y recibe, ya calcul
 
 ## 2. Petición
 
-`POST /api/v1/estimates/batch` **[CONV]** (OQ-02)
+`POST /api/v1/estimates/batch` **[CONV]**
 
 ### Headers
 
@@ -31,7 +31,7 @@ Reservas envía una lista de identificadores de embarcación y recibe, ya calcul
 
 | Campo | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
-| `boat_ids` | array de UUID | Sí | Identificadores de las embarcaciones a estimar. Puede ser `[]`. Máximo `seashare.estimates.max-batch-size` (por defecto **50**) | [SPEC HU1 flujo 2: "lista de identificadores (`boat_ids`)"; RF-006: máximo "50 o 100"] — el valor 50 es [PEND] D-22 |
+| `boat_ids` | array de UUID | Sí | Identificadores de las embarcaciones a estimar. Puede ser `[]`. Máximo `seashare.estimates.max-batch-size` (por defecto **50**) | [SPEC HU1 flujo 2: "lista de identificadores (`boat_ids`)"; RF-006: máximo "50 o 100"] — 50 queda fijado (general-plan D-22) |
 
 El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de pasajeros [SPEC Entidades Clave: `SolicitudEstimacionLote`]. El sistema fija siempre la fecha actual como fecha de evaluación, 1 día de duración y 1 pasajero (reglas 6 y 11).
 
@@ -54,7 +54,7 @@ El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de 
 2. **Más identificadores que el máximo** → se rechaza **sin procesar ningún elemento** [SPEC RF-006, casos extremos "1,000 embarcaciones"]. Reservas debe partir la solicitud en lotes.
 3. El sistema consulta a Flota **una sola vez enviando la lista de IDs** [SPEC RF-005] — ver [`../external/flota-consulta-tarifas-base.md`](../external/flota-consulta-tarifas-base.md) — e invoca UC02 por cada embarcación.
 4. **Identificadores inexistentes**: se omiten (Flota no los confirma) y se estima solo a las reconocidas con tarifa [SPEC casos extremos].
-5. **Embarcación sin tarifa base** (nula o faltante): no se estima, el resto del lote se devuelve y nunca se muestra un precio asumido [SPEC casos extremos]. El SPEC permite "excluirla **o** marcarla"; este contrato la **marca** en `unavailable` ([PEND] OQ-11).
+5. **Embarcación sin tarifa base** (nula o faltante): no se estima, el resto del lote se devuelve y nunca se muestra un precio asumido [SPEC casos extremos]; este contrato la **marca** en `unavailable`, y los identificadores no reconocidos por Flota se **omiten** (no aparecen en `estimates` ni en `unavailable`).
 6. **Supuestos fijos del lote** (no son valores por defecto configurables): duración **1 día**, **1 pasajero** y **fecha actual** como fecha de evaluación de la tarifa [SPEC RF-002, HU1].
 7. **Fórmula**: `estimated_total = (tarifa base final × duración en días) + (tarifa de seguro × pasajeros)` [SPEC RF-002]. La tarifa base final ya incluye la tarifa dinámica (UC02).
 8. La estimación **no incluye** el depósito de garantía ni penalidades o ajustes posteriores [SPEC RF-002].
@@ -74,7 +74,7 @@ El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de 
 | `estimates` | array | Una entrada por embarcación estimada | [SPEC HU1 flujo 4: "arreglo de estimaciones"] |
 | `estimates[].boat_id` | UUID | Identificador de la embarcación | [SPEC] |
 | `estimates[].estimated_total` | string decimal | Costo estimado | [SPEC RF-002] |
-| `unavailable` | array | Embarcaciones reconocidas **sin tarifa base** | [SPEC casos extremos] + OQ-11 |
+| `unavailable` | array | Embarcaciones reconocidas **sin tarifa base** | [SPEC casos extremos] + [CONV] |
 | `unavailable[].boat_id` | UUID | Identificador | — |
 | `unavailable[].reason` | string | `SIN_TARIFA_BASE` ("sin estimación disponible") | [SPEC casos extremos] |
 
@@ -102,7 +102,7 @@ Lista vacía:
 
 ## 5. Respuestas de error
 
-**Orden de validación** [CONV] (§4.3 del índice): E3 → E4 → E6 → E7 (E1/E2 retiradas: sin autenticación; E5 no aplica: no hay recurso en la URL; E8 no produce error en el lote: los identificadores no reconocidos se omiten y los sin tarifa se reportan en `unavailable`). La petición se valida completa (E4) antes de consultar los parámetros financieros (E6) o llamar a Flota (E7).
+**Orden de validación** [CONV] (§4.3 del índice): E1 → E2 → E4 → E5 (E3 no aplica: no hay recurso en la URL; E6 no produce error en el lote: los identificadores no reconocidos se omiten y los sin tarifa se reportan en `unavailable`). La petición se valida completa (E2) antes de consultar los parámetros financieros (E4) o llamar a Flota (E5).
 
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|

@@ -12,7 +12,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El sistema envía una solicitud de liberación (de una autorización) o reembolso (de un cobro capturado) a la Pasarela de Pago (Mercado Pago). Esto ocurre ante cancelaciones (UC07) o disputas rechazadas (UC08) [SPEC HU1, HU2].
+El sistema envía una solicitud de reembolso (total o parcial) de un cobro aprobado a la Pasarela de Pago (Mercado Pago). Esto ocurre ante cancelaciones (UC07) o disputas rechazadas (UC08) [SPEC HU1, HU2].
 
 ## 2. Petición (Llamada a Mercado Pago)
 
@@ -27,7 +27,7 @@ Donde `{id}` corresponde al ID del pago original devuelto por Mercado Pago (`ori
 | Header | Obligatorio | Valor |
 |---|---|---|
 | `Authorization` | Sí | `Bearer <ACCESS_TOKEN>` (requisito de la integración con Mercado Pago; no es seguridad del proyecto — general-plan §7.1) |
-| `X-Idempotency-Key` | Sí | Clave única (ej. `reembolso-<reserva>-<estado>`) |
+| `X-Idempotency-Key` | Sí | Clave idempotente por intento (ej. `reembolso-<reservation_id>-<status>-<status_changed_at>`; general-plan D-33) |
 
 ### Body (Payload)
 

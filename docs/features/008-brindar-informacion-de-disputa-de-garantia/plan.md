@@ -7,7 +7,7 @@
 
 UC08 es el consumidor asíncrono y unidireccional que recibe desde Reservas el estado de una disputa de garantía. El mensaje solo contiene `reservation_id`, `dispute_id`, `status`, `status_changed_at` y `event_key`; nunca recibe motivos, orígenes, montos ni instrucciones de pasarela [SPEC RF-001, RF-003, RF-007, RNF-001].
 
-`PENDING` registra el evento sin mover dinero. `REJECTED` consulta el depósito y cobro internos y solicita a UC09 el reembolso/liberación total; `COMPLETED` solicita a UC10 la liquidación total. Los eventos se procesan con idempotencia, exclusión mutua y control de concurrencia. UC08 no calcula la ventana de 24 horas ni ejecuta jobs [SPEC RF-004..RF-010].
+`PENDING` registra el evento sin mover dinero. `REJECTED` consulta el depósito y cobro internos y solicita a UC09 el reembolso total del depósito por `/refunds` (general-plan D-32); `COMPLETED` solicita a UC10 la liquidación total. El desenlace del depósito (reembolso o liquidación) se registra con un único *compare-and-set* en `deposit_disposition`, del que UC08 es dueño (general-plan D-34). Los eventos se procesan con idempotencia, exclusión mutua y control de concurrencia. UC08 no calcula la ventana de 24 horas ni ejecuta jobs [SPEC RF-004..RF-010].
 
 Enfoque técnico: Spring Boot único con arquitectura hexagonal (`domain` / `application` / `infrastructure`), listener AMQP, PostgreSQL, `deposit_disposition`, `dispute_event_log`, `FailureRecorderPort`, y puertos de entrada de UC09/UC10. Los errores siguen `contracts/README.md` §3.5 y §4.4: `ack` para mensajes inválidos, desconocidos, duplicados o sin datos financieros; `nack`/backoff/DLQ para fallas transitorias.
 
@@ -38,11 +38,11 @@ Enfoque técnico: Spring Boot único con arquitectura hexagonal (`domain` / `app
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
 **Primary Dependencies**: Spring Boot 4.1.1; Web MVC, Validation, Data JPA, AMQP, Actuator, Flyway, MapStruct, Resilience4j, Micrometer/Prometheus, ArchUnit y ShedLock opcional. UC08 usa especialmente AMQP, JPA, Validation, PostgreSQL, RabbitMQ, Awaitility y Testcontainers. Las dependencias pertenecen al núcleo compartido; este plan no modifica `pom.xml`. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
 **Storage**: PostgreSQL 16+, `NUMERIC(18,4)` y `timestamptz`. UC08 es dueño de `deposit_disposition` y `dispute_event_log`; lee `reservation_information` y `charge_record` mediante puertos de sus dueños [general-plan §4].  
-**Messaging**: RabbitMQ 3.13+, exchange topic durable `seashare.reservations`, routing key `reservation.dispute.updated`, cola `finance.guarantee-dispute.v1`, mensajes persistentes y DLQ `finance.guarantee-dispute.v1.dlq` [D-22; contrato UC08].
+**Messaging**: RabbitMQ 3.13+, exchange topic durable `seashare.reservations`, routing key `reservation.dispute.updated`, cola `finance.guarantee-dispute.v1`, mensajes persistentes y DLQ `finance.guarantee-dispute.v1.dlq` [contrato UC08].
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers PostgreSQL/RabbitMQ, Awaitility, ArchUnit y pruebas de contrato AMQP [CONV].  
 **Target Platform**: contenedores Docker sobre Linux; desarrollo con Docker Compose [SPEC general-plan].  
 **Project Type**: servicio backend único hexagonal, sin frontend propio.  
-**Performance Goals**: el SPEC no define SLA numérico [NEEDS CLARIFICATION OQ-UC08-01]; se exige idempotencia, backoff y ausencia de bloqueo permanente.  
+**Performance Goals**: Sin meta propia: el SPEC 08 no define SLA numérico; rigen idempotencia, reintentos con backoff (5 intentos, base 1 s) y ausencia de bloqueo permanente [CONV].  
 **Constraints**: `BigDecimal` a 4 decimales; importes solo desde registros internos; `PENDING` no mueve dinero; finales son tratamientos del 100 %; un depósito tiene un solo desenlace; sin respuesta al productor; sin sub-resultados parciales ni cron de 24 horas [SPEC RF-004..RF-010].  
 **Scale/Scope**: un consumidor AMQP, dos tablas propietarias, dos puertos consumidos de UC09/UC10, 10 RF + 3 RNF + 6 CE + 1 HU [SPEC 08].
 
@@ -89,7 +89,7 @@ src/main/java/com/seashare/seasharem3/
     └── config/{AmqpConfig,ProblemDetailsConfig,ObservabilityConfig}.java
 
 src/main/resources/db/migration/
-└── dispute_tracking_tables.sql # DDL exacta de UC08; política de versionado global abierta
+└── dispute_tracking_tables.sql # DDL exacta de UC08; 7.ª fase del historial Flyway único (general-plan D-31)
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/ArchitectureTest.java
@@ -102,7 +102,7 @@ src/test/java/com/seashare/seasharem3/
 
 **Structure Decision**: sigue `general-plan.md` §3.2–§3.4: `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`; ningún listener accede directamente a repositorios; DTOs AMQP viven en infraestructura y aplicación trabaja con commands/results.
 
-**Firmas referenciadas**: UC08 publica `OpenDepositTrackingUseCase` para UC07. Consume `RequestRefundUseCase` de UC09 y `RequestSettlementUseCase` de UC10 por sus puertos publicados; no redefine ni implementa esos casos. No expone REST ni responde a Reservas.
+**Firmas referenciadas**: UC08 publica `OpenDepositTrackingUseCase` para UC07 y es dueño de `deposit_disposition` (desenlace con un único *compare-and-set*; general-plan D-34). Consume `RequestRefundUseCase` de UC09 y `RequestSettlementUseCase` de UC10 por sus puertos publicados; no redefine ni implementa esos casos. No expone REST ni responde a Reservas.
 
 ## Reglas de negocio
 
@@ -110,12 +110,12 @@ src/test/java/com/seashare/seasharem3/
 2. **Estados canónicos** [SPEC RF-002, RF-010]: solo `PENDING`, `REJECTED`, `COMPLETED`; desconocidos/parciales → fallo registrado, `ack`, cero operaciones.
 3. **Idempotencia** [SPEC RF-008; contrato §3.2]: clave `(reservation_id, dispute_id, event_key)`; repetidos no llaman UC09/UC10.
 4. **Pendiente** [SPEC RF-004]: registra y no reembolsa/liquida.
-5. **Rechazado** [SPEC RF-003, RF-005, RF-009A]: recupera depósito/cobro internos y solicita 100 % a UC09; el estado del cobro determina liberación o reembolso.
+5. **Rechazado** [SPEC RF-003, RF-005, RF-009A]: recupera el depósito y el cobro internos y solicita a UC09 el reembolso total (100 %) del depósito por `/refunds` (general-plan D-32).
 6. **Completado** [SPEC RF-006]: recupera depósito interno y solicita 100 % a UC10.
 7. **Sin montos asumidos** [SPEC RF-007]: ausencia de depósito/cobro confirmado → fallo controlado sin llamada financiera.
 8. **Exclusión mutua** [SPEC RF-008; general-plan §3.2]: un depósito solo termina en reembolso o liquidación.
 9. **Ventana de 24 horas** [SPEC RF-009, RF-009A]: Reservas envía `REJECTED`; UC08 no calcula vencimientos ni ejecuta jobs.
-10. **Ack/nack** [CONV README §4.4]: inválidos/desconocidos/ausencia/duplicado → `ack` + fallo; BD/broker transitorio → `nack`, backoff y DLQ tras 3–5 reintentos.
+10. **Ack/nack** [CONV README §4.4]: inválidos/desconocidos/ausencia/duplicado → `ack` + fallo; BD/broker transitorio → `nack`, backoff exponencial (5 intentos, base 1 s) y, al agotarlos, DLQ + registro en `operational_failure`.
 11. **Unidireccional** [SPEC RF-009; contrato §4]: no se publica respuesta de negocio.
 12. **Precisión** [SPEC RNF-002; README §3.1]: montos `BigDecimal`/`NUMERIC(18,4)`, sin redondeo prematuro.
 
@@ -158,25 +158,26 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 - **`ce003_finales_generan_una_sola_consecuencia_total`**: rechazado llama una vez a UC09 y completado una vez a UC10, por 100 %.
 - **`ce004_montos_solo_desde_registros_internos`**: ningún monto del mensaje llega a la operación financiera.
 - **`ce005_concurrencia_idempotente`**: eventos concurrentes no duplican desenlace.
-- **`ce006_sin_subresultados_parciales`**: liberación/retención parcial no se procesa.
+- **`ce006_sin_subresultados_parciales`**: reembolso o liquidación parcial no se procesa.
 
-## Discrepancias y preguntas abiertas
+## Decisiones de diseño (D-UC08-xx)
 
-| ID | Descripción | Propuesta por defecto | Estado |
+Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC08` son decisiones del plan general (§9).
+
+| ID | Descripción | Decisión | Estado |
 |---|---|---|---|
-| **OQ-UC08-01** | El SPEC no define SLA ni número exacto de reintentos | heredar backoff general de 3–5 reintentos y medir lag | Abierta |
-| **D-UC08-01** | UC08 es dueño de `deposit_disposition` y `dispute_event_log`; UC09/UC10 deben publicar firmas | UC08 conserva la DDL exacta de ambas tablas, consume los `port.in` de UC09/UC10 y no redefine sus firmas | Aplicada |
-| **D-UC08-02** | Orden definitivo de migraciones | documentar la DDL exacta de UC08; la política y orden global permanecen abiertos (OQ-CROSS-07 / D-CROSS-08) | Abierta; requiere decisión externa |
-| **D-UC08-03** | Tratamiento de errores en cola | ack + fallo para lógica; nack/DLQ para transitorios | Decidida por contrato |
-| **D-UC08-04** | Carrera entre creación de seguimiento y actualización de depósito | reintento acotado o creación idempotente de la fila bajo `ReservationLockPort` | Aplicada (D-13) |
-| **OQ-UC08-02** | Seguridad transversal para AMQP | **Cerrada — Seguridad fuera de alcance**: general-plan §7.1 y D-21; el sistema no implementa autenticación/autorización para AMQP y no se crea `SecurityConfig` propio ni compartido | **Cerrada** |
+| **D-UC08-01** | UC08 es dueño de `deposit_disposition` y `dispute_event_log`; UC09/UC10 publican sus firmas | UC08 conserva la DDL exacta de ambas tablas, consume los `port.in` de UC09/UC10 y no redefine sus firmas | Aplicada |
+| **D-UC08-02** | Orden definitivo de migraciones | Historial Flyway único ordenado por fase (general-plan D-31); UC08 es la 7.ª fase (después de UC10) | Decidida |
+| **D-UC08-03** | Tratamiento de errores en cola | `ack` + fallo para lógica; `nack`/DLQ para transitorios | Aplicada |
+| **D-UC08-04** | Carrera entre creación de seguimiento y actualización de depósito | Reintento acotado o creación idempotente de la fila bajo `ReservationLockPort` (general-plan D-15) | Aplicada |
+| **D-UC08-05** | Seguridad transversal para AMQP | Seguridad fuera de alcance: sin autenticación ni autorización para AMQP y sin `SecurityConfig` propio o compartido (general-plan §7.1; D-21) | Aplicada |
 
 ## Implementation Phases
 
 ### Phase 1: Setup — Compartido
 
-- [ ] **T001** Consumir la configuración AMQP común, Problem Details, `FailureRecorderPort`, `ReservationLockPort`, `OutboxPort` y observabilidad compartida; los fallos se registran con `REQUIRES_NEW`, `reservation_id` nullable, `payload_ref` referencial y procedimiento de reproceso [D-10].
-- [ ] **T002** Configurar exchange, binding, cola quorum y DLQ `<cola>.dlq` según contrato [D-22].
+- [ ] **T001** Consumir la configuración AMQP común, Problem Details, `FailureRecorderPort`, `ReservationLockPort`, `OutboxPort` y observabilidad compartida; los fallos se registran con `REQUIRES_NEW`, `reservation_id` nullable, `payload_ref` referencial y procedimiento de reproceso.
+- [ ] **T002** Configurar exchange, binding, cola quorum y DLQ `<cola>.dlq` según contrato.
 - [ ] **T003** Definir ack/nack, backoff y correlación; sin cron/scheduler propio.
 
 ### Phase 2: Foundational
@@ -188,8 +189,8 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 
 ### Phase 3: US1 — Recibir y procesar disputa (P1)
 
-- [ ] **T008** Implementar servicio: registrar, deduplicar por `(reservation_id, dispute_id, event_key)`, resolver pendientes y persistir disposición; la carrera usa reintento acotado o creación idempotente [D-13].
-- [ ] **T008a** Persistir `deposit_disposition` con CAS explícito: estados finales, rechazo del reembolso cuando corresponda y transición única bajo `ReservationLockPort` [D-CROSS-11].
+- [ ] **T008** Implementar servicio: registrar, deduplicar por `(reservation_id, dispute_id, event_key)`, resolver pendientes y persistir disposición; la carrera usa reintento acotado o creación idempotente [D-15].
+- [ ] **T008a** Persistir `deposit_disposition` con CAS explícito: estados finales, rechazo del reembolso cuando corresponda y transición única bajo `ReservationLockPort`.
 - [ ] **T009** Consultar depósito/cobro internos y llamar exactamente una vez a UC09/UC10 con el total interno.
 - [ ] **T010** Implementar listener con ack para errores no reintentables y nack/DLQ para transitorios.
 - [ ] **T011** Tests de contrato AMQP, listener y ausencia de respuesta.
@@ -208,7 +209,7 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012..T018`.
 
-UC08 consume las firmas publicadas por UC09/UC10 y publica `OpenDepositTrackingUseCase` para UC07. Cualquier cambio a esos planes queda fuera y solo se documenta. UC08 es dueño de la DDL de `deposit_disposition` y `dispute_event_log`; la política de migraciones permanece abierta en OQ-CROSS-07/D-08.
+UC08 consume las firmas publicadas por UC09/UC10 y publica `OpenDepositTrackingUseCase` para UC07. Cualquier cambio a esos planes queda fuera y solo se documenta. UC08 es dueño de la DDL de `deposit_disposition` y `dispute_event_log`; su migración se aplica en la 7.ª fase del historial Flyway único ordenado por fase (general-plan D-31), después de UC10, y no define versiones propias.
 
 ## Notes
 

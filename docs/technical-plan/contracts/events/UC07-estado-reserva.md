@@ -37,7 +37,7 @@ El Sistema de Reservas y Operaciones notifica el estado vigente de una reserva. 
 | `status_changed_at` | datetime | Sí | Fecha y hora en que ocurrió la transición (ISO 8601) | [SPEC RNF-001] |
 | `payment_token_ref` | string | Sí (si `PENDING`) | Token o referencia segura del medio de pago | [SPEC RF-002A, RNF-001] |
 | `payment_method_type` | string | No | Tipo de método de pago (si disponible en `PENDING`) | [SPEC RNF-001] |
-| `payment_metadata` | object | No | Metadatos no sensibles del pago | [SPEC RNF-001] |
+| `payment_metadata` | object | No | Metadatos no sensibles del pago; puede incluir `payer_email` del arrendatario (usado por UC05 para el cobro) | [SPEC RNF-001] + [CONV] |
 
 ```json
 {
@@ -47,7 +47,8 @@ El Sistema de Reservas y Operaciones notifica el estado vigente de una reserva. 
   "payment_token_ref": "tok_12345abcdef",
   "payment_method_type": "CREDIT_CARD",
   "payment_metadata": {
-    "last_four": "4242"
+    "last_four": "4242",
+    "payer_email": "arrendatario@example.com"
   }
 }
 ```

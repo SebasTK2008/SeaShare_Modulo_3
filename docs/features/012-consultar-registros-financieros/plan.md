@@ -40,14 +40,14 @@ Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domai
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
 **Primary Dependencies**: Spring Boot 4.1.1; Spring Web MVC, Validation, Data JPA (Hibernate), Actuator, Flyway, MapStruct, Micrometer/Prometheus y ArchUnit. UC12 usa especialmente Web MVC, JPA/read-only query, MockMvc, Testcontainers y pruebas de arquitectura. Las dependencias pertenecen al núcleo compartido; este plan no modifica `pom.xml`. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
-**Storage**: PostgreSQL 16+; UC12 crea `v_financial_records` como `UNION ALL` de `charge_record`, `refund_record`, `settlement_record` y `commission_record`, con `record_id`, orden estable `(created_at DESC, record_id DESC)` y `NULL::text AS external_reference` para comisiones. Usa `NUMERIC(18,4)` y `timestamptz` [D-07].
+**Storage**: PostgreSQL 16+; UC12 crea `v_financial_records` como `UNION ALL` de `charge_record`, `refund_record`, `settlement_record` y `commission_record`, con `record_id`, orden estable `(created_at DESC, record_id DESC)` y `NULL::text AS external_reference` para comisiones. Usa `NUMERIC(18,4)` y `timestamptz` [D-11].
 **Messaging**: N/A para la entrada de UC12; no consume ni publica eventos en este caso de uso.  
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers PostgreSQL y ArchUnit [CONV].  
 **Target Platform**: contenedores Docker sobre Linux; desarrollo local con Docker Compose [SPEC general-plan].  
 **Project Type**: servicio backend único hexagonal, sin frontend propio.  
-**Performance Goals**: consulta paginada indexada por `owner_id`, `reservation_id`, `boat_id` y `created_at`; el SPEC no fija latencia numérica [NEEDS CLARIFICATION OQ-UC12-01]. El diseño evita cargar el histórico completo en memoria.  
+**Performance Goals**: Sin meta propia: el SPEC 12 no fija latencia numérica; consulta paginada indexada por `owner_id`, `reservation_id`, `boat_id` y `created_at`, sin cargar el histórico completo en memoria [CONV].  
 **Constraints**: solo lectura; alcance del Propietario se aplica antes de filtros; tamaño por defecto 10; orden estable sin omisiones/duplicados; `BigDecimal` a 4 decimales; sin Flota, mutaciones ni exportación [SPEC RF-003, RF-007, RF-010, RF-012, RF-013, RNF-002/003].  
-**Scale/Scope**: un endpoint REST, cuatro tipos de registro, dos alcances declarados (`OWNER`/`PLATFORM`), cinco filtros del contrato (`transaction_type`, `owner_id`, `boat_id`, `reservation_id`, fechas/q) y 13 RF + 3 RNF + 5 CE + 2 HU [SPEC 12].
+**Scale/Scope**: un endpoint REST, cuatro tipos de registro, dos alcances declarados (`OWNER`/`PLATFORM`), cinco filtros del contrato (`transaction_type`, `owner_id`, `boat_id`, `reservation_id`, `date_from`/`date_to`) y 13 RF + 3 RNF + 5 CE + 2 HU [SPEC 12].
 
 ## Project Structure
 
@@ -89,30 +89,29 @@ src/main/java/com/seashare/seasharem3/
     └── config/{ProblemDetailsConfig,ObservabilityConfig}.java
 
 src/main/resources/db/migration/
-└── V*__create_financial_records_view.sql # versión sujeta a OQ-CROSS-07/D-08
+└── V*__create_financial_records_view.sql # historial Flyway único: 8.ª fase tras UC08, vista al final (general-plan D-31)
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/ArchitectureTest.java
 ├── contract/FinancialRecordsControllerContractTest.java
 ├── domain/model/FinancialRecordQueryTest.java
 ├── application/service/FinancialRecordsQueryServiceTest.java
-├── infrastructure/adapter/in/web/FinancialRecordsSecurityTest.java   # retirada — seguridad fuera de alcance (general-plan §7.1)
 ├── infrastructure/adapter/out/persistence/FinancialRecordQueryAdapterTest.java
 └── integration/FinancialRecordsPaginationIT.java
 ```
 
 **Structure Decision**: sigue `general-plan.md` §3.2–§3.4. Los VOs compartidos (`Money`, `ReservationId`, `OwnerId`, `ClockPort`) se consumen del núcleo compartido y no se redeclaran. `domain` no depende de Spring/JPA/Jackson; `application` solo depende de `domain`; controller invoca solo `application.port.in`; query adapter implementa `FinancialRecordQueryPort`; no se expone entidad JPA ni se accede a repositorios desde el controller.
 
-**Firmas referenciadas**: UC12 publica `QueryFinancialRecordsUseCase` para su adaptador REST y define la vista que UC13 consume. Consume `FinancialRecordQueryPort`/registros publicados por UC05, UC09 y UC10; no modifica sus planes. Zona horaria: `ClockPort` con `seashare.timezone` [D-23].
+**Firmas referenciadas**: UC12 publica `QueryFinancialRecordsUseCase` para su adaptador REST y define la vista que UC13 consume. Consume `FinancialRecordQueryPort`/registros publicados por UC05, UC09 y UC10; no modifica sus planes. Zona horaria: `ClockPort` con `seashare.timezone` [D-12].
 
 ## Reglas de negocio
 
 1. **Alcance declarado** [SPEC RF-003, RF-011; contrato §3.1]: con alcance declarado `OWNER` se filtra por el `owner_id` declarado y sus reservas asociadas; con alcance declarado `PLATFORM` se consulta la plataforma completa y `owner_id` actúa como filtro opcional. El sistema no valida la identidad declarada (seguridad fuera de alcance; general-plan §7.1).
-2. **Filtros** [SPEC RF-002; contrato §2]: `CHARGE`, `REFUND`, `SETTLEMENT`, `COMMISSION`, propietario y embarcación; contrato añade reserva, fechas y `q` como filtros técnicos. Todos se combinan con AND.
+2. **Filtros** [SPEC RF-002; contrato §2]: `CHARGE`, `REFUND`, `SETTLEMENT`, `COMMISSION`, propietario y embarcación; contrato añade reserva y fechas como filtros técnicos. Todos se combinan con AND.
 3. **Comisión** [SPEC RF-002]: `COMMISSION` devuelve únicamente `CommissionRecord`; nunca se compara numéricamente la comisión para decidir el tipo.
 4. **Fuente** [SPEC RF-004]: solo cuatro registros inmutables confirmados; intenciones, pendientes y fallidos quedan fuera.
 5. **Detalle** [SPEC RF-005, RF-006]: cada resultado contiene tipo, reserva, propietario, embarcación, monto, `created_at` y referencia externa opcional.
-6. **Paginación** [SPEC RF-007, RF-008, RNF-003]: `page` es 1-indexed, `size` por defecto 10, orden determinista `(created_at DESC, record_id DESC)`, sin omisiones ni duplicados.
+6. **Paginación** [SPEC RF-007, RF-008, RNF-003; general-plan D-22]: `page` es 1-indexed, `size` por defecto 10 y máximo 100, orden determinista `(created_at DESC, record_id DESC)`, sin omisiones ni duplicados.
 7. **Página fuera de rango** [SPEC RF-009; contrato §5]: `PAGE_OUT_OF_RANGE` 404; filtros sin resultados producen página vacía, no error.
 8. **Validación** [SPEC RF-009; contrato §5]: `page < 1`, `size` inválido o enumeración inválida → `VALIDATION_ERROR` 400 sin ejecutar query.
 9. **Alcance declarado** [SPEC RF-011; contrato §5]: el `scope` (`OWNER`/`PLATFORM`) y el `owner_id` llegan como **datos planos**; el sistema aplica lo declarado sin validar identidad ni rol (seguridad fuera de alcance; general-plan §7.1, D-21). No hay `401`/`403`.
@@ -130,7 +129,7 @@ Accept: application/json
 X-Correlation-Id: opcional
 ```
 
-Query parameters: `scope` obligatorio (`OWNER`/`PLATFORM`; dato plano, sin validar identidad); `page` obligatorio; `size` opcional (10); `transaction_type`, `owner_id`, `boat_id`, `reservation_id`, `q`, `date_from`, `date_to` opcionales. Con `scope=OWNER`, `owner_id` es obligatorio y define el alcance declarado; ningún filtro puede ampliarlo. Con `scope=PLATFORM`, `owner_id` es un filtro opcional.
+Query parameters: `scope` obligatorio (`OWNER`/`PLATFORM`; dato plano, sin validar identidad); `page` obligatorio; `size` opcional (10, máximo 100); `transaction_type`, `owner_id`, `boat_id`, `reservation_id`, `date_from`, `date_to` opcionales. Con `scope=OWNER`, `owner_id` es obligatorio y define el alcance declarado; ningún filtro puede ampliarlo. Con `scope=PLATFORM`, `owner_id` es un filtro opcional.
 
 Respuesta `200 OK`:
 
@@ -163,7 +162,6 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 | Unitario dominio | filtros, tipos, paginación y moneda | `domain/model/FinancialRecordQueryTest` |
 | Unitario aplicación | alcance, filtros, default, páginas y errores | `application/service/FinancialRecordsQueryServiceTest` |
 | Contrato/Web | query params, JSON, códigos y metadatos | `FinancialRecordsControllerContractTest` |
-| Seguridad | Retirada — fuera de alcance (general-plan §7.1) | — (test retirado) |
 | Integración | vista, orden estable, páginas y solo lectura | `FinancialRecordsPaginationIT` |
 | Arquitectura | capas, ausencia de Flota y ausencia de export | `arch/ArchitectureTest` |
 
@@ -173,22 +171,23 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 - **`ce004_detalle_completo_y_comision`**: cuatro tipos, campos obligatorios y referencia externa opcional; comisión solo por tipo.
 - **`ce005_solo_lectura_sin_exportacion`**: ninguna operación de escritura ni archivo generado; no se invoca Flota.
 
-## Discrepancias y preguntas abiertas
+## Decisiones de diseño (D-UC12-xx)
 
-| ID | Descripción | Propuesta por defecto | Estado |
+Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC12` son decisiones del plan general (§9).
+
+| ID | Descripción | Decisión | Estado |
 |---|---|---|---|
-| **OQ-UC12-01** | El SPEC no fija latencia ni volumen | usar consulta paginada indexada y no cargar histórico completo; medir p95 en integración | Abierta |
-| **D-UC12-01** | El contrato añade `reservation_id`, `q`, fechas y filtro de propietario | aceptarlos como filtros técnicos sin ampliar el alcance del SPEC; validar tipos y combinarlos con AND | Aplicada |
-| **D-07** | Dueño y forma de `v_financial_records` | UC12 crea la vista con `record_id`, orden estable y `NULL::text` para comisiones | Aplicada |
-| **D-UC12-03** | Seguridad transversal no está cerrada | **Cerrada — Seguridad fuera de alcance**: general-plan §7.1 y D-21; el alcance viaja como dato plano (`scope`/`owner_id`), sin `SecurityConfig`, sin 401/403 y sin tests de seguridad | **Cerrada** |
-| **OQ-CROSS-07 / D-08** | Política y orden de migraciones | mantener abierta y respetar dependencias | Abierta |
-| **OQ-CROSS-14 / D-26** | Semántica de `q` y métricas adicionales | UC12 implementa solo la búsqueda y métricas exigidas por el SPEC; no agrega métricas ni columnas | Abierta; requiere decisión externa |
+| **D-UC12-01** | Filtros técnicos del contrato (`reservation_id`, `date_from`/`date_to` y `owner_id` opcional) | Se aceptan sin ampliar el alcance declarado del SPEC; se validan los tipos y se combinan con AND | Aplicada |
+| **D-UC12-02** | Dueño y forma de `v_financial_records` | UC12 crea la vista con `record_id`, orden estable `(created_at DESC, record_id DESC)` y `NULL::text AS external_reference` para comisiones | Aplicada |
+| **D-UC12-03** | Seguridad transversal | Seguridad fuera de alcance (general-plan §7.1, D-21): el alcance declarado viaja como dato plano (`scope`/`owner_id`) y el sistema no emite `401`/`403` en REST; sin `SecurityConfig` | Aplicada |
+| **D-UC12-04** | Política y orden de migraciones | Historial Flyway único y ordenado por fase (general-plan D-31): UC12 es la 8.ª fase, tras UC08, y la vista `v_financial_records` queda al final | Aplicada |
+| **D-UC12-05** | Alcance de la consulta | UC12 expone exactamente los filtros del contrato (tipo, propietario, embarcación, reserva y rango de fechas), la paginación y el orden estable; no agrega métricas ni columnas propias | Aplicada |
 
 ## Implementation Phases
 
 ### Phase 1: Setup
 
-- [ ] **T001** Consumir web, validación, seguridad, errores y observabilidad del núcleo compartido.
+- [ ] **T001** Consumir web, validación, errores y observabilidad del núcleo compartido.
 - [ ] **T002** Crear DDL de `v_financial_records` con `record_id`, `NULL::text AS external_reference` para comisiones y orden estable; incluir pruebas de esquema.
 - [ ] **T003** Configurar parámetros de paginación y correlación; no agregar exportación ni cliente de Flota.
 
@@ -205,7 +204,7 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 - [ ] **T009** [US1/P1] Implementar consulta paginada propia, filtros y aislamiento de propietario.
 - [ ] **T010** [US2/P1] Implementar consulta global de Administrador y filtros combinados.
 - [ ] **T011** Exponer `GET /api/v1/financial-records` y mapear respuesta completa sin exponer entidades.
-- [ ] **T012** Tests de contrato: 200, vacío, filtros, validaciones, página fuera de rango (sin pruebas 401/403: seguridad fuera de alcance).
+- [ ] **T012** Tests de contrato: 200, vacío, filtros, validaciones y página fuera de rango.
 - [ ] **T013** `ce001_alcance_propietario`.
 - [ ] **T014** `ce002_cobertura_global_sin_duplicados`.
 - [ ] **T015** `ce003_paginacion_default_y_metadatos`.
@@ -222,7 +221,7 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009/T010 → T011 → T012..T020`.
 
-UC12 depende de los registros confirmados publicados por UC05, UC09 y UC10 y define la vista consumida por UC13. La política de migraciones queda abierta en OQ-CROSS-07/D-08.
+UC12 depende de los registros confirmados publicados por UC05, UC09 y UC10 y define la vista consumida por UC13. El historial Flyway es único y ordenado por fase (general-plan D-31): UC12 es la 8.ª fase, tras UC08, y la vista `v_financial_records` queda al final.
 
 ## Notes
 
@@ -234,4 +233,4 @@ No modificar `pom.xml`, `general-plan.md`, SPEC, contrato ni planes de UC05/UC09
 - [ ] RF/RNF/CE/HU trazados a componente, tarea y prueba.
 - [ ] Alcance, filtros, paginación estable y errores documentados.
 - [ ] Solo lectura, sin Flota y sin exportación.
-- [ ] DDL exacta de `v_financial_records` documentada; política de versionado global permanece abierta.
+- [ ] DDL exacta de `v_financial_records` documentada; migración integrada en el historial Flyway único, tras UC08 y con la vista al final (general-plan D-31).

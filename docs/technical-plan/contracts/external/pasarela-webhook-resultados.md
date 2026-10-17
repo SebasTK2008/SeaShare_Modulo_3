@@ -85,7 +85,7 @@ MP firma cada notificación con HMAC-SHA256 usando el **secret del webhook** con
 
 1. **Verificación de autenticidad (paso previo obligatorio)**: Se verifica la firma `x-signature` usando el HMAC-SHA256 y el secret del webhook configurado en el panel de Mercado Pago. Si la firma es inválida o ausente → `401 UNAUTHENTICATED`. **Sin este paso no se procesa nada.** Requisito de la integración con Mercado Pago (no es seguridad del proyecto; general-plan §7.1).
 
-2. **Acuse de recibo inmediato**: El sistema responde `200 OK` a MP sin esperar el resultado del procesamiento interno. MP considera la notificación fallida si no recibe respuesta en tiempo (reintentará si recibe `4xx` o `5xx`).
+2. **Acuse de recibo inmediato**: El sistema responde `200 OK` a MP sin esperar el resultado del procesamiento interno. MP considera la notificación fallida si no recibe respuesta en tiempo (MP reintenta si recibe `4xx` o `5xx`, excepto `401`).
 
 3. **Procesamiento asíncrono (paso 2 — fuera de este contrato)**: Con el `data.id` recibido, el sistema consulta la API de MP para obtener el detalle completo del recurso (`type=payment` → `GET /v1/payments/{data.id}`, etc.) y determina el estado final de la operación. Luego actualiza las intenciones internas y genera los registros inmutables.
 
@@ -97,7 +97,7 @@ MP firma cada notificación con HMAC-SHA256 usando el **secret del webhook** con
 
 5. **Deduplicación**: Se usa el `data.id` de MP junto con la `idempotency_key` del comando original para localizar la intención interna y evitar procesar dos veces la misma notificación.
 
-6. **`data.id` desconocido**: Si el ID no puede asociarse a ninguna intención interna, el sistema responde `200 OK` (para evitar reintentos infinitos de MP) y registra el evento en `operational_failure` para revisión manual [PEND OQ-xx].
+6. **`data.id` o `type` desconocidos**: Si el ID o el tipo no pueden asociarse a ninguna intención interna, el sistema responde `200 OK` (para evitar reintentos infinitos de MP) y registra el evento en `operational_failure` para revisión manual [CONV].
 
 7. **Resiliencia**: Si el procesamiento interno falla (base de datos no disponible, error al consultar la API de MP en el paso 2), el sistema responde `500 INTERNAL_ERROR` para que MP reintente la notificación.
 

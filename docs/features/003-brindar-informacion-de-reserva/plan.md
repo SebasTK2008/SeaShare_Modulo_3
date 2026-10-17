@@ -7,9 +7,9 @@
 
 UC03 es el caso de uso **unidireccional** por el que el Sistema de Reservas y Operaciones notifica al sistema los datos de una reserva que el arrendatario ya ingresó (`reservation_id`, `boat_id`, `start_date`, `end_date`, `passengers`, `owner_id` y `max_capacity`). El sistema **incluye (`<<include>>`) a UC02** pasando `boat_id` y `start_date` para obtener la tarifa vigente de la embarcación en esa fecha, y registra internamente la `InformaciónDeReserva` en la tabla `reservation_information` para que quede disponible para UC04 (valor calculado) y para que los registros financieros posteriores se asocien a su propietario [SPEC RF-001, RF-002, RF-004, HU1]. **No devuelve ninguna respuesta ni desglose** a Reservas (RF-006, CE-002) y **no calcula ningún valor total** (RF-007).
 
-Enfoque técnico: servicio backend Spring Boot con arquitectura hexagonal de tres capas (`domain` / `application` / `infrastructure`) bajo `com.seashare.seasharem3` [SPEC general-plan §3.2–§3.4]. El adaptador de entrada es un **listener AMQP** sobre `seashare.reservations` / `reservation.info.provided` / cola `finance.reservation-info.v1` [contrato UC03]; el servicio de aplicación invoca **solo por `port.in`** el puerto de UC02 `ProvideBaseRateUseCase` y persiste con un adaptador JPA (entidad propia, MapStruct, general-plan D-04). Los fallos se registran mediante el catálogo único de puertos `FailureRecorderPort`/`operational_failure`; el registro usa transacción independiente y existe un procedimiento de reproceso [D-09, D-10]. La clasificación acuse/reenvío/DLQ sigue `contracts/README.md` §4.4 y la configuración AMQP común, con DLQ `<cola>.dlq` [D-22]. El `Message-Id` del encabezado AMQP se usa **solo para trazabilidad**: la idempotencia la da el *upsert* por `reservation_id` sin deduplicación por `message_id` (D-07) [decisión D-UC03-03].
+Enfoque técnico: servicio backend Spring Boot con arquitectura hexagonal de tres capas (`domain` / `application` / `infrastructure`) bajo `com.seashare.seasharem3` [SPEC general-plan §3.2–§3.4]. El adaptador de entrada es un **listener AMQP** sobre `seashare.reservations` / `reservation.info.provided` / cola `finance.reservation-info.v1` [contrato UC03]; el servicio de aplicación invoca **solo por `port.in`** el puerto de UC02 `ProvideBaseRateUseCase` y persiste con un adaptador JPA (entidad propia, MapStruct, general-plan D-04). Los fallos se registran mediante el catálogo único de puertos `FailureRecorderPort`/`operational_failure`; el registro usa transacción independiente y existe un procedimiento de reproceso. La clasificación acuse/reenvío/DLQ sigue `contracts/README.md` §4.4 y la configuración AMQP común, con DLQ `<cola>.dlq`. El `Message-Id` del encabezado AMQP se usa **solo para trazabilidad**: la idempotencia la da el *upsert* por `reservation_id` sin deduplicación por `message_id` (D-07) [decisión D-UC03-03].
 
-UC03 corresponde a la **fase 5** de la hoja de ruta [general-plan §12]: consume de UC02 (`ProvideBaseRateUseCase`, `BoatId`, `BaseRate`, `BaseRateException`) y del núcleo compartido (`DomainException`, VOs y `FailureRecorderPort`). **La política de migraciones permanece abierta**; UC03 documenta la DDL exacta de `reservation_information` en su rol de dueño, sin aprobar el versionado global [OQ-CROSS-07 / D-08].
+UC03 corresponde a la **fase 5** de la hoja de ruta [general-plan §10]: consume de UC02 (`ProvideBaseRateUseCase`, `BoatId`, `BaseRate`, `BaseRateException`) y del núcleo compartido (`DomainException`, VOs y `FailureRecorderPort`). UC03 aporta la DDL exacta de `reservation_information` como **3.ª migración del historial Flyway único**, tras el núcleo compartido y UC11 [general-plan D-31].
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -19,7 +19,7 @@ UC03 corresponde a la **fase 5** de la hoja de ruta [general-plan §12]: consume
 | **RF-002** incluir (`<<include>>`) UC02 con `boat_id` y `start_date` | `RegisterReservationInformationService` (vía `ProvideBaseRateUseCase`, de UC02) | T017 | T018 |
 | **RF-003** no consultar Flota por propietario/capacidad | `RegisterReservationInformationService` (la única llamada a UC02 lleva `boat_id` + `start_date`) + ArchUnit | T017, T024 | T023 (CE-004) |
 | **RF-004** registrar internamente la información | `ReservationInformation` (dominio), `ReservationInformationPersistenceAdapter` | T010, T015 | T016, T019 |
-| **RF-005** validar fechas y pasajeros vs capacidad | `ReservationInformation` (dominio) + `CHECK` en la DDL de V1 | T010, T006 | T013, T016 |
+| **RF-005** validar fechas y pasajeros vs capacidad | `ReservationInformation` (dominio) + `CHECK` en la DDL de `reservation_information` | T010, T006 | T013, T016 |
 | **RF-006** sin respuesta ni desglose a Reservas | `RegisterReservationInformationUseCase` (`void`) + `ReservationInfoListener` (sin reply) | T010, T011 | T022 (CE-002) |
 | **RF-007** sin calcular totales (alquiler/seguro/depósito) | `RegisterReservationInformationService` (no usa `PricingCalculator`/`ReservationValueCalculator`) + ArchUnit | T017, T024 | T022 (CE-002) |
 | **RF-008** exclusivo de Reservas | Cola dedicada `finance.reservation-info.v1` enlazada al exchange de Reservas + `ReservationInfoRabbitConfig` | T011 | T012, T020 |
@@ -36,12 +36,12 @@ UC03 corresponde a la **fase 5** de la hoja de ruta [general-plan §12]: consume
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC03: **Spring AMQP**, Spring Data JPA, MapStruct, ArchUnit, Testcontainers RabbitMQ y `spring-rabbit-test`. Las dependencias se incorporan mediante la configuración AMQP común, sin editar el `pom.xml` en silencio.
-**Storage**: PostgreSQL 16+ — tabla `reservation_information` (dueño UC03) y tabla técnica compartida `operational_failure`. `operational_failure.reservation_id` es nullable y no tiene FK; `payload_ref` referencia el mensaje o JSON almacenado. La DDL de ambas tablas se documenta exactamente en sus planes dueños [SPEC general-plan §4, D-10].
-**Messaging**: RabbitMQ 3.13+ — exchange `seashare.reservations` (topic, durable), routing key `reservation.info.provided`, cola `finance.reservation-info.v1`, DLQ `finance.reservation-info.v1.dlq` **[CONV; OQ-UC03-02 / OQ-09]** [contrato UC03; README §3.5]
+**Storage**: PostgreSQL 16+ — tabla `reservation_information` (dueño UC03) y tabla técnica compartida `operational_failure`. `operational_failure.reservation_id` es nullable y no tiene FK; `payload_ref` referencia el mensaje o JSON almacenado. La DDL de ambas tablas se documenta exactamente en sus planes dueños [SPEC general-plan §4].
+**Messaging**: RabbitMQ 3.13+ — exchange `seashare.reservations` (topic, durable), routing key `reservation.info.provided`, cola `finance.reservation-info.v1`, DLQ `finance.reservation-info.v1.dlq` **[CONV]** [contrato UC03; README §3.5]
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL **y** RabbitMQ), `spring-rabbit-test`, WireMock (Flota, a través de UC02), Awaitility (reintentos/DLQ), ArchUnit [CONV]
 **Target Platform**: Contenedores Docker (Linux) [SPEC general-plan]
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio [SPEC general-plan]
-**Performance Goals**: El SPEC 03 no define metas de rendimiento `[NEEDS CLARIFICATION: OQ-UC03-04; se buscó en spec.md 003, general-plan.md y el contrato UC03; no hay metas propias para un consumidor AMQP]` **[CONV: sin meta propia]**
+**Performance Goals**: Sin meta propia: el SPEC 03 no define metas para un consumidor AMQP; rigen reintentos y DLQ [CONV].
 **Constraints**: unidireccional sin canal de respuesta (RF-006, CE-002); `owner_id` y `max_capacity` solo desde la solicitud, nunca de Flota (RF-003, CE-004); no se persiste información incompleta y se conserva la versión válida previa (RNF-003, casos extremos); *upsert* con invalidación de montos calculados (casos extremos; D-UC03-02); `BigDecimal` escala 4 para la tarifa (RNF-002); exclusivo del Sistema de Reservas y Operaciones (RF-008)
 **Scale/Scope**: 1 evento AMQP entrante [contrato UC03]; 8 RF + 3 RNF + 4 CE + 1 HU del SPEC 03; 1 puerto de entrada (`RegisterReservationInformationUseCase`) + 1 puerto de salida propio (`ReservationInformationRepository`) + piezas consumidas por nombre (UC02, `FailureRecorderPort`)
 
@@ -75,12 +75,12 @@ src/main/java/com/seashare/seasharem3/
 ├── SeashareM3Application.java                       # ya existe
 ├── domain/
 │   ├── model/
-│   │   └── ReservationInformation.java              # T010 [SPEC "InformaciónDeReserva"; general-plan §13]
+│   │   └── ReservationInformation.java              # T010 [SPEC "InformaciónDeReserva"; general-plan §11]
 │   ├── valueobject/
 │   │   ├── ReservationId.java                       # VO del núcleo compartido; UC03 lo consume por nombre
 │   │   ├── OwnerId.java                             # VO del núcleo compartido; UC03 lo consume por nombre
 │   │   ├── BoatId.java                              # de UC02 (T006) — consumido por nombre
-│   │   └── BaseRate.java                            # de UC02 (T006) — consumido por nombre [general-plan §13]
+│   │   └── BaseRate.java                            # de UC02 (T006) — consumido por nombre [general-plan §11]
 │   └── exception/
 │       ├── DomainException.java                     # T003 [núcleo compartido]
 │       ├── ReservationInformationValidationException.java  # T009 [SPEC RF-005; nombre [CONV]]
@@ -112,7 +112,7 @@ src/main/java/com/seashare/seasharem3/
 
 src/main/resources/
 └── db/migration/
-    └── reservation_information.sql                   # T006 [DDL exacta del dueño; política de migraciones abierta]
+    └── reservation_information.sql                   # T006 [DDL exacta del dueño; 3.ª migración del historial único]
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/
@@ -137,55 +137,55 @@ src/test/java/com/seashare/seasharem3/
 
 ```java
 public interface ReservationInformationRepository {
-    Optional<ReservationInformation> findByReservationId(ReservationId reservationId);  // lectura (B/C; UC04)
+    Optional<ReservationInformation> findByReservationId(ReservationId reservationId);  // lectura (UC11/UC12/UC13; UC04)
     ReservationInformation save(ReservationInformation information);  // upsert por reservation_id; el adaptador
                                                                       // deja las columnas calculadas y
                                                                       // frozen_parameters_id en NULL (invalidación),
                                                                       // reescribe base_rate_parameters_id y persiste
                                                                       // en una transacción única
-    // --- UC04·T007 (D-UC04-05): completa montos + frozen_parameters_id + calculated_at ---
+    // --- UC04: completa montos + frozen_parameters_id + calculated_at ---
     //   NO anula el bloque informativo; transacción única con pg_advisory_xact_lock(reservationId);
     //   debe ejecutarse sobre la fila ya existente (si no existe, el servicio no la crea: responde 404).
     ReservationInformation saveCalculatedAmounts(ReservationInformation information);
 }
 ```
 
-**Structure Decision**: servicio backend único con Arquitectura Hexagonal de tres capas (`domain`, `application`, `infrastructure`) en un solo módulo Maven, con subpaquetes temáticos sin reglas entre sí, bajo la raíz `com.seashare.seasharem3` [SPEC general-plan §3.2, §3.3, D-02, D-03]. Reglas del §3.4 aplicadas aquí: `domain` sin Spring/JPA/Jackson/AMQP; `application` solo depende de `domain` (se permite `@Transactional` pragmático); `infrastructure.adapter.in` solo invoca `application.port.in`; `infrastructure.adapter.out` solo implementa `application.port.out`; el listener nunca accede a un repositorio; la entidad JPA no sale de `adapter.out.persistence`; los DTOs entrantes viven en `infrastructure.adapter.in` y la aplicación trabaja con `command` (RNF-001). Identificadores en inglés (D-23) y lenguaje ubicuo §13 (*InformaciónDeReserva → `ReservationInformation`*; *SolicitudInformacionReserva* no está en §13 → `ReservationInfoMessage` **[CONV, D-UC03-09]**).
+**Structure Decision**: servicio backend único con Arquitectura Hexagonal de tres capas (`domain`, `application`, `infrastructure`) en un solo módulo Maven, con subpaquetes temáticos sin reglas entre sí, bajo la raíz `com.seashare.seasharem3` [SPEC general-plan §3.2, §3.3, D-02, D-03]. Reglas del §3.4 aplicadas aquí: `domain` sin Spring/JPA/Jackson/AMQP; `application` solo depende de `domain` (se permite `@Transactional` pragmático); `infrastructure.adapter.in` solo invoca `application.port.in`; `infrastructure.adapter.out` solo implementa `application.port.out`; el listener nunca accede a un repositorio; la entidad JPA no sale de `adapter.out.persistence`; los DTOs entrantes viven en `infrastructure.adapter.in` y la aplicación trabaja con `command` (RNF-001). Identificadores en inglés (D-23) y lenguaje ubicuo §11 (*InformaciónDeReserva → `ReservationInformation`*; *SolicitudInformacionReserva* no está en §11 → `ReservationInfoMessage` **[CONV, D-UC03-09]**).
 
 ## Reglas de negocio
 
 Todas las reglas provienen del SPEC 03 (`spec.md`) y su contrato, salvo indicación. Ejemplo base del contrato: `start_date = 2026-12-20`, `end_date = 2026-12-22`, `passengers = 4`, `max_capacity = 6`, `owner_id = a1b2c3d4-…`.
 
-1. **Datos recibidos** [SPEC RF-001, RNF-001]: el mensaje AMQP trae los 7 campos obligatorios: `reservation_id`, `boat_id`, `start_date`, `end_date`, `passengers`, `owner_id`, `max_capacity`. Ausencia, `null`, tipo inválido (UUID, fecha `YYYY-MM-DD`, entero) o formato inválido ⇒ mensaje inválido (equivalente a E4). `owner_id` y `max_capacity` ya fueron obtenidos por Reservas desde Flota; el sistema los usa tal cual [SPEC RF-001, RF-003].
+1. **Datos recibidos** [SPEC RF-001, RNF-001]: el mensaje AMQP trae los 7 campos obligatorios: `reservation_id`, `boat_id`, `start_date`, `end_date`, `passengers`, `owner_id`, `max_capacity`. Ausencia, `null`, tipo inválido (UUID, fecha `YYYY-MM-DD`, entero) o formato inválido ⇒ mensaje inválido (equivalente a E2). `owner_id` y `max_capacity` ya fueron obtenidos por Reservas desde Flota; el sistema los usa tal cual [SPEC RF-001, RF-003].
 2. **Naturaleza unidireccional** [SPEC RF-006, CE-002]: el sistema **no devuelve nada** a Reservas: el listener no responde y el caso de uso no publica mensajes de salida. La confirmación es el `ack` del mensaje tras persistir.
 3. **Inclusión de UC02** [SPEC RF-002]: el servicio invoca `ProvideBaseRateUseCase.provideBaseRates(new ProvideBaseRateCommand(List.of(boatId), startDate))` — **una sola consulta** a Flota con una lista de un elemento, con `evaluatedDate = start_date` recibida. La tarifa final (ya dinámica, salida de UC02 a escala 4) se usa para toda la duración de la reserva. Ejemplo: mensaje del contrato → UC02 evalúa `2026-12-20` y devuelve la tarifa final por unidad de tiempo (p. ej. `437500.0000`, ilustrativo).
 4. **Fuentes de propietario y capacidad** [SPEC RF-003, CE-004]: UC03 **jamás** consulta a Flota por `owner_id` ni `max_capacity`; la única llamada externa es la inclusión de UC02 con `boat_id` + `start_date`. Si faltan `owner_id` o `max_capacity` en el mensaje, el dato es incompleto y el registro no se persiste [casos extremos].
-5. **Validaciones de dominio** [SPEC RF-005, CE-001]: `end_date >= start_date` y `1 <= passengers <= max_capacity`. Violación ⇒ `ReservationInformationValidationException` (permanente): `ack` + registro interno, **sin persistir** y conservando la versión válida previa. Los mismos invariantes se replican como `CHECK` en la DDL de V1 (general-plan §4).
-6. **`base_rate` con precisión** [SPEC RNF-002]: la tarifa se almacena como `BigDecimal` a escala 4 (salida de UC02 **sin redondeo**, D-UC02-04) en la columna `base_rate NUMERIC(18,4)`. UC03 no redondea y no calcula montos de alquiler, seguro ni depósito [SPEC RF-007].
+5. **Validaciones de dominio** [SPEC RF-005, CE-001]: `end_date >= start_date` y `1 <= passengers <= max_capacity`. Violación ⇒ `ReservationInformationValidationException` (permanente): `ack` + registro interno, **sin persistir** y conservando la versión válida previa. Los mismos invariantes se replican como `CHECK` en la DDL de `reservation_information` (general-plan §4).
+6. **`base_rate` con precisión** [SPEC RNF-002]: la tarifa se almacena como `BigDecimal` a escala 4 (salida de UC02 **sin redondeo**) en la columna `base_rate NUMERIC(18,4)`. UC03 no redondea y no calcula montos de alquiler, seguro ni depósito [SPEC RF-007].
 7. ***Upsert*** [SPEC casos extremos; contrato regla 4; CE-001]: si ya existe una `InformaciónDeReserva` para el `reservation_id`, se **sobrescribe** el bloque informativo completo (`boat_id`, `base_rate`, `base_rate_parameters_id`, `start_date`, `end_date`, `passengers`, `owner_id`, `max_capacity`) con la versión más reciente, **re-incluyendo UC02** para volver a consultar la tarifa vigente de la fecha de inicio (su `parametersId` se guarda como `base_rate_parameters_id`; `NULL` si la fecha era regular).
-8. **Invalidación de montos al sobrescribir** [SPEC casos extremos; decisión confirmada, D-UC03-02]: todo *upsert* deja en `NULL`, **en conjunto**, `rental_amount`, `insurance_amount`, `deposit_amount`, `total_amount`, `frozen_parameters_id` y `calculated_at` (general-plan §4: montos y referencia de versión se escriben juntos). `base_rate_parameters_id` **no** se anula: se reescribe con el `parametersId` de la nueva consulta a UC02. UC04 **debe recalcular** antes de que pueda procesarse un nuevo cobro (general-plan D-17).
-9. **Reentregas y duplicados** [decisión confirmada, D-UC03-03; general-plan D-07]: no hay tabla *inbox* ni deduplicación por `Message-Id`; el `Message-Id` solo se loguea. Una reentrega (entrega al-menos-una-vez) de un mensaje idéntico produce el mismo estado informativo y **re-invalida** los montos; como UC04 recalcula de forma determinista (D-17), el impacto es que UC04 debe volver a ejecutarse antes de un nuevo cobro.
+8. **Invalidación de montos al sobrescribir** [SPEC casos extremos; D-UC03-02]: todo *upsert* deja en `NULL`, **en conjunto**, `rental_amount`, `insurance_amount`, `deposit_amount`, `total_amount`, `frozen_parameters_id` y `calculated_at` (general-plan §4: montos y referencia de versión se escriben juntos). `base_rate_parameters_id` **no** se anula: se reescribe con el `parametersId` de la nueva consulta a UC02. UC04 **debe recalcular** antes de que pueda procesarse un nuevo cobro (general-plan D-17). La carrera entre el *upsert* y el cálculo de UC04 se serializa con el bloqueo asesor por reserva (`pg_advisory_xact_lock`, general-plan D-15).
+9. **Reentregas y duplicados** [D-UC03-03; general-plan D-07]: no hay tabla *inbox* ni deduplicación por `Message-Id`; el `Message-Id` solo se loguea. Una reentrega (entrega al-menos-una-vez) de un mensaje idéntico produce el mismo estado informativo y **re-invalida** los montos; como UC04 recalcula de forma determinista (D-17), el impacto es que UC04 debe volver a ejecutarse antes de un nuevo cobro.
 10. **No persistir información incompleta** [casos extremos, RNF-003, CE-003]: si la validación falla, falta `owner_id`/`max_capacity` o la inclusión de UC02 no puede completarse, **no se escribe nada**; como el *upsert* ocurre en una única transacción al final del flujo, la versión válida previa se conserva automáticamente.
-11. **Embarcación sin tarifa base** [casos extremos; decisión confirmada, D-UC03-04]: si UC02 devuelve un resultado **vacío** (embarcación sin tarifa o no reconocida; el diseño batch de UC02 nunca lanza `BASE_RATE_NOT_AVAILABLE`, omite el resultado — D-UC02-08), UC03 lanza `BaseRateUnavailableException` (permanente): `ack` + registro interno en `operational_failure`, sin reintento y sin persistir. UC02 ya registró su propio fallo `BASE_RATE_NOT_AVAILABLE`; UC03 registra el suyo (D-UC02-08).
-12. **Fallas transitorias** [RNF-003; decisión confirmada, D-UC03-05; README §4.4]: `BaseRateException(FLEET_UNAVAILABLE)` y `BaseRateException(DYNAMIC_RATE_NOT_CONFIGURED)` (de UC02, transitorias) y fallas de persistencia (BD) ⇒ `nack` con **3–5 reintentos y *backoff*** → **DLQ** `finance.reservation-info.v1.dlq`; se registra en `operational_failure`. Jamás se persiste una tarifa asumida ni información a medias [principio rector 4].
+11. **Embarcación sin tarifa base** [casos extremos; D-UC03-04]: si UC02 devuelve un resultado **vacío** (embarcación sin tarifa o no reconocida; el diseño batch de UC02 nunca lanza `BASE_RATE_NOT_AVAILABLE`, omite el resultado), UC03 lanza `BaseRateUnavailableException` (permanente): `ack` + registro interno en `operational_failure`, sin reintento y sin persistir. UC02 ya registró su propio fallo `BASE_RATE_NOT_AVAILABLE`; UC03 registra el suyo.
+12. **Fallas transitorias** [RNF-003; D-UC03-05; README §4.4]: `BaseRateException(FLEET_UNAVAILABLE)` y `BaseRateException(DYNAMIC_RATE_NOT_CONFIGURED)` (de UC02, transitorias) y fallas de persistencia (BD) ⇒ `nack` con **5 reintentos y *backoff* exponencial (base 1 s)** → **DLQ** `finance.reservation-info.v1.dlq`; se registra en `operational_failure`. Jamás se persiste una tarifa asumida ni información a medias [principio rector 4].
 13. **Clasificación del listener** [CONV; README §4.4]: resumen de la política de acuse (detalle en §Contratos):
     | Situación | Equivalencia | Acción |
     |---|---|---|
-    | Mensaje mal formado, campos ausentes/inválidos, validación RF-005 fallida, sin tarifa base | E4 / E8 | `ack` + registro en `operational_failure` (no se reintenta) |
-    | `FLEET_UNAVAILABLE`, `DYNAMIC_RATE_NOT_CONFIGURED`, fallo de BD | E7 / E10 | `nack` + reintentos (3–5, backoff) → DLQ + registro |
+    | Mensaje mal formado, campos ausentes/inválidos, validación RF-005 fallida, sin tarifa base | E2 / E6 | `ack` + registro en `operational_failure` (no se reintenta) |
+    | `FLEET_UNAVAILABLE`, `DYNAMIC_RATE_NOT_CONFIGURED`, fallo de BD | E5 / E8 | `nack` + reintentos (5, *backoff* exponencial base 1 s) → DLQ + registro |
 14. **Seguridad fuera de alcance** [general-plan §7.1, D-21]: el sistema **no implementa** autenticación ni autorización, tampoco para el canal AMQP. La cola dedicada `finance.reservation-info.v1` identifica al usuario esperado (el Sistema de Reservas y Operaciones); la operación del broker es infraestructura, no control de acceso del proyecto. No se implementa `SecurityConfig` ni pruebas de seguridad.
 15. **Orden de procesamiento** [CONV, README §4.3]: el mensaje se valida por completo (reglas 1 y 5) **antes** de invocar a UC02, y UC02 se invoca antes de persistir: una llamada externa nunca se gasta en un mensaje ya inválido.
 
-## Migración V1 (contribución)
+## Migración (contribución)
 
-La política global de migraciones permanece abierta (OQ-CROSS-07 / D-08). UC03 es dueño de la DDL exacta de `reservation_information`, sin aprobar el archivo, la versión ni la consolidación global. La DDL exacta es:
+El historial Flyway es único y está ordenado por fase: núcleo → UC11 → UC03 → UC05 → UC09 → UC10 → UC08 → UC12 (general-plan D-31). UC03 es dueño de la DDL exacta de `reservation_information` y la aporta como **3.ª migración**, tras el núcleo y UC11. La DDL exacta es:
 
 ```sql
--- DDL exacta de la tabla propiedad de UC03; el versionado global queda abierto
+-- DDL exacta de la tabla propiedad de UC03; 3.ª migración del historial Flyway único (general-plan D-31)
 CREATE TABLE reservation_information (
     reservation_id                  UUID         PRIMARY KEY,             -- [SPEC RF-001; general-plan §4]
     boat_id                         UUID         NOT NULL,                -- [SPEC RF-001]
-    base_rate                       NUMERIC(18,4) NOT NULL,               -- [SPEC RNF-002; escala 4, sin redondeo (D-UC02-04)]
+    base_rate                       NUMERIC(18,4) NOT NULL,               -- [SPEC RNF-002; escala 4, sin redondeo]
     base_rate_parameters_id         UUID,                                 -- [CONV; D-24/D-27] versión de financial_parameters usada por la tarifa dinámica (UC02); NULL si la fecha era regular
     start_date                      DATE         NOT NULL,                -- [SPEC RF-001]
     end_date                        DATE         NOT NULL,                -- [SPEC RF-001]
@@ -219,7 +219,7 @@ Fuente: `contracts/events/UC03-informacion-reserva.md` y las convenciones de `co
 | Exchange | `seashare.reservations` (topic, durable) |
 | Routing Key | `reservation.info.provided` |
 | Cola consumidora | `finance.reservation-info.v1` |
-| DLQ (reintentos agotados) | `finance.reservation-info.v1.dlq` **[CONV; OQ-UC03-02 / OQ-09]** |
+| DLQ (reintentos agotados) | `finance.reservation-info.v1.dlq` **[CONV]** |
 | Headers | `Content-Type: application/json` (obligatorio), `Message-Id` (obligatorio, uso de trazabilidad), `App-Id: reservations-service` (no obligatorio) |
 | `delivery_mode` | `2` (persistente) |
 | Respuesta al productor | **Ninguna** (RF-006) |
@@ -246,12 +246,12 @@ No aplica (unidireccional). El mensaje se confirma (`ack`) **tras persistir** en
 
 | Situación | Clasificación | Acción AMQP | Registro interno |
 |---|---|---|---|
-| Cuerpo no JSON, headers ausentes, campos ausentes/`null`, tipos/formato inválidos | E4 | `ack` (no reintentar) | `operational_failure` |
-| `end_date < start_date` o `passengers` fuera de `1..max_capacity` | E4 (RF-005) | `ack` | `operational_failure` |
-| Falta `owner_id` o `max_capacity` (dato incompleto) | E8 (dato del recurso recibido) | `ack` | `operational_failure` |
-| Sin tarifa base (UC02 devuelve vacío) | E8 | `ack` | `operational_failure` |
-| `FLEET_UNAVAILABLE` / `DYNAMIC_RATE_NOT_CONFIGURED` (UC02) | E7 / E6 | `nack` + reintentos (3–5, *backoff*) → DLQ | `operational_failure` al agotar |
-| Fallo de persistencia (BD) | E10 | `nack` + reintentos → DLQ | `operational_failure` al agotar |
+| Cuerpo no JSON, headers ausentes, campos ausentes/`null`, tipos/formato inválidos | E2 | `ack` (no reintentar) | `operational_failure` |
+| `end_date < start_date` o `passengers` fuera de `1..max_capacity` | E2 (RF-005) | `ack` | `operational_failure` |
+| Falta `owner_id` o `max_capacity` (dato incompleto) | E6 (dato del recurso recibido) | `ack` | `operational_failure` |
+| Sin tarifa base (UC02 devuelve vacío) | E6 | `ack` | `operational_failure` |
+| `FLEET_UNAVAILABLE` / `DYNAMIC_RATE_NOT_CONFIGURED` (UC02) | E5 / E4 | `nack` + reintentos (5, *backoff* exponencial base 1 s) → DLQ | `operational_failure` al agotar |
+| Fallo de persistencia (BD) | E8 | `nack` + reintentos → DLQ | `operational_failure` al agotar |
 | Mensaje repetido (misma `reservation_id`, mismo contenido) | Idempotente | `ack`; *upsert* del mismo estado (re-invalida montos, D-UC03-03) | — |
 
 *Nota*: los errores de negocio se confirman (`ack`) para no reprocesar en vano [contrato UC03 §5]; las fallas transitorias se reintentan conforme al general-plan §7.2.
@@ -265,7 +265,7 @@ Fuente: `general-plan.md` (Technical Context), contrato UC03 y SPEC 03. Cobertur
 | Unitario (`domain`) | invariantes RF-005 (fechas, pasajeros vs capacidad, requeridos), tarifa escala 4 | `domain/model/ReservationInformationTest` |
 | Unitario (`application`) | orquestación: incluye UC02 una sola vez, upsert re-consulta tarifa, sin tarifa (permanente), FLEET/DYNAMIC (transitorio), validación, versión previa conservada, sin cálculos (RF-007) | `RegisterReservationInformationServiceTest` (Mockito sobre `ProvideBaseRateUseCase`, repo, `InMemoryFailureRecorder`) |
 | Contrato (messaging) | cuerpo y headers del contrato UC03: mensaje válido, campos ausentes/`null`, tipos/formato inválidos | `ReservationInfoListenerContractTest` |
-| Integración (Testcontainers) | migración V1 + *upsert* + invalidación + CHECK + versión previa conservada | `ReservationInformationPersistenceAdapterTest` |
+| Integración (Testcontainers) | migración de `reservation_information` + *upsert* + invalidación + CHECK + versión previa conservada | `ReservationInformationPersistenceAdapterTest` |
 | Política del listener (Testcontainers RabbitMQ) | `ack`/`nack`/reintentos/DLQ según la tabla de decisión; registro en `operational_failure` | `ReservationInfoListenerRetryPolicyTest` |
 | Aceptación | CE-001…CE-004 | `ReservationInformationAcceptanceTest` |
 | Arquitectura | reglas §3.4; RF-003/RF-006/RF-007 (sin controller, sin publicaciones, sin cálculos, sin consultas directas a Flota por owner/capacidad) | `arch/ArchitectureTest` |
@@ -279,37 +279,23 @@ Fuente: `general-plan.md` (Technical Context), contrato UC03 y SPEC 03. Cobertur
 
 Además: la regresión de consumidores **no forma parte de este plan** (UC04 completará los montos, `frozen_parameters_id` y `calculated_at`; los demás planes leen la tabla por nombre; aquí solo se publica la firma del repositorio).
 
-## Discrepancias y puntos abiertos
+## Decisiones de diseño (D-UC03-xx)
 
-Registro de contradicciones detectadas al elaborar este plan. **No se resuelven en silencio**: cada una indica la decisión para avanzar y qué requiere confirmación. Los IDs `D-UC03-xx` son propios de este plan; `D-xx` sin prefijo UC03 son decisiones del plan general (§11) o del plan de UC02.
+Registro de las decisiones de diseño de este plan, con su contexto y estado. Los IDs `D-UC03-xx` son propios de este plan; los `D-xx` sin prefijo UC03 son decisiones del plan general (§9).
 
-| ID | Descripción | Fuentes en conflicto | Decisión para avanzar | Estado |
+| ID | Descripción | Contexto | Decisión | Estado |
 |---|---|---|---|---|
-| **D-UC03-01** | La política de migraciones y la consolidación de DDL no están cerradas | `general-plan.md` §4 vs OQ-CROSS-07 / D-08 | UC03 mantiene la DDL exacta de `reservation_information` como dueño; no aprueba versión, archivo global ni orden de migraciones | Abierta; requiere decisión externa |
-| **D-UC03-02** | El SPEC 03 solo dice que los montos calculados «se invalidan»; no fija qué columnas | SPEC 03 casos extremos vs general-plan §4 (montos y referencia de versión «escritos juntos») | La invalidación anula en conjunto `rental_amount`, `insurance_amount`, `deposit_amount`, `total_amount`, `frozen_parameters_id` y `calculated_at`; `base_rate_parameters_id` se reescribe con el `parametersId` de la nueva consulta a UC02 | Decidida (**confirmada por el responsable**) |
-| **D-UC03-03** | El SPEC 03 no define la deduplicación AMQP; la entrega del broker es al-menos-una-vez (D-07) | SPEC 03 vs general-plan D-07 («un `message_id` no está en ningún SPEC») | *Upsert* puro sin tabla *inbox* ni dedup por `Message-Id`; una reentrega re-invalida montos y UC04 recalcula determinista (D-17) | Decidida (**confirmada por el responsable**) |
-| **D-UC03-04** | El SPEC 03 dice «registra el fallo y no persiste» cuando UC02 no puede completarse, sin clasificar el motivo | SPEC 03 casos extremos vs tabla de decisión README §4.4 | Embarcación sin tarifa (UC02 devuelve vacío) = **permanente** → `ack` + registro; FLEET/DYNAMIC = **transitorio** → reintentos/DLQ | Decidida (**confirmada por el responsable**) |
-| **D-UC03-05** | Política de acuse del listener no definida por el SPEC 03 | SPEC 03 vs README §4.4 y general-plan §7.2 | `nack` con 3–5 reintentos y *backoff* solo en fallas transitorias → DLQ + registro; `ack` en inválidos | Decidida (**confirmada por el responsable**) |
-| **D-UC03-06** | El registro de fallos debe aislarse de la transacción de negocio | `general-plan.md` §3.5/§4 y D-10 | UC03 consume `FailureRecorderPort` por nombre; el puerto registra con `REQUIRES_NEW`, `reservation_id` nullable y `payload_ref` referencial. Se documenta un procedimiento de reproceso | Aplicada |
-| **D-UC03-07** | UC03 necesita artefactos Maven para AMQP y sus pruebas | pom actual vs UC03 | Se documentan en T001 sin coordinar mediante tareas externas ni editar en silencio | Aplicada |
-| **D-UC03-08** | El SPEC RF-008 fija *quién* publica (solo Reservas) pero no el mecanismo de autenticación del canal AMQP | SPEC 03 RF-008 vs general-plan §7.1 (seguridad fuera de alcance) + D-21 | Sin autenticación: el sistema no implementa seguridad; la cola dedicada identifica al usuario esperado. No se implementa `SecurityConfig`. Ver **OQ-UC03-01** | **Cerrada — Seguridad fuera de alcance** |
-| **D-UC03-09** | `SolicitudInformacionReserva` (entidad clave del SPEC 03) no está en el lenguaje ubicuo §13 | SPEC 03 vs general-plan §13 | `ReservationInfoMessage` (infraestructura) → `RegisterReservationInformationCommand` (aplicación); `InformaciónDeReserva` → `ReservationInformation` (ya en §13) | Decidida **[CONV]** |
+| **D-UC03-01** | Migraciones de UC03 en el historial Flyway único | `general-plan.md` §4 (tabla `reservation_information`) y §10 (orden de fases) | UC03 mantiene la DDL exacta de `reservation_information` como dueño; se aplica como **3.ª migración del historial único**, tras el núcleo y UC11 (general-plan D-31) | Aplicada |
+| **D-UC03-02** | Columnas que invalida el *upsert* de una reserva ya calculada | SPEC 03 (casos extremos); general-plan §4 y D-17 | La invalidación anula en conjunto `rental_amount`, `insurance_amount`, `deposit_amount`, `total_amount`, `frozen_parameters_id` y `calculated_at`; `base_rate_parameters_id` se reescribe con el `parametersId` de la nueva consulta a UC02 | Decidida |
+| **D-UC03-03** | Idempotencia ante la entrega al-menos-una-vez del broker | SPEC 03; general-plan D-07 | *Upsert* puro sin tabla *inbox* ni dedup por `Message-Id`; una reentrega re-invalida montos y UC04 recalcula determinista (D-17); la carrera con UC04 se serializa con el bloqueo asesor por reserva (`pg_advisory_xact_lock`, D-15) | Decidida |
+| **D-UC03-04** | Clasificación del fallo cuando UC02 no puede completarse | SPEC 03 (casos extremos); README §4.4 | Embarcación sin tarifa (UC02 devuelve vacío) = **permanente** → `ack` + registro; FLEET/DYNAMIC = **transitorio** → reintentos/DLQ | Decidida |
+| **D-UC03-05** | Política de acuse del listener | SPEC 03; README §4.4 y general-plan §7.2 | `nack` con 5 reintentos y *backoff* exponencial (base 1 s) solo en fallas transitorias → DLQ + registro; `ack` en mensajes inválidos | Decidida |
+| **D-UC03-06** | Aislamiento del registro de fallos respecto de la transacción de negocio | `general-plan.md` §3.5/§4 | UC03 consume `FailureRecorderPort` por nombre; el puerto registra con `REQUIRES_NEW`, `reservation_id` nullable y `payload_ref` referencial; se documenta un procedimiento de reproceso | Aplicada |
+| **D-UC03-07** | Artefactos Maven para AMQP y sus pruebas | `pom.xml` actual | Se documentan en T001 sin coordinar mediante tareas externas ni editar en silencio | Aplicada |
+| **D-UC03-08** | Identificación del productor en el canal AMQP (RF-008 fija quién publica: solo Reservas) | SPEC 03 RF-008; general-plan §7.1 (seguridad fuera de alcance) y D-21 | Sin autenticación: el sistema no implementa seguridad; la cola dedicada identifica al usuario esperado. No se implementa `SecurityConfig` | Aplicada |
+| **D-UC03-09** | Nombres de los DTOs del mensaje respecto del lenguaje ubicuo | SPEC 03; general-plan §11 | `ReservationInfoMessage` (infraestructura) → `RegisterReservationInformationCommand` (aplicación); `InformaciónDeReserva` → `ReservationInformation` (ya en §11) | Decidida |
 | **D-UC03-10** | `ReservationId`/`OwnerId` son VOs compartidos del núcleo | `general-plan.md` §3.3 | UC03 los consume por nombre y no los redeclara; el lenguaje ubicuo vigente prevalece | Aplicada |
-| **D-UC03-11** | `ProvideBaseRateUseCase` es *batch-only* (una consulta por invocación) y nunca lanza `BASE_RATE_NOT_AVAILABLE` | SPEC 03 RF-002 vs plan UC02 (T016, D-UC02-08) | UC03 invoca con lista de un elemento y correlaciona por `boat_id`; resultado vacío ⇒ `BaseRateUnavailableException` (regla 11) | Decidida |
-
-## Preguntas abiertas (OQ-UC03-xx)
-
-Preguntas que este plan no puede resolver con el SPEC 03, el plan general ni los contratos. Hasta que se confirmen rige la propuesta por defecto y las tareas afectadas quedan condicionadas.
-
-| ID | Pregunta | Afecta | Propuesta por defecto | Estado |
-|---|---|---|---|---|
-| **OQ-UC03-01** | ¿Qué mecanismo garantiza que solo Reservas publique en el exchange? El SPEC RF-008 fija quién, no cómo (análogo a OQ-01/OQ-09 del general-plan) | T011; regla 14 | **Cerrada — Seguridad fuera de alcance**: general-plan §7.1 y D-21; sin autenticación de canal y sin `SecurityConfig` de AMQP. La cola dedicada es el usuario esperado | Cerrada |
-| **OQ-UC03-02** | ¿Cuál es el nombre y la topología definitivos de la DLQ y del reproceso manual de los mensajes? (heredada del general-plan OQ-09: nombres AMQP a acordar con Reservas) | T011, T020 | `finance.reservation-info.v1.dlq` **[CONV]**; reproceso manual fuera del alcance de este plan | Abierta |
-| **OQ-UC03-03** | ¿Cuántos reintentos y con qué *backoff* para los mensajes transitorios? (general-plan §7.2: 3–5 con *backoff*) | T011, T020 | 5 reintentos con *backoff* exponencial (1 s base) **[CONV]** | Abierta |
-| **OQ-UC03-04** | ¿Existe una meta de rendimiento para UC03? El SPEC 03 no la define | Technical Context | Sin meta propia: procesamiento AMQP asíncrono **[CONV]** | Abierta |
-| **OQ-UC03-05** | ¿Cómo se resuelve la carrera UC03 (upsert/reenvío que invalida montos) vs UC04 (cálculo)? (general-plan OQ-06) | D-UC03-03; nota para UC04 | UC04 recalcula de forma determinista a partir de la información registrada y la versión de parámetros referenciada (general-plan D-17); ante una invalidación, UC04 debe volver a ejecutarse antes de un nuevo cobro | Abierta (de UC04) |
-
-**`[NEEDS CLARIFICATION]` consolidado:** OQ-UC03-02 a OQ-UC03-05 (OQ-UC03-01 cerrada: seguridad fuera de alcance).
+| **D-UC03-11** | `ProvideBaseRateUseCase` es *batch-only* (una consulta por invocación) y nunca lanza `BASE_RATE_NOT_AVAILABLE` | SPEC 03 RF-002; plan de UC02 | UC03 invoca con lista de un elemento y correlaciona por `boat_id`; resultado vacío ⇒ `BaseRateUnavailableException` (regla 11) | Decidida |
 
 ## Implementation Phases
 
@@ -325,7 +311,7 @@ Preguntas que este plan no puede resolver con el SPEC 03, el plan general ni los
 - [ ] **T003** · `DomainException` (`domain/exception`), base del árbol de excepciones del núcleo común.
 - [ ] **T004** · consumir `FailureRecorderPort` y `operational_failure` por sus firmas compartidas; registro `REQUIRES_NEW`, `reservation_id` nullable, sin FK, `payload_ref` referencial y procedimiento de reproceso.
 - [ ] **T005** · consumir por nombre las piezas de UC02: `ProvideBaseRateUseCase`, `ProvideBaseRateCommand`, `BaseRateResult`, `BoatId`, `BaseRate` y `BaseRateException`; UC03 no las implementa ni las redeclara.
-- [ ] **T006** · documentar la DDL exacta de `reservation_information` como tabla propia de UC03; la política y orden global de migraciones quedan abiertos (OQ-CROSS-07 / D-08).
+- [ ] **T006** · documentar la DDL exacta de `reservation_information` como tabla propia de UC03; es la 3.ª migración del historial Flyway único, tras el núcleo y UC11 (general-plan D-31).
 - [ ] **T007** · `ReservationInfoMessage` (`infrastructure/adapter/in/messaging/dto`, claves `snake_case` del contrato) + `ReservationInfoMessageMapper` (mensaje → `RegisterReservationInformationCommand`) [RNF-001; D-UC03-09].
 - [ ] **T008** · `RegisterReservationInformationCommand` (los 7 campos obligatorios) usando los VOs compartidos `ReservationId`/`OwnerId` por nombre [general-plan §3.3; D-UC03-10].
 - [ ] **T009** · Excepciones de dominio: `ReservationInformationValidationException` (permanente) y `BaseRateUnavailableException` (permanente), ambas sobre `DomainException` [CONV].
@@ -333,14 +319,14 @@ Preguntas que este plan no puede resolver con el SPEC 03, el plan general ni los
 ### Phase 3: US1 — Recepción AMQP y validaciones (HU1; RF-001, RF-005, RF-008, RNF-001)
 
 - [ ] **T010** · `RegisterReservationInformationUseCase` (`void`, sin respuesta — RF-006) + dominio `ReservationInformation` (inmutable): invariantes RF-005 (`end_date >= start_date`; `1 <= passengers <= max_capacity`), campos requeridos y `baseRate` a escala 4 [RNF-002].
-- [ ] **T011** · `ReservationInfoListener` + `ReservationInfoRabbitConfig` + `RabbitMqProperties`: exchange `seashare.reservations` (topic, durable), binding `reservation.info.provided`, cola `finance.reservation-info.v1`, DLQ `finance.reservation-info.v1.dlq` **[CONV; OQ-UC03-02]**, `acknowledge-mode=MANUAL` (ack tras persistir), reintentos transitorios 3–5 con *backoff* **[OQ-UC03-03]**; `Message-Id` a logs.
+- [ ] **T011** · `ReservationInfoListener` + `ReservationInfoRabbitConfig` + `RabbitMqProperties`: exchange `seashare.reservations` (topic, durable), binding `reservation.info.provided`, cola `finance.reservation-info.v1`, DLQ `finance.reservation-info.v1.dlq` **[CONV]**, `acknowledge-mode=MANUAL` (ack tras persistir), reintentos transitorios: 5 con *backoff* exponencial (base 1 s) **[CONV]**; `Message-Id` a logs.
 - [ ] **T012** · Tests de contrato del mensaje AMQP (`ReservationInfoListenerContractTest`): parseo del body del contrato; campos ausentes/`null`; tipos/formato inválidos (UUID, fechas, enteros) → mensaje inválido (ack + registro).
 - [ ] **T013** · Pruebas unitarias de dominio `ReservationInformation`: fechas (fin == inicio válido; fin < inicio inválido), pasajeros (1, `max_capacity`, `max_capacity + 1`), campos requeridos, tarifa escala 4 [RF-005, RNF-002].
 
 ### Phase 4: US1 — Registro con inclusión de UC02 e invalidación (HU1; RF-002, RF-003, RF-004, RNF-002, CE-001)
 
 - [ ] **T014** · `ReservationInformationRepository` (`application/port/out`) con la firma publicada en «Firmas referenciadas por otros planes»: `findByReservationId` + `save` (upsert). [general-plan §3.5]
-- [ ] **T015** · `ReservationInformationJpaEntity` + `ReservationInformationJpaRepository` (sobre `reservation_information`, PK `reservation_id`) + `ReservationInformationMapper` (MapStruct, D-04) + `ReservationInformationPersistenceAdapter`: *upsert* `INSERT … ON CONFLICT (reservation_id) DO UPDATE` que sobrescribe el bloque informativo (incluido `base_rate_parameters_id`) y **deja las columnas calculadas y `frozen_parameters_id` en NULL** (invalidación, **D-UC03-02**) dentro de una **transacción única**. Las lecturas (`findByReservationId`) resuelven los valores aplicados con un **join de solo lectura** a la versión referenciada por `frozen_parameters_id` y reconstruyen `FrozenParameters` (D-27, D1).
+- [ ] **T015** · `ReservationInformationJpaEntity` + `ReservationInformationJpaRepository` (sobre `reservation_information`, PK `reservation_id`) + `ReservationInformationMapper` (MapStruct, D-04) + `ReservationInformationPersistenceAdapter`: *upsert* `INSERT … ON CONFLICT (reservation_id) DO UPDATE` que sobrescribe el bloque informativo (incluido `base_rate_parameters_id`) y **deja las columnas calculadas y `frozen_parameters_id` en NULL** (invalidación, **D-UC03-02**) dentro de una **transacción única**. Las lecturas (`findByReservationId`) resuelven los valores aplicados con un **join de solo lectura** a la versión referenciada por `frozen_parameters_id` y reconstruyen `FrozenParameters` (D-27).
 - [ ] **T016** · Pruebas de integración del adaptador (Testcontainers PostgreSQL): persistencia de los 7 campos + `base_rate`; sobrescritura; reescritura de `base_rate_parameters_id`; invalidación de montos + `frozen_parameters_id` + `calculated_at`; lectura de `FrozenParameters` resuelta desde la versión referenciada (join); FK hacia versiones de `financial_parameters`; CHECK de fechas y pasajeros (constraint de BD); versión válida previa conservada ante fallo de persistencia.
 - [ ] **T017** · `RegisterReservationInformationService`: valida (reglas 1 y 5) → incluye UC02 con `List.of(boatId)` y `evaluatedDate = start_date` (RF-002, regla 3) → *upsert* con `FailureRecorderPort` (por nombre) ante fallos; correlaciona por `boat_id`; resultado vacío → `BaseRateUnavailableException` (regla 11); `BaseRateException` FLEET/DYNAMIC → transitorio (regla 12); **sin cálculos de valor** (RF-007).
 - [ ] **T018** · Pruebas unitarias del servicio (Mockito + `InMemoryFailureRecorder`): flujo feliz; upsert re-consulta la tarifa; sin tarifa (permanente: registro, sin persistir, versión previa); FLEET/DYNAMIC (transitorio); validación fallida; una sola invocación a `ProvideBaseRateUseCase`.
@@ -356,7 +342,7 @@ Preguntas que este plan no puede resolver con el SPEC 03, el plan general ni los
 
 ### Phase 6: Polish — **parcialmente compartido con la Fase general**
 
-- [ ] **T025** · Documentación y referencias: publicar la firma de `ReservationInformationRepository`, documentar la DDL exacta y mantener abierta la política global de migraciones; confirmar la DLQ, el reproceso y la topología AMQP. No se edita ningún contrato ni SPEC sin acuerdo.
+- [ ] **T025** · Documentación y referencias: publicar la firma de `ReservationInformationRepository`, documentar la DDL exacta (`reservation_information`, 3.ª migración del historial único) y dejar constancia de la topología AMQP vigente (cola `finance.reservation-info.v1`, DLQ `finance.reservation-info.v1.dlq`; reproceso manual fuera del alcance). No se edita ningún contrato ni SPEC sin acuerdo.
 - [ ] **T026** · revisar cobertura (dominio ≥ 90 %, aplicación ≥ 80 % **[CONV]**) y `./mvnw clean verify` final con las pruebas de aceptación CE-001…CE-004.
 
 ## Dependencies & Execution Order
@@ -380,34 +366,33 @@ T001 ─┬─> T002 ─┬─> T003 ─> T004 ─┐
 ```
 
 - **Grupo 1 (T001–T009)**: Setup y Foundational de UC03, con consumo del catálogo compartido de puertos y VOs.
-- **US1 (T010–T019)**: dominio y listener (T010–T013) → repositorio y adaptador (T014–T016) → servicio y aceptación CE-001 (T017–T019). El adaptador de persistencia y el servicio dependen de la migración V1 (T006).
+- **US1 (T010–T019)**: dominio y listener (T010–T013) → repositorio y adaptador (T014–T016) → servicio y aceptación CE-001 (T017–T019). El adaptador de persistencia y el servicio dependen de la migración de `reservation_information` (T006).
 - **Fallos y unidireccionalidad (T020–T024)**: después del flujo feliz; T020 (política de acuse) depende de T010/T011; las aceptaciones CE-003/CE-004 dependen de T017 y de los dobles.
 - **Polish (T025–T026)**: al final.
-- **Riesgo de secuencia**: T020 (reintentos/DLQ) depende de la decisión externa sobre topología y reproceso AMQP (OQ-UC03-02); T004 depende de que el catálogo compartido de puertos esté disponible, sin crear una implementación paralela en UC03.
+- **Secuencia**: T020 (reintentos/DLQ) usa la topología AMQP vigente (cola `finance.reservation-info.v1` y DLQ `finance.reservation-info.v1.dlq`); T004 depende de que el catálogo compartido de puertos esté disponible, sin crear una implementación paralela en UC03.
 
 ## Notes
 
-- **OQ-CROSS-05 / D-CROSS-05**: la invalidación de montos en el upsert posterior al cobro permanece abierta; UC03 no la resuelve.
+- **Invalidación y carrera con UC04**: el *upsert* invalida montos y la referencia de versión sin tocar los registros inmutables; UC04 recalcula de forma determinista a partir de la información registrada y de la versión referenciada antes de un nuevo cobro (general-plan D-17). La carrera entre ambos se serializa con el bloqueo asesor por reserva (`pg_advisory_xact_lock`, general-plan D-15).
 
-- El SPEC 03 **no** define: nombre/topología de DLQ (OQ-UC03-02), política exacta de reintentos (OQ-UC03-03), metas de rendimiento (OQ-UC03-04) ni la resolución de la carrera con UC04 (OQ-UC03-05) → `[NEEDS CLARIFICATION]`/`[PEND]` con propuesta por defecto registrada. La seguridad del canal está **fuera de alcance** (general-plan §7.1; OQ-UC03-01 cerrada).
-- **Migraciones**: la política global permanece abierta (OQ-CROSS-07 / D-08). UC03 es dueño de la DDL exacta de `reservation_information` y no aprueba el archivo ni el versionado global.
+- **Política AMQP vigente**: cola `finance.reservation-info.v1` con DLQ `finance.reservation-info.v1.dlq` [CONV]; los fallos transitorios se reintentan 5 veces con *backoff* exponencial (base 1 s) antes de la DLQ; el reproceso manual de mensajes queda fuera del alcance de este plan. Sin meta de rendimiento propia. La seguridad del canal está **fuera de alcance** (general-plan §7.1; D-21).
+- **Migraciones**: historial Flyway único ordenado por fase (núcleo → UC11 → UC03 → UC05 → UC09 → UC10 → UC08 → UC12; general-plan D-31); UC03 aporta la 3.ª migración con la DDL exacta de `reservation_information`.
 - **Reentregas**: sin dedup por `Message-Id` (D-07); el *upsert* re-invalida montos y UC04 recalcula determinista (D-17). Una reentrega idéntica después de un cálculo obliga a re-ejecutar UC04 antes de un nuevo cobro (D-UC03-03).
 - `ProvideBaseRateUseCase`, `BoatId`, `BaseRate` y `BaseRateException` son de **UC02** (plan ya redactado): UC03 los consume por nombre y por `port.in`, no los implementa ni los prueba.
 - `FailureRecorderPort`/`operational_failure` son **compartidos**: UC03 los referencia por nombre y usa `InMemoryFailureRecorder` en las pruebas. El registro se aísla con `REQUIRES_NEW` y existe procedimiento de reproceso.
-- UC03 **no depende del puerto de `financial_parameters`** (no calcula seguro; RF-007); la versión usada por la tarifa dinámica llega vía `BaseRateResult.parametersId` (UC02) y se persiste como `base_rate_parameters_id`. El adaptador de UC03 hace un **join de solo lectura** a la versión referenciada por `frozen_parameters_id` al reconstruir `FrozenParameters` (D-27, D1). **No usa** `PricingCalculator`/`ReservationValueCalculator` (esos cálculos son de UC01 y UC04).
-- Los planes posteriores leerán `reservation_information` por nombre; la firma de `ReservationInformationRepository` se publica en «Firmas referenciadas por otros planes» (D-09).
-- Etiquetas usadas: `[SPEC]` (SPEC 03 y contrato), `[CONV]` (general-plan e inferido), `[PEND]`/`[NEEDS CLARIFICATION]` (sin definir).
+- UC03 **no depende del puerto de `financial_parameters`** (no calcula seguro; RF-007); la versión usada por la tarifa dinámica llega vía `BaseRateResult.parametersId` (UC02) y se persiste como `base_rate_parameters_id`. El adaptador de UC03 hace un **join de solo lectura** a la versión referenciada por `frozen_parameters_id` al reconstruir `FrozenParameters` (D-27). **No usa** `PricingCalculator`/`ReservationValueCalculator` (esos cálculos son de UC01 y UC04).
+- Los planes posteriores leerán `reservation_information` por nombre; la firma de `ReservationInformationRepository` se publica en «Firmas referenciadas por otros planes».
+- Etiquetas usadas: `[SPEC]` (SPEC 03 y contrato), `[CONV]` (general-plan e inferido).
 
 ## Checklist de auto-revisión
 
 - [ ] Estructura idéntica a `plan-template.md` (Summary con tabla de trazabilidad, Technical Context, Project Structure, Reglas de negocio, Contratos/Migración, Estrategia de testing, fases con `T0NN`, Dependencies, Notes).
 - [ ] Sin placeholders ni tareas de ejemplo; sin etiquetas "Option 1/2".
 - [ ] Fecha `2026-10-09` y enlace a `spec.md`.
-- [ ] Toda regla marcada `[SPEC]`, `[CONV]`, `[PEND]` o `[NEEDS CLARIFICATION]`.
-- [ ] Contradicciones `D-UC03-01` a `D-UC03-11` en «Discrepancias y puntos abiertos» con decisión explícita, sin resolución silenciosa; D-UC03-01 mantiene abierta la política de migraciones.
-- [ ] Preguntas abiertas definidas en el propio plan (OQ-UC03-02 a OQ-UC03-05; OQ-UC03-01 cerrada por seguridad fuera de alcance), con remisión a las OQ del general (OQ-01, OQ-06, OQ-09) cuando corresponden.
+- [ ] Toda regla marcada `[SPEC]` o `[CONV]`.
+- [ ] Decisiones `D-UC03-01` a `D-UC03-11` en «Decisiones de diseño» con decisión explícita y estado; la DDL de `reservation_information` es la 3.ª migración del historial único (general-plan D-31).
 - [ ] Cada RF/RNF/CE/HU del SPEC 03 trazado a componente, tarea y prueba; pruebas `ce001_…`–`ce004_…`.
-- [ ] DDL exacta de `reservation_information` propiedad de UC03, con los `CHECK` de RF-005; política de migraciones abierta.
-- [ ] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§13) aplicadas; sin cálculos de valor (RF-007) y sin consultas a Flota por owner/capacidad (RF-003).
+- [ ] DDL exacta de `reservation_information` propiedad de UC03, con los `CHECK` de RF-005, aportada como 3.ª migración del historial Flyway único (general-plan D-31).
+- [ ] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§11) aplicadas; sin cálculos de valor (RF-007) y sin consultas a Flota por owner/capacidad (RF-003).
 - [ ] «Firmas referenciadas por otros planes» declarado: `RegisterReservationInformationUseCase` no se expone; `ReservationInformationRepository` publicado para los demás planes y UC04.
 - [ ] Referencias por nombre: `ProvideBaseRateUseCase` (UC02), `FailureRecorderPort`/`operational_failure` y VOs compartidos; sin redefiniciones ni coordinación por tareas externas.
