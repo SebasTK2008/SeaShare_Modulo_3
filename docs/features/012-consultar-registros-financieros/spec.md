@@ -8,9 +8,9 @@
 
 Como Propietario, quiero consultar de forma paginada los registros de cobro, reembolso, dispersión y comisión relacionados con mis reservas, de manera que pueda revisar el detalle de mis operaciones sin acceder a información de otros propietarios.
 
-**Por qué esta prioridad**: El Propietario necesita consultar cada operación financiera de sus reservas para verificar cobros, reembolsos y dispersiones. La paginación evita respuestas de tamaño no controlado y el alcance por propietario evita la exposición de información de terceros.
+**Por qué esta prioridad**: El Propietario necesita consultar cada operación financiera de sus reservas para verificar cobros, reembolsos y dispersiones. La paginación evita respuestas de tamaño no controlado y el alcance declarado limita la consulta a los registros del propietario indicado.
 
-**Prueba Independiente**: Con registros de cobro, reembolso, dispersión y comisión asociados a reservas de varios propietarios, enviar al sistema una solicitud paginada desde un Propietario y validar que cada página contiene únicamente registros relacionados con reservas de dicho Propietario y los metadatos de paginación correspondientes.
+**Prueba Independiente**: Con registros de cobro, reembolso, dispersión y comisión asociados a reservas de varios propietarios, enviar al sistema una solicitud paginada con alcance declarado de Propietario y validar que cada página contiene únicamente registros relacionados con el `owner_id` declarado y los metadatos de paginación correspondientes.
 
 **Escenarios de Aceptación**:
 
@@ -56,7 +56,7 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
   El sistema responde con un error controlado y no ejecuta la consulta.
 
 - **¿Puede un Propietario consultar registros de otro propietario usando un filtro de propietario o de embarcación?**
-  No. El sistema aplica primero el alcance del Propietario sobre sus reservas y después los filtros solicitados; ningún filtro puede ampliar dicho alcance.
+  En el modelo del sistema la identidad llega como dato plano: el sistema aplica primero el alcance declarado (`owner_id` recibido en la solicitud) y después los filtros solicitados; ningún filtro puede ampliar dicho alcance. El sistema no valida la identidad declarada (seguridad fuera de alcance; general-plan §7.1).
 
 - **¿Cómo se consulta el tipo de registro comisión?**
   Comisión es una opción del filtro por tipo de transacción, junto con cobro, reembolso y dispersión. Cuando el solicitante selecciona comisión, el sistema devuelve únicamente registros de tipo `RegistroDeComisión`; no se aplica ninguna comparación numérica sobre el monto de comisión.
@@ -68,9 +68,9 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir del Propietario o del Administrador Financiero una solicitud de consulta que incluya el número de página y, opcionalmente, el tamaño de página y los filtros.
+- **RF-001**: El sistema DEBE recibir del Propietario o del Administrador Financiero una solicitud de consulta que incluya el alcance declarado (Propietario con su `owner_id`, o Administrador Financiero), el número de página y, opcionalmente, el tamaño de página y los filtros.
 - **RF-002**: El sistema DEBE aceptar filtros por tipo de transacción (cobro, reembolso, dispersión o comisión), propietario asociado y embarcación asociada. Cuando el tipo seleccionado sea comisión, el resultado DEBE contener únicamente registros de tipo `RegistroDeComisión`; no se DEBE aplicar una comparación numérica sobre el monto de comisión.
-- **RF-003**: El sistema DEBE limitar las consultas del Propietario a los registros asociados a sus reservas y permitir al Administrador Financiero consultar los registros de toda la plataforma.
+- **RF-003**: El sistema DEBE aplicar el alcance declarado en la solicitud: cuando el alcance sea de Propietario, limitar los resultados a los registros asociados al `owner_id` declarado; cuando sea de Administrador Financiero, consultar los registros de toda la plataforma. El sistema no valida la identidad del llamador (seguridad fuera de alcance): procesa los datos declarados tal como llegan.
 - **RF-004**: El sistema DEBE consultar los registros inmutables e informativos de cobro (`RegistroDeCobro`), reembolso (`RegistroDeReembolso`), dispersión (`RegistroDeDispersión`) y comisión (`RegistroDeComisión`), omitiendo las intenciones de operación que aún no han sido confirmadas.
 - **RF-005**: El sistema DEBE incluir en cada registro devuelto el tipo de registro, la reserva asociada, el propietario y la embarcación asociados, el monto y la fecha y hora de creación del registro (fechaHoraCreación).
 - **RF-006**: El sistema DEBE incluir la referencia externa de la Pasarela de Pago cuando se encuentre disponible.
@@ -78,7 +78,7 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 - **RF-008**: El sistema DEBE utilizar diez registros como tamaño de página por defecto cuando el solicitante no lo indique.
 - **RF-009**: El sistema DEBE responder con un error controlado cuando la página exceda el total disponible o cuando los parámetros de paginación sean inválidos.
 - **RF-010**: El sistema NO DEBE crear, modificar ni eliminar registros financieros como parte de esta consulta.
-- **RF-011**: El sistema DEBE exponer este caso de uso exclusivamente al Propietario y al Administrador Financiero.
+- **RF-011**: El sistema DEBE exponer este caso de uso al Propietario y al Administrador Financiero como usuarios esperados, sin implementar validación de identidad ni de rol (seguridad fuera de alcance; general-plan §7.1, D-21).
 - **RF-012**: El sistema NO DEBE consultar al Sistema de Gestión de Flota para resolver el alcance ni los filtros.
 - **RF-013**: El sistema NO DEBE exportar archivos desde este caso de uso; la exportación corresponde a "Consultar informe financiero" (SPEC 13).
 
@@ -94,7 +94,7 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 - **RegistroDeReembolso (Entidad Inmutable, definida en SPEC 9)**: En este caso de uso es únicamente consultada y representa una métrica informativa de una liberación o reembolso confirmado; no participa en cálculos.
 - **RegistroDeDispersión (Entidad Inmutable, definida en SPEC 10)**: En este caso de uso es únicamente consultada y representa una métrica informativa de una captura o liquidación confirmada; no participa en cálculos.
 - **RegistroDeComisión (Entidad Inmutable, definida en SPEC 10)**: En este caso de uso es únicamente consultada y representa una métrica informativa de la comisión confirmada; no participa en cálculos.
-- **SolicitudConsultaRegistrosFinancieros (DTO)**: Información recibida desde el Propietario o el Administrador Financiero. Contiene el número de página, el tamaño opcional y los filtros por tipo de transacción, propietario y embarcación. El tipo de transacción puede ser cobro, reembolso, dispersión o comisión.
+- **SolicitudConsultaRegistrosFinancieros (DTO)**: Información recibida desde el Propietario o el Administrador Financiero. Contiene el alcance declarado (rol y `owner_id` cuando corresponda), el número de página, el tamaño opcional y los filtros por tipo de transacción, propietario y embarcación. El tipo de transacción puede ser cobro, reembolso, dispersión o comisión.
 - **RegistroFinancieroResultado (DTO)**: Representa el detalle de una métrica financiera informativa e inmutable. Contiene el tipo de registro, la reserva, el propietario y la embarcación asociados, el monto, la fecha y hora de creación (fechaHoraCreación) y la referencia externa cuando exista.
 - **PáginaDeRegistrosFinancierosResultado (DTO)**: Resultado que el sistema devuelve para cada solicitud. Contiene la lista de registros de la página y sus metadatos de paginación.
 
@@ -102,7 +102,7 @@ Como Administrador Financiero, quiero consultar de forma paginada los registros 
 
 ### Resultados Medibles
 
-- **CE-001**: Alcance del Propietario, "100% de las páginas consultadas por un Propietario contienen únicamente registros relacionados con sus reservas, con cero (0) registros de otros propietarios expuestos en pruebas automatizadas".
+- **CE-001**: Alcance Declarado del Propietario, "100% de las páginas consultadas con alcance de Propietario contienen únicamente registros relacionados con el `owner_id` declarado, con cero (0) registros de otros propietarios expuestos en pruebas automatizadas".
 - **CE-002**: Cobertura Global, "100% de las páginas consultadas por el Administrador Financiero corresponden al conjunto global de registros que coincide con los filtros indicados, sin omisiones ni duplicados detectados en pruebas automatizadas".
 - **CE-003**: Consistencia de Paginación, "100% de las respuestas se entregan paginadas y el tamaño utilizado por defecto es de diez registros, con cero (0) respuestas que entreguen el conjunto completo en una sola página".
 - **CE-004**: Integridad del Detalle, "100% de los registros devueltos incluyen el tipo de registro, la reserva, el propietario, la embarcación y el monto; la referencia externa se incluye cuando está disponible y el cuarto tipo corresponde a `RegistroDeComisión`".

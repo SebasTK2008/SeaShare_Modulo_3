@@ -30,7 +30,7 @@ Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasha
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [general-plan]
-**Primary Dependencies**: Spring Boot 4.1.1. Para UC06: Spring Web MVC, Validation, Security, MapStruct (solo si se mapea con MapStruct), ArchUnit. Las dependencias se registran en el setup común, sin referencias a tareas externas.
+**Primary Dependencies**: Spring Boot 4.1.1. Para UC06: Spring Web MVC, Validation, MapStruct (solo si se mapea con MapStruct), ArchUnit. Las dependencias se registran en el setup común, sin referencias a tareas externas. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
 **Storage**: PostgreSQL 16+; UC06 **solo lee** `charge_intent` (tabla de UC05) [general-plan §3.5]; no tiene migraciones propias
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers (PostgreSQL), WireMock (solo para demostrar CE-002), ArchUnit [general-plan]
 **Target Platform**: Contenedores Docker (Linux) [general-plan]
@@ -86,7 +86,7 @@ src/test/java/com/seashare/seasharem3/
 ├── domain/valueobject/PaymentConfirmationStatusTest.java               # T002
 ├── application/service/GetPaymentConfirmationServiceTest.java          # T004
 ├── contract/UC06PaymentConfirmationContractTest.java                   # T009, T013
-├── infrastructure/adapter/in/web/PaymentConfirmationSecurityTest.java  # T008
+├── infrastructure/adapter/in/web/PaymentConfirmationSecurityTest.java  # T008 retirada — seguridad fuera de alcance (general-plan §7.1)
 ├── infrastructure/adapter/out/persistence/PaymentConfirmationLatestIntentIT.java  # T010
 └── acceptance/Uc06AcceptanceTest.java                                  # T011, T012, T013
 ```
@@ -99,7 +99,7 @@ El puerto de salida `ChargeIntentRepository` **no** se crea aquí: es de UC05 y 
 
 Todas provienen del SPEC 6 y del contrato `UC06-confirmacion-pago.md`, salvo indicación.
 
-1. **Quién puede llamarlo** [SPEC RF-001; contrato]: solo el Sistema de Reservas y Operaciones. Mecanismo de autenticación `[PEND OQ-01 del plan general; ver OQ-UC06-01]`.
+1. **Quién puede llamarlo** [SPEC RF-001; contrato]: el Sistema de Reservas y Operaciones es el usuario esperado; el sistema **no valida** el llamador (seguridad fuera de alcance; general-plan §7.1, D-21).
 2. **Búsqueda** [SPEC RF-002]: se consulta la `ChargeIntent` de la reserva. Una reserva puede tener varias (UC05 RF-004A); se devuelve **la más reciente por `created_at`** **[CONV]** (el SPEC 6 habla de "la" intención, en singular).
 3. **Estados** [SPEC RF-003; general-plan §10]:
 
@@ -116,8 +116,8 @@ Todas provienen del SPEC 6 y del contrato `UC06-confirmacion-pago.md`, salvo ind
 5. **Montos y referencia** [SPEC RF-004]: `authorized_amount`, `captured_amount`, `released_amount`, `charged_amount`, `external_reference` y `detail` salen de la intención; los no disponibles van como `null`. Detalle: la columna `status_detail` la agrega UC05 (D-UC05-02). Escala de los montos en JSON `[PEND OQ-UC06-02]`.
 6. **Solo lectura** [SPEC RF-002, caso extremo "solicitud repetida"]: cada consulta devuelve el estado vigente, sin crear ni modificar registros.
 7. **Sin intención** [SPEC RF-005, RNF-003]: `404 CHARGE_INTENT_NOT_FOUND`, `retryable: true` (UC05 la crea de forma asíncrona tras `PENDING`) [contrato; README E5].
-8. **Orden de validación** [README §4.3]: E1 (`401`) → E2 (`403`) → E3 → E4 (`400`, `reservation_id` con formato inválido) → E5 (`404`). No se consulta la base antes de validar el formato.
-9. **No definido por el SPEC 6** `[NEEDS CLARIFICATION]` (siguen abiertas): OQ-UC06-01 y OQ-UC06-02.
+8. **Orden de validación** [README §4.3]: E3 → E4 (`400`, `reservation_id` con formato inválido) → E5 (`404`). No se consulta la base antes de validar el formato (E1/E2 retiradas: seguridad fuera de alcance).
+9. **No definido por el SPEC 6** `[NEEDS CLARIFICATION]` (sigue abierta): OQ-UC06-02 (OQ-UC06-01 cerrada: seguridad fuera de alcance).
 
 ## Contratos de API
 
@@ -143,8 +143,6 @@ Fuente: `contracts/rest/UC06-confirmacion-pago.md` [general-plan §6]. El SPEC n
 | HTTP | `code` | Cuándo | `retryable` | En catálogo §3.4 |
 |---|---|---|---|---|
 | 400 | `VALIDATION_ERROR` | `reservation_id` no es un UUID | No | sí |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | sí |
-| 403 | `FORBIDDEN` | El llamador no es el Sistema de Reservas y Operaciones | No | sí |
 | 404 | `CHARGE_INTENT_NOT_FOUND` | No existe `ChargeIntent` para la reserva | Sí | sí |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | sí |
 
@@ -157,7 +155,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 | Unitario (`domain`) | mapeo de los 8 estados internos a los 6 devueltos | `PaymentConfirmationStatusTest` |
 | Unitario (`application`) | intención presente/ausente, nulos, la más reciente | `GetPaymentConfirmationServiceTest` (Mockito sobre `ChargeIntentRepository`) |
 | Contrato (MockMvc) | cuerpos y códigos del contrato; los tres escenarios de aceptación | `UC06PaymentConfirmationContractTest` |
-| Seguridad | `401`/`403` | `PaymentConfirmationSecurityTest` |
+| Seguridad | Retirada — fuera de alcance (general-plan §7.1) | — (T008 retirada) |
 | Integración (Testcontainers) | varias intenciones por reserva → la más reciente | `PaymentConfirmationLatestIntentIT` |
 | Arquitectura | sin dependencia hacia la pasarela | `ArchitectureTest` (base y ampliación T014) |
 
@@ -179,11 +177,11 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 
 | ID | Pregunta | Afecta | Propuesta por defecto | Estado |
 |---|---|---|---|---|
-| **OQ-UC06-01** | ¿Cómo se identifica y autoriza al "Sistema de Reservas y Operaciones" (credencial de servicio)? Equivale a OQ-01 del plan general; el SPEC fija quién, no cómo | T008 | OAuth2 Resource Server (JWT) con credencial de servicio de Reservas (general-plan §7.1) **[CONV]** | **Abierta** |
+| **OQ-UC06-01** | ¿Cómo se identifica y autoriza al "Sistema de Reservas y Operaciones" (credencial de servicio)? Equivale a OQ-01 del plan general; el SPEC fija quién, no cómo | T008 | **Cerrada — Seguridad fuera de alcance**: general-plan §7.1 y D-21; sin autenticación ni pruebas de seguridad (T008 retirada) | **Cerrada** |
 | **OQ-UC06-02** | Escala y modo de redondeo de los montos en el JSON (los ejemplos muestran 2 decimales; internamente son 4). Afecta a todos los bloques | T006 | Sin regla fijada; se aplica la que se acuerde para todos los contratos | **Abierta** |
 | **OQ-UC06-03** | Si hay varias intenciones, ¿se devuelve siempre la más reciente? | T005, T010 | La más reciente por `created_at` | **Cerrada** → **Adoptada.** |
 
-**`[NEEDS CLARIFICATION]` consolidado (abiertas):** OQ-UC06-01 y OQ-UC06-02.
+**`[NEEDS CLARIFICATION]` consolidado (abierta):** OQ-UC06-02 (OQ-UC06-01 cerrada: seguridad fuera de alcance).
 
 ## Implementation Phases
 
@@ -195,7 +193,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 
 ### Phase 2: Foundational
 
-- [ ] **T018** · consumir `DomainException`, `ProblemDetailsConfig` y configuración de seguridad por sus contratos compartidos; UC06 no los redeclara.
+- [ ] **T018** · consumir `DomainException` y `ProblemDetailsConfig` por sus contratos compartidos; UC06 no los redeclara (sin configuración de seguridad: fuera de alcance, general-plan §7.1).
 
 ### Phase 3: US1 — Consultar el resultado de un cobro (HU1; RF-001…RF-006; RNF-001…RNF-003; CE-001…CE-003)
 
@@ -206,7 +204,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 - [ ] **T005** · `GetPaymentConfirmationService`: lee por `ChargeIntentRepository.findLatestByReservationId`, traduce el estado, lanza `ChargeIntentNotFoundException`. Sin dependencia de la pasarela; consume la firma de UC05 por nombre.
 - [ ] **T006** · `PaymentConfirmationController` (`GET`) y `PaymentConfirmationResponse` con las claves del contrato (montos como *string* decimal). Escala condicionada a **OQ-UC06-02**. · M: `none` · P: `pending`
 - [ ] **T007** · configurar el manejador con `CHARGE_INTENT_NOT_FOUND` 404 `retryable: true` y `VALIDATION_ERROR` 400 por `reservation_id` no UUID, reutilizando `ProblemDetailsConfig` compartido.
-- [ ] **T008** · Regla de seguridad del path: solo la credencial del Sistema de Reservas; `401`/`403`. Condicionada a **OQ-UC06-01**; prueba `PaymentConfirmationSecurityTest`. · M: `none` · P: `pending`
+- [ ] **T008** · **Retirada (seguridad fuera de alcance)** — Regla de seguridad del path (solo credencial del Sistema de Reservas; `401`/`403`) y prueba `PaymentConfirmationSecurityTest`; ya no aplica (general-plan §7.1, D-21; OQ-UC06-01 cerrada). Se conserva el número para no romper referencias. · M: `none` · P: `none`
 - [ ] **T009** · Pruebas de contrato MockMvc con los ejemplos del contrato: `200` por cada estado, `400`, `404`, y que repetir la consulta no modifica datos. · M: `none` · P: `pending`
 - [ ] **T010** · Integración (Testcontainers): varias `ChargeIntent` de una reserva → se devuelve la más reciente usando el adaptador de persistencia publicado por UC05.
 - [ ] **T011** · **`ce001_estado_devuelto_coincide_con_la_intencion`** (CE-001). · M: `none` · P: `pending`

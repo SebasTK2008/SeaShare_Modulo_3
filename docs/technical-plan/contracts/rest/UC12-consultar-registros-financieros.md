@@ -6,14 +6,14 @@
 | SPEC | `docs/features/012-consultar-registros-financieros/spec.md` |
 | Dirección | Propietario / Administrador Financiero → sistema |
 | ¿Responde? | Sí (síncrono) |
-| Quién puede llamarlo | Solo Propietario o Administrador Financiero [SPEC RF-011] |
+| Quién puede llamarlo | Solo Propietario o Administrador Financiero (usuarios esperados; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) [SPEC RF-011] |
 | Efectos secundarios | Ninguno (solo lectura) [SPEC RF-010] |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-Permite a Propietarios y Administradores Financieros consultar el histórico de operaciones financieras confirmadas (cobros, reembolsos, dispersiones y comisiones) de manera paginada. El alcance de los datos devueltos se filtra automáticamente según el rol del llamador [SPEC HU1, HU2].
+Permite a Propietarios y Administradores Financieros consultar el histórico de operaciones financieras confirmadas (cobros, reembolsos, dispersiones y comisiones) de manera paginada. El alcance de los datos devueltos se determina por el **alcance declarado** (`scope`) que llega como **dato plano**: el sistema aplica exactamente lo declarado sin validar identidad (seguridad fuera de alcance; general-plan §7.1) [SPEC HU1, HU2].
 
 ## 2. Petición
 
@@ -23,7 +23,6 @@ Permite a Propietarios y Administradores Financieros consultar el histórico de 
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <token>` [PEND OQ-01] |
 | `Accept` | No | `application/json` |
 | `X-Correlation-Id` | No | Cadena libre |
 
@@ -31,10 +30,11 @@ Permite a Propietarios y Administradores Financieros consultar el histórico de 
 
 | Parámetro | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
+| `scope` | string | Sí | Alcance declarado: `OWNER` (Propietario) o `PLATFORM` (Administrador Financiero) | [CONV] — dato plano; el sistema aplica lo declarado sin validar identidad (seguridad fuera de alcance) |
 | `page` | integer | Sí | Número de página (1-indexed) | [SPEC RF-001] |
 | `size` | integer | No | Tamaño de página (por defecto 10) | [SPEC RF-001, RF-008] |
 | `transaction_type` | string | No | Filtro por tipo: `COBRO`, `REEMBOLSO`, `DISPERSION`, `COMISION` | [SPEC RF-002, D-18] |
-| `owner_id` | UUID | No | Filtro por propietario asociado. Un Propietario no puede usarlo para ver a otros | [SPEC RF-002, RF-003, casos extremos] |
+| `owner_id` | UUID | Sí si `scope=OWNER` | Propietario asociado: con `scope=OWNER` es la identidad declarada cuyos registros se devuelven (el sistema no valida pertenencia); con `scope=PLATFORM` es un filtro opcional | [SPEC RF-002, RF-003, casos extremos] |
 | `boat_id` | UUID | No | Filtro por embarcación asociada | [SPEC RF-002] |
 | `reservation_id` | UUID | No | Filtro por reserva asociada. Permite aislar todos los registros financieros de una reserva concreta | [CONV] |
 | `q` | string | No | Búsqueda de texto libre por reserva, arrendatario o propietario | [CONV] |
@@ -43,9 +43,9 @@ Permite a Propietarios y Administradores Financieros consultar el histórico de 
 
 ## 3. Reglas de procesamiento
 
-1. **Determinación del alcance**: El sistema extrae la identidad del llamador (`owner_id` del token) y su rol.
-   - Si es **Propietario**: Solo puede ver registros de sus reservas. El parámetro `owner_id`, de enviarse, no puede ampliar este alcance [SPEC RF-003, casos extremos].
-   - Si es **Administrador Financiero**: Puede ver toda la plataforma y usar `owner_id` para filtrar a un propietario específico [SPEC RF-003].
+1. **Determinación del alcance**: El sistema lee el **alcance declarado** (`scope`) como dato plano y lo aplica sin validar la identidad del llamador (seguridad fuera de alcance; general-plan §7.1).
+   - Si es **`OWNER`**: solo se devuelven registros asociados al `owner_id` declarado (obligatorio en este caso). Otros filtros (`boat_id`, `reservation_id`, etc.) se aplican dentro de ese alcance y nunca lo amplían [SPEC RF-003, casos extremos].
+   - Si es **`PLATFORM`**: se consultan los registros de toda la plataforma; `owner_id` actúa como filtro opcional [SPEC RF-003].
 2. **Origen de datos**: Solo se consultan las cuatro tablas de registros inmutables. Las operaciones en curso o fallidas (intenciones) se ignoran [SPEC RF-004, casos extremos].
 3. **Filtro `COMISION`**: Si `transaction_type=COMISION`, se devuelven únicamente registros de tipo `RegistroDeComisión`. No se hacen comparaciones numéricas [SPEC RF-002, casos extremos].
 4. **Paginación**: Se garantiza que no se omiten ni duplican registros entre páginas [SPEC RNF-003]. Si `page` es mayor al total disponible, se devuelve error controlado [SPEC RF-009, casos extremos]. Si no hay resultados para los filtros, se devuelve una página vacía [SPEC casos extremos].
@@ -101,8 +101,6 @@ Estructura de cada elemento en `content` (DTO `RegistroFinancieroResultado` [SPE
 |---|---|---|---|---|
 | 400 | `VALIDATION_ERROR` | `page` < 1, o enumeración inválida | No | [SPEC RF-009] |
 | 404 | `PAGE_OUT_OF_RANGE` | La página solicitada excede el total de páginas disponibles | No | [SPEC casos extremos] |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
-| 403 | `FORBIDDEN` | El llamador no es Propietario ni Administrador Financiero | No | [SPEC RF-011] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ## 6. Idempotencia y reintentos

@@ -6,7 +6,7 @@
 | SPEC | `docs/features/007-brindar-estado-de-la-reserva/spec.md` |
 | Dirección | Sistema de Reservas y Operaciones → sistema |
 | ¿Responde? | No (unidireccional) |
-| Quién puede publicarlo | Sistema de Reservas y Operaciones |
+| Quién puede publicarlo | Sistema de Reservas y Operaciones (usuario esperado; la aplicación consume el mensaje como **dato plano** — seguridad fuera de alcance, general-plan §7.1) |
 | Efectos secundarios | Dispara UC05 (Procesar cobro), UC09 (Reembolsar) y/o UC10 (Liquidar) según el estado |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).

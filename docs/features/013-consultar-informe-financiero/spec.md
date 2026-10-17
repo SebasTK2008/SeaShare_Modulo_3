@@ -10,7 +10,7 @@ Como Administrador Financiero, quiero consultar datos agregados de los registros
 
 **Por qué esta prioridad**: El Administrador Financiero necesita una visión agregada de la actividad financiera de la plataforma. Este informe no representa un balance financiero global ni incluye costos operativos u otros egresos externos a los registros definidos por el sistema.
 
-**Prueba Independiente**: Con registros de cobro, reembolso, dispersión y comisión confirmados en distintos períodos y asociados a varias reservas, solicitar el informe como Administrador Financiero para cada periodicidad y validar que las métricas corresponden al agregado global del período seleccionado sin contar la comisión dos veces.
+**Prueba Independiente**: Con registros de cobro, reembolso, dispersión y comisión confirmados en distintos períodos y asociados a varias reservas, solicitar el informe con alcance declarado de Administrador Financiero para cada periodicidad y validar que las métricas corresponden al agregado global del período seleccionado sin contar la comisión dos veces.
 
 **Escenarios de Aceptación**:
 
@@ -30,7 +30,7 @@ Como Propietario, quiero consultar datos agregados de los registros financieros 
 
 **Por qué esta prioridad**: El Propietario necesita consultar sus resultados financieros de forma resumida por período, sin revisar cada operación individual. El alcance debe resolverse con la relación registrada entre cada operación financiera y la reserva o el propietario asociado.
 
-**Prueba Independiente**: Con registros financieros relacionados con reservas de varios propietarios y distribuidos en distintos períodos, solicitar el informe como un Propietario y validar que las métricas solo incluyen los registros relacionados con sus reservas, incluyendo sus dispersiones confirmadas a favor, y que la comparación usa el período anterior equivalente.
+**Prueba Independiente**: Con registros financieros relacionados con reservas de varios propietarios y distribuidos en distintos períodos, solicitar el informe con alcance declarado de Propietario (`owner_id`) y validar que las métricas solo incluyen los registros relacionados con el `owner_id` declarado, incluyendo sus dispersiones confirmadas a favor, y que la comparación usa el período anterior equivalente.
 
 **Escenarios de Aceptación**:
 
@@ -50,7 +50,7 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 
 **Por qué esta prioridad**: La exportación permite conservar o compartir el resultado agregado del período consultado. Debe usar exactamente el mismo cálculo y alcance de la consulta para evitar diferencias entre la información mostrada y el archivo generado.
 
-**Prueba Independiente**: Solicitar la exportación de un informe como Administrador Financiero y como Propietario para un mismo tipo de período, validar que cada archivo contiene las métricas agregadas correspondientes, que el alcance del Propietario está restringido a sus reservas y que los valores coinciden con la consulta.
+**Prueba Independiente**: Solicitar la exportación de un informe con alcance declarado de Administrador Financiero y con alcance declarado de Propietario para un mismo tipo de período, validar que cada archivo contiene las métricas agregadas correspondientes, que el alcance de Propietario está restringido al `owner_id` declarado y que los valores coinciden con la consulta.
 
 **Escenarios de Aceptación**:
 
@@ -82,20 +82,20 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
   No. Un depósito pendiente que todavía no tenga un registro financiero confirmado no forma parte del informe. Solo se agrega cuando su reembolso o liquidación queda registrado como operación financiera confirmada.
 
 - **¿Puede un Propietario consultar datos de reservas ajenas?**
-  No. El sistema limita el informe a los registros financieros relacionados con las reservas del Propietario solicitante.
+  En el modelo del sistema la identidad llega como dato plano: el sistema limita el informe a los registros financieros relacionados con el `owner_id` declarado en la solicitud y no valida la identidad declarada (seguridad fuera de alcance; general-plan §7.1).
 
 ## Requisitos *(obligatorio)*
 
 ### Requisitos Funcionales
 
-- **RF-001**: El sistema DEBE recibir del Administrador Financiero o del Propietario una solicitud que indique la periodicidad quincenal, mensual o trimestral y el período seleccionado.
+- **RF-001**: El sistema DEBE recibir del Administrador Financiero o del Propietario una solicitud que indique el alcance declarado (Administrador Financiero, o Propietario con su `owner_id`), la periodicidad quincenal, mensual o trimestral y el período seleccionado.
 - **RF-002**: El sistema DEBE definir las quincenas del día 1 al día 15 y del día 16 al último día del mes, los meses calendario y los trimestres calendario.
 - **RF-003**: El sistema DEBE mostrar por defecto el último período cerrado de la periodicidad seleccionada y la comparación con el período inmediatamente anterior equivalente.
 - **RF-004**: El sistema DEBE permitir seleccionar períodos anteriores de la periodicidad elegida y NO DEBE aceptar rangos libres de fechas.
-- **RF-005**: El sistema DEBE calcular para el Administrador Financiero el agregado de todos los registros financieros confirmados de la plataforma que correspondan al período seleccionado.
-- **RF-006**: El sistema DEBE calcular para el Propietario el agregado de los registros financieros confirmados relacionados con sus reservas que correspondan al período seleccionado.
+- **RF-005**: El sistema DEBE calcular, cuando el alcance declarado sea de Administrador Financiero, el agregado de todos los registros financieros confirmados de la plataforma que correspondan al período seleccionado.
+- **RF-006**: El sistema DEBE calcular, cuando el alcance declarado sea de Propietario, el agregado de los registros financieros confirmados relacionados con el `owner_id` declarado que correspondan al período seleccionado. El sistema no valida la identidad declarada (seguridad fuera de alcance).
 - **RF-007**: El sistema DEBE agregar los cobros, reembolsos y dispersiones confirmados a partir de los montos registrados y la fecha de cada operación.
-- **RF-008**: El sistema DEBE calcular para el Administrador Financiero el neto generado como el total de cobros confirmados menos el total de reembolsos confirmados y menos el total de dispersiones confirmadas, y para el Propietario sus ganancias como el total de dispersiones confirmadas a su favor (liquidación del alquiler, compensaciones por cancelación y depósitos liquidados), sin incluir costos operativos ni conceptos externos a los registros financieros definidos por el sistema.
+- **RF-008**: El sistema DEBE calcular, cuando el alcance declarado sea de Administrador Financiero, el neto generado como el total de cobros confirmados menos el total de reembolsos confirmados y menos el total de dispersiones confirmadas, y cuando el alcance declarado sea de Propietario, sus ganancias como el total de dispersiones confirmadas a favor del `owner_id` declarado (liquidación del alquiler, compensaciones por cancelación y depósitos liquidados), sin incluir costos operativos ni conceptos externos a los registros financieros definidos por el sistema.
 - **RF-009**: El sistema DEBE incluir el total de comisiones representado por los `RegistroDeComisión` confirmados y la cantidad de registros agrupada por tipo. El total de comisiones es una métrica informativa independiente y NO DEBE sumarse ni restarse nuevamente en el cálculo del neto o de las ganancias, porque la comisión ya fue considerada al calcular la liquidación estándar.
 - **RF-010**: El sistema DEBE incluir la variación absoluta y porcentual frente al período inmediatamente anterior equivalente. Si el valor del período anterior es cero, la variación porcentual DEBE indicarse como no calculable.
 - **RF-011**: El sistema DEBE devolver un DTO con datos agregados y NO DEBE devolver mediante este caso de uso el detalle individual paginado definido en "Consultar registros financieros" (SPEC 12).
@@ -117,15 +117,15 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 - **RegistroDeReembolso (Entidad Inmutable, definida en SPEC 9)**: En este caso de uso es únicamente consultada como métrica informativa de los reembolsos confirmados del período; no participa en cálculos de reembolso.
 - **RegistroDeDispersión (Entidad Inmutable, definida en SPEC 10)**: En este caso de uso es únicamente consultada como métrica informativa de las dispersiones confirmadas; no participa en cálculos de dispersión.
 - **RegistroDeComisión (Entidad Inmutable, definida en SPEC 10)**: En este caso de uso es únicamente consultada como métrica informativa de las comisiones confirmadas; no participa en cálculos de cobro, reembolso o dispersión.
-- **SolicitudInformeFinanciero (DTO)**: Información recibida del Administrador Financiero o del Propietario. Contiene la periodicidad y el período seleccionado.
+- **SolicitudInformeFinanciero (DTO)**: Información recibida del Administrador Financiero o del Propietario. Contiene el alcance declarado (rol y `owner_id` cuando corresponda), la periodicidad y el período seleccionado.
 - **InformeFinancieroResultado (DTO)**: Resultado agregado que contiene las métricas del período, el alcance, la periodicidad y la comparación con el período anterior equivalente.
-- **ArchivoExportacionInformeFinanciero (DTO)**: Archivo `.csv` que contiene el informe agregado, la periodicidad, el período, el alcance, el solicitante y la fecha y hora de generación.
+- **ArchivoExportacionInformeFinanciero (DTO)**: Archivo `.csv` que contiene el informe agregado, la periodicidad, el período, el alcance declarado, el solicitante declarado y la fecha y hora de generación.
 
 ## Criterios de Éxito *(obligatorio)*
 
 ### Resultados Medibles
 
-- **CE-001**: Alcance del Informe, "100% de los informes del Administrador Financiero agregan únicamente registros financieros de la plataforma y 100% de los informes del Propietario agregan únicamente registros relacionados con sus reservas, con cero (0) datos de otros alcances expuestos".
+- **CE-001**: Alcance Declarado del Informe, "100% de los informes con alcance declarado de Administrador Financiero agregan únicamente registros financieros de la plataforma y 100% de los informes con alcance declarado de Propietario agregan únicamente registros relacionados con el `owner_id` declarado, con cero (0) datos de otros alcances expuestos".
 - **CE-002**: Precisión del Neto, "100% de los informes del Administrador Financiero calculan el neto generado como cobros confirmados menos reembolsos confirmados menos dispersiones confirmadas, y 100% de los informes del Propietario calculan sus ganancias como el total de dispersiones confirmadas a su favor, con el total de comisiones presentado como métrica informativa independiente y sin doble contabilización".
 - **CE-003**: Consistencia de Periodicidad, "100% de los períodos quincenales, mensuales y trimestrales utilizan los límites fijos definidos y 0 solicitudes con rangos libres de fechas son aceptadas".
 - **CE-004**: Comparación Temporal, "100% de las comparaciones utilizan el período inmediatamente anterior equivalente y las variaciones porcentuales con valor anterior cero se identifican como no calculables".

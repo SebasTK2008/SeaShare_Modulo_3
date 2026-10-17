@@ -6,14 +6,14 @@
 | SPEC | `docs/features/013-consultar-informe-financiero/spec.md` |
 | Dirección | Propietario / Administrador Financiero → sistema |
 | ¿Responde? | Sí (síncrono) |
-| Quién puede llamarlo | Solo Propietario o Administrador Financiero [SPEC RF-001] |
+| Quién puede llamarlo | Solo Propietario o Administrador Financiero (usuarios esperados; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) [SPEC RF-001] |
 | Efectos secundarios | Ninguno (solo lectura) |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-Devuelve datos agregados de los registros financieros para un período específico. Para el Administrador Financiero, calcula el neto generado de toda la plataforma; para el Propietario, calcula sus ganancias por las reservas de sus embarcaciones [SPEC HU1, HU2].
+Devuelve datos agregados de los registros financieros para un período específico. Con el alcance declarado `PLATFORM` (Administrador Financiero), calcula el neto generado de toda la plataforma; con el alcance declarado `OWNER` (Propietario), calcula las ganancias de las reservas del `owner_id` declarado. El alcance llega como **dato plano** y el sistema no valida identidad (seguridad fuera de alcance; general-plan §7.1) [SPEC HU1, HU2].
 
 ## 2. Petición
 
@@ -23,7 +23,6 @@ Devuelve datos agregados de los registros financieros para un período específi
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <token>` [PEND OQ-01] |
 | `Accept` | No | `application/json` |
 | `X-Correlation-Id` | No | Cadena libre |
 
@@ -31,6 +30,8 @@ Devuelve datos agregados de los registros financieros para un período específi
 
 | Parámetro | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
+| `scope` | string | Sí | Alcance declarado: `OWNER` (Propietario) o `PLATFORM` (Administrador Financiero) | [CONV] — dato plano; el sistema aplica lo declarado sin validar identidad (seguridad fuera de alcance) |
+| `owner_id` | UUID | Sí si `scope=OWNER` | Identidad declarada del Propietario cuyos registros se agregan; el sistema no valida pertenencia | [SPEC RF-006] |
 | `periodicity` | string | Sí | `QUINCENAL`, `MENSUAL`, `TRIMESTRAL` | [SPEC RF-001, D-18] |
 | `period` | string | No | Identificador del período en el formato canónico según periodicidad (ver tabla). Si no se envía, el sistema usa el último período cerrado | [SPEC RF-001, RF-003] |
 
@@ -47,12 +48,12 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
 ## 3. Reglas de procesamiento
 
 1. **Períodos**: Quincenas (días 1-15 y 16-fin), Meses (calendario), Trimestres (Ene-Mar, Abr-Jun, Jul-Sep, Oct-Dic). No se aceptan rangos libres de fechas [SPEC RF-002, RF-004].
-2. **Alcance**:
-   - **Propietario**: Agrega solo los registros vinculados a sus reservas [SPEC RF-006].
-   - **Administrador Financiero**: Agrega todos los registros de la plataforma [SPEC RF-005].
+2. **Alcance declarado** (dato plano, sin validar identidad; general-plan §7.1):
+   - **`OWNER`**: Agrega solo los registros vinculados al `owner_id` declarado [SPEC RF-006].
+   - **`PLATFORM`**: Agrega todos los registros de la plataforma [SPEC RF-005].
 3. **Fórmula**:
-   - **Administrador Financiero**: `Neto = (Total Cobros) - (Total Reembolsos) - (Total Dispersiones)`.
-   - **Propietario**: `Ganancia = Total Dispersiones` (a su favor) [SPEC RF-008].
+   - **`PLATFORM`**: `Neto = (Total Cobros) - (Total Reembolsos) - (Total Dispersiones)`.
+   - **`OWNER`**: `Ganancia = Total Dispersiones` (a favor del `owner_id` declarado) [SPEC RF-008].
 4. **Comisiones**: El total de comisiones es informativo. NO se suma ni resta nuevamente en las fórmulas anteriores [SPEC RF-009].
 5. **Cantidades**: Se agrupa el número de registros por tipo (cobros, reembolsos, dispersiones, comisiones) [SPEC RF-009].
 6. **Comparación temporal**: Se calcula contra el período inmediatamente anterior equivalente. Variación absoluta y porcentual. Si el valor anterior es 0, la variación porcentual es `null` o se marca como no calculable [SPEC RF-010].
@@ -115,9 +116,7 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `INVALID_PERIOD` | Periodicidad no soportada o período con formato inválido | No | [SPEC RF-004, casos extremos] |
-| 400 | `VALIDATION_ERROR` | Falta `periodicity` u otro parámetro con tipo o formato incorrecto | No | [CONV] |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
-| 403 | `FORBIDDEN` | El llamador no es Propietario ni Administrador Financiero | No | [SPEC] |
+| 400 | `VALIDATION_ERROR` | Falta `periodicity` o `scope`, o algún parámetro tiene tipo/formato incorrecto | No | [CONV] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ## 6. Idempotencia y reintentos

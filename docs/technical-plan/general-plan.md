@@ -18,7 +18,7 @@ Este documento define el orden **general** del proyecto: arquitectura, tecnolog�
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`)
   
-**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Security (OAuth2 Resource Server), Actuator, Flyway, MapStruct, Resilience4j, ShedLock (opcional, §5.3), Micrometer (+ Prometheus), ArchUnit
+**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Actuator, Flyway, MapStruct, Resilience4j, ShedLock (opcional, §5.3), Micrometer (+ Prometheus), ArchUnit
   
 **Storage**: PostgreSQL 16+ (`NUMERIC` para dinero, `timestamptz` para instantes)
 **Messaging**: RabbitMQ 3.13+ (colas *quorum*, confirmaciones de publicador, DLQ)
@@ -28,7 +28,7 @@ Este documento define el orden **general** del proyecto: arquitectura, tecnolog�
 **Target Platform**: Contenedores Docker (Linux); desarrollo local con Docker Compose
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio
 
-**Constraints**: `BigDecimal` en todo cálculo monetario, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de varios UC]**; sin datos sensibles de medios de pago **[SPEC UC05 RNF-004]**; registros financieros inmutables y trazables a su intención; parámetros financieros congelados por reserva **[SPEC UC04 RF-008]**; manejo controlado de fallas externas **[SPEC RNF-003 de varios UC]**
+**Constraints**: `BigDecimal` en todo cálculo monetario, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de varios UC]**; sin datos sensibles de medios de pago **[SPEC UC05 RNF-004]**; registros financieros inmutables y trazables a su intención; parámetros financieros congelados por reserva (referencia a la versión usada) **[SPEC UC04 RF-008]**; manejo controlado de fallas externas **[SPEC RNF-003 de varios UC]**
 **Scale/Scope**: 13 casos de uso; sistemas externos: Reservas, Flota, Pasarela; clientes Administrador Financiero y Propietario. El SPEC no define volumen: el diseño es *stateless* y escala horizontalmente.
 
 
@@ -66,7 +66,7 @@ Este documento define el orden **general** del proyecto: arquitectura, tecnolog�
 6. **El sistema no gestiona TTL, ventanas de cancelación ni disputas**: eso es de Reservas; el sistema solo reacciona al estado recibido (UC07, UC08).
 7. **Registros inmutables y trazables**: `RegistroDeCobro`, `RegistroDeReembolso`, `RegistroDeDispersión` y `RegistroDeComisión` se crean solo con confirmación externa exitosa y nunca se modifican. Cada uno conserva la referencia obligatoria a la intención que lo originó (`intencionDeCobroId`, `intencionDeReembolsoId`, `intencionDeDispersiónId`); el `RegistroDeComisión` además se relaciona directamente con el `RegistroDeDispersión` confirmado (UC05 RF-004B, UC09 RF-006A, UC10 RF-009A y RF-014).
 8. **Un timeout no es un fallo** (UC05 RNF-003): se concilia, no se asume. **La idempotencia se define por intento**: cada intención lleva su propia clave idempotente, una misma reserva puede tener varias intenciones de cobro (reintentos tras rechazo o expiración) y la prevención del cobro doble recae sobre la clave de cada intento, no sobre la unicidad de la intención por reserva (UC05 RF-004A).
-9. **Los parámetros financieros se congelan por reserva**: al calcular el valor de la reserva (UC04) se congelan la comisión (%) y la tarifa de seguro por pasajero vigentes en ese momento; no son retroactivos. Un cambio posterior en UC11 solo afecta cálculos posteriores y nunca los valores ya registrados (UC04 RF-008, UC11 RF-007).
+9. **Los parámetros financieros se congelan por reserva**: al calcular el valor de la reserva (UC04) se registra la **referencia a la versión vigente** de los parámetros; la comisión (%) y la tarifa de seguro por pasajero aplicadas se resuelven de esa versión (no se copian); no son retroactivas. Un cambio posterior en UC11 solo afecta cálculos posteriores y nunca los valores ya registrados (UC04 RF-008, UC11 RF-007).
 
 ---
 
@@ -114,13 +114,13 @@ flowchart LR
 |---|---|---|
 | Dominio | `com.seashare.seasharem3.domain` | Entidades, value objects, políticas y cálculos puros (sin Spring, JPA ni Jackson) |
 | Aplicación | `com.seashare.seasharem3.application` | Puertos de entrada (un caso de uso por interfaz), servicios que los implementan y puertos de salida |
-| Infraestructura | `com.seashare.seasharem3.infrastructure` | Adaptadores de entrada y salida, persistencia, mensajería, seguridad, configuración |
+| Infraestructura | `com.seashare.seasharem3.infrastructure` | Adaptadores de entrada y salida, persistencia, mensajería, configuración |
 
 
 | Concepto compartido | Casos de uso que lo tocan |
 |---|---|
-| `InformaciónDeReserva` (incluye montos calculados y parámetros congelados) | UC03 la crea (y al reenviarse invalida los montos); UC04 la actualiza (montos y parámetros congelados); UC05, UC07, UC08, UC09 y UC10 la leen |
-| `ParámetrosFinancierosGlobales` | UC11 la escribe; UC01, UC02 y UC04 la leen (UC04 congela comisión % y seguro por pasajero en la reserva) |
+| `InformaciónDeReserva` (incluye montos calculados y la referencia a la versión de parámetros congelada) | UC03 la crea (y al reenviarse invalida los montos y la referencia de versión); UC04 la actualiza (montos y `frozen_parameters_id`); UC05, UC07, UC08, UC09 y UC10 la leen |
+| `ParámetrosFinancierosGlobales` | UC11 la escribe; UC01, UC02 y UC04 la leen (UC04 registra en la reserva la referencia a la versión usada, de la que se obtienen la comisión % y el seguro por pasajero) |
 | `IntenciónDeCobro` (varias por reserva, una clave idempotente por intento) / `RegistroDeCobro` (con `intencionDeCobroId`) | UC05 los crea; UC06 consulta la intención; UC08, UC09 y UC10 usan el cobro original; UC12 y UC13 leen el registro |
 | `IntenciónDeReembolso` / `RegistroDeReembolso` (con `intencionDeReembolsoId`) | UC09 los crea; UC12 y UC13 leen el registro |
 | `IntenciónDeDispersión` (conserva la comisión calculada) / `RegistroDeDispersión` (con `intencionDeDispersiónId`) / `RegistroDeComisión` (con `intencionDeDispersiónId` y relación al `RegistroDeDispersión`) | UC10 los crea; UC12 y UC13 leen los registros |
@@ -161,7 +161,7 @@ seashare-m3/
 │   └── infrastructure/
 │       ├── adapter/in/{web,messaging,webhook,scheduler}/   # Controllers + DTOs HTTP, listeners AMQP, webhook, jobs
 │       ├── adapter/out/{persistence,fleet,gateway,messaging}/  # JPA + mappers, cliente Flota, ACL pasarela, outbox
-│       └── config/           # Spring, AMQP, seguridad, Problem Details, observabilidad
+│       └── config/           # Spring, AMQP, Problem Details, observabilidad
 ├── src/main/resources/{application.properties, db/migration/V*.sql}
 ├── src/test/java/…           # espejo de paquetes + arch/ (ArchUnit) + contract/
 ├── Dockerfile
@@ -185,27 +185,27 @@ seashare-m3/
 |---|---|---|---|---|---|
 | UC01 | `EstimateBatchUseCase`, `EstimateSingleUseCase` | `FleetRatePort` (vía UC02), `FinancialParametersRepository` | `web` | — | `tarifa×días + seguro×pasajeros`; en lote siempre 1 día / 1 pasajero / fecha actual (RF-002); días inclusivos; límite de lote; el lote rechaza todo atributo distinto de `boat_ids` (RF-007); advertencia obligatoria en individual |
 | UC02 | `ProvideBaseRateUseCase` (solo interno) | `FleetRatePort`, `FinancialParametersRepository` | — | — | Calendario exacto (RF-006); `max(fin de semana, temporada alta)`; sin tipo/categoría de embarcación |
-| UC03 | `RegisterReservationInformationUseCase` | `ReservationInformationRepository`, `FailureRecorderPort` | `messaging` | `reservation_information` | *Upsert*; `1 ≤ pasajeros ≤ capacidad`; `fin ≥ inicio`; no persiste incompletos; conserva versión válida previa; **al sobrescribir una reserva ya calculada, invalida los montos calculados** y UC04 debe recalcularlos antes de un nuevo cobro |
-| UC04 | `CalculateReservationValueUseCase` | `ReservationInformationRepository`, `FinancialParametersRepository` | `web` | `reservation_information` (montos y parámetros congelados) | Depósito = 10 % de la tarifa base diaria; total = alquiler + seguro + depósito; **congela comisión % y seguro por pasajero vigentes al calcular** y no son retroactivos |
+| UC03 | `RegisterReservationInformationUseCase` | `ReservationInformationRepository`, `FailureRecorderPort` | `messaging` | `reservation_information` | *Upsert*; `1 ≤ pasajeros ≤ capacidad`; `fin ≥ inicio`; no persiste incompletos; conserva versión válida previa; **al sobrescribir una reserva ya calculada, invalida los montos calculados y la referencia de versión congelada** y UC04 debe recalcularlos antes de un nuevo cobro |
+| UC04 | `CalculateReservationValueUseCase` | `ReservationInformationRepository`, `FinancialParametersRepository` | `web` | `reservation_information` (montos y referencia a la versión de parámetros usada) | Depósito = 10 % de la tarifa base diaria; total = alquiler + seguro + depósito; **congela la versión usada al calcular (`frozen_parameters_id`): los valores aplicados (comisión % y seguro por pasajero) se leen de esa versión** y no son retroactivos; el recálculo repetido usa la versión referenciada (D-17) |
 | UC05 | `ProcessChargeUseCase`, `RegisterChargeResultUseCase`, `ExpireStaleAuthorizationsUseCase` | `ChargeGatewayPort`, `ReservationInformationRepository`, `OutboxPort` | invocado por UC07; `webhook`; `scheduler` | `charge_intent`, `charge_record` | Un solo monto (alquiler + seguro + depósito); solo token; **varias `ChargeIntent` por reserva, cada una con su clave idempotente** (reintento tras rechazo o expiración = nueva intención); `RegistroDeCobro` solo con cobro/captura confirmados y con `charge_intent_id` obligatorio |
 | UC06 | `GetPaymentConfirmationUseCase` | `ChargeIntentRepository` | `web` | lectura de `charge_intent` | Solo lectura; no contacta la pasarela (RF-006) |
 | UC07 | `HandleReservationStatusUseCase` | `ProcessChargeUseCase`, `RequestRefundUseCase`, `RequestSettlementUseCase`, `OpenDepositTrackingUseCase` (por `port.in`) | `messaging` | `reservation_status_log` | 10 estados; estado desconocido = inconsistencia registrada; sin respuesta; **identidad de operación = reserva + estado notificado + tipo de operación financiera + clave idempotente** (RF-009A); exclusión mutua del depósito (RF-009B) |
 | UC08 | `HandleDisputeNotificationUseCase`, `OpenDepositTrackingUseCase` | `RequestRefundUseCase`, `RequestSettlementUseCase` (por `port.in`) | `messaging` | `deposit_disposition`, `dispute_event_log` | Solo `PENDING/REJECTED/COMPLETED`; 100 % del depósito; un único desenlace por depósito; refuerza exclusión mutua y coherencia con los flujos de UC07, UC09 y UC10 (RF-008) |
 | UC09 | `RequestRefundUseCase`, `RegisterRefundResultUseCase` | `RefundGatewayPort`, `ReservationInformationRepository`, `ChargeIntentRepository` | invocado por UC07/UC08; `webhook` | `refund_intent`, `refund_record` | Montos por estado; "liberar o reembolsar según el estado del cobro original"; sin descuentos transaccionales propios (RF-012); intención con clave idempotente y vínculo al cobro original; `RegistroDeReembolso` solo con éxito confirmado y con `refund_intent_id` obligatorio; coherencia con la identidad de operación de UC07 (RF-013) |
-| UC10 | `RequestSettlementUseCase`, `RegisterSettlementResultUseCase` | `SettlementGatewayPort`, `ReservationInformationRepository` | invocado por UC07/UC08; `webhook` | `settlement_intent`, `settlement_record`, `commission_record` | Liquidación estándar `alquiler − comisión − seguro`; la comisión se calcula y se conserva en la `IntenciónDeDispersión` (RF-004, RF-014) con el % congelado en la reserva (UC04 RF-008) y no se recalcula con parámetros actuales; penalidades sin comisión ni seguro; `RegistroDeDispersión` (con `settlement_intent_id` obligatorio) + `RegistroDeComisión` atómicos y sin duplicados; la comisión no es atributo de `RegistroDeDispersión`; coherencia con la identidad de operación de UC07 (RF-016) |
-| UC11 | `LoadFinancialParametersUseCase`, `SaveFinancialParametersUseCase` | `FinancialParametersRepository` | `web` | `financial_parameters` | Guardado atómico de los 4 valores; rangos 0–100 % y seguro ≥ 0; sin historial; **no retroactivo: los valores ya congelados en reservas calculadas no cambian** (RF-007); solo Administrador Financiero |
-| UC12 | `QueryFinancialRecordsUseCase` | `FinancialRecordQueryPort` | `web` | vista `v_financial_records` | Alcance del Propietario antes de filtros; paginación sin omitir ni duplicar; solo registros inmutables |
+| UC10 | `RequestSettlementUseCase`, `RegisterSettlementResultUseCase` | `SettlementGatewayPort`, `ReservationInformationRepository` | invocado por UC07/UC08; `webhook` | `settlement_intent`, `settlement_record`, `commission_record` | Liquidación estándar `alquiler − comisión − seguro`; la comisión se calcula y se conserva en la `IntenciónDeDispersión` (RF-004, RF-014) con el % de la **versión referenciada por `frozen_parameters_id`** en la reserva (UC04 RF-008) y no se recalcula con parámetros actuales; penalidades sin comisión ni seguro; `RegistroDeDispersión` (con `settlement_intent_id` obligatorio) + `RegistroDeComisión` atómicos y sin duplicados; la comisión no es atributo de `RegistroDeDispersión`; coherencia con la identidad de operación de UC07 (RF-016) |
+| UC11 | `LoadFinancialParametersUseCase`, `SaveFinancialParametersUseCase` | `FinancialParametersRepository` | `web` | `financial_parameters` | Guardado atómico de los 4 valores creando una **versión nueva** (historial inmutable; vigente = más reciente); rangos 0–100 % y seguro ≥ 0; **no retroactivo: las referencias de versión en reservas calculadas no cambian y los valores aplicados se leen de su versión referenciada** (RF-007); usuario esperado: Administrador Financiero (sin validación; seguridad fuera de alcance) |
+| UC12 | `QueryFinancialRecordsUseCase` | `FinancialRecordQueryPort` | `web` | vista `v_financial_records` | Alcance declarado (`OWNER`/`PLATFORM`, dato plano) antes de filtros; paginación sin omitir ni duplicar; solo registros inmutables |
 | UC13 | `GetFinancialReportUseCase`, `ExportFinancialReportUseCase` | `FinancialReportQueryPort` | `web` | agregación sobre las 4 tablas inmutables | Períodos fijos; neto sin doble contabilizar la comisión; variación porcentual no calculable si el anterior es 0 |
 
 
 ## 4.1 Modelo de datos (PostgreSQL)
 
-Convenciones: `NUMERIC(18,4)` para dinero y porcentajes, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de los UC 02, 03, 04, 05, 09, 10, 11, 12 y 13]**, `timestamptz` para instantes, UUID v4 como identificadores (única excepción: `financial_parameters.id = 1`, entero fijo del singleton), migraciones versionadas con Flyway.
+Convenciones: `NUMERIC(18,4)` para dinero y porcentajes, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de los UC 02, 03, 04, 05, 09, 10, 11, 12 y 13]**, `timestamptz` para instantes, UUID v4 como identificadores (`financial_parameters` agrega además un `version_number` secuencial), migraciones versionadas con Flyway.
 
 | Tabla | Tipo | Propósito / columnas relevantes | Restricciones |
 |---|---|---|---|
-| `financial_parameters` | Singleton | `commission_pct`, `insurance_fee_per_passenger`, `weekend_increase_pct`, `high_season_increase_pct`, `updated_at`, `updated_by` | `id = 1`; `CHECK` de rangos (UC11 RF-013); sin historial ni versión: cada guardado sobrescribe (UC11) |
-| `reservation_information` | Entidad (UC03/UC04) | `reservation_id` PK, `boat_id`, `base_rate`, `start_date`, `end_date`, `passengers`, `owner_id`, `max_capacity`, `rental_amount`, `insurance_amount`, `deposit_amount`, `total_amount`, **`commission_pct_applied`, `insurance_fee_per_passenger_applied`** (parámetros congelados por UC04 RF-008), `calculated_at` | `CHECK (end_date >= start_date)`; `CHECK (passengers BETWEEN 1 AND max_capacity)`; montos y parámetros congelados `NULL` hasta UC04 y escritos juntos; el *upsert* de UC03 sobre una reserva ya calculada deja los montos calculados en `NULL` (invalidación); UC11 nunca modifica estas columnas |
+| `financial_parameters` | **Versionada (append-only)** | `id` (UUID v4), `version_number` (secuencial), `commission_pct`, `insurance_fee_per_passenger`, `weekend_increase_pct`, `high_season_increase_pct`, `created_at`, `created_by` (dato plano, opcional) | `UNIQUE(version_number)`; `CHECK` de rangos (UC11 RF-013); cada guardado **inserta una versión nueva** y ninguna versión se modifica; la **vigente** es la de mayor `version_number` (UC11) |
+| `reservation_information` | Entidad (UC03/UC04) | `reservation_id` PK, `boat_id`, `base_rate`, **`base_rate_parameters_id`** (FK a la versión usada por la tarifa dinámica, UC02/UC03), `start_date`, `end_date`, `passengers`, `owner_id`, `max_capacity`, `rental_amount`, `insurance_amount`, `deposit_amount`, `total_amount`, **`frozen_parameters_id`** (FK a la versión usada por UC04; única fuente de los parámetros aplicados), `calculated_at` | `CHECK (end_date >= start_date)`; `CHECK (passengers BETWEEN 1 AND max_capacity)`; montos y `frozen_parameters_id` `NULL` hasta UC04 y escritos juntos; **los valores congelados no se copian: se resuelven de la versión referenciada** (D-27); `base_rate_parameters_id` se escribe con UC03 (`NULL` si la fecha era regular y el cálculo no usó parámetros); el *upsert* de UC03 sobre una reserva ya calculada deja los montos calculados, `frozen_parameters_id` y `calculated_at` en `NULL` (invalidación); UC11 nunca modifica estas columnas; el FK impide eliminar versiones referenciadas (sin purga de `financial_parameters` mientras existan reservas) |
 | `charge_intent` | Entidad (UC05) | `id`, `reservation_id`, `idempotency_key`, `status`, montos (`authorized/captured/released/charged`), `payment_token_ref`, `payment_method_type`, `last_four`, `external_reference`, `authorization_expires_at`, `created_at`, `version` | `UNIQUE(idempotency_key)`; **sin** `UNIQUE(reservation_id)`: se permiten múltiples intenciones por reserva (UC05 RF-004A); índice `(reservation_id, created_at DESC)` |
 | `charge_record` | **Inmutable** | `id`, **`charge_intent_id`**, `reservation_id`, `owner_id`, `boat_id`, `amount`, `rental_amount`, `insurance_amount`, `deposit_amount`, `payment_method_type`, `last_four`, `external_reference`, `created_at` | `charge_intent_id NOT NULL` con `FOREIGN KEY` a `charge_intent(id)` (UC05 RF-004B); trigger anti-`UPDATE/DELETE` |
 | `refund_intent` | Entidad (UC09) | `id`, `reservation_id`, `trigger` (estado/evento), `scope`, `amount`, `charge_intent_id`, `idempotency_key`, `status`, `external_reference` | `UNIQUE(idempotency_key)`; índice `(reservation_id)` |
@@ -241,19 +241,21 @@ Una intención que no alcanza éxito confirmado (rechazada, cancelada, expirada,
 %%{init: {"theme": "dark"}}%%
 erDiagram
     financial_parameters {
-        int id PK
+        uuid id PK
+        bigint version_number
         numeric commission_pct
         numeric insurance_fee_per_passenger
         numeric weekend_increase_pct
         numeric high_season_increase_pct
-        datetime updated_at
-        string updated_by
+        datetime created_at
+        string created_by
     }
 
     reservation_information {
         uuid reservation_id PK
         uuid boat_id
         numeric base_rate
+        uuid base_rate_parameters_id FK
         datetime start_date
         datetime end_date
         int passengers
@@ -263,8 +265,7 @@ erDiagram
         numeric insurance_amount
         numeric deposit_amount
         numeric total_amount
-        numeric commission_pct_applied
-        numeric insurance_fee_per_passenger_applied
+        uuid frozen_parameters_id FK
         datetime calculated_at
     }
 
@@ -416,7 +417,8 @@ erDiagram
         string name PK
     }
 
-    financial_parameters ||--o{ reservation_information : configures
+    financial_parameters ||--o{ reservation_information : "tarifa dinámica (UC03)"
+    financial_parameters ||--o{ reservation_information : "versión de parámetros usada (UC04)"
     reservation_information ||--o{ charge_intent : has
     reservation_information ||--o| deposit_disposition : resolves
     reservation_information ||--o{ dispute_event_log : records
@@ -488,7 +490,7 @@ sequenceDiagram
   M1-->>F: tarifas base
   F->>F: UC02 tarifa dinámica y registro de InformaciónDeReserva (invalida montos previos si es reenvío)
   M2->>F: POST calculated-value (UC04)
-  F->>F: congela comisión % y seguro por pasajero, calcula y registra el desglose
+  F->>F: registra la versión de parámetros usada, calcula y registra el desglose
   F-->>M2: desglose y total
   M2->>MQ: reservation.status.changed PENDING + payment_token_ref (UC07)
   MQ->>F: consumo
@@ -539,11 +541,11 @@ Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). 
 
 ## 7. Aspectos transversales
 
-### 7.1 Seguridad
-- Los SPEC fijan **quién puede usar cada caso de uso** (UC11 solo Administrador Financiero, RF-008; UC12/UC13 Propietario y Administrador Financiero; UC03/UC07/UC08 solo Reservas, UC03 RF-008) pero **no el mecanismo de autenticación** (**OQ-01**). Propuesta por defecto **[TÉC]**: OAuth2 Resource Server (JWT) con roles `ADMIN_FINANCIERO`, `PROPIETARIO` y una credencial de servicio para Reservas. Las tareas de seguridad de cada plan (`SecurityConfig`, OAuth2) se implementan con esta propuesta por defecto y quedan condicionadas a la confirmación de OQ-01.
-- El `owner_id` del Propietario se toma de la identidad autenticada, nunca del cuerpo ni de la URL (UC12 RF-003, UC13 RF-006).
-- Datos de pago: solo token, tipo y últimos cuatro dígitos; sin PAN, CVV ni vencimiento; el token no se escribe en logs (UC05 RNF-004, CE-005).
-- Webhook: verificación de autenticidad del emisor según el mecanismo de Mercado Pago.
+### 7.1 Seguridad — fuera de alcance
+- **El sistema NO implementa autenticación, autorización, tokens ni identidades verificadas: la seguridad está fuera del alcance del proyecto** (**OQ-01 cerrada**). Los SPEC fijan **quién se espera que use cada caso de uso** (UC11: Administrador Financiero, RF-008; UC12/UC13: Propietario y Administrador Financiero; UC03/UC07/UC08: Reservas, UC03 RF-008), pero el sistema **no valida el llamador**; las tareas de seguridad (`SecurityConfig`, OAuth2) se retiran de los planes.
+- **Datos planos**: cuando un caso de uso necesita identidad o rol (p. ej. `owner_id` y el alcance declarado en UC12/UC13), llegan como datos de la petición o del mensaje y se procesan tal cual, sin validar pertenencia ni permisos. Los módulos externos (Reservas, Flota) tampoco implementan seguridad para integrarse.
+- Datos de pago (**se conserva**): solo token, tipo y últimos cuatro dígitos; sin PAN, CVV ni vencimiento; el token no se escribe en logs (UC05 RNF-004, CE-005). Es protección de datos del medio de pago, no control de acceso.
+- Integración con Mercado Pago (**no es seguridad del proyecto; se conserva**): verificación de firma `x-signature` del webhook y `Authorization: Bearer <ACCESS_TOKEN>` de los comandos salientes, por ser requisitos de la pasarela.
 
 ### 7.2 Resiliencia (valores iniciales **[TÉC]** a calibrar)
 | Dependencia | Timeout | Reintentos | Otros |
@@ -592,17 +594,17 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
 | D-14 | **CQRS ligero** para UC12/UC13: vista `UNION ALL` + SQL de agregación | Pasar por el dominio | Son solo lectura (UC12 RF-010, UC13 RF-013) | 012, 013 |
 | D-15 | **Bloqueo asesor por reserva** + `@Version` en intenciones | Bloqueo global; serializable | Serializa operaciones de dinero de una reserva sin frenar al resto | 007, 008, 009, 010 |
 | D-16 | `deposit_disposition` con *compare-and-set* | Validar solo en cada caso de uso | Un depósito solo puede reembolsarse **o** liquidarse una vez (UC08 CE-005; UC07 RF-009B) | 007, 008, 009, 010 |
-| D-17 | UC04 **recalcula siempre a partir de la información registrada y de los parámetros congelados en la reserva**, por lo que cada solicitud devuelve el mismo desglose (determinista); el *upsert* de UC03 invalida los montos y UC04 debe recalcularlos antes de un nuevo cobro (reemplaza la propuesta anterior de devolver el desglose ya registrado; resuelve OQ-07) | Recalcular con los parámetros vigentes en cada solicitud; devolver el desglose registrado sin recalcular | UC04 define el resultado como determinístico (edge case de solicitud repetida) y RF-008 congela comisión % y seguro por pasajero; así se reconcilia con UC11 RF-007 (los parámetros nuevos no afectan valores ya registrados) | 003, 004, 011 |
+| D-17 | UC04 **recalcula siempre a partir de la información registrada y de la versión de parámetros referenciada en la reserva** (`frozen_parameters_id`; si no hay referencia, la vigente), por lo que cada solicitud devuelve el mismo desglose (determinista); el *upsert* de UC03 invalida los montos y la referencia, y UC04 debe recalcular antes de un nuevo cobro (reemplaza la propuesta anterior de devolver el desglose ya registrado; resuelve OQ-07) | Recalcular con los parámetros vigentes en cada solicitud; devolver el desglose registrado sin recalcular | UC04 define el resultado como determinístico (edge case de solicitud repetida) y RF-008 congela la versión de parámetros usada; así se reconcilia con UC11 RF-007 (los parámetros nuevos no afectan valores ya registrados) | 003, 004, 011 |
 | D-18 | Enumeraciones en inglés (fuente canónica Módulo 2); campos JSON en `snake_case` | Usar enumeraciones en español | Traducción obligatoria para código/contratos | 001, 007, 008 |
 | D-19 | **No cachear** tarifas de Flota | Caché con TTL | Flota es la fuente autoritativa (UC02 RF-004) | 002 |
 | D-20 | Resilience4j (timeout, reintento, *circuit breaker*) configurable | Reintentos manuales | Evita estados de carga infinita (UC01 CE-004) | 001, 002, 005 |
-| D-21 | OAuth2/JWT con roles; `owner_id` desde la identidad (**OQ-01**) | `owner_id` en el cuerpo | El alcance del Propietario no puede depender de un dato manipulable | 011, 012, 013 |
+| D-21 | **Sin autenticación ni autorización** (**OQ-01 cerrada**): la identidad y el rol llegan como **datos planos** (p. ej. `owner_id` y el alcance declarado en UC12/UC13) y el sistema aplica exactamente lo declarado | OAuth2/JWT con roles e identidad desde el token | La seguridad (autenticación, autorización, tokens) está fuera del alcance del proyecto; los módulos externos tampoco la implementan | 011, 012, 013 |
 | D-22 | Límite de lote = **50**; tamaño máximo de página = **100** | 100 como lote; sin máximo | UC01 RF-006 deja abierto "50 o 100"; 50 coincide con la prueba de carga de Flota. El máximo de página protege el tamaño de respuesta (OQ-16) | 001, 012 |
 | D-23 | Código y API en **inglés**; documentación en español con la tabla de §13 | Identificadores en español con tildes | Evita problemas de herramientas; §13 mantiene el lenguaje ubicuo | Todos |
-| D-24 | `financial_parameters` como **singleton sin historial ni versión** (último guardado gana) | Tabla con historial; *optimistic locking* | UC11 indica que se sobrescribe y no se conserva historial; el guardado atómico de una sola fila da una única versión coherente (RNF-003). El efecto no retroactivo lo da el congelamiento por reserva (D-27) | 011 |
+| D-24 | `financial_parameters` **versionada (append-only)**: cada guardado inserta una versión nueva; la **vigente** es la de mayor `version_number`; ninguna versión se modifica | Singleton sin historial (último guardado gana); *optimistic locking* | El versionado conserva el historial inmutable y hace auditable el congelamiento; el guardado atómico sigue dando una única versión coherente (RNF-003) | 011 |
 | D-25 | Tablas técnicas `deposit_disposition`, `dispute_event_log`, `reservation_status_log` | Persistir el estado operativo de la reserva | UC07 prohíbe persistir el estado operativo; solo se guarda lo necesario para idempotencia y para decidir la operación monetaria | 007, 008 |
 | D-26 | **Cada registro inmutable referencia a su intención con una FK obligatoria** (`charge_intent_id`, `refund_intent_id`, `settlement_intent_id`); `commission_record` referencia a su intención y a su `settlement_record` | Registros sin vínculo; vínculo por `reservation_id` + referencia externa | Los SPEC exigen trazabilidad directa del registro inmutable a la operación operativa (UC05 RF-004B, UC09 RF-006A, UC10 RF-009A/RF-014) y lo verifican en CE-002, CE-003 y CE-003/CE-006 | 005, 009, 010 |
-| D-27 | **Congelar comisión % y tarifa de seguro por pasajero en `reservation_information`** al calcular el valor (UC04); los cálculos posteriores (valor repetido, liquidación) usan lo congelado y UC11 no los altera | Leer siempre `financial_parameters` vigentes; historial de versiones de parámetros | UC04 RF-008 y UC11 RF-007 definen que los parámetros no son retroactivos; D-24 mantiene los parámetros globales sin historial | 004, 010, 011 |
+| D-27 | **Congelar la referencia a la versión de parámetros usada** en `reservation_information` (`frozen_parameters_id`, FK) al calcular el valor (UC04): los valores aplicados (comisión % y seguro por pasajero) **no se copian**, se resuelven de esa versión; UC03 registra además la referencia de la tarifa dinámica (`base_rate_parameters_id`); los cálculos posteriores (valor repetido, liquidación) usan la versión referenciada y UC11 no la altera | Copiar los valores aplicados en la reserva; leer siempre la versión vigente sin conservar referencia | UC04 RF-008 y UC11 RF-007 exigen que los parámetros no sean retroactivos; el versionado append-only (D-24) permite resolver los valores por FK sin duplicarlos y sin riesgo de divergencia; el FK impide purgar versiones referenciadas | 004, 010, 011 |
 | D-28 | **Varias `ChargeIntent` por reserva; la unicidad la da `UNIQUE(idempotency_key)`**, no `UNIQUE(reservation_id)`; reintentos técnicos reutilizan la clave y nuevos intentos de negocio generan una nueva | `UNIQUE(reservation_id)` en `charge_intent` (decisión anterior) | UC05 RF-004A permite múltiples intenciones por reserva (reintentos tras rechazo o expiración) y delega la prevención de cobro doble en la clave idempotente de cada intento | 005, 006, 007 |
 
 ---
@@ -612,9 +614,9 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
 
 ### Dependencias entre fases
 - **Setup (1)** → sin dependencias. **Foundational (2)** → depende de 1 y **bloquea** todo lo demás.
-- **UC11 (3)** → antes de 4, 5, 6 y 7 (UC01, UC02 y UC04 leen parámetros; UC04 los congela en la reserva).
+- **UC11 (3)** → antes de 4, 5, 6 y 7 (UC01, UC02 y UC04 leen parámetros; UC04 registra la referencia a la versión usada).
 - **UC02/UC01 (4)** → depende de 3 y 2. **UC03/UC04 (5)** → depende de 4 (UC03 incluye UC02) y 3.
-- **UC05/UC06 (6)** → depende de 5. **UC09/UC10 (7)** → dependen de 6 (cobro original) y 5 (valores y parámetros congelados); pueden desarrollarse en paralelo.
+- **UC05/UC06 (6)** → depende de 5. **UC09/UC10 (7)** → dependen de 6 (cobro original) y 5 (valores y referencia de parámetros); pueden desarrollarse en paralelo.
 - **UC08 (8)** → depende de 7. **UC07 (9)** → depende de 6, 7 y 8 (orquesta todo). **UC12/UC13 (10)** → pueden iniciar tras definirse las tablas inmutables (6 y 7) y completarse al final.
 - **Polish (N)** → después de las fases deseadas.
 
@@ -643,8 +645,8 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
 | IntenciónDeReembolso / RegistroDeReembolso | `RefundIntent` / `RefundRecord` (`intencionDeReembolsoId` → `refundIntentId`) |
 | IntenciónDeDispersión / RegistroDeDispersión | `SettlementIntent` / `SettlementRecord` (`intencionDeDispersiónId` → `settlementIntentId`) |
 | RegistroDeComisión | `CommissionRecord` |
-| ParámetrosFinancierosGlobales | `FinancialParameters` |
-| Parámetros congelados (comisión %, seguro por pasajero) | `FrozenParameters` |
+| ParámetrosFinancierosGlobales | `FinancialParameters` (versionada; `version_number` identifica la versión) |
+| Parámetros congelados (referencia a la versión usada; los valores aplicados se resuelven de esa versión) | `FrozenParameters` |
 | Clave idempotente | `IdempotencyKey` |
 | Tarifa base / tarifa dinámica | `BaseRate` / `DynamicRatePolicy` |
 | Depósito de garantía | `GuaranteeDeposit` |

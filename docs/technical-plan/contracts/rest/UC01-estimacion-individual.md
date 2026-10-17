@@ -6,7 +6,7 @@
 | SPEC | `docs/features/001-solicitar-estimacion-para-reserva/spec.md` |
 | Dirección | Sistema de Reservas y Operaciones → sistema |
 | ¿Responde? | Sí (síncrono) |
-| Quién puede llamarlo | Solo el Sistema de Reservas y Operaciones |
+| Quién puede llamarlo | Solo el Sistema de Reservas y Operaciones (usuario esperado; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) |
 | Efectos secundarios | Ninguno (solo lectura) |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
@@ -23,7 +23,6 @@ Reservas delega el cálculo exacto de una embarcación para un rango de fechas y
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <token>` [PEND OQ-01] |
 | `Content-Type` | Sí | `application/json` |
 | `Accept` | No | `application/json` |
 | `X-Correlation-Id` | No | Cadena libre |
@@ -56,7 +55,7 @@ Reservas delega el cálculo exacto de una embarcación para un rango de fechas y
 6. El campo `warning` es **obligatorio** y su texto proviene del sistema [SPEC HU2, escenario 1].
 7. Embarcación sin tarifa base ⇒ error controlado [SPEC casos extremos]. El SPEC no distingue "sin tarifa" de "no reconocida por Flota" en la modalidad individual; ambos devuelven `BASE_RATE_NOT_AVAILABLE` ([PEND] OQ-11).
 8. Falla de Flota (caída, *timeout*, inalcanzable o respuesta inválida) ⇒ `503 FLEET_UNAVAILABLE`, sin valores asumidos [SPEC casos extremos, RNF-003].
-9. Falta la tarifa de seguro o el porcentaje que exige la fecha de inicio ⇒ `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`, sin estimación parcial [SPEC casos extremos].
+9. No existe **versión vigente** de los parámetros financieros o falta el valor requerido (tarifa de seguro o incremento que exige la fecha de inicio) ⇒ `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`, sin estimación parcial [SPEC casos extremos].
 
 ## 4. Respuesta exitosa
 
@@ -92,17 +91,15 @@ Texto exacto de `warning` (sin punto final, como en el SPEC):
 
 ## 5. Respuestas de error
 
-**Orden de validación** [CONV] (§4.3 del índice): E1 → E2 → E3 → E4 → E6 → E7 → E8 (E5 no aplica: no hay recurso en la URL). Las validaciones de E4 (fechas y tipos) ocurren antes de consultar los parámetros financieros (E6) o llamar a Flota (E7); si Flota responde y la embarcación no tiene tarifa o no la conoce, es E8, no E7.
+**Orden de validación** [CONV] (§4.3 del índice): E3 → E4 → E6 → E7 → E8 (E1/E2 retiradas: sin autenticación; E5 no aplica: no hay recurso en la URL). Las validaciones de E4 (fechas y tipos) ocurren antes de consultar los parámetros financieros (E6) o llamar a Flota (E7); si Flota responde y la embarcación no tiene tarifa o no la conoce, es E8, no E7.
 
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `INVALID_DATE_RANGE` | Formato de fecha inválido, inicio en el pasado o fin anterior al inicio | No | [SPEC casos extremos] |
 | 400 | `VALIDATION_ERROR` | Cuerpo no es JSON o faltan/tienen tipo incorrecto `boat_id` o `passengers` | No | [CONV] |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
-| 403 | `FORBIDDEN` | El llamador no es el Sistema de Reservas y Operaciones | No | [SPEC HU2] |
 | 422 | `BASE_RATE_NOT_AVAILABLE` | Embarcación sin tarifa base o no reconocida por Flota | No | [SPEC casos extremos] + OQ-11 |
 | 503 | `FLEET_UNAVAILABLE` | Flota caída, *timeout*, inalcanzable o con respuesta inválida | Sí | [SPEC casos extremos, RNF-003] |
-| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | Falta el seguro o el porcentaje requerido | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
+| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | No existe versión vigente de los parámetros o falta el valor requerido | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ```json

@@ -6,7 +6,7 @@
 | SPEC | `docs/features/008-brindar-informacion-de-disputa-de-garantia/spec.md` |
 | Dirección | Sistema de Reservas y Operaciones → sistema |
 | ¿Responde? | No (unidireccional) |
-| Quién puede publicarlo | Sistema de Reservas y Operaciones |
+| Quién puede publicarlo | Sistema de Reservas y Operaciones (usuario esperado; la aplicación consume el mensaje como **dato plano** — seguridad fuera de alcance, general-plan §7.1) |
 | Efectos secundarios | Reembolso (UC09) o Liquidación (UC10) total del depósito |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).

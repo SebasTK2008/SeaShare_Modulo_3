@@ -37,7 +37,7 @@ Las contradicciones detectadas contra los documentos de `docs/context/` (uso de 
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC02: Spring Web (cliente `RestClient`), **Resilience4j** (`resilience4j-spring-boot3`: *timeout*, reintento, *circuit breaker*), MapStruct, ArchUnit y **WireMock** (pruebas del cliente Flota). La incorporación de dependencias se documenta como trabajo de setup del repositorio; no se edita el `pom.xml` en silencio.
-**Storage**: PostgreSQL 16+ (**sin tablas propias**): UC02 solo **lee** `financial_parameters` y **escribe** en `operational_failure` mediante los puertos compartidos [SPEC general-plan §4] — `NUMERIC(18,4)` para dinero y porcentajes, `timestamptz` para instantes
+**Storage**: PostgreSQL 16+ (**sin tablas propias**): UC02 solo **lee la versión vigente** de `financial_parameters` y **escribe** en `operational_failure` mediante los puertos compartidos [SPEC general-plan §4] — `NUMERIC(18,4)` para dinero y porcentajes, `timestamptz` para instantes
 **Testing**: JUnit 5, AssertJ, Mockito, AssertJ, WireMock (contratos de Flota), Reactor de Resilience4j, ArchUnit, Awaitility (circuit breaker) [CONV]; el registro de fallas se prueba con un doble en memoria de `FailureRecorderPort` [CONV]
 **Target Platform**: Contenedores Docker (Linux) [SPEC general-plan]
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio [SPEC general-plan]
@@ -149,10 +149,11 @@ public interface ProvideBaseRateUseCase {
 public record ProvideBaseRateCommand(List<BoatId> boatIds,           // obligatorio; vacío ⇒ List.of() sin consultar a Flota
                                      LocalDate evaluatedDate) {}     // obligatorio; fecha de inicio o fecha actual (la resuelve el llamador)
 
-public record BaseRateResult(BoatId boatId, BaseRate baseRate) {}    // tarifa final por unidad de tiempo, escala 4
+public record BaseRateResult(BoatId boatId, BaseRate baseRate,
+                             UUID parametersId) {}                   // parametersId: fila (versión) de `financial_parameters` usada en el ajuste; null si la fecha fue regular (no se leyó). UC03 lo persiste como `base_rate_parameters_id`; UC01 no lo persiste.
 ```
 
-Semántica acordada (D-UC02-09): la «fecha actual» del modo lote la resuelve **UC01** con `ClockPort.today()` y la pasa en el comando, para que coincida exactamente con el `evaluation_date` que UC01 devuelve; UC03 y UC01-individual pasan la `start_date`. **No se publican puertos de salida adicionales**: `FleetRatePort` es interno y `ClockPort`, `FinancialParametersRepository` y `FailureRecorderPort` se consumen desde el núcleo compartido.
+Semántica acordada (D-UC02-09): la «fecha actual» del modo lote la resuelve **UC01** con `ClockPort.today()` y la pasa en el comando, para que coincida exactamente con el `evaluation_date` que UC01 devuelve; UC03 y UC01-individual pasan la `start_date`. Cuando la fecha exige ajuste, `ProvideBaseRateService` lee la **versión vigente** de `financial_parameters` (`findCurrent()`) y entrega su `id` en `parametersId` para que UC03 registre la referencia `base_rate_parameters_id` (general-plan §4); una fecha regular devuelve `parametersId = null`. **No se publican puertos de salida adicionales**: `FleetRatePort` es interno y `ClockPort`, `FinancialParametersRepository` y `FailureRecorderPort` se consumen desde el núcleo compartido.
 
 **Structure Decision**: servicio backend único con Arquitectura Hexagonal de tres capas (`domain`, `application`, `infrastructure`) en un solo módulo Maven, con subpaquetes temáticos sin reglas entre sí, bajo la raíz `com.seashare.seasharem3` [SPEC general-plan §3.2, §3.3, D-02, D-03]. Reglas del §3.4 aplicadas aquí: `domain` sin Spring/JPA/Jackson; `application` solo depende de `domain`; `infrastructure.adapter.out` solo implementa `application.port.out`; los DTOs HTTP/Flota viven en `infrastructure.adapter.out` y `application` trabaja con `command`/`result` (RNF-001); ningún controller accede a un repositorio (**no hay controller en UC02**, RF-003). Identificadores en inglés (D-23) y lenguaje ubicuo §13: *Tarifa base / tarifa dinámica → `BaseRate` / `DynamicRatePolicy`*; `EmbarcacionInfo` y `TarifaBaseResultado` del SPEC 02 no están en §13 → nombres `BoatBaseRateDto` y `BaseRateResult` **[CONV; D-UC02-10]**.
 
@@ -177,8 +178,8 @@ Todas las reglas provienen del SPEC 02 (`spec.md`) salvo indicación. Ejemplos c
 10. **Tarifa base nula o faltante** [SPEC casos extremos; contrato Flota regla 3]: la embarcación no se incluye en el resultado (el llamador correlaciona por `boat_id`) y **UC02 registra el fallo** en `operational_failure` (`reason = BASE_RATE_NOT_AVAILABLE`, transitorio = no). No se inventa un valor.
 11. **Tarifa base inválida** [D-UC02-07, tabla de decisión regla 4]: una `base_rate` no numérica, **negativa o cero** en la respuesta de Flota es una **respuesta inválida de la dependencia** → `BaseRateException(FLEET_UNAVAILABLE)`, transitorio = sí; falla toda la invocación (nunca valores parciales).
 12. **Flota caída, timeout o inalcanzable** [SPEC casos extremos, RNF-003; contratos UC01]: el puerto lanza `BaseRateException(FLEET_UNAVAILABLE)`; el servicio **registra el fallo** y **propaga** la excepción al llamador para que aplique su propio manejo (UC01 → `503 FLEET_UNAVAILABLE`; UC03 → reintento/DLQ según su plan). Nunca una tarifa asumida.
-13. **Porcentaje faltante** [SPEC casos extremos]: si la fecha evaluada exige un porcentaje y no está configurado (fila ausente o campo `null`) → información incompleta → `BaseRateException(DYNAMIC_RATE_NOT_CONFIGURED)`, transitorio = sí (lo corrige el Administrador Financiero); se registra y se propaga. **Si la fecha es regular, ningún porcentaje es necesario** y la tarifa se obtiene aunque no exista configuración. En coincidencia FE+TA se requieren **ambos** porcentajes para poder aplicar el mayor (D-UC02-06, decisión adoptada).
-14. **Lectura perezosa de parámetros** [SPEC casos extremos; decisión DUC-02-11/regla]: el servicio solo consulta `FinancialParametersRepository.find()` cuando la política indica que la fecha requiere ajuste (`DynamicRatePolicy.requiresAdjustment`); una fecha regular no lee el repositorio.
+13. **Porcentaje faltante** [SPEC casos extremos]: si la fecha evaluada exige un porcentaje y no está configurado (sin versión vigente de `financial_parameters` o campo `null`) → información incompleta → `BaseRateException(DYNAMIC_RATE_NOT_CONFIGURED)`, transitorio = sí (lo corrige el Administrador Financiero); se registra y se propaga. **Si la fecha es regular, ningún porcentaje es necesario** y la tarifa se obtiene aunque no exista configuración. En coincidencia FE+TA se requieren **ambos** porcentajes para poder aplicar el mayor (D-UC02-06, decisión adoptada).
+14. **Lectura perezosa de parámetros** [SPEC casos extremos; decisión DUC-02-11/regla]: el servicio solo consulta `FinancialParametersRepository.findCurrent()` (la versión vigente) cuando la política indica que la fecha requiere ajuste (`DynamicRatePolicy.requiresAdjustment`); una fecha regular no lee el repositorio y devuelve `parametersId = null`. Cuando se leyó, el `id` de la versión usada viaja en `BaseRateResult.parametersId` para la trazabilidad de los llamadores persistidos (UC03).
 15. **Precisión y redondeo** [SPEC RNF-002, D-UC02-04]: todos los montos son `BigDecimal` y el resultado de cada operación se normaliza a **escala 4** (`setScale(4, HALF_UP)`); **UC02 no redondea a centavos**. El redondeo final hacia pantallas, la pasarela o reportes es del llamador. Ejemplo: `350000.0000 × 1.2500 = 437500.0000` (el response de UC01 muestra `437500.00`).
 
 ## Contratos
@@ -210,7 +211,7 @@ Fuente: `general-plan.md` (Technical Context), contrato Flota y SPEC 02. Cobertu
 |---|---|---|
 | Unitario (`domain` VOs) | `Money`/`BoatId`/`BaseRate` (escala 4, igualdad, `BaseRate` rechaza ≤ 0) | `domain/valueobject/MoneyBoatIdBaseRateTest` |
 | Unitario (`domain/service`) | `EasterCalculator` (Pascua de años conocidos), `HighSeasonCalendar` (límites de las 4 ventanas + enero + puentes), `DynamicRatePolicy` (regular/FE/TA/coincidencia/% faltante/escala 4) | `EasterCalculatorTest`, `HighSeasonCalendarTest`, `DynamicRatePolicyTest` |
-| Unitario (`application`) | `ProvideBaseRateService` (Mockito sobre `FleetRatePort`, `FinancialParametersRepository`, `DynamicRatePolicy`, `InMemoryFailureRecorder`): una sola consulta a Flota, dedupe, lista vacía, embarcaciones sin tarifa, fecha regular sin parámetros, % faltante, Flota caída | `ProvideBaseRateServiceTest` |
+| Unitario (`application`) | `ProvideBaseRateService` (Mockito sobre `FleetRatePort`, `FinancialParametersRepository`, `DynamicRatePolicy`, `InMemoryFailureRecorder`): una sola consulta a Flota, dedupe, lista vacía, embarcaciones sin tarifa, fecha regular sin versión vigente de parámetros, % faltante, Flota caída | `ProvideBaseRateServiceTest` |
 | Contrato (WireMock) | `FleetRateRestClient` contra el contrato `flota-consulta-tarifas-base.md`: 200 feliz, tarifa nula/ausente, cuerpo inválido, 500, timeout (SLA) y circuito abierto | `FleetRateRestClientContractTest` |
 | Aceptación | `ce001_…` (CE-001), `ce002_…` (CE-002), `ce003_…` (CE-003) | `BaseRateAcceptanceTest` |
 | Arquitectura | Reglas §3.4 (CE-002): la tarifa dinámica vive solo en UC02; nadie fuera depende de `DynamicRatePolicy`; DTOs sin tipo/categoría | `arch/ArchitectureTest` |
@@ -246,7 +247,7 @@ Preguntas que este plan no puede resolver con el SPEC 02, el plan general ni los
 
 | ID | Pregunta | Afecta | Propuesta por defecto | Estado |
 |---|---|---|---|---|
-| **OQ-UC02-01** | ¿Qué mecanismo de autenticación usa el sistema para llamar a Flota (mTLS, API key, token de servicio)? El contrato Flota no define `Authorization` ni el SPEC 02 lo menciona | T019 | Sin autenticación en primera iteración; credencial de servicio vía `seashare.fleet.*` si Flota la exige **[CONV]** | Abierta |
+| **OQ-UC02-01** | ¿Qué mecanismo de seguridad usa el sistema para llamar a Flota (mTLS, API key, token de servicio)? El contrato Flota no define `Authorization` ni el SPEC 02 lo menciona | T019 | **Cerrada — Seguridad fuera de alcance**: el sistema no implementa autenticación; los datos hacia/desde Flota son planos (general-plan §7.1). Si Flota exigiera credencial en el futuro, sería requisito de integración, no seguridad del proyecto | Cerrada |
 | **OQ-UC02-02** | ¿Existe una meta de rendimiento propia de UC02? El SPEC 02 no la define | Technical Context | Sin meta propia; hereda el SLA de Flota (< 500 ms / 50 embarcaciones) **[CONV]** | Abierta |
 | **OQ-UC02-03** | ¿Cuál es el formato de `high_season_windows` en el contrato UC11 (hereda OQ-UC11-03)? | T026 (referencia entre planes), contrato UC11 | UC02 entrega `HighSeasonWindow` tipadas (`type`, `startInclusive`, `endInclusive`) y **no** define el formato de strings; el mapeo lo decide UC11 | Abierta (de UC11) |
 | **OQ-UC02-04** | ¿Cuál es la zona horaria de negocio para «fecha actual» y fin de semana (general-plan OQ-04)? | T005, T009, reglas 3 y 6 | `America/Bogota` en `seashare.timezone` **[CONV]** | Abierta (general) |
@@ -254,7 +255,7 @@ Preguntas que este plan no puede resolver con el SPEC 02, el plan general ni los
 | **OQ-UC02-06** | ¿Cómo se nombra el puerto de reloj del general-plan §3.3 («reloj»)? | T005 | `ClockPort` con `LocalDate today()` **[CONV]** | Abierta |
 | **OQ-CROSS-10 / D-24** | ¿Cómo se tratan los festivos entre semana en la política de temporada alta? | T009–T012 | El calendario no añade comportamiento fuera del SPEC hasta recibir la decisión transversal | Abierta; requiere decisión externa |
 
-**`[NEEDS CLARIFICATION]` consolidado:** OQ-UC02-01 a OQ-UC02-06.
+**`[NEEDS CLARIFICATION]` consolidado:** OQ-UC02-02 a OQ-UC02-06 (OQ-UC02-01 cerrada: seguridad fuera de alcance).
 
 ## Implementation Phases
 
@@ -286,8 +287,8 @@ Preguntas que este plan no puede resolver con el SPEC 02, el plan general ni los
 - [ ] **T013** · `ProvideBaseRateCommand` (`List<BoatId> boatIds`, `LocalDate evaluatedDate` obligatorio) y `BaseRateResult` (`BoatId`, `BaseRate`) en `application/dto` [D-UC02-10].
 - [ ] **T014** · `BaseRateException` (`domain/exception`, extiende `DomainException`): `BaseRateFailureReason` (`FLEET_UNAVAILABLE`, `DYNAMIC_RATE_NOT_CONFIGURED`, `BASE_RATE_NOT_AVAILABLE`) y `isTransient()` (verdadero en `FLEET_UNAVAILABLE` y `DYNAMIC_RATE_NOT_CONFIGURED`; falso en el registro por-embarcación).
 - [ ] **T015** · `FleetRatePort` (`application/port/out`): `Map<BoatId, BaseRate> findBaseRates(Set<BoatId> boatIds)` — devuelve **solo** las embarcaciones con tarifa válida; lanza `BaseRateException(FLEET_UNAVAILABLE)` ante falla de Flota (D-UC02-07).
-- [ ] **T016** · `ProvideBaseRateUseCase` + `ProvideBaseRateService`: dedupe de IDs; lista vacía → `List.of()` sin consultar a Flota; **una sola consulta** a `FleetRatePort`; lectura perezosa de `FinancialParametersRepository.find()` (solo si `DynamicRatePolicy.requiresAdjustment`); por cada embarcación sin tarifa → registro `BASE_RATE_NOT_AVAILABLE` en el `FailureRecorderPort`; frente a `FLEET_UNAVAILABLE`/`DYNAMIC_RATE_NOT_CONFIGURED` → registra y **propaga** sin devolver nada; jamás una tarifa asumida.
-- [ ] **T017** · Pruebas unitarias del servicio (Mockito + `InMemoryFailureRecorder`): escenarios 1–3 de HU1; lote con varias embarcaciones (una sin tarifa no rompe las demás); lista vacía; IDs duplicados → una sola consulta; fecha regular sin fila de parámetros; % faltante; Flota caída (registro + propagación).
+- [ ] **T016** · `ProvideBaseRateUseCase` + `ProvideBaseRateService`: dedupe de IDs; lista vacía → `List.of()` sin consultar a Flota; **una sola consulta** a `FleetRatePort`; lectura perezosa de la versión vigente (`FinancialParametersRepository.findCurrent()`, solo si `DynamicRatePolicy.requiresAdjustment`) y entrega de su `id` en `BaseRateResult.parametersId`; por cada embarcación sin tarifa → registro `BASE_RATE_NOT_AVAILABLE` en el `FailureRecorderPort`; frente a `FLEET_UNAVAILABLE`/`DYNAMIC_RATE_NOT_CONFIGURED` → registra y **propaga** sin devolver nada; jamás una tarifa asumida.
+- [ ] **T017** · Pruebas unitarias del servicio (Mockito + `InMemoryFailureRecorder`): escenarios 1–3 de HU1; lote con varias embarcaciones (una sin tarifa no rompe las demás); lista vacía; IDs duplicados → una sola consulta; fecha regular sin versión vigente de parámetros; % faltante; Flota caída (registro + propagación); `parametersId` poblado con ajuste y `null` sin ajuste.
 
 ### Phase 5: US1 — Adaptador a Flota (HU1, RF-004, RNF-001, RNF-003)
 
@@ -330,10 +331,10 @@ T001 ─┬─> T002 ─┬─> T003 ──> T004 ──┐
 
 ## Notes
 
-- El SPEC 02 **no** define: meta de rendimiento propia (OQ-UC02-02), autenticación hacia Flota (OQ-UC02-01), definición de fin de semana (D-UC02-06/OQ-UC02-04), ni el manejo de tarifas negativas/cero (D-UC02-07) → `[NEEDS CLARIFICATION]` (OQ-UC02-xx) con decisión por defecto registrada.
+- El SPEC 02 **no** define: meta de rendimiento propia (OQ-UC02-02), definición de fin de semana (D-UC02-06/OQ-UC02-04), ni el manejo de tarifas negativas/cero (D-UC02-07) → `[NEEDS CLARIFICATION]` (OQ-UC02-xx) con decisión por defecto registrada. La seguridad hacia Flota está **fuera de alcance** (general-plan §7.1; OQ-UC02-01 cerrada): sin autenticación.
 - **`docs/context/` contradice al SPEC 02** en dos puntos (tipo/categoría; puentes como temporada alta) → rige el SPEC (D-UC02-01, D-UC02-02).
 - Calendario: `isHighSeason` + `windowsForYear` son de UC02; **UC11 los consume** (OQ-UC11-05 queda respondida). El formato de `high_season_windows` es decisión de UC11 (OQ-UC11-03).
-- `FinancialParameters`/`FinancialParametersRepository` son de UC11: UC02 los consume por nombre y **solo cuando la fecha lo exige** (lectura perezosa, regla 14).
+- [ ] `FinancialParameters`/`FinancialParametersRepository` son de UC11: UC02 los consume por nombre y **solo cuando la fecha lo exige** (lectura perezosa de la versión vigente, regla 14); el `id` de la versión usada viaja en `BaseRateResult.parametersId` (UC03 lo persiste como `base_rate_parameters_id`; UC01 no lo persiste).
 - `FailureRecorderPort`/`operational_failure` son piezas compartidas: UC02 las referencia por nombre, no las implementa y las sustituye por un doble en pruebas (T016, T025).
 - `FleetRatePort` es interno a UC02; `Money`, `BoatId` y `ClockPort` viven en el núcleo compartido y UC02 los consume por nombre, conforme a `general-plan.md` §3.3/§3.5.
 - Etiquetas usadas: `[SPEC]` (SPEC 02 y contratos), `[CONV]` (general-plan e inferido), `[PEND]`/`[NEEDS CLARIFICATION]` (sin definir).
@@ -345,9 +346,9 @@ T001 ─┬─> T002 ─┬─> T003 ──> T004 ──┐
 - [ ] Fecha `2026-10-09` y enlace a `spec.md`.
 - [ ] Toda regla marcada `[SPEC]`, `[CONV]`, `[PEND]` o `[NEEDS CLARIFICATION]`.
 - [ ] Contradicciones `D-UC02-01` a `D-UC02-12` en «Discrepancias y puntos abiertos» con decisión explícita, sin resolución silenciosa; las decisiones de infraestructura compartida se expresan por puertos y tablas, no por tareas externas.
-- [ ] Preguntas abiertas definidas en el propio plan (OQ-UC02-01 a OQ-UC02-06), con remisión explícita a las OQ del general-plan y de UC11 cuando corresponden.
+- [ ] Preguntas abiertas definidas en el propio plan (OQ-UC02-02 a OQ-UC02-06; OQ-UC02-01 cerrada por seguridad fuera de alcance), con remisión explícita a las OQ del general-plan y de UC11 cuando corresponden.
 - [ ] Cada RF/RNF/CE/HU del SPEC 02 trazado a componente y tarea; pruebas `ce001_…`, `ce002_…`, `ce003_…`.
 - [ ] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§13) aplicadas; sin tipo/categoría en DTOs.
-- [ ] UC02 sin tablas propias, sin migración propia, sin endpoint REST; solo consume `financial_parameters` y `operational_failure` mediante sus puertos compartidos.
+- [ ] UC02 sin tablas propias, sin migración propia, sin endpoint REST; solo consume la versión vigente de `financial_parameters` y `operational_failure` mediante sus puertos compartidos.
 - [ ] `Money`, `BoatId` y `ClockPort` se consumen del núcleo compartido y no se redeclaran; `OQ-UC11-05` queda respondida por `windowsForYear`.
 - [ ] Puerto `ProvideBaseRateUseCase` publicado con su firma (§Firmas referenciadas por otros planes); referencias por nombre con UC01/UC03 y UC11 declaradas.

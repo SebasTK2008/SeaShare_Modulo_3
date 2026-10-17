@@ -6,7 +6,7 @@
 | SPEC | `docs/features/001-solicitar-estimacion-para-reserva/spec.md` |
 | Dirección | Sistema de Reservas y Operaciones → sistema |
 | ¿Responde? | Sí (síncrono) |
-| Quién puede llamarlo | Solo el Sistema de Reservas y Operaciones [SPEC UC01 HU1] |
+| Quién puede llamarlo | Solo el Sistema de Reservas y Operaciones (usuario esperado; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) [SPEC UC01 HU1] |
 | Efectos secundarios | Ninguno (solo lectura; la estimación es informativa y no bloquea activos) |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
@@ -23,7 +23,6 @@ Reservas envía una lista de identificadores de embarcación y recibe, ya calcul
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <token>` [PEND OQ-01] |
 | `Content-Type` | Sí | `application/json` |
 | `Accept` | No | `application/json` |
 | `X-Correlation-Id` | No | Cadena libre |
@@ -60,7 +59,7 @@ El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de 
 7. **Fórmula**: `estimated_total = (tarifa base final × duración en días) + (tarifa de seguro × pasajeros)` [SPEC RF-002]. La tarifa base final ya incluye la tarifa dinámica (UC02).
 8. La estimación **no incluye** el depósito de garantía ni penalidades o ajustes posteriores [SPEC RF-002].
 9. **Falla de Flota** (caída, *timeout*, inalcanzable o respuesta inválida): no se devuelven estimaciones parciales ni inventadas → `503 FLEET_UNAVAILABLE` [SPEC casos extremos, RNF-003, CE-004].
-10. **Falta la tarifa de seguro o el porcentaje de incremento que exige la fecha evaluada** (fin de semana o temporada alta): no se calcula nada parcial → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED` [SPEC casos extremos]. Un día regular no necesita el porcentaje (UC02 casos extremos).
+10. **No existe versión vigente de los parámetros financieros o falta el valor requerido** (tarifa de seguro o porcentaje de incremento que exige la fecha evaluada — fin de semana o temporada alta): no se calcula nada parcial → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED` [SPEC casos extremos]. Un día regular no necesita el porcentaje (UC02 casos extremos).
 11. **Sin fechas ni pasajeros en el cuerpo**: el lote se define solo por `boat_ids`. Si el payload incluye `start_date`, `end_date`, `passengers` u otros campos desconocidos, se responde `400 VALIDATION_ERROR` sin procesar el lote **[CONV]**. Por eso la validación de rango de fechas no aplica en esta modalidad (solo en la individual) [SPEC casos extremos].
 
 ## 4. Respuesta exitosa
@@ -103,16 +102,14 @@ Lista vacía:
 
 ## 5. Respuestas de error
 
-**Orden de validación** [CONV] (§4.3 del índice): E1 → E2 → E3 → E4 → E6 → E7 (E5 no aplica: no hay recurso en la URL; E8 no produce error en el lote: los identificadores no reconocidos se omiten y los sin tarifa se reportan en `unavailable`). La petición se valida completa (E4) antes de consultar los parámetros financieros (E6) o llamar a Flota (E7).
+**Orden de validación** [CONV] (§4.3 del índice): E3 → E4 → E6 → E7 (E1/E2 retiradas: sin autenticación; E5 no aplica: no hay recurso en la URL; E8 no produce error en el lote: los identificadores no reconocidos se omiten y los sin tarifa se reportan en `unavailable`). La petición se valida completa (E4) antes de consultar los parámetros financieros (E6) o llamar a Flota (E7).
 
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `VALIDATION_ERROR` | Cuerpo no es JSON, `boat_ids` ausente o no es arreglo, algún elemento no es UUID, tipos incorrectos, o campos que el lote no acepta (`start_date`, `end_date`, `passengers` u otros desconocidos) | No | [CONV] |
 | 400 | `BATCH_SIZE_EXCEEDED` | `boat_ids` supera el máximo | No | [SPEC RF-006] |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
-| 403 | `FORBIDDEN` | El llamador no es el Sistema de Reservas y Operaciones | No | [SPEC HU1] |
 | 503 | `FLEET_UNAVAILABLE` | Flota caída, *timeout*, inalcanzable o con respuesta inválida | Sí | [SPEC casos extremos, RNF-003] |
-| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | Falta el seguro o el porcentaje requerido por la fecha evaluada | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
+| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | No existe versión vigente de los parámetros o falta el valor requerido por la fecha evaluada | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ```json

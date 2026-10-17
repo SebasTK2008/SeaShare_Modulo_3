@@ -6,7 +6,7 @@
 | SPEC | `docs/features/003-brindar-informacion-de-reserva/spec.md` |
 | Dirección | Sistema de Reservas y Operaciones → sistema |
 | ¿Responde? | No (unidireccional) |
-| Quién puede publicarlo | Sistema de Reservas y Operaciones |
+| Quién puede publicarlo | Sistema de Reservas y Operaciones (usuario esperado; la aplicación consume el mensaje como **dato plano** — seguridad fuera de alcance, general-plan §7.1) |
 | Efectos secundarios | Inclusión de UC02; crea o actualiza `InformaciónDeReserva` |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
@@ -58,7 +58,7 @@ El Sistema de Reservas y Operaciones notifica los datos de una reserva ingresado
 1. **Validaciones**: `end_date >= start_date`, `1 <= passengers <= max_capacity`. Si no se cumplen, se registra el fallo internamente y no se persiste la información [SPEC RF-005].
 2. **Dependencia**: No se consulta a Flota para obtener `owner_id` ni `max_capacity` [SPEC RF-003].
 3. **Inclusión (UC02)**: Se incluye "Brindar tarifa base" pasando `boat_id` y `start_date` para obtener la tarifa vigente. Si falla, el mensaje puede reintentarse brevemente; si persiste, se registra el fallo y el mensaje va a la DLQ, sin persistir información incompleta [SPEC RF-002, RNF-003].
-4. **Idempotencia y Upsert**: Si se recibe una reserva que ya existe, se sobrescribe con la versión más reciente (upsert) y se vuelven a consultar los valores [SPEC casos extremos]. Los montos previamente calculados (si existieran) se invalidan.
+4. **Idempotencia y Upsert**: Si se recibe una reserva que ya existe, se sobrescribe con la versión más reciente (upsert) y se vuelven a consultar los valores [SPEC casos extremos]. Los montos previamente calculados (si existieran) se invalidan junto con la referencia a la versión de parámetros usada.
 5. **No hay respuesta**: El sistema no devuelve nada a Reservas. Los fallos se registran en `operational_failure` [SPEC RF-006, RF-007].
 
 ## 4. Respuesta exitosa
