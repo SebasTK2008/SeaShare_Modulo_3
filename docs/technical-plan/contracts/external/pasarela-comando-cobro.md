@@ -25,7 +25,7 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
 | Header | Obligatorio | Valor |
 |---|---|---|
 | `Authorization` | Sí | `Bearer <ACCESS_TOKEN>` (requisito de la integración con Mercado Pago; no es seguridad del proyecto — general-plan §7.1) |
-| `X-Idempotency-Key` | Sí | Clave única (ej. `cobro-<reservation_id>`) para evitar cobros duplicados |
+| `X-Idempotency-Key` | Sí | Clave idempotente por intento (ej. `cobro-<reservation_id>-<status>-<status_changed_at>`; general-plan D-33) para evitar cobros duplicados |
 
 ### Body (Payload)
 
@@ -33,10 +33,10 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
 |---|---|---|---|---|
 | `transaction_amount` | decimal | Sí | Monto total a cobrar (incluye alquiler, seguro y depósito) | [SPEC RF-002, RNF-002] |
 | `token` | string | Sí | Token seguro de la tarjeta generado por el SDK de Mercado Pago | [SPEC RF-001, RF-011] |
-| `description` | string | Sí | Descripción de la reserva para el estado de cuenta | [SPEC] |
-| `installments` | integer | Sí | Número de cuotas (usualmente 1 para este negocio) | [SPEC] |
-| `payment_method_id` | string | Sí | ID del medio de pago (ej. `visa`, `master`) | [SPEC] |
-| `payer.email` | string | Sí | Email del arrendatario | [SPEC] |
+| `description` | string | Sí | Descripción de la reserva para el estado de cuenta; la fija el sistema (p. ej. `Reserva <reservation_id>`) | [CONV] |
+| `installments` | integer | Sí | Número de cuotas; el sistema fija `1` | [CONV] |
+| `payment_method_id` | string | Sí | ID del medio de pago; se envía el `payment_method_type` recibido en el mensaje de UC07 (ej. `visa`, `master`) | [SPEC] + [CONV] |
+| `payer.email` | string | Sí | Email del arrendatario; se envía `payment_metadata.payer_email` del mensaje de UC07 (dato plano) | [SPEC] + [CONV] |
 | `external_reference` | string | Sí | Identificador de la reserva para trazabilidad cruzada | [SPEC SolicitudCobroPasarela] |
 
 ```json
@@ -58,6 +58,7 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
 1. **Minimización de datos**: NUNCA se envía ni se almacena el número completo de tarjeta o CVV. Solo se opera con el `token` de un solo uso [SPEC RF-011, RNF-004].
 2. **Monto único**: El `transaction_amount` es uno solo, englobando alquiler, seguro y depósito. No se hacen llamadas separadas por concepto [SPEC RF-015].
 3. **Idempotencia**: Se garantiza pasando el `X-Idempotency-Key` en los headers de la llamada. Un timeout no significa fallo [SPEC RNF-003].
+4. **Cobro directo**: se solicita el cobro con captura automática; no se usa autorización retenida ni `capture=false`. La aprobación de Mercado Pago ya es el cobro (general-plan D-32).
 
 ## 4. Respuesta exitosa (Técnica)
 
@@ -71,7 +72,7 @@ Mercado Pago responde confirmando la recepción y estado inicial del pago. El re
 
 ## 5. Manejo de Errores
 
-Si la llamada HTTP falla por `Timeout`, `502`, `503`, el worker lanza excepción y el mensaje AMQP interno se reintenta (respetando la `X-Idempotency-Key`). El estado en la `IntenciónDeCobro` se marcará como `COMMUNICATION_ERROR` hasta que el worker tenga éxito o se resuelva mediante el webhook. Los errores HTTP `400` por validación de token no son reintentables.
+Si la llamada HTTP falla por `Timeout`, `502`, `503`, el worker lanza excepción y el mensaje AMQP interno se reintenta (respetando la `X-Idempotency-Key`). El estado en la `IntenciónDeCobro` se marcará como `COMMUNICATION_ERROR` hasta que el worker tenga éxito o se resuelva mediante el webhook. Los errores HTTP `400` por validación de token no son reintentables: marcan la intención como `REJECTED` con el `status_detail` técnico de la pasarela (sin crear registro inmutable).
 
 ## 6. Trazabilidad
 

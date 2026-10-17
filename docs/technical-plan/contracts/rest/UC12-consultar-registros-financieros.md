@@ -32,12 +32,11 @@ Permite a Propietarios y Administradores Financieros consultar el histórico de 
 |---|---|---|---|---|
 | `scope` | string | Sí | Alcance declarado: `OWNER` (Propietario) o `PLATFORM` (Administrador Financiero) | [CONV] — dato plano; el sistema aplica lo declarado sin validar identidad (seguridad fuera de alcance) |
 | `page` | integer | Sí | Número de página (1-indexed) | [SPEC RF-001] |
-| `size` | integer | No | Tamaño de página (por defecto 10) | [SPEC RF-001, RF-008] |
+| `size` | integer | No | Tamaño de página (por defecto 10; máximo 100, general-plan D-22) | [SPEC RF-001, RF-008] |
 | `transaction_type` | string | No | Filtro por tipo: `COBRO`, `REEMBOLSO`, `DISPERSION`, `COMISION` | [SPEC RF-002, D-18] |
 | `owner_id` | UUID | Sí si `scope=OWNER` | Propietario asociado: con `scope=OWNER` es la identidad declarada cuyos registros se devuelven (el sistema no valida pertenencia); con `scope=PLATFORM` es un filtro opcional | [SPEC RF-002, RF-003, casos extremos] |
 | `boat_id` | UUID | No | Filtro por embarcación asociada | [SPEC RF-002] |
 | `reservation_id` | UUID | No | Filtro por reserva asociada. Permite aislar todos los registros financieros de una reserva concreta | [CONV] |
-| `q` | string | No | Búsqueda de texto libre por reserva, arrendatario o propietario | [CONV] |
 | `date_from` | string | No | Fecha inicio del rango (formato YYYY-MM-DD) | [CONV] |
 | `date_to` | string | No | Fecha fin del rango (formato YYYY-MM-DD) | [CONV] |
 

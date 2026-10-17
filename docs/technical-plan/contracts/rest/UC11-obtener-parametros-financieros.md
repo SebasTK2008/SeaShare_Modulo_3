@@ -13,7 +13,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El Administrador Financiero consulta la configuración financiera vigente de la plataforma. El sistema devuelve la **versión vigente** de los parámetros globales (identificada por su `version`) junto con los valores calculados de solo lectura, de manera que la pantalla de configuración pueda mostrar el estado actual antes de editarlo [SPEC HU3].
+El Administrador Financiero consulta la configuración financiera vigente de la plataforma. El sistema devuelve la **versión vigente** de los parámetros globales (identificada por su `version_number`) junto con los valores calculados de solo lectura, de manera que la pantalla de configuración pueda mostrar el estado actual antes de editarlo [SPEC HU3].
 
 ## 2. Petición
 
@@ -34,7 +34,7 @@ No aplica.
 
 1. Se recupera la **versión vigente** de `ParámetrosFinancierosGlobales` (la de mayor `version_number`); las versiones anteriores se conservan como historial inmutable [SPEC RF-006].
 2. Si no existe ninguna versión de la configuración, el sistema informa que está pendiente y **no inventa valores** para ningún parámetro [SPEC HU3 escenario 2]. En REST esto se modela devolviendo un `404 Not Found` [CONV].
-3. El sistema calcula el valor del depósito como 10% de la tarifa base diaria, pero dado que en este contexto no hay una tarifa base de una reserva específica, esto es meramente representativo o un texto informativo [SPEC RF-012, HU3] *(Nota: el spec indica "el depósito calculado como 10% de la tarifa base diaria", por lo que al nivel de parámetros globales se informará la regla del 10% en lugar de un monto, ya que el monto depende de la embarcación)*.
+3. La regla del depósito de garantía se informa como texto (`guarantee_deposit_rule`): **10 % de la tarifa diaria vigente registrada de la reserva** (general-plan D-29); al nivel de parámetros globales se informa la regla, no un monto, porque el monto depende de la embarcación [SPEC RF-012, HU3].
 4. El sistema incluye las ventanas de temporada alta calculadas por el calendario [SPEC HU3, RF-012].
 
 ## 4. Respuesta exitosa
@@ -43,22 +43,22 @@ No aplica.
 
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
-| `version` | integer | Número de la versión vigente consultada (para trazabilidad de los cálculos) | [CONV] — general-plan D-24 |
+| `version_number` | integer | Número de la versión vigente consultada (para trazabilidad de los cálculos) | [CONV] — general-plan D-24 |
 | `platform_commission_percentage` | string decimal | Porcentaje de comisión de la plataforma | [SPEC RF-009] |
 | `insurance_fee_per_passenger` | string decimal | Tarifa del seguro náutico por pasajero | [SPEC RF-009] |
 | `weekend_increase_percentage` | string decimal | Porcentaje de incremento por fin de semana | [SPEC RF-009] |
 | `high_season_increase_percentage` | string decimal | Porcentaje de incremento por temporada alta | [SPEC RF-009] |
 | `guarantee_deposit_rule` | string | Regla del depósito de garantía (solo lectura) | [SPEC RF-012] |
-| `high_season_windows` | array de strings | Ventanas de temporada alta calculadas (solo lectura) | [SPEC RF-012] [PEND formato: ver *OQ-UC11-03* en el plan UC11] |
+| `high_season_windows` | array de strings | Ventanas de temporada alta calculadas (solo lectura); formato `MM-dd→MM-dd` para ventanas fijas y `semana-santa` para la ventana móvil | [SPEC RF-012] + [CONV] |
 
 ```json
 {
-  "version": 7,
+  "version_number": 7,
   "platform_commission_percentage": "15.00",
   "insurance_fee_per_passenger": "15000.00",
   "weekend_increase_percentage": "10.00",
   "high_season_increase_percentage": "25.00",
-  "guarantee_deposit_rule": "10% de la tarifa base diaria",
+  "guarantee_deposit_rule": "10% de la tarifa diaria vigente registrada",
   "high_season_windows": [
     "11-15→01-15",
     "06-01→07-30",

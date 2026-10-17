@@ -57,7 +57,7 @@ El adaptador convierte la `SolicitudDispersiónPasarela` a la estructura del spl
 ## 3. Reglas de procesamiento
 
 1. **Independencia de comisiones**: El sistema asume que cobró inicialmente a una cuenta master (la de la plataforma) y ahora transfiere el neto al propietario. El monto remanente tras la dispersión se queda en la cuenta de la plataforma como recaudación propia (comisión + seguro de averías) [SPEC RF-005].
-2. **Cuenta destino vinculada**: El `collector_id` del propietario debe estar previamente autorizado y vinculado a la aplicación de Marketplace del sistema en Mercado Pago.
+2. **Cuenta destino vinculada**: El `collector_id` del propietario debe estar previamente autorizado y vinculado a la aplicación de Marketplace del sistema en Mercado Pago; llega como **dato plano** de la configuración de la integración y el sistema lo envía tal cual, sin validar identidad [CONV].
 3. **Componente de depósito**: Si parte de la liquidación al propietario incluye dinero que venía del depósito de garantía retenido al cliente, el sistema unifica esto en el `amount` enviado a MP (para simplificar la transferencia) y maneja el detalle del concepto de forma interna [SPEC RF-016].
 
 ## 4. Respuesta exitosa (Técnica)

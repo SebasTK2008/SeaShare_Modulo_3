@@ -75,10 +75,6 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
 | `total_refunds` | string decimal | Suma de `RegistroDeReembolso` | [SPEC RF-007] |
 | `total_settlements` | string decimal | Suma de `RegistroDeDispersión` | [SPEC RF-007] |
 | `total_commissions` | string decimal | Suma de `RegistroDeComisión` (informativo) | [SPEC RF-009] |
-| `total_gross_volume` | string decimal | Volumen bruto total (solo Admin, null para Propietario) | [CONV] |
-| `retained_funds` | string decimal | Fondos retenidos / ciclo abierto (solo Admin, null para Propietario) | [CONV] |
-| `disputed_amount` | string decimal | Monto en disputas abiertas (solo Admin, null para Propietario) | [CONV] |
-| `open_disputes_count` | integer | Cantidad de disputas abiertas (solo Admin, null para Propietario) | [CONV] |
 | `counts` | object | Cantidad de registros (ej. `{"COBRO": 15, "REEMBOLSO": 2, ...}`) | [SPEC RF-009] |
 | `comparison` | object | Comparación global con el período anterior | [SPEC RF-010] |
 
@@ -93,10 +89,6 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
   "total_refunds": "100000.00",
   "total_settlements": "900000.00",
   "total_commissions": "135000.00",
-  "total_gross_volume": "1250000.00",
-  "retained_funds": "100000.00",
-  "disputed_amount": "240.00",
-  "open_disputes_count": 1,
   "counts": {
     "COBRO": 10,
     "REEMBOLSO": 2,

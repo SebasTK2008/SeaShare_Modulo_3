@@ -13,11 +13,11 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-Reservas consulta el estado vigente del cobro de una reserva para decidir si avanza a `RESERVED` o revierte el bloqueo temporal. Solo un estado aprobado y verificable permite avanzar la reserva (`docs/context/contexto-modulo3.md`, flujo paso 6).
+Reservas consulta el estado vigente del cobro de una reserva para decidir si avanza a `RESERVED` o revierte el bloqueo temporal. Solo un estado aprobado y verificable permite avanzar la reserva [SPEC UC06 RF-003].
 
 ## 2. Petición
 
-`GET /api/v1/reservations/{reservation_id}/payment-confirmation` **[CONV]** (OQ-02). Sin cuerpo.
+`GET /api/v1/reservations/{reservation_id}/payment-confirmation` **[CONV]**. Sin cuerpo.
 
 ### Headers
 
@@ -60,21 +60,21 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
 | `status` | Significado |
 |---|---|
 | `IN_PROCESS` | La pasarela aún no reportó un resultado definitivo [SPEC escenario 3] |
-| `APPROVED` | La pasarela aprobó la autorización o el cobro |
+| `APPROVED` | La pasarela aprobó el cobro |
 | `REJECTED` | La pasarela rechazó la operación |
 | `CANCELLED` | La operación fue cancelada |
-| `EXPIRED` | La autorización venció sin captura (UC05 RF-014) |
-| `UNKNOWN` | Estado externo no determinado (incluye la falla de comunicación, [PEND] OQ-12) |
+| `EXPIRED` | La operación expiró sin cobro (UC05 RF-014) |
+| `UNKNOWN` | Estado externo no determinado (incluye la falla de comunicación: el estado interno `COMMUNICATION_ERROR` se mapea a `UNKNOWN`) |
 
 ```json
 {
   "reservation_id": "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10",
   "status": "APPROVED",
   "detail": null,
-  "authorized_amount": "990000.00",
+  "authorized_amount": null,
   "captured_amount": null,
   "released_amount": null,
-  "charged_amount": null,
+  "charged_amount": "990000.00",
   "external_reference": "pg-8841"
 }
 ```
