@@ -36,7 +36,7 @@ Enfoque técnico: Spring Boot único con arquitectura hexagonal (`domain` / `app
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
-**Primary Dependencies**: Spring Boot 4.1.1; Web MVC, Validation, Data JPA, AMQP, Security OAuth2 Resource Server, Actuator, Flyway, MapStruct, Resilience4j, Micrometer/Prometheus, ArchUnit y ShedLock opcional. UC08 usa especialmente AMQP, JPA, Validation, PostgreSQL, RabbitMQ, Awaitility y Testcontainers. Las dependencias pertenecen al núcleo compartido; este plan no modifica `pom.xml`.
+**Primary Dependencies**: Spring Boot 4.1.1; Web MVC, Validation, Data JPA, AMQP, Actuator, Flyway, MapStruct, Resilience4j, Micrometer/Prometheus, ArchUnit y ShedLock opcional. UC08 usa especialmente AMQP, JPA, Validation, PostgreSQL, RabbitMQ, Awaitility y Testcontainers. Las dependencias pertenecen al núcleo compartido; este plan no modifica `pom.xml`. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
 **Storage**: PostgreSQL 16+, `NUMERIC(18,4)` y `timestamptz`. UC08 es dueño de `deposit_disposition` y `dispute_event_log`; lee `reservation_information` y `charge_record` mediante puertos de sus dueños [general-plan §4].  
 **Messaging**: RabbitMQ 3.13+, exchange topic durable `seashare.reservations`, routing key `reservation.dispute.updated`, cola `finance.guarantee-dispute.v1`, mensajes persistentes y DLQ `finance.guarantee-dispute.v1.dlq` [D-22; contrato UC08].
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers PostgreSQL/RabbitMQ, Awaitility, ArchUnit y pruebas de contrato AMQP [CONV].  
@@ -169,7 +169,7 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 | **D-UC08-02** | Orden definitivo de migraciones | documentar la DDL exacta de UC08; la política y orden global permanecen abiertos (OQ-CROSS-07 / D-CROSS-08) | Abierta; requiere decisión externa |
 | **D-UC08-03** | Tratamiento de errores en cola | ack + fallo para lógica; nack/DLQ para transitorios | Decidida por contrato |
 | **D-UC08-04** | Carrera entre creación de seguimiento y actualización de depósito | reintento acotado o creación idempotente de la fila bajo `ReservationLockPort` | Aplicada (D-13) |
-| **OQ-UC08-02** | Seguridad transversal para AMQP | heredar configuración compartida; no crear `SecurityConfig` propio | Diferida |
+| **OQ-UC08-02** | Seguridad transversal para AMQP | **Cerrada — Seguridad fuera de alcance**: general-plan §7.1 y D-21; el sistema no implementa autenticación/autorización para AMQP y no se crea `SecurityConfig` propio ni compartido | **Cerrada** |
 
 ## Implementation Phases
 

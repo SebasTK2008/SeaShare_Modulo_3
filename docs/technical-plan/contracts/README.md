@@ -68,7 +68,7 @@ Casos de uso **sin contrato propio**:
 | Rutas | Prefijo `/api/v1/`, segmentos en minúscula con guiones. La ruta del contrato específico es la fuente de verdad (§ inicio) | [CONV] |
 | Cuerpos JSON | UTF-8, claves en `snake_case` (`boat_ids` ya viene fijado por UC01) | [CONV] |
 | Valores de enumeración | En inglés (fuente canónica del Módulo 2) (`PENDING`, `REJECTED`, `CANCELLED_STRICT`…) | [CONV] |
-| Identificadores | UUID v4 (única excepción: `financial_parameters.id = 1`, entero fijo del singleton) | [CONV] |
+| Identificadores | UUID v4 (los parámetros financieros agregan `version_number` secuencial) | [CONV] |
 | Fechas | `YYYY-MM-DD` | [CONV] |
 | Instantes | ISO-8601 en UTC, por ejemplo `2026-10-01T15:04:05Z` | [CONV] |
 | Dinero | **String decimal** (`"350000.00"`), nunca número JSON; el sistema usa `BigDecimal` | [SPEC RNF-002] + [CONV] |
@@ -82,10 +82,11 @@ Casos de uso **sin contrato propio**:
 
 | Header | Obligatorio | Valor | Origen |
 |---|---|---|---|
-| `Authorization` | Sí | `Bearer <token>` | [PEND] OQ-01 (los SPEC fijan quién puede usar cada caso de uso, no el mecanismo) |
 | `Content-Type` | Sí en `POST`/`PUT` con cuerpo | `application/json` | [CONV] |
 | `Accept` | No | `application/json` (o `text/csv` en la exportación) | [CONV] |
 | `X-Correlation-Id` | No | Cadena libre para trazabilidad; si se omite, el sistema genera una | [CONV] |
+
+**No hay autenticación**: el servicio no exige `Authorization` ni valida identidad alguna; la seguridad (autenticación, autorización, tokens) está **fuera del alcance** del proyecto (general-plan §7.1, D-21). Los datos de identidad o rol que necesite un caso de uso (p. ej. `owner_id` y el alcance declarado de UC12/UC13) viajan como **datos planos** en la petición.
 
 **Respuesta**
 
@@ -130,8 +131,6 @@ Ordenado por HTTP. La columna **Fila** remite a la fila de la tabla de decisión
 | `BATCH_SIZE_EXCEEDED` | 400 | El lote de UC01 supera el máximo de identificadores | No | [SPEC UC01 RF-006] | E4 |
 | `INVALID_DATE_RANGE` | 400 | Formato de fecha inválido, inicio en el pasado o fin anterior al inicio (UC01 individual) | No | [SPEC UC01 casos extremos] | E4 |
 | `INVALID_PERIOD` | 400 | Periodicidad o período inválido, o rango libre de fechas (UC13) | No | [SPEC UC13 RF-004, casos extremos] | E4 |
-| `UNAUTHENTICATED` | 401 | Credencial ausente o inválida | No | [PEND] OQ-01 | E1 |
-| `FORBIDDEN` | 403 | Rol no autorizado para el caso de uso | No | [SPEC UC11 RF-008/CE-003, UC12 RF-011] | E2 |
 | `RESERVATION_INFO_NOT_FOUND` | 404 | UC04 sin información de reserva registrada | Sí (posible carrera con UC03, OQ-06) | [SPEC UC04 RF-009] | E5 |
 | `CHARGE_INTENT_NOT_FOUND` | 404 | UC06 sin `IntenciónDeCobro` para la reserva | Sí (UC05 la crea de forma asíncrona tras `PENDING`) | [SPEC UC06 RF-005] + [CONV] | E5 |
 | `PARAMETERS_NOT_CONFIGURED` | 404 | UC11 obtener: todavía no existe configuración | Sí (cuando el Administrador Financiero la guarde) | [SPEC UC11 HU3 esc. 2] | E5 |
@@ -146,7 +145,7 @@ Ordenado por HTTP. La columna **Fila** remite a la fila de la tabla de decisión
 | `FLEET_UNAVAILABLE` | 503 | Flota caída, inalcanzable, con el *circuit breaker* abierto, sin respuesta (*timeout*) o con una respuesta inválida | Sí | [SPEC UC01 casos extremos, RNF-003] + [CONV] | E7 |
 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | 503 | Falta la tarifa de seguro o el porcentaje que exige la fecha evaluada (UC01, UC04) | Sí (cuando el Administrador Financiero configure) | [SPEC UC01 y UC04 casos extremos] + [CONV] | E6 |
 
-`401`, `403` y `500 INTERNAL_ERROR` aplican a **todos** los contratos REST y se repiten en cada uno solo cuando tienen una particularidad. `405`, `406` y `415` los emite el framework y tampoco hace falta repetirlos salvo que el contrato los condicione (por ejemplo, `406` en la exportación).
+`500 INTERNAL_ERROR` aplica a **todos** los contratos REST y se repite en cada uno solo cuando tiene una particularidad. `405`, `406` y `415` los emite el framework y tampoco hace falta repetirlos salvo que el contrato los condicione (por ejemplo, `406` en la exportación). Los códigos `UNAUTHENTICATED` (401) y `FORBIDDEN` (403) **quedan retirados del catálogo**: el sistema no implementa control de acceso (seguridad fuera de alcance; general-plan §7.1). La única excepción es el webhook de la Pasarela, que conserva su `401` como parte del contrato de la integración con Mercado Pago (verificación de firma), no como autenticación del sistema.
 
 ### 3.5 Contratos de colas (resumen)
 
@@ -176,12 +175,10 @@ Pregunta de desempate: **¿existe alguna forma de que el llamador arregle esto c
 
 ### 4.2 Tabla de decisión
 
-Se evalúa **en orden**; se aplica la primera fila cuya situación se cumpla. `E10` puede ocurrir en cualquier paso.
+Se evalúa **en orden**; se aplica la primera fila cuya situación se cumpla. `E10` puede ocurrir en cualquier paso. Las filas **E1/E2 fueron retiradas** (seguridad fuera de alcance; general-plan §7.1): el sistema no emite `401`/`403` en sus contratos REST.
 
 | Fila | Situación | HTTP | `code` | `retryable` | Quién lo corrige | Ejemplos |
 |---|---|---|---|---|---|---|
-| **E1** | Credencial ausente, vencida o inválida | 401 | `UNAUTHENTICATED` | No | Llamador | Cualquier REST sin token |
-| **E2** | Credencial válida, pero el rol no puede usar el caso de uso | 403 | `FORBIDDEN` | No | Administración de accesos | UC11 con rol distinto de Administrador Financiero; UC01/UC04/UC06 con un llamador que no es Reservas |
 | **E3** | Método, `Content-Type` o `Accept` no soportados | 405 / 415 / 406 | `METHOD_NOT_ALLOWED` / `UNSUPPORTED_MEDIA_TYPE` / `NOT_ACCEPTABLE` | No | Llamador | `PUT` sin `application/json`; exportación pidiendo `Accept: application/xml` |
 | **E4** | La petición está mal formada o fuera del dominio permitido, **sin consultar ningún dato**: JSON no parseable, campo obligatorio ausente o `null`, tipo, formato, enumeración o rango inválido, regla entre campos violada, fecha pasada, lote sobre el máximo | 400 | `VALIDATION_ERROR`; o el específico: `BATCH_SIZE_EXCEEDED`, `INVALID_DATE_RANGE`, `INVALID_PERIOD` | No | Llamador | `passengers` negativo; `end_date` anterior a `start_date`; 1 000 `boat_ids` |
 | **E5** | El recurso que identifica la **URL** no existe todavía, o la página pedida excede el total | 404 | `RESERVATION_INFO_NOT_FOUND`, `CHARGE_INTENT_NOT_FOUND`, `PARAMETERS_NOT_CONFIGURED`, `PAGE_OUT_OF_RANGE` | **Sí** solo si un proceso asíncrono puede crearlo después; **No** en `PAGE_OUT_OF_RANGE` | Llamador (corregir el ID o esperar) | UC04 antes de que UC03 termine; UC06 antes de que UC05 cree la intención; UC11 obtener sin configuración |
@@ -193,14 +190,14 @@ Se evalúa **en orden**; se aplica la primera fila cuya situación se cumpla. `E
 
 ### 4.3 Reglas de uso y desempate
 
-1. **Orden de evaluación**: E1 → E2 → E3 → E4 → E5 → E6 → E7 → E8. Una petición inválida siempre da `4xx`, aunque la dependencia también esté caída: no se gasta una llamada externa en una petición que ya es inválida. Un contrato puede declarar un orden más específico dentro de E5 y E8, nunca alterar el orden entre filas.
+1. **Orden de evaluación**: E3 → E4 → E5 → E6 → E7 → E8. Una petición inválida siempre da `4xx`, aunque la dependencia también esté caída: no se gasta una llamada externa en una petición que ya es inválida. Un contrato puede declarar un orden más específico dentro de E5 y E8, nunca alterar el orden entre filas.
 2. **`404` solo para el recurso de la URL.** Un identificador inexistente dentro del **cuerpo** (por ejemplo `boat_id`) es E8 (`422`), no `404`.
 3. **La fecha pasada es E4 (`400`)** aunque dependa del reloj: la petición es inválida por sí misma.
 4. **Datos de la dependencia vs. fallo de la dependencia.** Si Flota responde bien y dice "no tiene tarifa" o "no la conozco", es E8. Si Flota no responde, responde fuera de tiempo o responde algo ilegible, es E7. Si Flota rechaza nuestra petición por estar mal construida, es E10: el llamador original no pudo evitarlo.
 5. **Configuración global vs. dato del recurso.** Si lo que falta es igual para toda petición válida (parámetros financieros), es E6 (`5xx`). Si depende del identificador que envió el llamador (tarifa de **esa** embarcación), es E8 (`4xx`).
 6. **`retryable` en 4xx** es `false` por defecto. Solo se marca `true` cuando el contrato documenta que otro proceso puede crear el recurso después (E5 asíncrono). **`retryable` en 5xx** es `true`; no se usa `503` con `retryable: false`, porque `503` ya significa "intenta más tarde".
 7. **Nunca valores parciales**: ante E6, E7 o E8 se devuelve el error completo, jamás una estimación o desglose parcial (principio rector 4 del plan general).
-8. **Alcance del Propietario**: UC12 y UC13 resuelven el alcance filtrando por la identidad autenticada. Un Propietario que pide datos de otro obtiene el resultado de su propio alcance, no un `403` ni un `404`.
+8. **Alcance declarado**: UC12 y UC13 reciben el alcance como **dato plano** (`scope` de Propietario o Administrador Financiero, y `owner_id` cuando sea de Propietario) y aplican exactamente lo declarado, sin validar identidad ni pertenencia (seguridad fuera de alcance; general-plan §7.1). No hay `403` ni resolución de identidad autenticada.
 9. **Detalle del error**: en `4xx` es específico y accionable (`field` y `message`). En `5xx` es genérico: sin trazas, SQL, nombres de clase ni URLs internas. El detalle técnico va al log con el `X-Correlation-Id`.
 10. **Prohibido**: responder `200` con un cuerpo de error; `500` por una validación; `4xx` por una falla de dependencia; códigos nuevos que no estén en el catálogo de la §3.4. El `429` no se usa: ningún SPEC define límite de tasa.
 
@@ -213,7 +210,7 @@ Los canales sin respuesta al productor no pueden usar HTTP. Se aplican las misma
 | Cola (UC03, UC07, UC08) | Mensaje inválido, estado desconocido, reserva sin información previa, validación fallida (equivale a E4/E8) | `ack` y registro en `operational_failure`. Sin reintento ni DLQ: reintentar no cambia el resultado | [SPEC UC03 RNF-003, UC07 RF-010, UC08 RNF-003] |
 | Cola (UC03, UC08) | Falla transitoria: BD, Flota (equivale a E7/E10) | `nack` con reintentos y *backoff* (3–5, plan general §7.2); al agotarlos va a la DLQ y se registra en `operational_failure` | [CONV] |
 | Cola (UC07, UC08) | Mensaje repetido (misma clave idempotente) | `ack` sin operación monetaria adicional | [SPEC UC07 casos extremos, UC08 RF-008] |
-| Webhook | Firma ausente o inválida (E1) | `401 UNAUTHENTICATED` | [CONV] |
+| Webhook | Firma ausente o inválida | `401 UNAUTHENTICATED` | [CONV] — requisito de la integración con Mercado Pago, no control de acceso del sistema (general-plan §7.1) |
 | Webhook | Payload mal formado (E4) | `400 VALIDATION_ERROR` | [CONV] |
 | Webhook | Resultado ya registrado (duplicado) | `200 OK`, sin modificar el registro | [SPEC UC05 casos extremos, UC10 casos extremos] |
 | Webhook | Falla interna: BD no disponible (E10) | `500 INTERNAL_ERROR`, para que la Pasarela reintente | [CONV] |
@@ -222,7 +219,7 @@ Los canales sin respuesta al productor no pueden usar HTTP. Se aplican las misma
 ### 4.5 Lista de verificación para cada contrato
 
 1. Cada fila de la tabla de errores del contrato usa un `code` y un HTTP **idénticos** a los del catálogo (§3.4).
-2. El contrato declara el orden de validación aplicable (E1 → E8) cuando tiene más de una causa posible de error.
+2. El contrato declara el orden de validación aplicable (E3 → E8) cuando tiene más de una causa posible de error.
 3. Ningún `5xx` expone detalles internos y ningún `4xx` esconde una falla propia.
 4. Todo `retryable: true` en un `4xx` tiene su justificación asíncrona escrita en el contrato.
 5. Si el contrato necesita un error que no existe, se agrega primero a la §4.2 y al catálogo, no solo al contrato.

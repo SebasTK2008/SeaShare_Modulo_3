@@ -6,14 +6,14 @@
 | SPEC | `docs/features/013-consultar-informe-financiero/spec.md` |
 | Dirección | Propietario / Administrador Financiero → sistema |
 | ¿Responde? | Sí (síncrono) |
-| Quién puede llamarlo | Solo Propietario o Administrador Financiero [SPEC RF-012] |
+| Quién puede llamarlo | Solo Propietario o Administrador Financiero (usuarios esperados; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) [SPEC RF-012] |
 | Efectos secundarios | Ninguno (solo lectura) [SPEC RF-013] |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-Genera un archivo `.csv` con los mismos datos agregados del informe financiero consultado en la UI, garantizando idéntico alcance, cálculo y período, para que el usuario pueda descargarlo y conservarlo [SPEC HU3].
+Genera un archivo `.csv` con los mismos datos agregados del informe financiero consultado en la UI, garantizando idéntico alcance (`scope` y `owner_id` declarados como **datos planos**, sin validar identidad), cálculo y período, para que el usuario pueda descargarlo y conservarlo [SPEC HU3].
 
 ## 2. Petición
 
@@ -23,7 +23,6 @@ Genera un archivo `.csv` con los mismos datos agregados del informe financiero c
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <token>` [PEND OQ-01] |
 | `Accept` | No | `text/csv` |
 | `X-Correlation-Id` | No | Cadena libre |
 
@@ -31,6 +30,8 @@ Genera un archivo `.csv` con los mismos datos agregados del informe financiero c
 
 | Parámetro | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
+| `scope` | string | Sí | Alcance declarado: `OWNER` (Propietario) o `PLATFORM` (Administrador Financiero) | [CONV] — dato plano; el sistema aplica lo declarado sin validar identidad (seguridad fuera de alcance) |
+| `owner_id` | UUID | Sí si `scope=OWNER` | Identidad declarada del Propietario cuyos registros se exportan; el sistema no valida pertenencia | [SPEC RF-006] |
 | `periodicity` | string | Sí | `QUINCENAL`, `MENSUAL`, `TRIMESTRAL` | [SPEC RF-013] |
 | `period` | string | Sí | Identificador explícito del período a exportar, en el formato canónico según periodicidad (ver tabla) | [SPEC RF-013] |
 
@@ -46,9 +47,9 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
 
 ## 3. Reglas de procesamiento
 
-1. **Igualdad de cálculo**: Utiliza internamente el mismo flujo que `GET /api/v1/financial-report` para determinar el alcance (por rol de usuario) y realizar las agregaciones [SPEC RNF-004].
+1. **Igualdad de cálculo**: Utiliza internamente el mismo flujo que `GET /api/v1/financial-report` para determinar el alcance declarado (`scope`/`owner_id`, datos planos) y realizar las agregaciones [SPEC RNF-004].
 2. **Formato CSV**: Transforma el resultado en un archivo de texto plano delimitado por comas [SPEC RF-012].
-3. **Contenido**: El CSV debe incluir métricas agregadas (neto/ganancia, totales por tipo), período, periodicidad, nombre/id del solicitante y la fecha y hora de la generación [SPEC HU3 escenarios 1 y 2, RF-013].
+3. **Contenido**: El CSV debe incluir métricas agregadas (neto/ganancia, totales por tipo), período, periodicidad, el alcance declarado y el nombre/id declarado del solicitante, y la fecha y hora de la generación [SPEC HU3 escenarios 1 y 2, RF-013].
 
 ## 4. Respuesta exitosa
 
@@ -67,9 +68,7 @@ Los errores se devuelven preferiblemente como JSON (`application/problem+json`),
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `INVALID_PERIOD` | Periodicidad no soportada o período con formato inválido | No | [SPEC RF-004, casos extremos] |
-| 400 | `VALIDATION_ERROR` | Falta `periodicity` o `period`, u otro parámetro con tipo o formato incorrecto | No | [CONV] |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
-| 403 | `FORBIDDEN` | El llamador no es Propietario ni Administrador Financiero | No | [SPEC RF-012] |
+| 400 | `VALIDATION_ERROR` | Falta `periodicity`, `period` o `scope`, u otro parámetro con tipo o formato incorrecto | No | [CONV] |
 | 500 | `INTERNAL_ERROR` | Error no previsto al generar el CSV | Sí | [CONV] |
 
 ## 6. Idempotencia y reintentos

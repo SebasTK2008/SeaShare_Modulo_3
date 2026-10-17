@@ -6,7 +6,7 @@
 | SPEC | `docs/features/006-solicitar-confirmacion-de-pago/spec.md` |
 | Dirección | Sistema de Reservas y Operaciones → sistema |
 | ¿Responde? | Sí (síncrono) |
-| Quién puede llamarlo | Solo el Sistema de Reservas y Operaciones [SPEC RF-001] |
+| Quién puede llamarlo | Solo el Sistema de Reservas y Operaciones (usuario esperado; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) [SPEC RF-001] |
 | Efectos secundarios | Ninguno: solo lectura de la `IntenciónDeCobro`; **no contacta a la pasarela** [SPEC RF-002, RF-006] |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
@@ -23,7 +23,6 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <token>` [PEND OQ-01] |
 | `Accept` | No | `application/json` |
 | `X-Correlation-Id` | No | Cadena libre |
 
@@ -85,8 +84,6 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `VALIDATION_ERROR` | `reservation_id` no tiene formato válido | No | [CONV] |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
-| 403 | `FORBIDDEN` | El llamador no es el Sistema de Reservas y Operaciones | No | [SPEC RF-001] |
 | 404 | `CHARGE_INTENT_NOT_FOUND` | No existe `IntenciónDeCobro` para esa reserva ("Procesar cobro" nunca se inició) | Sí | [SPEC RF-005, RNF-003] + [CONV] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 

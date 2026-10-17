@@ -56,7 +56,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Proc
 **Target Platform**: Contenedores Docker (Linux) [general-plan]
 **Project Type**: Servicio backend único (hexagonal) [general-plan]
 **Performance Goals**: No definidos por el SPEC 5 `[NEEDS CLARIFICATION: se buscó en spec.md 005, general-plan.md y contratos de pasarela; solo existe el timeout de la pasarela de 10 s del general-plan §7.2 [CONV]]`
-**Constraints**: `BigDecimal` con 4 decimales internos [SPEC RNF-002]; solo token, nunca PAN/CVV/vencimiento [SPEC RNF-004]; un timeout no es un fallo [SPEC RNF-003]; `RegistroDeCobro` solo con cobro/captura confirmados [SPEC RF-006, RF-008; general-plan §3.5]; la comisión y el seguro congelados no se tocan aquí
+**Constraints**: `BigDecimal` con 4 decimales internos [SPEC RNF-002]; solo token, nunca PAN/CVV/vencimiento [SPEC RNF-004]; un timeout no es un fallo [SPEC RNF-003]; `RegistroDeCobro` solo con cobro/captura confirmados [SPEC RF-006, RF-008; general-plan §3.5]; los valores aplicados (comisión % y seguro) se resuelven de la versión de parámetros referenciada por la reserva y no se tocan aquí
 **Scale/Scope**: 2 tablas propias (`charge_intent`, `charge_record`); 0 endpoints REST propios; 1 endpoint de entrada de la pasarela (compartido, ver OQ-UC05-07); 3 jobs (expiración, conciliación, relay); 15 RF + 5 RNF + 7 CE + 2 HU
 
 **Estado actual del repositorio (relevante)**: existen `SeashareM3Application`, `application.properties` (solo `spring.application.name`), `TestcontainersConfiguration`, `SeashareM3ApplicationTests` y `TestSeashareM3Application`. **No existen** `domain`/`application`/`infrastructure`, migraciones, `Dockerfile`, `docker-compose.yml` ni reglas ArchUnit; tampoco `docs/features/005-procesar-cobro/plan.md` hasta este documento.
@@ -201,7 +201,7 @@ UC05 **no expone endpoints REST propios** (README §2: "UC05 no tiene endpoint p
 |---|---|---|
 | 200 | — | Notificación aceptada, duplicada o `data.id` desconocido (propuesta §4.4) |
 | 400 | `VALIDATION_ERROR` | Payload mal formado o sin `action`, `data.id`, `type` |
-| 401 | `UNAUTHENTICATED` | `x-signature` ausente o inválida |
+| 401 | `UNAUTHENTICATED` | `x-signature` ausente o inválida (requisito de la integración con Mercado Pago; no es seguridad del proyecto — general-plan §7.1) |
 | 500 | `INTERNAL_ERROR` | BD no disponible al acusar recibo: la pasarela reintentará |
 
 ## Estrategia de testing
@@ -214,7 +214,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 | Unitario (`application`) | RF-002, RF-009, RF-013, RF-004A, resultados por estado | `ProcessChargeServiceTest`, `RegisterChargeResultServiceTest` |
 | Integración (Testcontainers PostgreSQL) | migración, FK, `UNIQUE(idempotency_key)`, varias intenciones por reserva, trigger anti-mutación | `ChargePersistenceAdapterTest` |
 | Integración (Testcontainers RabbitMQ + WireMock) | outbox → worker → pasarela, mismo `X-Idempotency-Key` en reintentos, timeouts | `ChargeCommandListenerTest`, `MercadoPagoChargeAdapterTest` |
-| Web (MockMvc) | firma, `400`, `401`, `200` duplicado, `500` | `GatewayWebhookControllerTest` |
+| Web (MockMvc) | firma, `400`, `401`, `200` duplicado, `500` (el `401` es de la firma de Mercado Pago, no control de acceso — general-plan §7.1) | `GatewayWebhookControllerTest` |
 | Arquitectura | reglas §3.4 | `ArchitectureTest` (base y ampliación T030) |
 
 **Pruebas de aceptación (CE-001…CE-007)**:

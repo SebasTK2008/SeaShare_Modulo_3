@@ -5,9 +5,9 @@
 
 ## Summary
 
-UC13 consulta y exporta informes agregados de registros financieros confirmados para `ADMIN_FINANCIERO` o `OWNER`. Usa períodos quincenales, mensuales y trimestrales, el período anterior equivalente y el mismo agregador para JSON y CSV [SPEC RF-001..RF-015, HU1..HU3].
+UC13 consulta y exporta informes agregados de registros financieros confirmados para el alcance declarado `PLATFORM` (Administrador Financiero) o `OWNER` (Propietario con `owner_id`). Usa períodos quincenales, mensuales y trimestrales, el período anterior equivalente y el mismo agregador para JSON y CSV [SPEC RF-001..RF-015, HU1..HU3].
 
-La fuente es `v_financial_records`, creada por UC12 con `record_id` y `NULL::text AS external_reference` para comisiones. El alcance se obtiene de la identidad autenticada; UC13 no consulta Flota, no devuelve el detalle paginado de UC12 y no modifica registros. `q` y las métricas adicionales del contrato permanecen como OQ-CROSS-14/D-26; el CSV incluye únicamente los campos exigidos por el SPEC.
+La fuente es `v_financial_records`, creada por UC12 con `record_id` y `NULL::text AS external_reference` para comisiones. El alcance se obtiene del **alcance declarado** (`scope`/`owner_id` como **datos planos**, sin validar identidad; general-plan §7.1); UC13 no consulta Flota, no devuelve el detalle paginado de UC12 y no modifica registros. `q` y las métricas adicionales del contrato permanecen como OQ-CROSS-14/D-26; el CSV incluye únicamente los campos exigidos por el SPEC.
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -32,10 +32,10 @@ La fuente es `v_financial_records`, creada por UC12 con `record_id` y `NULL::tex
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
-**Primary Dependencies**: Spring Boot 4.1.1; Web MVC, Validation, Data JPA, Security OAuth2 Resource Server, Actuator, MapStruct, Micrometer/Prometheus, ArchUnit y librería CSV. Cambios de dependencias pertenecen al núcleo compartido y no se aplican desde este plan.
+**Primary Dependencies**: Spring Boot 4.1.1; Web MVC, Validation, Data JPA, Actuator, MapStruct, Micrometer/Prometheus, ArchUnit y librería CSV. Cambios de dependencias pertenecen al núcleo compartido y no se aplican desde este plan. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
 **Storage**: PostgreSQL 16+; lectura de `v_financial_records` (`UNION ALL`, orden `created_at DESC, record_id DESC`), `NUMERIC(18,4)` y `timestamptz`. UC13 no crea tablas.
 **Messaging**: N/A; ambos endpoints son REST síncronos y de solo lectura.
-**Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Spring Security Test, Testcontainers PostgreSQL y ArchUnit.
+**Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers PostgreSQL y ArchUnit.
 **Target Platform**: contenedores Docker sobre Linux.
 **Project Type**: servicio backend único hexagonal, sin frontend propio.  
 **Performance Goals**: agregación indexada; el SPEC no fija SLA [NEEDS CLARIFICATION OQ-UC13-01].
@@ -82,7 +82,7 @@ src/test/java/com/seashare/seasharem3/
 1. Quincenas: días 1–15 y 16–fin; meses calendario; trimestres Q1–Q4 [SPEC RF-002].
 2. Consulta sin período: último período cerrado y comparación anterior equivalente [SPEC RF-003].
 3. No se aceptan rangos libres [SPEC RF-004].
-4. `ADMIN_FINANCIERO`: plataforma; `OWNER`: registros propios [SPEC RF-005/006].
+4. `PLATFORM`: plataforma completa; `OWNER` (`owner_id` declarado): registros propios [SPEC RF-005/006].
 5. Neto plataforma = cobros − reembolsos − dispersiones; ganancias del propietario = dispersiones confirmadas [SPEC RF-008].
 6. Comisiones son métrica informativa y no se contabilizan dos veces [SPEC RF-009].
 7. Variación porcentual con período anterior cero = no calculable [SPEC RF-010].
@@ -92,7 +92,7 @@ src/test/java/com/seashare/seasharem3/
 
 ## Contratos REST
 
-`GET /api/v1/financial-report`: `periodicity` obligatorio y `period` opcional. `GET /api/v1/financial-report/export`: `periodicity` y `period` obligatorios, respuesta `text/csv`. Ambos usan Problem Details para `INVALID_PERIOD`, `VALIDATION_ERROR`, `UNAUTHENTICATED`, `FORBIDDEN` e `INTERNAL_ERROR` según los contratos existentes.
+`GET /api/v1/financial-report`: `periodicity` y `scope` obligatorios, `owner_id` obligatorio si `scope=OWNER`; `period` opcional. `GET /api/v1/financial-report/export`: igual, respuesta `text/csv`. Ambos usan Problem Details para `INVALID_PERIOD`, `VALIDATION_ERROR` e `INTERNAL_ERROR` según los contratos (sin `401`/`403`: seguridad fuera de alcance, general-plan §7.1).
 
 ## Estrategia de testing
 
@@ -121,7 +121,7 @@ src/test/java/com/seashare/seasharem3/
 | D-23 | ClockPort y zona horaria explícita | Aplicada |
 | D-20 | VOs compartidos no se redeclaran | Aplicada |
 | OQ-CROSS-07 / D-08 | Política y orden de migraciones | Abierta; no se asigna `V1` aprobada |
-| OQ-CROSS-13 / D-16 | Seguridad, claims y AMQP | Abierta |
+| OQ-CROSS-13 / D-16 | Seguridad, claims y AMQP | **Cerrada — Seguridad fuera de alcance**: general-plan §7.1 y D-21; el alcance viaja como dato plano (`scope`/`owner_id`), sin autenticación, `SecurityConfig` ni pruebas 401/403 |
 
 ## Implementation Phases
 
@@ -134,15 +134,15 @@ src/test/java/com/seashare/seasharem3/
 
 - [ ] T003 Consumir `ClockPort`, `Money`, `ReservationId` y `OwnerId` del núcleo compartido; no redeclarar VOs.
 - [ ] T004 Implementar `ReportPeriodResolver` con zona horaria explícita y período anterior equivalente.
-- [ ] T005 Implementar consulta/agregación sobre registros confirmados y filtro por scope.
+- [ ] T005 Implementar consulta/agregación sobre registros confirmados y filtro por alcance declarado (`scope`/`owner_id`, datos planos).
 - [ ] T006 Crear DTOs de aplicación, métricas y comparación.
 - [ ] T007 Implementar validación y Problem Details conforme a contratos.
 - [ ] T008 Implementar `FinancialReportService` como fuente única de cálculo.
 
 ### Phase 3: User Stories
 
-- [ ] T009 [US1] Exponer informe de plataforma para `ADMIN_FINANCIERO`.
-- [ ] T010 [US2] Exponer informe propio para `OWNER`.
+- [ ] T009 [US1] Exponer informe de plataforma para el alcance declarado `PLATFORM`.
+- [ ] T010 [US2] Exponer informe propio para el alcance declarado `OWNER` (`owner_id`).
 - [ ] T011 [US3] Exportar CSV desde el resultado común, solo con campos definidos por SPEC; `q`/métricas extra quedan condicionados a OQ-CROSS-14.
 - [ ] T012 `ce001_scope_platform_and_owner`.
 - [ ] T013 `ce002_net_without_double_commission`.
@@ -152,7 +152,7 @@ src/test/java/com/seashare/seasharem3/
 
 ### Phase 4: Polish
 
-- [ ] T017 Probar período abierto, zona horaria, informe vacío, cero anterior y seguridad diferida.
+- [ ] T017 Probar período abierto, zona horaria, informe vacío, cero anterior (sin pruebas de seguridad: fuera de alcance, general-plan §7.1).
 - [ ] T018 ArchUnit, cobertura y validación final de que no se consulta Flota ni se mutan registros.
 
 ## Dependencies & Execution Order

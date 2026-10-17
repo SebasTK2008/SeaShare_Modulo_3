@@ -6,14 +6,14 @@
 | SPEC | `docs/features/011-configurar-parametros-financieros-globales/spec.md` |
 | Dirección | Administrador Financiero → sistema |
 | ¿Responde? | Sí (síncrono) |
-| Quién puede llamarlo | Solo el Administrador Financiero [SPEC RF-008] |
+| Quién puede llamarlo | Solo el Administrador Financiero (usuario esperado; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) [SPEC RF-008] |
 | Efectos secundarios | Ninguno (solo lectura) |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El Administrador Financiero consulta la configuración financiera vigente de la plataforma. El sistema devuelve los parámetros globales vigentes y los valores calculados de solo lectura, de manera que la pantalla de configuración pueda mostrar el estado actual antes de editarlo [SPEC HU3].
+El Administrador Financiero consulta la configuración financiera vigente de la plataforma. El sistema devuelve la **versión vigente** de los parámetros globales (identificada por su `version`) junto con los valores calculados de solo lectura, de manera que la pantalla de configuración pueda mostrar el estado actual antes de editarlo [SPEC HU3].
 
 ## 2. Petición
 
@@ -23,7 +23,6 @@ El Administrador Financiero consulta la configuración financiera vigente de la 
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <token>` [PEND OQ-01] |
 | `Accept` | No | `application/json` |
 | `X-Correlation-Id` | No | Cadena libre |
 
@@ -33,8 +32,8 @@ No aplica.
 
 ## 3. Reglas de procesamiento
 
-1. Se recupera la entidad única `ParámetrosFinancierosGlobales` vigente [SPEC RF-006].
-2. Si no existe una configuración previa, el sistema informa que está pendiente y **no inventa valores** para ningún parámetro [SPEC HU3 escenario 2]. En REST esto se modela devolviendo un `404 Not Found` [CONV].
+1. Se recupera la **versión vigente** de `ParámetrosFinancierosGlobales` (la de mayor `version_number`); las versiones anteriores se conservan como historial inmutable [SPEC RF-006].
+2. Si no existe ninguna versión de la configuración, el sistema informa que está pendiente y **no inventa valores** para ningún parámetro [SPEC HU3 escenario 2]. En REST esto se modela devolviendo un `404 Not Found` [CONV].
 3. El sistema calcula el valor del depósito como 10% de la tarifa base diaria, pero dado que en este contexto no hay una tarifa base de una reserva específica, esto es meramente representativo o un texto informativo [SPEC RF-012, HU3] *(Nota: el spec indica "el depósito calculado como 10% de la tarifa base diaria", por lo que al nivel de parámetros globales se informará la regla del 10% en lugar de un monto, ya que el monto depende de la embarcación)*.
 4. El sistema incluye las ventanas de temporada alta calculadas por el calendario [SPEC HU3, RF-012].
 
@@ -44,6 +43,7 @@ No aplica.
 
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
+| `version` | integer | Número de la versión vigente consultada (para trazabilidad de los cálculos) | [CONV] — general-plan D-24 |
 | `platform_commission_percentage` | string decimal | Porcentaje de comisión de la plataforma | [SPEC RF-009] |
 | `insurance_fee_per_passenger` | string decimal | Tarifa del seguro náutico por pasajero | [SPEC RF-009] |
 | `weekend_increase_percentage` | string decimal | Porcentaje de incremento por fin de semana | [SPEC RF-009] |
@@ -53,6 +53,7 @@ No aplica.
 
 ```json
 {
+  "version": 7,
   "platform_commission_percentage": "15.00",
   "insurance_fee_per_passenger": "15000.00",
   "weekend_increase_percentage": "10.00",
@@ -71,9 +72,7 @@ No aplica.
 
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
-| 403 | `FORBIDDEN` | El llamador no tiene rol de Administrador Financiero | No | [SPEC RF-008] |
-| 404 | `PARAMETERS_NOT_CONFIGURED` | Todavía no existe configuración | Sí | [SPEC HU3] |
+| 404 | `PARAMETERS_NOT_CONFIGURED` | Todavía no existe ninguna versión de la configuración | Sí | [SPEC HU3] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ```json

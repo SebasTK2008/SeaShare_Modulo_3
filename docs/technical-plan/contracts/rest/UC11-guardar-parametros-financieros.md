@@ -6,24 +6,23 @@
 | SPEC | `docs/features/011-configurar-parametros-financieros-globales/spec.md` |
 | Dirección | Administrador Financiero → sistema |
 | ¿Responde? | Sí (síncrono) |
-| Quién puede llamarlo | Solo el Administrador Financiero [SPEC RF-008] |
-| Efectos secundarios | Actualiza o crea la entidad lógica `ParámetrosFinancierosGlobales` [SPEC RF-005] |
+| Quién puede llamarlo | Solo el Administrador Financiero (usuario esperado; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) [SPEC RF-008] |
+| Efectos secundarios | Crea una **nueva versión vigente** de la entidad lógica `ParámetrosFinancierosGlobales`; las versiones anteriores se conservan como historial inmutable [SPEC RF-005] |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El Administrador Financiero guarda la configuración financiera global (comisión, seguro e incrementos dinámicos). El sistema valida y persiste todos los valores como una única operación atómica, sobrescribiendo cualquier configuración vigente [SPEC HU4].
+El Administrador Financiero guarda la configuración financiera global (comisión, seguro e incrementos dinámicos). El sistema valida y persiste todos los valores como una única operación atómica que crea una **nueva versión vigente**, conservando las versiones anteriores como historial inmutable [SPEC HU4].
 
 ## 2. Petición
 
-`PUT /api/v1/financial-parameters` **[CONV]** (Al ser reemplazo total de la entidad única, PUT es adecuado).
+`PUT /api/v1/financial-parameters` **[CONV]** (Al ser reemplazo total de la configuración vigente, PUT es adecuado; cada PUT válido con contenido distinto crea una versión nueva).
 
 ### Headers
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <token>` [PEND OQ-01] |
 | `Content-Type` | Sí | `application/json` |
 | `Accept` | No | `application/json` |
 | `X-Correlation-Id` | No | Cadena libre |
@@ -51,22 +50,26 @@ El Administrador Financiero guarda la configuración financiera global (comisió
 1. **Validación de tipos y nulos**: Ningún campo obligatorio puede estar vacío o ser no numérico/formato inválido [SPEC RF-013].
 2. **Rangos**: Porcentaje de comisión, incremento de fin de semana e incremento de temporada alta deben estar entre 0.00 y 100.00 [SPEC RF-013].
 3. **Monto**: Tarifa del seguro debe ser ≥ 0 [SPEC RF-013].
-4. **Persistencia**: Si todos son válidos, se persiste atómicamente sobrescribiendo la configuración previamente vigente [SPEC RF-005, RF-011, RNF-003].
+4. **Persistencia**: Si todos son válidos, se persiste atómicamente como una **versión nueva** (ninguna versión existente se modifica), que pasa a ser la vigente [SPEC RF-005, RF-011, RNF-003].
 5. **Fallos**: Ante una validación fallida, el sistema no actualiza ningún parámetro, informa un error controlado y conserva la configuración anterior [SPEC RF-013, HU4 escenario 3].
-6. **Efecto retroactivo**: Ninguno. Reservas previamente calculadas no se afectan [SPEC RF-007].
+6. **Efecto retroactivo: ninguno.** Reservas previamente calculadas no se afectan: conservan la **referencia a la versión de parámetros usada** (`frozen_parameters_id`), de la que se resuelven los valores aplicados, y UC11 no altera ninguna versión anterior [SPEC RF-007].
 7. **Campos excluidos**: No se envía ni se configura el depósito de garantía ni las fechas de temporada alta [SPEC RF-012, Casos Extremos].
 
 ## 4. Respuesta exitosa
 
-`204 No Content` — Sin cuerpo **[CONV]** o `200 OK` con un cuerpo vacío o de confirmación.
+`200 OK` — `Content-Type: application/json`:
+
+```json
+{ "version": 8 }
+```
+
+**[CONV]** Devuelve el número de la nueva versión vigente para facilitar la trazabilidad (general-plan D-24). Un `204 No Content` también sería válido; se prefiere exponer la versión.
 
 ## 5. Respuestas de error
 
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `VALIDATION_ERROR` | Cuerpo inválido, campos vacíos, valores fuera de rango o negativos | No | [SPEC RF-013] |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
-| 403 | `FORBIDDEN` | El llamador no es Administrador Financiero | No | [SPEC RF-008] |
 | 500 | `PARAMETERS_SAVE_FAILED` | La persistencia falló; la configuración anterior se conserva íntegra | Sí | [SPEC HU4 esc. 3] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
@@ -83,7 +86,7 @@ El Administrador Financiero guarda la configuración financiera global (comisió
 
 ## 6. Idempotencia y reintentos
 
-`PUT` es idempotente por naturaleza. Enviar la misma configuración sobrescribirá con los mismos valores. Reintentar fallas del servidor es seguro.
+`PUT` es idempotente por naturaleza. Enviar la misma configuración (mismos cuatro valores) **no crea una versión nueva**: el sistema devuelve la versión vigente; un contenido distinto crea una versión nueva. Reintentar fallas del servidor es seguro.
 
 ## 7. Trazabilidad
 

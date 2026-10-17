@@ -6,7 +6,7 @@
 | SPECs | 005 (Cobro), 009 (Reembolso), 010 (Liquidación) |
 | Dirección | Mercado Pago → sistema |
 | ¿Responde? | Sí (`200 OK` o `204 No Content` para confirmar recepción) |
-| Quién puede llamarlo | Solo Mercado Pago (verificado criptográficamente con `x-signature`) |
+| Quién puede llamarlo | Solo Mercado Pago (verificado criptográficamente con `x-signature`: requisito de la integración con Mercado Pago, no control de acceso del sistema; general-plan §7.1) |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
@@ -83,7 +83,7 @@ MP firma cada notificación con HMAC-SHA256 usando el **secret del webhook** con
 
 ## 3. Reglas de procesamiento
 
-1. **Verificación de autenticidad (paso previo obligatorio)**: Se verifica la firma `x-signature` usando el HMAC-SHA256 y el secret del webhook configurado en el panel de Mercado Pago. Si la firma es inválida o ausente → `401 UNAUTHENTICATED`. **Sin este paso no se procesa nada.**
+1. **Verificación de autenticidad (paso previo obligatorio)**: Se verifica la firma `x-signature` usando el HMAC-SHA256 y el secret del webhook configurado en el panel de Mercado Pago. Si la firma es inválida o ausente → `401 UNAUTHENTICATED`. **Sin este paso no se procesa nada.** Requisito de la integración con Mercado Pago (no es seguridad del proyecto; general-plan §7.1).
 
 2. **Acuse de recibo inmediato**: El sistema responde `200 OK` a MP sin esperar el resultado del procesamiento interno. MP considera la notificación fallida si no recibe respuesta en tiempo (reintentará si recibe `4xx` o `5xx`).
 

@@ -25,7 +25,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud 
   El sistema no intenta calcular ningún monto parcial. De acuerdo con RF-009, responde al Sistema de Reservas y Operaciones con un error controlado que indica que no existe información registrada para el identificador de reserva recibido.
 
 - **¿Qué sucede si el Sistema de Reservas y Operaciones solicita el valor calculado de la misma reserva más de una vez?**
-  Dado que el cálculo (RF-003 a RF-006) se realiza siempre a partir de la misma información registrada para esa reserva, el resultado es determinístico: el sistema recupera nuevamente dicha información, recalcula el monto de alquiler, el seguro náutico, el depósito de garantía y el valor total, y devuelve el mismo desglose. La actualización de la información interna (RF-008) es igualmente idempotente, ya que sobrescribe los montos calculados con valores equivalentes.
+  Dado que el cálculo (RF-003 a RF-006) se realiza siempre a partir de la misma información registrada para esa reserva y de la versión de parámetros congelada (referencia a la versión usada, de la que se resuelven la comisión % y la tarifa de seguro por pasajero), el resultado es determinístico incluso si se crea una nueva versión de los parámetros financieros globales: el sistema devuelve el mismo desglose. La actualización de la información interna (RF-008) es igualmente idempotente, ya que reescribe los montos y la referencia con valores equivalentes.
 
 - **¿Cómo debe comportarse el sistema si la tarifa base necesaria para calcular el depósito no está disponible?**
   El sistema considera la información necesaria incompleta. No calcula un depósito asumido o parcial; registra el fallo y responde con un error controlado.
@@ -33,7 +33,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud 
 - **¿Qué sucede si la información registrada para la reserva está incompleta (por ejemplo, sin tarifa base) debido a una falla previa durante "Brindar información de reserva"?**
   Se trata igualmente de un caso de información incompleta cubierto por RNF-003: el sistema no debe ejecutar un cálculo parcial (por ejemplo, omitiendo el monto de alquiler). Debe tratar la solicitud como no calculable y responder con un error controlado al Sistema de Reservas y Operaciones, equivalente al tratamiento definido en RF-009.
 
-- **¿Qué sucede si la tarifa del seguro náutico no ha sido configurada por el Administrador Financiero al momento de calcular el valor de la reserva?**
+- **¿Qué sucede si no existe una versión vigente de los parámetros financieros globales (o la tarifa del seguro náutico no está configurada) al momento de calcular el valor de la reserva?**
   El sistema considera la información necesaria incompleta. No calcula el monto del seguro náutico ni un valor total parcial; registra el fallo y responde con un error controlado al Sistema de Reservas y Operaciones.
 
 ## Requisitos *(obligatorio)*
@@ -47,7 +47,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud 
 - **RF-005**: El sistema DEBE calcular el depósito de garantía conforme a la regla definida en este caso de uso, sin multiplicarlo por la duración, el número de pasajeros o el daño reportado.
 - **RF-006**: El sistema DEBE calcular el valor total de la reserva como la suma del monto de alquiler, el monto del seguro náutico y el monto del depósito de garantía. Este valor total es el monto que se cobra al Arrendatario en "Procesar cobro".
 - **RF-007**: El sistema DEBE devolver al Sistema de Reservas y Operaciones el desglose completo del valor de la reserva, compuesto por el monto de alquiler, el monto del seguro náutico, el monto del depósito de garantía y el valor total.
-- **RF-008**: El sistema DEBE congelar los parámetros usados (comisión % y tarifa seguro por pasajero) vigentes al calcular el valor de la reserva; dichos valores no son retroactivos. El sistema DEBE actualizar la información interna previamente registrada de la reserva, incorporando los montos calculados, dejándola disponible para "Procesar cobro". Si los datos de la reserva cambian posteriormente, los montos calculados deben invalidarse y recalcularse antes de un nuevo cobro.
+- **RF-008**: El sistema DEBE congelar los parámetros usados al calcular el valor de la reserva, registrando la **referencia a la versión** de los parámetros financieros globales empleada en el cálculo (la comisión % y la tarifa de seguro por pasajero aplicadas se resuelven de esa versión, sin copiarlas en la reserva); dichos valores no son retroactivos. El sistema DEBE actualizar la información interna previamente registrada de la reserva, incorporando los montos calculados junto con la referencia de versión, dejándola disponible para "Procesar cobro". Si los datos de la reserva cambian posteriormente, los montos calculados y la referencia de versión deben invalidarse y recalcularse antes de un nuevo cobro.
 - **RF-009**: El sistema DEBE responder con un error controlado al Sistema de Reservas y Operaciones cuando se solicita el valor calculado de una reserva para la cual no existe información previamente registrada.
 
 ### Requisitos No Funcionales
@@ -58,7 +58,7 @@ Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud 
 
 ### Entidades Clave
 
-- **InformaciónDeReserva (Entidad, definida en SPEC 3)**: En este caso de uso es consultada y actualizada, incorporando la tarifa base usada, el monto de alquiler, el monto del seguro náutico, el depósito de garantía y el valor total, de manera que quede disponible para "Procesar cobro" y para su posterior reembolso o liquidación.
+- **InformaciónDeReserva (Entidad, definida en SPEC 3)**: En este caso de uso es consultada y actualizada, incorporando la tarifa base usada, el monto de alquiler, el monto del seguro náutico, el depósito de garantía, el valor total y la referencia a la versión de parámetros usada (de la que se resuelven la comisión % y el seguro por pasajero aplicados), de manera que quede disponible para "Procesar cobro" y para su posterior reembolso o liquidación.
 - **SolicitudValorReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva cuyo valor calculado se solicita.
 - **DesgloseValorReserva (DTO)**: Resultado que el sistema devuelve al Sistema de Reservas y Operaciones. Contiene el identificador de la reserva, el monto de alquiler bruto, el monto del seguro náutico, el monto del depósito de garantía y el valor total cobrado de la reserva. No representa una entidad persistida, sino el valor de retorno de esta operación.
 

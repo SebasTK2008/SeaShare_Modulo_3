@@ -116,8 +116,8 @@ Como el sistema, al recibir la confirmación exitosa de la liquidación estánda
 - **¿Qué diferencia existe entre la liquidación estándar al completar y la liquidación del depósito retenido?**
    La primera se ejecuta al recibir `completada` y calcula Valor Bruto menos Comisión menos Seguro, manteniendo asociado el depósito. La segunda se ejecuta únicamente al recibir `COMPLETED` desde la disputa y liquida el depósito fijo completo como una operación separada o relacionada.
 
-- **¿Qué sucede si el porcentaje de comisión de la plataforma configurado en los parámetros financieros globales no está disponible al momento de calcular la liquidación estándar?**
-  Al no poder completar el cálculo de la comisión, el sistema considera la información necesaria para la liquidación como incompleta. No continúa el cálculo con un valor asumido o parcial; en su lugar, registra el fallo internamente, de la misma forma que ante la ausencia de monto de alquiler o de seguro náutico registrados.
+- **¿Qué sucede si el porcentaje de comisión de la versión de parámetros financieros referenciada por la reserva no está disponible al momento de calcular la liquidación estándar?**
+  Al no poder completar el cálculo de la comisión (la versión referenciada por la reserva —`frozen_parameters_id`— no existe o no tiene comisión %), el sistema considera la información necesaria para la liquidación como incompleta. No continúa el cálculo con un valor asumido o parcial; en su lugar, registra el fallo internamente, de la misma forma que ante la ausencia de monto de alquiler o de seguro náutico registrados.
 
 - **¿Qué sucede cuando la Pasarela de Pago está caída, agota el tiempo de espera (*timeout*) o es inalcanzable al momento de enviar la solicitud de dispersión?**
   El sistema no asume ningún resultado; aplica un manejo de errores controlado, registra la solicitud de dispersión con un estado que refleje la falla de comunicación (sin marcarla como exitosa ni como rechazada por la Pasarela) y conserva dicha solicitud disponible para consulta posterior.

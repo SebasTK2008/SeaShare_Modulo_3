@@ -26,7 +26,7 @@ Donde `{id}` corresponde al ID del pago original devuelto por Mercado Pago (`ori
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <ACCESS_TOKEN>` |
+| `Authorization` | Sí | `Bearer <ACCESS_TOKEN>` (requisito de la integración con Mercado Pago; no es seguridad del proyecto — general-plan §7.1) |
 | `X-Idempotency-Key` | Sí | Clave única (ej. `reembolso-<reserva>-<estado>`) |
 
 ### Body (Payload)

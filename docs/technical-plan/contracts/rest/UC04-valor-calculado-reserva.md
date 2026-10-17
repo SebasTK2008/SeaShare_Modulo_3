@@ -6,14 +6,14 @@
 | SPEC | `docs/features/004-solicitar-el-valor-calculado-de-la-reserva/spec.md` |
 | Dirección | Sistema de Reservas y Operaciones → sistema |
 | ¿Responde? | Sí (síncrono) |
-| Quién puede llamarlo | Solo el Sistema de Reservas y Operaciones [SPEC RF-001] |
-| Efectos secundarios | Actualiza la `InformaciónDeReserva` con los montos calculados [SPEC RF-008] — por eso es `POST` |
+| Quién puede llamarlo | Solo el Sistema de Reservas y Operaciones (usuario esperado; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) [SPEC RF-001] |
+| Efectos secundarios | Actualiza la `InformaciónDeReserva` con los montos calculados y la referencia a la versión de parámetros usada (`frozen_parameters_id`) [SPEC RF-008] — por eso es `POST` |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-Reservas pide el valor definitivo de una reserva ya registrada (UC03). El sistema recupera la información registrada, calcula el monto de alquiler, el seguro náutico y el depósito de garantía, devuelve el desglose con el valor total y deja los montos disponibles para "Procesar cobro" [SPEC HU1].
+Reservas pide el valor definitivo de una reserva ya registrada (UC03). El sistema recupera la información registrada, calcula el monto de alquiler, el seguro náutico y el depósito de garantía, **congela la versión de parámetros usada (`frozen_parameters_id`), de la que se leen los valores aplicados**, devuelve el desglose con el valor total y deja los montos disponibles para "Procesar cobro" [SPEC HU1].
 
 ## 2. Petición
 
@@ -23,7 +23,6 @@ Reservas pide el valor definitivo de una reserva ya registrada (UC03). El sistem
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <token>` [PEND OQ-01] |
 | `Accept` | No | `application/json` |
 | `X-Correlation-Id` | No | Cadena libre |
 
@@ -40,12 +39,12 @@ Reservas pide el valor definitivo de una reserva ya registrada (UC03). El sistem
 3. **Seguro náutico** = `tarifa de seguro × pasajeros registrados` [SPEC RF-004].
 4. **Depósito de garantía** = 10 % de la tarifa base diaria; **no** se multiplica por duración, pasajeros ni daño [SPEC HU1, RF-005].
 5. **Valor total** = alquiler + seguro + depósito; es el monto que se cobra en "Procesar cobro" [SPEC RF-006].
-6. Los montos se **guardan** en la `InformaciónDeReserva` [SPEC RF-008]. Si UC03 vuelve a registrar la reserva, los montos se invalidan y deben recalcularse antes de un nuevo cobro [SPEC RF-008, UC03 casos extremos].
-7. **Solicitud repetida**: se devuelve el mismo desglose y la actualización interna es idempotente [SPEC casos extremos]. Si los parámetros cambiaron entre dos solicitudes sin que UC03 invalidara los montos, se devuelven los ya registrados (D-17, [PEND] OQ-07).
+6. Los montos y la **referencia a la versión** de `financial_parameters` usada (`frozen_parameters_id`) se **guardan** en la `InformaciónDeReserva`; los valores aplicados (comisión % y tarifa de seguro) **no se copian**: se leen de esa versión [SPEC RF-008]. Si UC03 vuelve a registrar la reserva, los montos y la referencia se invalidan y deben recalcularse antes de un nuevo cobro [SPEC RF-008, UC03 casos extremos].
+7. **Solicitud repetida**: se devuelve el mismo desglose y la actualización interna es idempotente [SPEC casos extremos]. El recálculo usa la **versión referenciada** (`frozen_parameters_id`) y, por tanto, no cambia aunque se publique una versión vigente más nueva (D-17, OQ-07 cerrada); si no hay referencia (primer cálculo o tras invalidación de UC03), usa la **versión vigente**.
 8. No se recalcula ni se vuelve a consultar la tarifa dinámica ni la tarifa base [SPEC CE-002].
 9. No existe información registrada → error controlado, sin ningún monto parcial [SPEC RF-009, casos extremos].
 10. Información registrada incompleta (por ejemplo, sin tarifa base) → error controlado, sin cálculo parcial [SPEC RNF-003, casos extremos].
-11. Tarifa del seguro sin configurar → error controlado; no se calcula ni el seguro ni un total parcial [SPEC casos extremos].
+11. **Primer cálculo (sin versión referenciada)**: no existe **versión vigente** de los parámetros financieros o la tarifa del seguro no está configurada → error controlado; no se calcula ni el seguro ni un total parcial. Un recálculo con referencia (`frozen_parameters_id`) siempre resuelve la versión referenciada (FK; la tabla es append-only) [SPEC casos extremos].
 
 ## 4. Respuesta exitosa
 
@@ -76,11 +75,9 @@ Reservas pide el valor definitivo de una reserva ya registrada (UC03). El sistem
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `VALIDATION_ERROR` | `reservation_id` no tiene formato válido | No | [CONV] |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida | No | [PEND] OQ-01 |
-| 403 | `FORBIDDEN` | El llamador no es el Sistema de Reservas y Operaciones | No | [SPEC RF-001] |
 | 404 | `RESERVATION_INFO_NOT_FOUND` | No existe información registrada para esa reserva | Sí (OQ-06) | [SPEC RF-009] |
 | 422 | `RESERVATION_INFO_INCOMPLETE` | La información registrada no permite calcular (por ejemplo, sin tarifa base) | No | [SPEC RNF-003] |
-| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | La tarifa del seguro náutico no está configurada | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
+| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | No existe versión vigente de los parámetros (primer cálculo, sin referencia) o la tarifa del seguro náutico no está configurada | Sí (cuando el Administrador Financiero configure) | [SPEC casos extremos] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ```json
@@ -96,7 +93,7 @@ Reservas pide el valor definitivo de una reserva ya registrada (UC03). El sistem
 
 ## 6. Idempotencia y reintentos
 
-Idempotente: devuelve siempre el mismo desglose mientras la información de la reserva no cambie [SPEC casos extremos]. Reintentar `RESERVATION_INFO_NOT_FOUND` es razonable si UC03 aún está en cola (OQ-06).
+Idempotente: devuelve siempre el mismo desglose mientras la información de la reserva no cambie (usa la versión de parámetros referenciada; la vigente solo si no hay referencia) [SPEC casos extremos]. Reintentar `RESERVATION_INFO_NOT_FOUND` es razonable si UC03 aún está en cola (OQ-06).
 
 ## 7. Trazabilidad
 

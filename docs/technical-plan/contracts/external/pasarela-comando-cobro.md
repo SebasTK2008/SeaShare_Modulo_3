@@ -24,7 +24,7 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
 
 | Header | Obligatorio | Valor |
 |---|---|---|
-| `Authorization` | Sí | `Bearer <ACCESS_TOKEN>` |
+| `Authorization` | Sí | `Bearer <ACCESS_TOKEN>` (requisito de la integración con Mercado Pago; no es seguridad del proyecto — general-plan §7.1) |
 | `X-Idempotency-Key` | Sí | Clave única (ej. `cobro-<reservation_id>`) para evitar cobros duplicados |
 
 ### Body (Payload)

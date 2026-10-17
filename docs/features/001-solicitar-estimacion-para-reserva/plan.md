@@ -40,7 +40,7 @@ El tratamiento de una embarcación ausente del resultado de UC02 queda abierto e
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC01: Spring Web MVC, Validation, Jackson, MapStruct, ArchUnit y WireMock/Resilience4j cuando correspondan. Las dependencias compartidas se coordinan fuera de este plan; no se modifica `pom.xml` aquí.
-**Storage**: PostgreSQL 16+; UC01 **no tiene tablas propias ni migración**. Solo **lee** `financial_parameters` (tabla de UC11) para la tarifa de seguro por pasajero [SPEC general-plan §4]
+**Storage**: PostgreSQL 16+; UC01 **no tiene tablas propias ni migración**. Solo **lee la versión vigente** de `financial_parameters` (tabla versionada de UC11) para la tarifa de seguro por pasajero [SPEC general-plan §4]
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, WireMock, ArchUnit, Testcontainers (para el contexto Spring de integración) [CONV]
 **Target Platform**: Contenedores Docker (Linux) [SPEC general-plan]
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio [SPEC general-plan]
@@ -155,11 +155,11 @@ Todas las reglas provienen del SPEC 01 (`spec.md`), sus contratos o el `general-
 12. **Embarcación sin tarifa disponible** [SPEC casos extremos; contrato lote regla 5; OQ-CROSS-06/D-25]: individual → `422 BASE_RATE_NOT_AVAILABLE`; el tratamiento de IDs no reconocidos en lote queda abierto. Nunca se asume un precio.
 13. **Falla de Flota** [SPEC casos extremos, RNF-003; contrato lote regla 9]: `ProvideBaseRateUseCase` lanza `BaseRateException(FLEET_UNAVAILABLE)` (caída, timeout, inalcanzable o respuesta inválida) → UC01 responde `503 FLEET_UNAVAILABLE` **sin estimaciones parciales**. UC02 ya registra el fallo en `operational_failure`; **UC01 no escribe** en `operational_failure` por ser un caso síncrono que responde (D-UC01-05, confirmado).
 14. **Parámetros faltantes** [SPEC casos extremos; contrato lote regla 10]: si falta la tarifa de seguro (fila ausente o valor nulo) o el porcentaje que exige la fecha evaluada (`BaseRateException(DYNAMIC_RATE_NOT_CONFIGURED)` de UC02) → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`, sin estimación parcial. Si la fecha evaluada es regular, no se necesita ningún porcentaje.
-15. **Orden de validación** [CONV; contratos §5 y `README` §4.3]: lote `E1 → E2 → E3 → E4 → E6 → E7`; individual `E1 → E2 → E3 → E4 → E6 → E7 → E8`. La petición se valida por completo (E4) antes de leer parámetros (E6) o llamar a Flota (E7); E5 no aplica (no hay recurso en la URL) y, en el lote, E8 no produce error (se reporta en `unavailable[]`).
+15. **Orden de validación** [CONV; contratos §5 y `README` §4.3]: lote `E3 → E4 → E6 → E7`; individual `E3 → E4 → E6 → E7 → E8` (E1/E2 retiradas: seguridad fuera de alcance). La petición se valida por completo (E4) antes de leer parámetros (E6) o llamar a Flota (E7); E5 no aplica (no hay recurso en la URL) y, en el lote, E8 no produce error (se reporta en `unavailable[]`).
 16. **Precisión y redondeo** [SPEC RNF-002; D-UC02-04; D-UC01-08]: todos los montos son `BigDecimal`; el cálculo interno trabaja a **escala 4**; el campo `estimated_total` de la respuesta se serializa como **string decimal redondeado HALF_UP a 2 decimales**. UC01, como llamador, realiza el redondeo final de presentación.
 17. **Advertencia obligatoria (individual)** [SPEC HU2 escenario 1]: toda respuesta exitosa incluye `warning` con el texto exacto (sin punto final): `Valor estimado. El valor incluye el seguro náutico, pero no incluye el depósito de garantía ni penalidades o ajustes derivados de cambios posteriores de la reserva`. Es la evidencia funcional de CE-003 (métrica de negocio no automatizable, D-UC01-10).
-18. **Seguridad** [PEND OQ-01; OQ-UC01-01]: los contratos declaran `401 UNAUTHENTICATED` / `403 FORBIDDEN` y que solo el Sistema de Reservas y Operaciones puede llamar. El **mecanismo y la configuración** quedan **diferidos** a la decisión transversal de seguridad registrada en el general-plan (§7.1, OQ-01): esta fase **no implementa** `SecurityConfig` ni pruebas de 401/403 para no introducir incoherencias con UC11 (ver Notes).
-19. **Sin persistencia ni migración** [SPEC; general-plan §3.3]: UC01 no crea tablas ni migraciones Flyway; es de solo lectura sobre `financial_parameters` (UC11). Repetir la petición no produce efectos (idempotente) [contrato §6].
+18. **Seguridad fuera de alcance** [general-plan §7.1, D-21; OQ-01 cerrada]: el sistema **no implementa** autenticación ni autorización; los contratos ya no declaran `401 UNAUTHENTICATED` / `403 FORBIDDEN`. "Solo el Sistema de Reservas y Operaciones" describe al usuario esperado, no una validación: esta fase **no implementa** `SecurityConfig` ni pruebas de 401/403.
+19. **Sin persistencia ni migración** [SPEC; general-plan §3.3]: UC01 no crea tablas ni migraciones Flyway; es de solo lectura de la versión vigente de `financial_parameters` (UC11, tabla versionada append-only). Repetir la petición no produce efectos (idempotente) [contrato §6].
 20. **Identificadores inexistentes** [SPEC casos extremos; OQ-CROSS-06/D-25]: el tratamiento entre omitir y reportar en `unavailable[]` permanece abierto; nunca se inventa precio.
 
 ## Contratos
@@ -196,10 +196,8 @@ Lista vacía → `{ "evaluation_date": "...", "duration_days": 1, "passengers": 
 |---|---|---|---|
 | 400 | `VALIDATION_ERROR` | Cuerpo no JSON, `boat_ids` ausente/no arreglo/elemento no UUID, o cualquier campo distinto de `boat_ids` | No |
 | 400 | `BATCH_SIZE_EXCEEDED` | `boat_ids` supera el máximo | No |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida [PEND OQ-01] | No |
-| 403 | `FORBIDDEN` | El llamador no es Reservas [PEND OQ-01] | No |
 | 503 | `FLEET_UNAVAILABLE` | Flota caída, timeout, inalcanzable o respuesta inválida [E7] | Sí |
-| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | Falta el seguro o el porcentaje exigido por la fecha [E6] | Sí |
+| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | No existe versión vigente de parámetros o falta el valor exigido por la fecha [E6] | Sí |
 | 500 | `INTERNAL_ERROR` | Error no previsto [E10] | Sí |
 
 ### `POST /api/v1/estimates/individual` (HU2)
@@ -228,11 +226,9 @@ Body: `boat_id`, `start_date`, `end_date`, `passengers` (todos obligatorios).
 |---|---|---|---|
 | 400 | `INVALID_DATE_RANGE` | Formato de fecha inválido, inicio en el pasado o fin anterior al inicio [E4] | No |
 | 400 | `VALIDATION_ERROR` | Cuerpo no JSON, o `boat_id`/`passengers` ausentes o con tipo/rango inválido [E4] | No |
-| 401 | `UNAUTHENTICATED` | Credencial ausente o inválida [PEND OQ-01] | No |
-| 403 | `FORBIDDEN` | El llamador no es Reservas [PEND OQ-01] | No |
 | 422 | `BASE_RATE_NOT_AVAILABLE` | Embarcación sin tarifa base o no reconocida por Flota [E8] | No |
 | 503 | `FLEET_UNAVAILABLE` | Flota caída, timeout, inalcanzable o respuesta inválida [E7] | Sí |
-| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | Falta el seguro o el porcentaje exigido por el inicio [E6] | Sí |
+| 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | No existe versión vigente de parámetros o falta el valor exigido por el inicio [E6] | Sí |
 | 500 | `INTERNAL_ERROR` | Error no previsto [E10] | Sí |
 
 **Mapeo de excepciones** (implementado por `EstimateExceptionHandler`, T007):
@@ -242,10 +238,10 @@ Body: `boat_id`, `start_date`, `end_date`, `passengers` (todos obligatorios).
 | `BaseRateException` de UC02 | `FLEET_UNAVAILABLE` | 503 `FLEET_UNAVAILABLE` |
 | `BaseRateException` de UC02 | `DYNAMIC_RATE_NOT_CONFIGURED` | 503 `FINANCIAL_PARAMETERS_NOT_CONFIGURED` |
 | Ausencia en el resultado de UC02 | — | lote: `unavailable[]`; individual: 422 `BASE_RATE_NOT_AVAILABLE` |
-| `FinancialParametersRepository.find()` vacío o seguro nulo | — | 503 `FINANCIAL_PARAMETERS_NOT_CONFIGURED` |
+| `FinancialParametersRepository.findCurrent()` sin versión vigente o seguro nulo | — | 503 `FINANCIAL_PARAMETERS_NOT_CONFIGURED` |
 | Validación de petición | — | 400 (`VALIDATION_ERROR` / `BATCH_SIZE_EXCEEDED` / `INVALID_DATE_RANGE`) |
 
-Todos los errores usan *Problem Details* (RFC 9457, `contracts/README.md` §3.3) con `code` y `retryable`. Headers comunes: `Authorization`, `Content-Type`, `Accept`, `X-Correlation-Id` (opcional; se genera si falta y se devuelve) [README §3.2].
+Todos los errores usan *Problem Details* (RFC 9457, `contracts/README.md` §3.3) con `code` y `retryable`. Headers comunes: `Content-Type`, `Accept`, `X-Correlation-Id` (opcional; se genera si falta y se devuelve) [README §3.2].
 
 ## Estrategia de testing
 
@@ -292,14 +288,14 @@ Preguntas que este plan no puede resolver con el SPEC 01, el plan general ni los
 
 | ID | Pregunta | Afecta | Propuesta por defecto | Estado |
 |---|---|---|---|---|
-| **OQ-CROSS-13 / D-16** | Seguridad, claims y AMQP | Reglas 401/403 de ambos contratos; pruebas de seguridad | Sin decisión local; UC01 documenta los códigos del contrato y consume configuración transversal cuando exista | Abierta |
+| **OQ-CROSS-13 / D-16** | Seguridad, claims y AMQP | Reglas 401/403 de ambos contratos; pruebas de seguridad | **Cerrada — Seguridad fuera de alcance**: general-plan §7.1 y D-21; los contratos de UC01 no declaran `401`/`403` y este plan no implementa `SecurityConfig` ni pruebas de seguridad | Cerrada |
 | **OQ-CROSS-12 / D-19** | Escala y redondeo final | RNF-002 y respuestas monetarias | Mantener cálculo decimal; no aprobar escala/redondeo adicional desde UC01 | Abierta |
 | **OQ-UC01-02** | ¿Existen metas de rendimiento propias de UC01? El SPEC 01 solo fija el SLA de Flota (HU3) | Technical Context; T022 | Sin meta propia; se hereda el timeout de 1 s del cliente de Flota y el SLA < 500 ms/50 embarcaciones es de Flota **[CONV]** | Abierta |
 | **OQ-UC01-03** | ¿Cuál es la zona horaria de negocio para "fecha actual" y "fecha pasada"? (general-plan OQ-04) | T009, T014; reglas 2, 10 | `America/Bogota` en `seashare.timezone` **[CONV]** | Abierta (general) |
 | **OQ-UC01-04** | ¿El máximo de lote definitivo es 50 o 100? El SPEC RF-006 deja "50 o 100" | T012 | **50** (general-plan D-22; coincide con la prueba de carga de Flota) | Abierta (general) |
 | **OQ-UC01-05** | ¿Se envía `Retry-After` en los `503` y se documentan reintentos del cliente Reservas? | T007 | `Retry-After` opcional (README §3.2); `retryable: true` en `503` | Abierta |
 
-**`[NEEDS CLARIFICATION]` consolidado:** OQ-UC01-01 a OQ-UC01-05.
+**`[NEEDS CLARIFICATION]` consolidado:** OQ-UC01-02 a OQ-UC01-05 (OQ-UC01-01 y OQ-CROSS-13 cerradas: seguridad fuera de alcance, general-plan §7.1).
 
 ## Implementation Phases
 
@@ -315,13 +311,13 @@ Preguntas que este plan no puede resolver con el SPEC 01, el plan general ni los
 - [ ] **T003** Consumir por nombre `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId`, `BaseRateException` y `FinancialParametersRepository`; UC01 no los implementa ni redeclara.
 - [ ] **T005** · `PricingCalculator` (`domain/service`): `Money estimate(Money finalBaseRatePerDay, int days, Money insurancePerPassenger, int passengers)` con `BigDecimal` a escala 4 y **sin redondeo final** (RNF-002, D-UC02-04); y constante `EstimateWarning.TEXT` con el texto literal de HU2 [SPEC].
 - [ ] **T006** · Pruebas unitarias de `PricingCalculator`: días inclusivos, distintos pasajeros, escala 4, casos borde (1 día / 1 pasajero) y montos con 4 decimales (RNF-002).
-- [ ] **T007** `EstimateExceptionHandler`: mapea `BaseRateException`, parámetros faltantes y validación a Problem Details del catálogo; seguridad queda sujeta a OQ-CROSS-13/D-16.
+- [ ] **T007** `EstimateExceptionHandler`: mapea `BaseRateException`, parámetros faltantes y validación a Problem Details del catálogo; **sin reglas de seguridad** (fuera de alcance, general-plan §7.1).
 
 ### Phase 3: US1 — Estimación en lote (HU1; RF-001, RF-002, RF-004, RF-005, RF-006, RF-007; CE-001, CE-005)
 
 - [ ] **T008** · DTOs de aplicación: `EstimateBatchCommand` (`List<BoatId>`), `BatchEstimateResult` (`evaluationDate`, `durationDays`, `passengers`, `estimates`, `unavailable`), `BoatEstimate` y `UnavailableBoat` (RNF-001).
-- [ ] **T009** · `EstimateBatchUseCase` + `EstimateBatchService`: lista vacía → resultado vacío **sin** leer parámetros ni invocar UC02; dedupe de IDs; límite de lote defendido en el servicio; lectura del seguro vía `FinancialParametersRepository.find()` (ausente/nulo → `FINANCIAL_PARAMETERS_NOT_CONFIGURED`); **una** invocación a `ProvideBaseRateUseCase` con `evaluatedDate = ClockPort.today()`; cálculo por embarcación; ausencias → `unavailable[]` (alternativa A); frente a `FLEET_UNAVAILABLE`/`DYNAMIC_RATE_NOT_CONFIGURED` **propaga sin devolver nada**.
-- [ ] **T010** · Pruebas unitarias del servicio (Mockito): 10 embarcaciones, una sin tarifa, lista vacía, IDs duplicados → una sola invocación, fecha regular sin fila de parámetros, seguro faltante, Flota caída (propagación sin salida parcial).
+- [ ] **T009** · `EstimateBatchUseCase` + `EstimateBatchService`: lista vacía → resultado vacío **sin** leer parámetros ni invocar UC02; dedupe de IDs; límite de lote defendido en el servicio; lectura del seguro vía `FinancialParametersRepository.findCurrent()` (sin versión vigente o valor nulo → `FINANCIAL_PARAMETERS_NOT_CONFIGURED`); **una** invocación a `ProvideBaseRateUseCase` con `evaluatedDate = ClockPort.today()`; cálculo por embarcación; ausencias → `unavailable[]` (alternativa A); frente a `FLEET_UNAVAILABLE`/`DYNAMIC_RATE_NOT_CONFIGURED` **propaga sin devolver nada**.
+- [ ] **T010** · Pruebas unitarias del servicio (Mockito): 10 embarcaciones, una sin tarifa, lista vacía, IDs duplicados → una sola invocación, fecha regular sin versión vigente de parámetros, seguro faltante, Flota caída (propagación sin salida parcial).
 - [ ] **T011** · `EstimateController` (`POST /api/v1/estimates/batch`) + `BatchEstimateRequest` **estricto** (rechaza cualquier campo distinto de `boat_ids`; p. ej. `@JsonAnySetter` que capture desconocidos y fuerce `VALIDATION_ERROR`) + `BatchEstimateResponse` con claves `snake_case` y `estimated_total` string de 2 decimales; `X-Correlation-Id` (genera si falta).
 - [ ] **T012** · Límite de lote: `seashare.estimates.max-batch-size` en `EstimateConfiguration`; `boat_ids.size() > max` → `400 BATCH_SIZE_EXCEEDED` sin procesar ningún elemento; elementos no-UUID o `boat_ids` ausente/no-arreglo → `400 VALIDATION_ERROR`.
 - [ ] **T013** · Tests de contrato MockMvc del lote: 200 feliz (ejemplo), lista vacía, `BATCH_SIZE_EXCEEDED`, campos extra, `boat_ids` inválidos y mapeo de `503`.
@@ -367,15 +363,15 @@ T001 ─┬─> T002 ─┬─> T003 ─> T004 ─> T005 ─> T006 ─┬─> T0
 - **US1 (T008–T013)** → **US2 (T014–T017)**: el individual reutiliza `PricingCalculator` (T005) y el `EstimateExceptionHandler` (T007); pueden desarrollarse en paralelo por archivos distintos (el controller es compartido: coordinar T011/T016 en el mismo archivo).
 - **Resiliencia y aceptación (T018–T023)**: después de ambas modalidades; T018/T022 dependen de los artefactos de UC02/UC11.
 - **Polish (T024–T027)**: al final.
-- **Riesgo de secuencia**: seguridad, escala/redondeo e IDs no reconocidos permanecen en OQ-CROSS-13, OQ-CROSS-12 y OQ-CROSS-06.
+- **Riesgo de secuencia**: escala/redondeo e IDs no reconocidos permanecen en OQ-CROSS-12 y OQ-CROSS-06 (seguridad cerrada: fuera de alcance, general-plan §7.1).
 
 ## Notes
 
 - El SPEC 01 **no** define meta de rendimiento propia (OQ-UC01-02), zona horaria (OQ-UC01-03), máximo definitivo de lote (OQ-UC01-04) ni rango de `passengers` (resuelto como D-UC01-07) → `[NEEDS CLARIFICATION]`/`[PEND]` con propuesta por defecto registrada.
-- **Seguridad diferida**: por acuerdo de esta revisión, la autenticación/autorización de UC01 (y el `SecurityConfig` compartido del sistema) **no se implementa ni se prueba** en este plan; queda como **OQ-UC01-01** para la decisión transversal de seguridad (general-plan §7.1, OQ-01). Los contratos siguen documentando `401`/`403`.
+- **Seguridad fuera de alcance**: el sistema **no implementa autenticación ni autorización** (general-plan §7.1, D-21, OQ-01 cerrada); los contratos de UC01 ya no declaran `401`/`403` y este plan no incluye `SecurityConfig` ni pruebas de seguridad. "Solo el Sistema de Reservas y Operaciones" es el usuario esperado.
 - **OQ-CROSS-06/D-25**: el plan no aprueba si un ID no reconocido se omite o se reporta en `unavailable[]`; queda pendiente de decisión externa.
 - `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId` y `BaseRateException` son de **UC02** (plan ya redactado): UC01 los consume por nombre, no los implementa ni los prueba.
-- `FinancialParametersRepository` y la tabla `financial_parameters` son de **UC11**: UC01 los consume por nombre (seguro por pasajero). UC01 **no** persiste ni migra nada.
+- `FinancialParametersRepository` y la tabla `financial_parameters` son de **UC11**: UC01 los consume por nombre (versión vigente, seguro por pasajero). UC01 **no** persiste ni migra nada.
 - `FailureRecorderPort`/`operational_failure` **no** se usan en UC01 (D-UC01-05); UC02 registra los fallos de Flota.
 - Ejemplo de lote del contrato con fecha inconsistente → **D-UC01-02** (corrección propuesta, no aplicada sin acuerdo).
 - Etiquetas usadas: `[SPEC]` (SPEC 01 y contratos), `[CONV]` (general-plan e inferido), `[PEND]`/`[NEEDS CLARIFICATION]` (sin definir).
@@ -387,9 +383,9 @@ T001 ─┬─> T002 ─┬─> T003 ─> T004 ─> T005 ─> T006 ─┬─> T0
 - [ ] Fecha `2026-10-09` y enlace a `spec.md`.
 - [ ] Toda regla marcada `[SPEC]`, `[CONV]`, `[PEND]` o `[NEEDS CLARIFICATION]`.
 - [ ] Discrepancias `D-UC01-01` a `D-UC01-10` (hueco en `D-UC01-04`, eliminada por carecer de fundamento en el proyecto) con decisión explícita, sin resolución silenciosa.
-- [ ] Preguntas abiertas definidas en el propio plan (OQ-UC01-01 a OQ-UC01-05), con remisión al general cuando corresponden.
+- [ ] Preguntas abiertas definidas en el propio plan (OQ-UC01-02 a OQ-UC01-05; OQ-UC01-01 cerrada por seguridad fuera de alcance), con remisión al general cuando corresponden.
 - [ ] Cada RF/RNF/CE/HU del SPEC 01 trazado a componente, tarea y prueba; pruebas `ce001_…`–`ce005_…` (CE-003 con nota de no automatizable).
 - [ ] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§13) aplicadas.
-- [ ] UC01 sin tablas, sin migración, sin persistencia; solo lee `financial_parameters` por nombre.
+- [ ] UC01 sin tablas, sin migración, sin persistencia; solo lee la versión vigente de `financial_parameters` por nombre.
 - [ ] «Firmas referenciadas por otros planes» declarado (UC01 no expone ninguna) y referencias por nombre a UC02/UC11.
-- [ ] Seguridad diferida registrada como OQ-UC01-01, sin `SecurityConfig` ni pruebas 401/403.
+- [ ] Seguridad fuera de alcance documentada (general-plan §7.1); sin `SecurityConfig` ni pruebas 401/403.
