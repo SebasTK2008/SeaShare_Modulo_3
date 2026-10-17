@@ -7,7 +7,7 @@
 
 UC13 consulta y exporta informes agregados de registros financieros confirmados para el alcance declarado `PLATFORM` (Administrador Financiero) o `OWNER` (Propietario con `owner_id`). Usa períodos quincenales, mensuales y trimestrales, el período anterior equivalente y el mismo agregador para JSON y CSV [SPEC RF-001..RF-015, HU1..HU3].
 
-La fuente es `v_financial_records`, creada por UC12 con `record_id` y `NULL::text AS external_reference` para comisiones. El alcance se obtiene del **alcance declarado** (`scope`/`owner_id` como **datos planos**, sin validar identidad; general-plan §7.1); UC13 no consulta Flota, no devuelve el detalle paginado de UC12 y no modifica registros. `q` y las métricas adicionales del contrato permanecen como OQ-CROSS-14/D-26; el CSV incluye únicamente los campos exigidos por el SPEC.
+La fuente es `v_financial_records`, creada por UC12 con `record_id` y `NULL::text AS external_reference` para comisiones. El alcance se obtiene del **alcance declarado** (`scope`/`owner_id` como **datos planos**, sin validar identidad; general-plan §7.1); UC13 no consulta Flota, no devuelve el detalle paginado de UC12 y no modifica registros. `q` y las métricas adicionales quedan **fuera** del contrato y del CSV: este incluye únicamente los campos exigidos por el SPEC.
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -38,7 +38,7 @@ La fuente es `v_financial_records`, creada por UC12 con `record_id` y `NULL::tex
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers PostgreSQL y ArchUnit.
 **Target Platform**: contenedores Docker sobre Linux.
 **Project Type**: servicio backend único hexagonal, sin frontend propio.  
-**Performance Goals**: agregación indexada; el SPEC no fija SLA [NEEDS CLARIFICATION OQ-UC13-01].
+**Performance Goals**: Sin meta propia: el SPEC 13 no fija SLA; agregación indexada [CONV].
 **Constraints**: `BigDecimal` a 4 decimales, no rangos libres, comisiones informativas sin doble conteo, depósitos pendientes excluidos, consulta/CSV con idéntico cálculo y alcance.
 **Scale/Scope**: dos endpoints REST, tres periodicidades, dos alcances, cuatro tipos de registro y 15 RF + 4 RNF + 6 CE + 3 HU.
 
@@ -75,7 +75,7 @@ src/test/java/com/seashare/seasharem3/
 └── arch/ArchitectureTest.java
 ```
 
-**Structure Decision**: `domain` no depende de Spring/JPA/Jackson; `application` solo depende de `domain`; adaptadores de entrada invocan `port.in`; adaptadores de salida implementan `port.out`; el controller no accede a repositorios. `ClockPort` y los VOs `Money`, `ReservationId`, `OwnerId` se consumen del núcleo compartido y no se redeclaran. Zona horaria explícita: `seashare.timezone=America/Bogota` mediante `ClockPort` [D-23].
+**Structure Decision**: `domain` no depende de Spring/JPA/Jackson; `application` solo depende de `domain`; adaptadores de entrada invocan `port.in`; adaptadores de salida implementan `port.out`; el controller no accede a repositorios. `ClockPort` y los VOs `Money`, `ReservationId`, `OwnerId` se consumen del núcleo compartido y no se redeclaran. Zona horaria: períodos y fechas de negocio en `America/Bogota` (`seashare.timezone`); instantes en UTC, mediante `ClockPort` (general-plan D-12).
 
 ## Reglas de negocio
 
@@ -87,8 +87,8 @@ src/test/java/com/seashare/seasharem3/
 6. Comisiones son métrica informativa y no se contabilizan dos veces [SPEC RF-009].
 7. Variación porcentual con período anterior cero = no calculable [SPEC RF-010].
 8. Inclusión por `created_at`; pendientes/intenciones quedan fuera [SPEC RF-014, RNF-003].
-9. El CSV reutiliza exactamente `FinancialReportResult`; incluye solo datos agregados exigidos por el SPEC, incluidos conteos por tipo y la comparación con el período anterior cuando correspondan a RF-009, RF-010 y RF-013. Las métricas extra del contrato (`retained_funds`, `disputed_amount`, etc.) permanecen condicionadas a OQ-CROSS-14/D-CROSS-26 [SPEC RF-013].
-10. `q` y métricas contractuales adicionales quedan abiertas bajo OQ-CROSS-14/D-26; no se presentan como aprobadas.
+9. El CSV reutiliza exactamente `FinancialReportResult` e incluye solo los datos exigidos por el SPEC (RF-009, RF-010, RF-013): neto, totales, conteos y comparación con el período anterior; las métricas extra (`total_gross_volume`, `retained_funds`, `disputed_amount`, `open_disputes_count`) quedan **fuera** del contrato y del CSV.
+10. `q` no forma parte del contrato: los parámetros de UC13 son `periodicity`, `scope`, `owner_id` y `period`.
 
 ## Contratos REST
 
@@ -111,17 +111,15 @@ src/test/java/com/seashare/seasharem3/
 - `ce005_pending_deposits_excluded`
 - `ce006_csv_matches_json_report`
 
-## Discrepancias y preguntas abiertas
+## Decisiones de diseño
 
-| ID | Situación | Estado |
+| ID | Decisión | Estado |
 |---|---|---|
-| OQ-UC13-01 | SLA/volumen no definidos por SPEC | Abierta |
-| OQ-CROSS-14 / D-26 | `q`, métricas extra y alcance exacto de campos adicionales del CSV | Abierta; no se asume solución |
-| D-UC13-01 | La vista pertenece a UC12; UC13 la consume mediante puerto | Aplicada; UC13 no crea ni redefine la vista |
-| D-23 | ClockPort y zona horaria explícita | Aplicada |
-| D-20 | VOs compartidos no se redeclaran | Aplicada |
-| OQ-CROSS-07 / D-08 | Política y orden de migraciones | Abierta; no se asigna `V1` aprobada |
-| OQ-CROSS-13 / D-16 | Seguridad, claims y AMQP | **Cerrada — Seguridad fuera de alcance**: general-plan §7.1 y D-21; el alcance viaja como dato plano (`scope`/`owner_id`), sin autenticación, `SecurityConfig` ni pruebas 401/403 |
+| D-UC13-01 | La vista `v_financial_records` pertenece a UC12; UC13 la consume mediante puerto y no la crea ni la redefine | Aplicada |
+| D-UC13-02 | Fechas de negocio y períodos en `America/Bogota` (`seashare.timezone`); instantes en UTC, con `ClockPort` del núcleo compartido (general-plan D-12) | Aplicada |
+| D-UC13-03 | Los VOs compartidos (`Money`, `ReservationId`, `OwnerId`) y `ClockPort` no se redeclaran; se consumen del núcleo compartido | Aplicada |
+| D-UC13-04 | UC13 no aplica migraciones propias: consume la vista `v_financial_records` publicada por UC12; el historial Flyway único y su orden son los de general-plan D-31 | Aplicada |
+| D-UC13-05 | Seguridad fuera de alcance: el alcance viaja como dato plano (`scope`/`owner_id`), sin autenticación, `SecurityConfig` ni pruebas 401/403 (general-plan §7.1 y D-21) | Aplicada |
 
 ## Implementation Phases
 
@@ -143,7 +141,7 @@ src/test/java/com/seashare/seasharem3/
 
 - [ ] T009 [US1] Exponer informe de plataforma para el alcance declarado `PLATFORM`.
 - [ ] T010 [US2] Exponer informe propio para el alcance declarado `OWNER` (`owner_id`).
-- [ ] T011 [US3] Exportar CSV desde el resultado común, solo con campos definidos por SPEC; `q`/métricas extra quedan condicionados a OQ-CROSS-14.
+- [ ] T011 [US3] Exportar CSV desde el resultado común, solo con campos definidos por SPEC; `q` y las métricas extra quedan fuera del contrato y del CSV.
 - [ ] T012 `ce001_scope_platform_and_owner`.
 - [ ] T013 `ce002_net_without_double_commission`.
 - [ ] T014 `ce003_fixed_period_boundaries` y `ce004_previous_equivalent_comparison`.
@@ -159,8 +157,8 @@ src/test/java/com/seashare/seasharem3/
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009/T010 → T011 → T012..T018`.
 
-UC13 depende de la vista y registros confirmados publicados por UC12/UC10/UC09/UC05 y del núcleo compartido. No se aplican migraciones desde este plan; la política queda en OQ-CROSS-07/D-08.
+UC13 depende de la vista y registros confirmados publicados por UC12/UC10/UC09/UC05 y del núcleo compartido. No se aplican migraciones desde este plan: el historial Flyway único y su orden son los de general-plan D-31 (la vista `v_financial_records` se publica al final, con UC12).
 
 ## Notes
 
-No modificar SPEC, contratos, plantilla, `general-plan.md` ni otros planes. Las decisiones B permanecen abiertas y no se presentan como aprobadas.
+No modificar SPEC, contratos, plantilla, `general-plan.md` ni otros planes. Las decisiones de UC11 (parámetros financieros) quedan resueltas en su plan; UC13 solo las consume.

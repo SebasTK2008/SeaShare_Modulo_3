@@ -48,7 +48,7 @@ Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domai
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers PostgreSQL/RabbitMQ, WireMock para Mercado Pago, Awaitility y ArchUnit [CONV].  
 **Target Platform**: contenedores Docker sobre Linux; desarrollo con Docker Compose [SPEC general-plan].  
 **Project Type**: servicio backend único hexagonal, sin frontend propio.  
-**Performance Goals**: el SPEC no fija SLA numérico [NEEDS CLARIFICATION OQ-UC10-01]; rigen timeouts/reintentos de pasarela y procesamiento idempotente. Un timeout nunca se interpreta como éxito.  
+**Performance Goals**: Sin meta propia: el SPEC 10 no fija SLA numérico; rigen el timeout de pasarela (10 s, general-plan §7.2), los reintentos del worker y el procesamiento idempotente; un timeout nunca se interpreta como éxito [CONV].  
 **Constraints**: `BigDecimal` a 4 decimales; la comisión aplicada proviene de la **versión de parámetros referenciada** por la reserva (`frozen_parameters_id`) y se conserva en la intención; cancelaciones y depósito no crean comisión; registros financieros inmutables; solo confirmación exitosa crea `SettlementRecord`; sin datos asumidos ni registros exitosos parciales; sin datos sensibles de pago [SPEC RNF-002/003; general-plan §2].  
 **Scale/Scope**: dos puertos de entrada internos, un adaptador de pasarela, webhook compartido, tres tablas propietarias, 16 RF + 3 RNF + 6 CE + 5 HU [SPEC 10].
 
@@ -107,7 +107,7 @@ src/main/java/com/seashare/seasharem3/
     └── config/{GatewayWebhookConfig,ProblemDetailsConfig,ObservabilityConfig}.java
 
 src/main/resources/db/migration/
-└── settlement_tables.sql # DDL exacta propiedad de UC10; política de versionado global abierta
+└── settlement_tables.sql # DDL exacta propiedad de UC10; 6.ª migración del historial Flyway único (general-plan D-31)
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/ArchitectureTest.java
@@ -128,16 +128,16 @@ src/test/java/com/seashare/seasharem3/
 1. **Entrada interna sin montos externos** [SPEC RF-001]: UC07/UC08 entregan reserva y desencadenante; los montos se recuperan internamente.
 2. **Cancelación moderada** [SPEC RF-002, RF-007]: `0.50 × rental_amount`; sin comisión ni seguro.
 3. **Cancelación tardía** [SPEC RF-003, RF-007]: `1.00 × rental_amount`; sin comisión ni seguro.
-4. **Estándar** [SPEC RF-005]: la base de liquidación y el tratamiento del seguro quedan parametrizados hasta resolver OQ-CROSS-03 / D-03. La versión de parámetros referenciada por la reserva (`frozen_parameters_id`) ya quedó definida como fuente autoritativa del cálculo de la reserva; los valores aplicados (comisión % y seguro por pasajero) se resuelven de ella y no se copian (D-30 **cerrada**; general-plan D-24/D-27).
+4. **Estándar** [SPEC RF-005]: liquidación = alquiler bruto − comisión; el seguro no interviene (general-plan D-30). La versión de parámetros referenciada por la reserva (`frozen_parameters_id`) es la fuente autoritativa: los valores aplicados (comisión %) se resuelven de ella y no se copian (general-plan D-24/D-27).
 5. **Depósito por disputa** [SPEC RF-006]: el `scope` vigente de general-plan y `dispute_id` identifican la liquidación del 100 % del depósito interno, sin comisión ni seguro.
 6. **Intención antes de pasarela** [SPEC RF-009]: registrar desencadenante, alcance, monto, comisión si aplica, depósito, cobro original, capacidad e idempotency key antes de enviar.
-7. **Pasarela** [SPEC RF-008; contrato comando]: enviar los campos cuya semántica esté confirmada; `payer.email`, `payment_method_id`, `installments`, `description` y `collector_id` permanecen abiertos en OQ-CROSS-02 / D-02.
+7. **Pasarela** [SPEC RF-008; contrato comando]: los campos exigidos quedan fijados: `payer_email` viaja en `payment_metadata` (mensaje de UC07); `payment_method_id` ← `payment_method_type`; `installments` = 1; `description` la fija el sistema; `collector_id` = dato plano de la configuración de la integración (cuenta del Propietario), no se valida.
 8. **Confirmación** [SPEC RF-010, RF-012]: aprobado crea registro inmutable; `pending`, `rejected`, `cancelled`, `expired` solo actualizan intención.
-9. **Comisión** [SPEC RF-004, RF-014]: se calcula con el % de la **versión de parámetros referenciada** por la reserva (`frozen_parameters_id`, resuelta vía `ReservationInformationRepository.findByReservationId`) y se conserva en la intención; base, redondeo y ausencia permanecen abiertos en OQ-CROSS-04 / D-04.
+9. **Comisión** [SPEC RF-004, RF-014]: comisión = % de la **versión de parámetros referenciada** por la reserva (`frozen_parameters_id`, resuelta vía `ReservationInformationRepository.findByReservationId`) × alquiler bruto; se conserva en la intención; comisión o parámetros ausentes → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`; 4 decimales internos y salidas `HALF_UP` a 2 decimales (`contracts/README.md` §3.1).
 10. **Trazabilidad** [SPEC RF-009A, RF-015, RF-016]: registros incluyen intención, reserva, propietario, embarcación, bruto, seguro, depósito, monto confirmado, detalle, referencia externa y fecha de creación.
 11. **Faltantes** [SPEC RF-013]: alquiler/seguro/depósito requerido ausente → registrar fallo, no calcular parcialmente ni llamar pasarela.
-12. **Timeout/error** [SPEC RNF-003; contrato comando]: mismo idempotency key para retry; timeout no es rechazo ni éxito; conservar intención en estado de comunicación pendiente/fallida para conciliación.
-13. **Webhook** [D-12]: UC05 verifica firma y despacha por `type`; UC10 solo reconcilia su resultado mediante `ReconcileSettlementResult` y no implementa receptor propio.
+12. **Timeout/error** [SPEC RNF-003; contrato comando]: un timeout o `5xx` deja la intención en `COMMUNICATION_ERROR` y el worker reintenta con la misma clave idempotente (`reservation_id` + `status` + `status_changed_at`, general-plan D-33); nunca se interpreta como éxito; el webhook resuelve el resultado. Fallos de negocio (`400`) → estado fallido para resolución manual.
+13. **Webhook** [contrato webhook]: UC05 verifica firma y despacha por `type`; UC10 solo reconcilia su resultado mediante `ReconcileSettlementResult` y no implementa receptor propio.
 14. **Inmutabilidad** [SPEC RF-010..RF-014; general-plan §2]: registros confirmados nunca se actualizan ni eliminan.
 
 ## Contratos
@@ -188,21 +188,23 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 - **`ce005_fallo_no_es_exito`**: rejected/cancelled/expired/pending no crean `SettlementRecord`.
 - **`ce006_una_comision_atomica`**: estándar confirmado crea exactamente un `SettlementRecord` y un `CommissionRecord` relacionados.
 
-## Discrepancias y preguntas abiertas
+## Decisiones de diseño (D-UC10-xx)
 
-| ID | Descripción | Propuesta por defecto | Estado |
-|---|---|---|---|
-| **OQ-UC10-01** | El SPEC no define SLA ni estado exacto para timeout | heredar timeout/retry de pasarela y mantener intención conciliable, nunca éxito | Abierta |
-| **D-UC10-01** | UC10 puede ser invocado por UC07 y UC08, pero las firmas se definen en planes distintos | publicar `RequestSettlementUseCase` aquí y copiar la firma en UC07/UC08; cambios externos no se aplican | Decidida |
-| **D-UC10-02** | La pasarela puede unificar depósito o usar operación relacionada | ACL decide capacidad soportada; UC10 conserva siempre el componente de depósito | Decidida por contrato |
-| **D-UC10-03** | El webhook es compartido por UC05/UC09/UC10 | UC10 consume solo resultados asociados a su intención; no crea otro webhook | Decidida |
-| **OQ-CROSS-07 / D-CROSS-08** | Política y orden de migraciones | mantener abierta; respetar dependencias sin asignar versión aprobada | Abierta |
-| **OQ-UC10-02** | Mecanismo transversal de autenticación/autorización | **Cerrada — Seguridad fuera de alcance**: general-plan §7.1 y D-21; sin autenticación ni autorización; UC10 no define ni hereda configuración de seguridad | **Cerrada** |
-| **OQ-CROSS-02 / D-CROSS-02** | Campos del pagador y metadatos exigidos por la pasarela | UC10 no inventa valores; usa solo campos confirmados | Abierta; requiere decisión externa |
-| **OQ-CROSS-03 / D-CROSS-03** | Tratamiento del seguro en la base de liquidación | No se fija fórmula adicional | Abierta; requiere decisión externa |
-| **OQ-CROSS-04 / D-CROSS-04** | Cálculo, base, redondeo y ausencia de comisión | No se fija política adicional | Abierta; requiere decisión externa |
-| **OQ-CROSS-12 / D-CROSS-19** | Escala y redondeo | Se parametriza según decisión transversal | Abierta; requiere decisión externa |
-| **D-30** | Parámetros congelados frente a globales | UC10 usa la **versión de parámetros referenciada** por la reserva (`frozen_parameters_id`; los valores aplicados —comisión % y seguro por pasajero— se resuelven de ella, sin copiarse en la reserva) como fuente autoritativa para reservas ya calculadas; una nueva versión de `financial_parameters` nunca altera cálculos ya realizados (general-plan D-24/D-27) | **Cerrada** |
+Registro de las decisiones de diseño de este plan, con su contexto y estado. Los IDs `D-UC10-xx` son propios de este plan; los `D-xx` sin prefijo UC10 son decisiones del plan general (§9).
+
+| ID | Descripción | Contexto | Decisión | Estado |
+|---|---|---|---|---|
+| **D-UC10-01** | Firmas del puerto publicado por UC10 para UC07/UC08 | Auditoría de planes | UC10 publica `RequestSettlementUseCase` aquí y copia su firma en UC07/UC08; cambios externos no se aplican | Aplicada |
+| **D-UC10-02** | La pasarela puede unificar el depósito o usar una operación relacionada | contrato comando de liquidación | El ACL decide la capacidad soportada; UC10 conserva siempre el componente de depósito | Aplicada |
+| **D-UC10-03** | El webhook es compartido por UC05/UC09/UC10 | contrato webhook compartido | UC10 consume solo los resultados asociados a su intención; no crea otro webhook | Aplicada |
+| **D-UC10-04** | Migraciones de UC10 en el historial Flyway único | general-plan §10 y D-31 | Historial Flyway único ordenado por fase (general-plan D-31); UC10 es la 6.ª fase (después de UC09) | Aplicada |
+| **D-UC10-05** | Mecanismo transversal de autenticación/autorización | general-plan §7.1 y D-21 | Seguridad fuera de alcance: sin autenticación ni autorización; UC10 no define ni hereda configuración de seguridad | Aplicada |
+| **D-UC10-06** | Campos del pagador y metadatos exigidos por la pasarela | contrato comando; mensaje de UC07 | `payer_email` viaja en `payment_metadata` (mensaje de UC07); `payment_method_id` ← `payment_method_type`; `installments` = 1; `description` la fija el sistema; `collector_id` = dato plano de la configuración de la integración (cuenta del Propietario), no se valida | Aplicada |
+| **D-UC10-07** | Tratamiento del seguro en la base de liquidación | SPEC 10 RF-004/RF-014 | El seguro no interviene: liquidación = alquiler bruto − comisión (general-plan D-30) | Aplicada |
+| **D-UC10-08** | Cálculo, base y ausencia de comisión | SPEC 10 RF-004/RF-014 | Comisión = % de la versión referenciada × alquiler bruto; comisión o parámetros ausentes → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED` | Aplicada |
+| **D-UC10-09** | Escala y redondeo | `contracts/README.md` §3.1 | 4 decimales internos; salidas `HALF_UP` a 2 decimales | Aplicada |
+| **D-UC10-10** | Idempotencia de la operación | general-plan D-33 | Clave `reservation_id` + `status` + `status_changed_at`; los reintentos técnicos reutilizan la clave y un `status_changed_at` nuevo es un intento nuevo | Aplicada |
+| **D-UC10-11** | Parámetros congelados frente a globales | general-plan D-24/D-27 | UC10 usa la **versión de parámetros referenciada** por la reserva (`frozen_parameters_id`) como fuente autoritativa para reservas ya calculadas (los valores aplicados —comisión %— se resuelven de ella, sin copiarse en la reserva); una nueva versión de `financial_parameters` nunca altera cálculos ya realizados | Aplicada |
 
 ## Implementation Phases
 
@@ -215,8 +217,8 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 ### Phase 2: Foundational
 
 - [ ] **T004** Crear `SettlementScope`, `SettlementTrigger`, estados y `SettlementCalculator`; `Money`, `ReservationId`, `OwnerId` y `ClockPort` se consumen del núcleo compartido y no se redeclaran.
-- [ ] **T005** Crear puertos, `SettlementCommand`/results y adaptadores de consulta para reserva/cobro; el command incluye `trigger`, `scope` y `dispute_id` cuando aplica [D-28]. Consume piezas de UC03/UC05 por nombre.
-- [ ] **T005a** Congelar la firma pública `SettlementRequestResult request(SettlementCommand)`; `scope` usa el valor vigente del catálogo y `DEPOSIT_DISPUTE` solo cuando existe `dispute_id`. No se usa `void` ni se inventa otro valor [D-28].
+- [ ] **T005** Crear puertos, `SettlementCommand`/results y adaptadores de consulta para reserva/cobro; el command incluye `trigger`, `scope` y `dispute_id` cuando aplica. Consume piezas de UC03/UC05 por nombre.
+- [ ] **T005a** Congelar la firma pública `SettlementRequestResult request(SettlementCommand)`; `scope` usa el valor vigente del catálogo y `DEPOSIT_DISPUTE` solo cuando existe `dispute_id`. No se usa `void` ni se inventa otro valor.
 - [ ] **T006** Crear `SettlementGatewayPort`, DTOs del comando/resultado y mapper ACL de Mercado Pago.
 - [ ] **T007** Crear modelos de intención/registro/comisión y repositorios; definir restricciones de idempotencia e inmutabilidad.
 - [ ] **T008** Implementar persistencia de intención antes del envío y consulta de intención para webhook/worker.
@@ -226,8 +228,8 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 - [ ] **T009** [US1/US2/US3] Implementar cálculo por cancelación, estándar y depósito con validación de datos internos (la comisión estándar usa el % de la **versión de parámetros referenciada** por la reserva), sin montos externos.
 - [ ] **T010** [US1/US2/US3] Implementar `RequestSettlementUseCase`, outbox, envío a pasarela y reintentos con la misma clave.
 - [ ] **T011** [US4] Implementar recepción/verificación de webhook, consulta de detalle y `RegisterSettlementResultUseCase`.
-- [ ] **T012** [US4/US5] Implementar transacción de confirmación: actualizar intención; en éxito crear registro; la comisión solo se crea conforme a la decisión externa D-04.
-- [ ] **T012a** Documentar la DDL exacta de `settlement_intent`, `settlement_record` y `commission_record`, incluyendo claves idempotentes, FKs, `dispute_id`, estados y restricciones de inmutabilidad [D-CROSS-18].
+- [ ] **T012** [US4/US5] Implementar transacción de confirmación: actualizar intención; en éxito crear registro; la comisión solo se crea en la liquidación estándar con el % de la versión de parámetros referenciada por la reserva.
+- [ ] **T012a** Documentar la DDL exacta de `settlement_intent`, `settlement_record` y `commission_record`, incluyendo claves idempotentes, FKs, `dispute_id`, estados y restricciones de inmutabilidad.
 - [ ] **T013** `ce001_precision_financiera_100_casos`.
 - [ ] **T014** `ce002_comision_por_alcance`.
 - [ ] **T015** Prueba de depósito total y trazabilidad con disputa UC08.
@@ -246,7 +248,7 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012 → T013..T021`.
 
-UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettlementUseCase` para UC07/UC08. UC12/UC13 solo consumen sus registros confirmados. La política de migraciones queda abierta en OQ-CROSS-07/D-08.
+UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettlementUseCase` para UC07/UC08. UC12/UC13 solo consumen sus registros confirmados. Las migraciones se aplican en el historial Flyway único ordenado por fase (general-plan D-31): UC10 es la 6.ª fase, después de UC09.
 
 ## Notes
 
@@ -258,4 +260,4 @@ No modificar `pom.xml`, `general-plan.md`, SPEC, contratos ni planes de UC03/UC0
 - [ ] Cada RF/RNF/CE/HU tiene componente, tarea y prueba.
 - [ ] Intención, registro, comisión, idempotencia e inmutabilidad están trazados.
 - [ ] Solo éxitos externos crean registros financieros.
-- [ ] DDL exacta de UC10 documentada; la política de versionado de migraciones permanece abierta.
+- [ ] DDL exacta de UC10 documentada; migraciones en el historial Flyway único ordenado por fase (UC10 = 6.ª fase, general-plan D-31).
