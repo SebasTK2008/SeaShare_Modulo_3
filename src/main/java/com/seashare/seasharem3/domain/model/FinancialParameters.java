@@ -37,7 +37,7 @@ public final class FinancialParameters {
         this.createdBy = createdBy;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         if (versionNumber < 1) {
-            throw new DomainException("version_number debe ser al menos 1: " + versionNumber);
+            throw new DomainException("version_number must be at least 1: " + versionNumber);
         }
         insuranceFeePerPassenger.requireNonNegative();
     }

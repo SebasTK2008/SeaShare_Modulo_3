@@ -12,14 +12,14 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 class BaseRateTest {
 
     @Test
-    void aceptaTarifasMayoresQueCeroApoyandoseEnMoney() {
+    void acceptsRatesGreaterThanZeroBackedByMoney() {
         BaseRate rate = new BaseRate(new Money(new BigDecimal("437500.00")));
 
         assertThat(rate.amount().amount()).isEqualByComparingTo(new BigDecimal("437500.0000"));
     }
 
     @Test
-    void rechazaCeroYNegativos() {
+    void rejectsZeroAndNegatives() {
         assertThatExceptionOfType(DomainException.class)
                 .isThrownBy(() -> new BaseRate(new Money(BigDecimal.ZERO)));
         assertThatExceptionOfType(DomainException.class)
@@ -27,7 +27,7 @@ class BaseRateTest {
     }
 
     @Test
-    void rechazaNull() {
+    void rejectsNull() {
         assertThatNullPointerException().isThrownBy(() -> new BaseRate(null));
     }
 }

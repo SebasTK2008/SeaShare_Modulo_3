@@ -31,20 +31,20 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void contractExceptionProduceElProblemDetailsDelCatalogo() throws Exception {
+    void contractExceptionProducesCatalogProblemDetails() throws Exception {
         mockMvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"value\":\"contract\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.type").value("about:blank"))
-                .andExpect(jsonPath("$.title").value("Período inválido"))
+                .andExpect(jsonPath("$.title").value("Invalid period"))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code").value("INVALID_PERIOD"))
                 .andExpect(jsonPath("$.retryable").value(false));
     }
 
     @Test
-    void laValidacionDelCuerpoDevuelveValidationErrorConCampos() throws Exception {
+    void bodyValidationReturnsValidationErrorWithFields() throws Exception {
         mockMvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"value\":\"\"}"))
                 .andExpect(status().isBadRequest())
@@ -53,7 +53,7 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void unCuerpoNoParseableDevuelveValidationError() throws Exception {
+    void unparseableBodyReturnsValidationError() throws Exception {
         mockMvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON).content("{"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
@@ -61,27 +61,27 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void unMetodoNoSoportadoDevuelveMethodNotAllowed() throws Exception {
+    void unsupportedMethodReturnsMethodNotAllowed() throws Exception {
         mockMvc.perform(get("/probe"))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
     }
 
     @Test
-    void unContentTypeNoSoportadoDevuelveUnsupportedMediaType() throws Exception {
+    void unsupportedContentTypeReturnsUnsupportedMediaType() throws Exception {
         mockMvc.perform(post("/probe").contentType(MediaType.TEXT_PLAIN).content("x"))
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"));
     }
 
     @Test
-    void unErrorNoControladoDevuelveInternalErrorSinFiltrarDetalleTecnico() throws Exception {
+    void unhandledErrorReturnsInternalErrorWithoutLeakingTechnicalDetail() throws Exception {
         mockMvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"value\":\"boom\"}"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.retryable").value(true))
-                .andExpect(jsonPath("$.detail").value("Ocurrió un error interno inesperado."));
+                .andExpect(jsonPath("$.detail").value("An unexpected internal error occurred."));
     }
 
     @RestController
@@ -90,10 +90,10 @@ class GlobalExceptionHandlerTest {
         @PostMapping(path = "/probe", consumes = MediaType.APPLICATION_JSON_VALUE)
         void probe(@Valid @RequestBody ProbeBody body) {
             if ("contract".equals(body.value())) {
-                throw new ContractException(ErrorCode.INVALID_PERIOD, "El período es inválido.");
+                throw new ContractException(ErrorCode.INVALID_PERIOD, "The period is invalid.");
             }
             if ("boom".equals(body.value())) {
-                throw new IllegalStateException("traza secreta que no debe salir");
+                throw new IllegalStateException("secret trace that must not leak");
             }
         }
     }

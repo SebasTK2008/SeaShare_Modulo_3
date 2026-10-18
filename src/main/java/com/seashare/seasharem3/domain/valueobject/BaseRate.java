@@ -13,7 +13,7 @@ public record BaseRate(Money amount) {
     public BaseRate {
         Objects.requireNonNull(amount, "amount");
         if (amount.amount().signum() <= 0) {
-            throw new DomainException("BaseRate debe ser mayor que 0: " + amount.amount());
+            throw new DomainException("BaseRate must be greater than 0: " + amount.amount());
         }
     }
 }

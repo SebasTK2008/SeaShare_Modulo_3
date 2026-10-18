@@ -88,7 +88,7 @@ public final class ChargeIntent {
             return this;
         }
         if (!ALLOWED_TRANSITIONS.get(status).contains(next)) {
-            throw new DomainException("Transición de ChargeIntent no permitida: " + status + " → " + next);
+            throw new DomainException("ChargeIntent transition not allowed: " + status + " → " + next);
         }
         return new ChargeIntent(id, reservationId, idempotencyKey, next, amount, paymentMethod, externalReference,
                 statusDetail, createdAt);
@@ -101,7 +101,7 @@ public final class ChargeIntent {
     public ChargeIntent withExternalReference(String reference) {
         Objects.requireNonNull(reference, "reference");
         if (externalReference != null && !externalReference.equals(reference)) {
-            throw new DomainException("ChargeIntent ya tiene external_reference: " + externalReference);
+            throw new DomainException("ChargeIntent already has an external_reference: " + externalReference);
         }
         return new ChargeIntent(id, reservationId, idempotencyKey, status, amount, paymentMethod, reference,
                 statusDetail, createdAt);

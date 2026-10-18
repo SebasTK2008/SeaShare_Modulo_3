@@ -21,7 +21,7 @@ class OutboxRelayServiceTest {
     private final RecordingBroker broker = new RecordingBroker();
 
     @Test
-    void publicaYMarcaLosMensajesPendientesEnOrden() {
+    void publishesAndMarksPendingMessagesInOrder() {
         outbox.publish("seashare.reservations", "reservation.info.provided", "{\"a\":1}");
         outbox.publish("seashare.finance.commands", "charge.command", "{\"b\":2}");
         OutboxRelayService service = new OutboxRelayService(outbox, broker, CLOCK, 100);
@@ -36,7 +36,7 @@ class OutboxRelayServiceTest {
     }
 
     @Test
-    void respetaElTamanoDeLoteEnCadaCiclo() {
+    void respectsBatchSizePerCycle() {
         for (int i = 0; i < 5; i++) {
             outbox.publish("seashare.reservations", "reservation.status.changed", "{\"n\":" + i + "}");
         }
@@ -50,7 +50,7 @@ class OutboxRelayServiceTest {
     }
 
     @Test
-    void siElBrokerFallaNoMarcaPublicadoYPropagaLaExcepcion() {
+    void whenBrokerFailsItDoesNotMarkPublishedAndPropagatesTheException() {
         outbox.publish("seashare.reservations", "reservation.info.provided", "{\"a\":1}");
         broker.failing = true;
         OutboxRelayService service = new OutboxRelayService(outbox, broker, CLOCK, 100);
@@ -69,7 +69,7 @@ class OutboxRelayServiceTest {
         @Override
         public void publish(String exchange, String routingKey, String payload) {
             if (failing) {
-                throw new IllegalStateException("broker caído");
+                throw new IllegalStateException("broker down");
             }
             published.add(new PublishedMessage(exchange, routingKey, payload));
         }

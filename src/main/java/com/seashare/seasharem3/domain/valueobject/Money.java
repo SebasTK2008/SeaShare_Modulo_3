@@ -63,7 +63,7 @@ public record Money(BigDecimal amount) implements Comparable<Money> {
     public Money divide(BigDecimal divisor) {
         Objects.requireNonNull(divisor, "divisor");
         if (divisor.signum() == 0) {
-            throw new DomainException("No se puede dividir un importe entre cero");
+            throw new DomainException("Cannot divide an amount by zero");
         }
         return new Money(amount.divide(divisor, INTERNAL_SCALE, RoundingMode.HALF_UP));
     }
@@ -147,14 +147,14 @@ public record Money(BigDecimal amount) implements Comparable<Money> {
     /** Rechaza importes negativos en contextos donde no tienen sentido (p. ej. tarifas). Fuente: general-plan §3.6. */
     public void requireNonNegative() {
         if (isNegative()) {
-            throw new DomainException("El importe no puede ser negativo: " + amount);
+            throw new DomainException("Amount cannot be negative: " + amount);
         }
     }
 
     /** Rechaza importes ≤ 0 en contextos donde se exige estrictamente positivo. Fuente: general-plan §3.6. */
     public void requirePositive() {
         if (!isPositive()) {
-            throw new DomainException("El importe debe ser mayor que cero: " + amount);
+            throw new DomainException("Amount must be greater than zero: " + amount);
         }
     }
 

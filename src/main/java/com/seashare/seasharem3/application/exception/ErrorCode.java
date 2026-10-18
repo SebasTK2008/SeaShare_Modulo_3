@@ -11,24 +11,24 @@ package com.seashare.seasharem3.application.exception;
  */
 public enum ErrorCode {
 
-    VALIDATION_ERROR(400, false, "Petición inválida"),
-    BATCH_SIZE_EXCEEDED(400, false, "Lote demasiado grande"),
-    INVALID_DATE_RANGE(400, false, "Rango de fechas inválido"),
-    INVALID_PERIOD(400, false, "Período inválido"),
-    UNAUTHENTICATED(401, false, "Firma del webhook inválida"),
-    RESERVATION_INFO_NOT_FOUND(404, true, "Información de reserva no encontrada"),
-    CHARGE_INTENT_NOT_FOUND(404, true, "Intención de cobro no encontrada"),
-    PARAMETERS_NOT_CONFIGURED(404, true, "Parámetros financieros no configurados"),
-    PAGE_OUT_OF_RANGE(404, false, "Página fuera de rango"),
-    METHOD_NOT_ALLOWED(405, false, "Método no permitido"),
-    NOT_ACCEPTABLE(406, false, "Representación no aceptable"),
-    UNSUPPORTED_MEDIA_TYPE(415, false, "Tipo de contenido no soportado"),
-    BASE_RATE_NOT_AVAILABLE(422, false, "Tarifa base no disponible"),
-    RESERVATION_INFO_INCOMPLETE(422, false, "Información de reserva incompleta"),
-    PARAMETERS_SAVE_FAILED(500, true, "No se pudo guardar la configuración"),
-    INTERNAL_ERROR(500, true, "Error interno"),
-    FLEET_UNAVAILABLE(503, true, "Servicio de flota no disponible"),
-    FINANCIAL_PARAMETERS_NOT_CONFIGURED(503, true, "Parámetros financieros no configurados");
+    VALIDATION_ERROR(400, false, "Invalid request"),
+    BATCH_SIZE_EXCEEDED(400, false, "Batch too large"),
+    INVALID_DATE_RANGE(400, false, "Invalid date range"),
+    INVALID_PERIOD(400, false, "Invalid period"),
+    UNAUTHENTICATED(401, false, "Invalid webhook signature"),
+    RESERVATION_INFO_NOT_FOUND(404, true, "Reservation information not found"),
+    CHARGE_INTENT_NOT_FOUND(404, true, "Charge intent not found"),
+    PARAMETERS_NOT_CONFIGURED(404, true, "Financial parameters not configured"),
+    PAGE_OUT_OF_RANGE(404, false, "Page out of range"),
+    METHOD_NOT_ALLOWED(405, false, "Method not allowed"),
+    NOT_ACCEPTABLE(406, false, "Not acceptable"),
+    UNSUPPORTED_MEDIA_TYPE(415, false, "Unsupported media type"),
+    BASE_RATE_NOT_AVAILABLE(422, false, "Base rate not available"),
+    RESERVATION_INFO_INCOMPLETE(422, false, "Reservation information incomplete"),
+    PARAMETERS_SAVE_FAILED(500, true, "Financial parameters save failed"),
+    INTERNAL_ERROR(500, true, "Internal error"),
+    FLEET_UNAVAILABLE(503, true, "Fleet service unavailable"),
+    FINANCIAL_PARAMETERS_NOT_CONFIGURED(503, true, "Financial parameters not configured");
 
     private final int httpStatus;
     private final boolean retryable;

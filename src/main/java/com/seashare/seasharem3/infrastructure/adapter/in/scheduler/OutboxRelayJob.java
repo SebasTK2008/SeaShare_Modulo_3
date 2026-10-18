@@ -28,7 +28,7 @@ public class OutboxRelayJob {
     public void relayOutbox() {
         int published = relayOutboxUseCase.relay();
         if (published > 0) {
-            log.info("Outbox relay: {} mensaje(s) publicado(s)", published);
+            log.info("Outbox relay: {} message(s) published", published);
         }
     }
 }

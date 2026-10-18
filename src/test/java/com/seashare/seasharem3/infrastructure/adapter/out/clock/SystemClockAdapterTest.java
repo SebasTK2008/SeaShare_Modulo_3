@@ -12,14 +12,14 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 class SystemClockAdapterTest {
 
     @Test
-    void hoyUsaLaZonaConfigurada() {
+    void todayUsesConfiguredZone() {
         SystemClockAdapter adapter = new SystemClockAdapter("America/Bogota");
 
         assertThat(adapter.today()).isEqualTo(LocalDate.now(ZoneId.of("America/Bogota")));
     }
 
     @Test
-    void unaZonaDesconocidaFallaAlConstruir() {
+    void unknownZoneFailsAtConstruction() {
         assertThatExceptionOfType(ZoneRulesException.class)
                 .isThrownBy(() -> new SystemClockAdapter("No/Existe"));
     }

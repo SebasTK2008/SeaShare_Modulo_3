@@ -213,7 +213,7 @@ CREATE TABLE refund_intent (
     idempotency_key    VARCHAR(255)  NOT NULL,
     status             VARCHAR(32)   NOT NULL,
     status_detail      TEXT,         -- [D-UC09-02] detalle del estado externo
-    dispute_id         UUID,         -- [D-UC09-02] nullable (solo trigger DISPUTA_RECHAZADO)
+    dispute_id         UUID,         -- [D-UC09-02] nullable (solo trigger DISPUTE_REJECTED)
     external_reference TEXT,
     created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitido en general-plan §4
     CONSTRAINT uq_refund_intent_idempotency_key UNIQUE (idempotency_key),
@@ -401,7 +401,7 @@ CREATE TABLE reservation_status_log (
 
 CREATE VIEW v_financial_records AS
 SELECT
-    'COBRO'::text        AS record_type,
+    'CHARGE'::text        AS record_type,
     id                   AS record_id,
     reservation_id       AS reservation_id,
     owner_id             AS owner_id,
@@ -412,7 +412,7 @@ SELECT
 FROM charge_record
 UNION ALL
 SELECT
-    'REEMBOLSO'::text,
+    'REFUND'::text,
     id,
     reservation_id,
     owner_id,
@@ -423,7 +423,7 @@ SELECT
 FROM refund_record
 UNION ALL
 SELECT
-    'DISPERSION'::text,
+    'SETTLEMENT'::text,
     id,
     reservation_id,
     owner_id,
@@ -434,7 +434,7 @@ SELECT
 FROM settlement_record
 UNION ALL
 SELECT
-    'COMISION'::text,
+    'COMMISSION'::text,
     id,
     reservation_id,
     owner_id,

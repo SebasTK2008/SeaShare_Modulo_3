@@ -26,7 +26,7 @@ class ChargeIntentTest {
     }
 
     @Test
-    void creaEnPendingSend() {
+    void createsInPendingSend() {
         ChargeIntent intent = create();
 
         assertThat(intent.status()).isEqualTo(ChargeIntentStatus.PENDING_SEND);
@@ -36,14 +36,14 @@ class ChargeIntentTest {
     }
 
     @Test
-    void rechazaMontoNoPositivo() {
+    void rejectsNonPositiveAmount() {
         assertThatExceptionOfType(DomainException.class).isThrownBy(() -> ChargeIntent.create(UUID.randomUUID(),
                 new ReservationId(UUID.randomUUID()), new IdempotencyKey("k"), Money.ZERO,
                 new PaymentMethodReference("tok", null, null), Instant.now()));
     }
 
     @Test
-    void permiteTransicionesValidasYEsIdempotenteConElMismoEstado() {
+    void allowsValidTransitionsAndIsIdempotentWithTheSameStatus() {
         ChargeIntent pending = create();
 
         ChargeIntent inProcess = pending.transitionTo(ChargeIntentStatus.IN_PROCESS);
@@ -56,7 +56,7 @@ class ChargeIntentTest {
     }
 
     @Test
-    void permiteFalloDeComunicacionYSuConciliacion() {
+    void allowsCommunicationFailureAndItsReconciliation() {
         ChargeIntent pending = create();
 
         ChargeIntent failure = pending.transitionTo(ChargeIntentStatus.COMMUNICATION_ERROR);
@@ -68,7 +68,7 @@ class ChargeIntentTest {
     }
 
     @Test
-    void rechazaTransicionesInvalidas() {
+    void rejectsInvalidTransitions() {
         ChargeIntent pending = create();
 
         assertThatExceptionOfType(DomainException.class)
@@ -82,7 +82,7 @@ class ChargeIntentTest {
     }
 
     @Test
-    void asociaExternalReferenceUnaSolaVez() {
+    void associatesExternalReferenceOnlyOnce() {
         ChargeIntent intent = create();
 
         ChargeIntent withReference = intent.withExternalReference("1234567890");
@@ -94,7 +94,7 @@ class ChargeIntentTest {
     }
 
     @Test
-    void adjuntaStatusDetailSinCambiarElEstado() {
+    void attachesStatusDetailWithoutChangingStatus() {
         ChargeIntent intent = create().transitionTo(ChargeIntentStatus.IN_PROCESS);
 
         ChargeIntent detailed = intent.withStatusDetail("pending_review");

@@ -1,13 +1,18 @@
 package com.seashare.seasharem3.application.dto;
 
+import com.seashare.seasharem3.domain.valueobject.ReservationStatus;
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
-/** Firma publicada por UC07 (plan §Puertos expuestos): status viaja crudo; la operación se deriva de reservationId + status + statusChangedAt. */
+/**
+ * Firma publicada por UC07 (plan §Puertos expuestos): {@code status} usa el enum compartido
+ * {@link ReservationStatus} (10 estados); la operación se deriva de reservationId + status + statusChangedAt.
+ */
 public record ReservationStatusCommand(
         UUID reservationId,
-        String status,
+        ReservationStatus status,
         Instant statusChangedAt,
         String paymentTokenRef,
         String paymentMethodType,

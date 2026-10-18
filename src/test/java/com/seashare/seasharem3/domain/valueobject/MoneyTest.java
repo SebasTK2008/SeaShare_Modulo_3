@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 class MoneyTest {
 
     @Test
-    void normalizaLaEscalaInternaA4Decimales() {
+    void normalizesInternalScaleTo4Decimals() {
         Money money = new Money(new BigDecimal("350000"));
 
         assertThat(money.amount()).isEqualByComparingTo(new BigDecimal("350000.0000"));
@@ -20,50 +20,50 @@ class MoneyTest {
     }
 
     @Test
-    void sumaRestaYMultiplicaConservandoLaEscala4() {
-        Money tarifa = new Money(new BigDecimal("350000.00"));
-        Money seguro = new Money(new BigDecimal("15000.00"));
+    void addsSubtractsAndMultipliesKeepingScale4() {
+        Money rate = new Money(new BigDecimal("350000.00"));
+        Money insurance = new Money(new BigDecimal("15000.00"));
 
-        assertThat(tarifa.add(seguro).amount()).isEqualByComparingTo(new BigDecimal("365000.0000"));
-        assertThat(tarifa.subtract(seguro).amount()).isEqualByComparingTo(new BigDecimal("335000.0000"));
-        assertThat(tarifa.multiply(new BigDecimal("3")).amount()).isEqualByComparingTo(new BigDecimal("1050000.0000"));
-        assertThat(seguro.multiply(new BigDecimal("4")).amount()).isEqualByComparingTo(new BigDecimal("60000.0000"));
+        assertThat(rate.add(insurance).amount()).isEqualByComparingTo(new BigDecimal("365000.0000"));
+        assertThat(rate.subtract(insurance).amount()).isEqualByComparingTo(new BigDecimal("335000.0000"));
+        assertThat(rate.multiply(new BigDecimal("3")).amount()).isEqualByComparingTo(new BigDecimal("1050000.0000"));
+        assertThat(insurance.multiply(new BigDecimal("4")).amount()).isEqualByComparingTo(new BigDecimal("60000.0000"));
     }
 
     @Test
-    void salidaMonetariaRedondeaHalfUpA2Decimales() {
-        Money conFraccion = new Money(new BigDecimal("437500.1250"));
+    void monetaryOutputRoundsHalfUpTo2Decimals() {
+        Money withFraction = new Money(new BigDecimal("437500.1250"));
 
-        assertThat(conFraccion.toOutputAmount()).isEqualByComparingTo(new BigDecimal("437500.13"));
-        assertThat(conFraccion.toOutputAmount().scale()).isEqualTo(2);
+        assertThat(withFraction.toOutputAmount()).isEqualByComparingTo(new BigDecimal("437500.13"));
+        assertThat(withFraction.toOutputAmount().scale()).isEqualTo(2);
     }
 
     @Test
-    void rechazaNull() {
+    void rejectsNull() {
         assertThatNullPointerException().isThrownBy(() -> new Money(null));
     }
 
     @Test
-    void rechazaMultiplicadorNull() {
+    void rejectsNullMultiplier() {
         assertThatNullPointerException().isThrownBy(() -> new Money(BigDecimal.TEN).multiply(null));
     }
 
     @Test
-    void rechazaImporteNegativoCuandoSeExigeNoNegativo() {
-        Money negativo = new Money(new BigDecimal("-0.01"));
+    void rejectsNegativeAmountWhenNonNegativeRequired() {
+        Money negative = new Money(new BigDecimal("-0.01"));
 
-        assertThatExceptionOfType(DomainException.class).isThrownBy(negativo::requireNonNegative);
+        assertThatExceptionOfType(DomainException.class).isThrownBy(negative::requireNonNegative);
     }
 
     @Test
-    void rechazaImporteNoPositivoCuandoSeExigePositivo() {
+    void rejectsNonPositiveAmountWhenPositiveRequired() {
         assertThatExceptionOfType(DomainException.class).isThrownBy(Money.ZERO::requirePositive);
         assertThatExceptionOfType(DomainException.class)
                 .isThrownBy(() -> new Money(new BigDecimal("-1")).requirePositive());
     }
 
     @Test
-    void aplicaPorcentajesConEscalaInterna4() {
+    void appliesPercentagesWithInternalScale4() {
         Money base = new Money(new BigDecimal("100000.00"));
 
         assertThat(base.percentageOf(new Percentage(new BigDecimal("10"))).amount())
@@ -74,7 +74,7 @@ class MoneyTest {
     }
 
     @Test
-    void divideConRedondeoHalfUpYRechazaDivisorCero() {
+    void dividesWithHalfUpRoundingAndRejectsZeroDivisor() {
         Money total = new Money(new BigDecimal("989999.99"));
 
         assertThat(total.divide(new BigDecimal("3")).amount()).isEqualByComparingTo(new BigDecimal("329999.9967"));
@@ -83,27 +83,27 @@ class MoneyTest {
     }
 
     @Test
-    void comparaImportes() {
-        Money menor = new Money(new BigDecimal("10.00"));
-        Money mayor = new Money(new BigDecimal("20.00"));
+    void comparesAmounts() {
+        Money lower = new Money(new BigDecimal("10.00"));
+        Money higher = new Money(new BigDecimal("20.00"));
 
-        assertThat(menor.isLessThan(mayor)).isTrue();
-        assertThat(menor.isLessThanOrEqualTo(mayor)).isTrue();
-        assertThat(mayor.isGreaterThan(menor)).isTrue();
-        assertThat(mayor.isGreaterThanOrEqualTo(menor)).isTrue();
-        assertThat(menor.isPositive()).isTrue();
-        assertThat(menor.isNegative()).isFalse();
+        assertThat(lower.isLessThan(higher)).isTrue();
+        assertThat(lower.isLessThanOrEqualTo(higher)).isTrue();
+        assertThat(higher.isGreaterThan(lower)).isTrue();
+        assertThat(higher.isGreaterThanOrEqualTo(lower)).isTrue();
+        assertThat(lower.isPositive()).isTrue();
+        assertThat(lower.isNegative()).isFalse();
         assertThat(Money.ZERO.isZero()).isTrue();
-        assertThat(menor.min(mayor)).isEqualTo(menor);
-        assertThat(menor.max(mayor)).isEqualTo(mayor);
-        assertThat(menor.compareTo(mayor)).isNegative();
+        assertThat(lower.min(higher)).isEqualTo(lower);
+        assertThat(lower.max(higher)).isEqualTo(higher);
+        assertThat(lower.compareTo(higher)).isNegative();
     }
 
     @Test
-    void niegaYAplicaValorAbsoluto() {
-        Money negativo = new Money(new BigDecimal("-15.50"));
+    void negatesAndAppliesAbsoluteValue() {
+        Money negative = new Money(new BigDecimal("-15.50"));
 
-        assertThat(negativo.negate().amount()).isEqualByComparingTo(new BigDecimal("15.5000"));
-        assertThat(negativo.abs().amount()).isEqualByComparingTo(new BigDecimal("15.5000"));
+        assertThat(negative.negate().amount()).isEqualByComparingTo(new BigDecimal("15.5000"));
+        assertThat(negative.abs().amount()).isEqualByComparingTo(new BigDecimal("15.5000"));
     }
 }

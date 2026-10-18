@@ -10,7 +10,7 @@ public record IdempotencyKey(String value) {
     public IdempotencyKey {
         Objects.requireNonNull(value, "value");
         if (value.isBlank()) {
-            throw new DomainException("IdempotencyKey no puede estar vacía");
+            throw new DomainException("IdempotencyKey cannot be empty");
         }
     }
 }

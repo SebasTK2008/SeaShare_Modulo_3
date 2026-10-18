@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 class DomainIdsTest {
 
     @Test
-    void envuelvenUuidYRespetanLaIgualdadPorValor() {
+    void wrapUuidAndRespectValueEquality() {
         UUID uuid = UUID.randomUUID();
 
         assertThat(new ReservationId(uuid)).isEqualTo(new ReservationId(uuid));
@@ -20,7 +20,7 @@ class DomainIdsTest {
     }
 
     @Test
-    void rechazanNull() {
+    void rejectNull() {
         assertThatNullPointerException().isThrownBy(() -> new ReservationId(null));
         assertThatNullPointerException().isThrownBy(() -> new BoatId(null));
         assertThatNullPointerException().isThrownBy(() -> new OwnerId(null));
@@ -28,7 +28,7 @@ class DomainIdsTest {
     }
 
     @Test
-    void laClaveIdempotenteRechazaVacios() {
+    void idempotencyKeyRejectsBlank() {
         assertThat(new IdempotencyKey("op-key").value()).isEqualTo("op-key");
         assertThatNullPointerException().isThrownBy(() -> new IdempotencyKey(null));
         org.assertj.core.api.Assertions.assertThatExceptionOfType(com.seashare.seasharem3.domain.exception.DomainException.class)

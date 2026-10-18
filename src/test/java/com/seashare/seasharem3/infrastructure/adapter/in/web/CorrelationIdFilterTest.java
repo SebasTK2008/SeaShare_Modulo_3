@@ -14,7 +14,7 @@ class CorrelationIdFilterTest {
     private final CorrelationIdFilter filter = new CorrelationIdFilter();
 
     @Test
-    void propagaElHeaderRecibidoYLoPublicaEnElMdc() throws Exception {
+    void propagatesReceivedHeaderAndPublishesItInMdc() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/probe");
         request.addHeader(CorrelationIdFilter.HEADER, "corr-123");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -29,7 +29,7 @@ class CorrelationIdFilterTest {
     }
 
     @Test
-    void generaUnoNuevoCuandoNoViene() throws Exception {
+    void generatesANewOneWhenAbsent() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/probe");
         MockHttpServletResponse response = new MockHttpServletResponse();
 

@@ -49,16 +49,16 @@ public class RabbitMessagePublisher implements MessageBrokerPort {
             CorrelationData.Confirm confirm = correlationData.getFuture().get(confirmTimeout.toMillis(),
                     TimeUnit.MILLISECONDS);
             if (!confirm.isAck()) {
-                throw new AmqpException("La publicación no fue confirmada por el broker: " + confirm.getReason());
+                throw new AmqpException("Publication was not confirmed by the broker: " + confirm.getReason());
             }
             if (correlationData.getReturned() != null) {
-                throw new AmqpException("Mensaje no enrutable: " + correlationData.getReturned().getReplyText());
+                throw new AmqpException("Message is not routable: " + correlationData.getReturned().getReplyText());
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new AmqpException("Publicación interrumpida", exception);
+            throw new AmqpException("Publication interrupted", exception);
         } catch (ExecutionException | TimeoutException exception) {
-            throw new AmqpException("Sin confirmación del broker en " + confirmTimeout, exception);
+            throw new AmqpException("No broker confirmation within " + confirmTimeout, exception);
         }
     }
 }

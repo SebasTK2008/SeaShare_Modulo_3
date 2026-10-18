@@ -52,7 +52,7 @@ public class GlobalExceptionHandler {
         List<ApiFieldError> errors = exception.getBindingResult().getFieldErrors().stream()
                 .map(error -> new ApiFieldError(error.getField(), error.getDefaultMessage()))
                 .toList();
-        return problems.create(ErrorCode.VALIDATION_ERROR, "El cuerpo de la petición no cumple el contrato.", errors);
+        return problems.create(ErrorCode.VALIDATION_ERROR, "The request body does not comply with the contract.", errors);
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)
@@ -62,7 +62,7 @@ public class GlobalExceptionHandler {
                         .map(error -> new ApiFieldError(
                                 result.getMethodParameter().getParameterName(), error.getDefaultMessage())))
                 .toList();
-        return problems.create(ErrorCode.VALIDATION_ERROR, "La petición no cumple el contrato.", errors);
+        return problems.create(ErrorCode.VALIDATION_ERROR, "The request does not comply with the contract.", errors);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -70,31 +70,31 @@ public class GlobalExceptionHandler {
         List<ApiFieldError> errors = exception.getConstraintViolations().stream()
                 .map(violation -> new ApiFieldError(violation.getPropertyPath().toString(), violation.getMessage()))
                 .toList();
-        return problems.create(ErrorCode.VALIDATION_ERROR, "La petición no cumple el contrato.", errors);
+        return problems.create(ErrorCode.VALIDATION_ERROR, "The request does not comply with the contract.", errors);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ProblemDetail handleUnreadableBody(HttpMessageNotReadableException exception) {
         return problems.create(ErrorCode.VALIDATION_ERROR,
-                "El cuerpo de la petición no es JSON válido o no coincide con el contrato.");
+                "The request body is not valid JSON or does not match the contract.");
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ProblemDetail handleMethodNotAllowed(HttpRequestMethodNotSupportedException exception) {
         return problems.create(ErrorCode.METHOD_NOT_ALLOWED,
-                "El método HTTP no está soportado en esta ruta.");
+                "The HTTP method is not supported on this route.");
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ProblemDetail handleUnsupportedMediaType(HttpMediaTypeNotSupportedException exception) {
         return problems.create(ErrorCode.UNSUPPORTED_MEDIA_TYPE,
-                "El Content-Type no está soportado; use application/json.");
+                "The Content-Type is not supported; use application/json.");
     }
 
     @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
     public ProblemDetail handleNotAcceptable(HttpMediaTypeNotAcceptableException exception) {
         return problems.create(ErrorCode.NOT_ACCEPTABLE,
-                "El Accept solicitado no está soportado por esta operación.");
+                "The requested Accept is not supported by this operation.");
     }
 
     @ExceptionHandler(BaseRateException.class)
@@ -122,7 +122,7 @@ public class GlobalExceptionHandler {
         if (exception instanceof ErrorResponse errorResponse) {
             return errorResponse.getBody();
         }
-        log.error("Error no controlado (correlationId={})", MDC.get("correlationId"), exception);
-        return problems.create(ErrorCode.INTERNAL_ERROR, "Ocurrió un error interno inesperado.");
+        log.error("Unhandled error (correlationId={})", MDC.get("correlationId"), exception);
+        return problems.create(ErrorCode.INTERNAL_ERROR, "An unexpected internal error occurred.");
     }
 }

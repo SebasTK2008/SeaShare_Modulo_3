@@ -7,19 +7,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BaseRateExceptionTest {
 
     @Test
-    void marcaComoTransitoriosLosMotivosReintentables() {
-        assertThat(new BaseRateException(BaseRateException.BaseRateFailureReason.FLEET_UNAVAILABLE, "caida")
+    void marksRetryableReasonsAsTransient() {
+        assertThat(new BaseRateException(BaseRateException.BaseRateFailureReason.FLEET_UNAVAILABLE, "outage")
                 .isTransient()).isTrue();
-        assertThat(new BaseRateException(BaseRateException.BaseRateFailureReason.DYNAMIC_RATE_NOT_CONFIGURED, "falta")
+        assertThat(new BaseRateException(BaseRateException.BaseRateFailureReason.DYNAMIC_RATE_NOT_CONFIGURED, "missing")
                 .isTransient()).isTrue();
-        assertThat(new BaseRateException(BaseRateException.BaseRateFailureReason.BASE_RATE_NOT_AVAILABLE, "sin tarifa")
+        assertThat(new BaseRateException(BaseRateException.BaseRateFailureReason.BASE_RATE_NOT_AVAILABLE, "no base rate")
                 .isTransient()).isFalse();
     }
 
     @Test
-    void exponeElMotivo() {
+    void exposesTheReason() {
         BaseRateException exception = new BaseRateException(
-                BaseRateException.BaseRateFailureReason.BASE_RATE_NOT_AVAILABLE, "sin tarifa");
+                BaseRateException.BaseRateFailureReason.BASE_RATE_NOT_AVAILABLE, "no base rate");
 
         assertThat(exception.reason()).isEqualTo(BaseRateException.BaseRateFailureReason.BASE_RATE_NOT_AVAILABLE);
     }

@@ -29,7 +29,7 @@ class ReservationInformationTest {
     }
 
     @Test
-    void creaSinMontosCalculados() {
+    void createsWithoutCalculatedAmounts() {
         ReservationInformation information = create();
 
         assertThat(information.isCalculated()).isFalse();
@@ -39,14 +39,14 @@ class ReservationInformationTest {
     }
 
     @Test
-    void rechazaFechasInvertidas() {
+    void rejectsInvertedDates() {
         assertThatExceptionOfType(DomainException.class).isThrownBy(() -> ReservationInformation.create(
                 new ReservationId(UUID.randomUUID()), new BoatId(UUID.randomUUID()),
                 new BaseRate(new Money(BigDecimal.TEN)), null, END, START, 2, new OwnerId(UUID.randomUUID()), 4));
     }
 
     @Test
-    void rechazaPasajerosFueraDeRango() {
+    void rejectsPassengersOutOfRange() {
         assertThatExceptionOfType(DomainException.class).isThrownBy(() -> ReservationInformation.create(
                 new ReservationId(UUID.randomUUID()), new BoatId(UUID.randomUUID()),
                 new BaseRate(new Money(BigDecimal.TEN)), null, START, END, 5, new OwnerId(UUID.randomUUID()), 4));
@@ -56,14 +56,14 @@ class ReservationInformationTest {
     }
 
     @Test
-    void rechazaCapacidadMenorQueUno() {
+    void rejectsCapacityLessThanOne() {
         assertThatExceptionOfType(DomainException.class).isThrownBy(() -> ReservationInformation.create(
                 new ReservationId(UUID.randomUUID()), new BoatId(UUID.randomUUID()),
                 new BaseRate(new Money(BigDecimal.TEN)), null, START, END, 1, new OwnerId(UUID.randomUUID()), 0));
     }
 
     @Test
-    void fijaMontosCalculadosYValidaElTotal() {
+    void setsCalculatedAmountsAndValidatesTotal() {
         ReservationInformation information = create();
         ReservationValue value = new ReservationValue(new Money(new BigDecimal("900000.00")),
                 new Money(new BigDecimal("60000.00")), new Money(new BigDecimal("30000.00")),
@@ -80,7 +80,7 @@ class ReservationInformationTest {
     }
 
     @Test
-    void rechazaTotalIncoherenteConElDesglose() {
+    void rejectsTotalInconsistentWithBreakdown() {
         ReservationInformation information = create();
         ReservationValue value = new ReservationValue(new Money(new BigDecimal("900000.00")),
                 new Money(new BigDecimal("60000.00")), new Money(new BigDecimal("30000.00")),
@@ -91,7 +91,7 @@ class ReservationInformationTest {
     }
 
     @Test
-    void invalidaLosMontosCalculados() {
+    void invalidatesCalculatedAmounts() {
         ReservationInformation information = create();
         ReservationValue value = new ReservationValue(new Money(new BigDecimal("900000.00")),
                 new Money(new BigDecimal("60000.00")), new Money(new BigDecimal("30000.00")),
@@ -111,7 +111,7 @@ class ReservationInformationTest {
     }
 
     @Test
-    void reemplazaLaTarifaBaseYSuVersionDeParametros() {
+    void replacesBaseRateAndItsParametersVersion() {
         ReservationInformation information = create();
         UUID parametersId = UUID.randomUUID();
 

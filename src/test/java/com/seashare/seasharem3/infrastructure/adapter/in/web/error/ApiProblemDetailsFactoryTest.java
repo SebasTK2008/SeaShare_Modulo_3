@@ -14,13 +14,13 @@ class ApiProblemDetailsFactoryTest {
     private final ApiProblemDetailsFactory factory = new ApiProblemDetailsFactory();
 
     @Test
-    void armaElProblemDetailsDelCatalogo() {
-        ProblemDetail problem = factory.create(ErrorCode.CHARGE_INTENT_NOT_FOUND, "No hay intención para la reserva.");
+    void buildsCatalogProblemDetails() {
+        ProblemDetail problem = factory.create(ErrorCode.CHARGE_INTENT_NOT_FOUND, "There is no intent for the reservation.");
 
         assertThat(problem.getType().toString()).isEqualTo("about:blank");
-        assertThat(problem.getTitle()).isEqualTo("Intención de cobro no encontrada");
+        assertThat(problem.getTitle()).isEqualTo("Charge intent not found");
         assertThat(problem.getStatus()).isEqualTo(404);
-        assertThat(problem.getDetail()).isEqualTo("No hay intención para la reserva.");
+        assertThat(problem.getDetail()).isEqualTo("There is no intent for the reservation.");
         assertThat(problem.getProperties())
                 .containsEntry("code", "CHARGE_INTENT_NOT_FOUND")
                 .containsEntry("retryable", true)
@@ -28,20 +28,20 @@ class ApiProblemDetailsFactoryTest {
     }
 
     @Test
-    void noMarcaRetryableLosErroresDeContrato() {
-        ProblemDetail problem = factory.create(ErrorCode.INVALID_PERIOD, "El período es inválido.");
+    void doesNotMarkContractErrorsRetryable() {
+        ProblemDetail problem = factory.create(ErrorCode.INVALID_PERIOD, "The period is invalid.");
 
         assertThat(problem.getStatus()).isEqualTo(400);
         assertThat(problem.getProperties()).containsEntry("retryable", false);
     }
 
     @Test
-    void incluyeLosErroresDeValidacionCuandoExisten() {
-        ProblemDetail problem = factory.create(ErrorCode.VALIDATION_ERROR, "La petición no cumple el contrato.",
-                List.of(new ApiFieldError("page", "debe ser mayor o igual a 1")));
+    void includesValidationErrorsWhenPresent() {
+        ProblemDetail problem = factory.create(ErrorCode.VALIDATION_ERROR, "The request does not comply with the contract.",
+                List.of(new ApiFieldError("page", "must be greater than or equal to 1")));
 
         assertThat(problem.getProperties()).containsKey("errors");
         assertThat(problem.getProperties().get("errors"))
-                .isEqualTo(List.of(new ApiFieldError("page", "debe ser mayor o igual a 1")));
+                .isEqualTo(List.of(new ApiFieldError("page", "must be greater than or equal to 1")));
     }
 }

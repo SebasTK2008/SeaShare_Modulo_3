@@ -112,13 +112,13 @@ public final class ReservationInformation {
 
     private void validate() {
         if (endDate.isBefore(startDate)) {
-            throw new DomainException("end_date no puede ser anterior a start_date: " + startDate + " – " + endDate);
+            throw new DomainException("end_date cannot be before start_date: " + startDate + " – " + endDate);
         }
         if (maxCapacity < 1) {
-            throw new DomainException("max_capacity debe ser al menos 1: " + maxCapacity);
+            throw new DomainException("max_capacity must be at least 1: " + maxCapacity);
         }
         if (passengers < 1 || passengers > maxCapacity) {
-            throw new DomainException("passengers debe estar entre 1 y max_capacity: " + passengers);
+            throw new DomainException("passengers must be between 1 and max_capacity: " + passengers);
         }
         boolean anyCalculated = rentalAmount != null || insuranceAmount != null || depositAmount != null
                 || totalAmount != null || frozenParametersId != null || calculatedAt != null;
@@ -126,13 +126,13 @@ public final class ReservationInformation {
                 && totalAmount != null && frozenParametersId != null && calculatedAt != null;
         if (anyCalculated && !allCalculated) {
             throw new DomainException(
-                    "Los montos calculados, frozen_parameters_id y calculated_at deben escribirse juntos");
+                    "Calculated amounts, frozen_parameters_id and calculated_at must be set together");
         }
         if (allCalculated) {
             Money expectedTotal = rentalAmount.add(insuranceAmount).add(depositAmount);
             if (totalAmount.compareTo(expectedTotal) != 0) {
-                throw new DomainException("total_amount debe ser alquiler + seguro + depósito: " + totalAmount
-                        + " frente a " + expectedTotal);
+                throw new DomainException("total_amount must be rental + insurance + deposit: " + totalAmount
+                        + " vs " + expectedTotal);
             }
         }
     }

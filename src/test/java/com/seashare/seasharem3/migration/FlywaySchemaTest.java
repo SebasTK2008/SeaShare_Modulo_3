@@ -213,7 +213,7 @@ class FlywaySchemaTest {
 		List<String> types = queryStrings(
 				"SELECT record_type FROM v_financial_records WHERE reservation_id = ? ORDER BY record_type",
 				fixture.reservationId);
-		assertThat(types).containsExactly("COBRO", "COMISION", "DISPERSION", "REEMBOLSO");
+		assertThat(types).containsExactly("CHARGE", "COMMISSION", "REFUND", "SETTLEMENT");
 	}
 
 	@Test

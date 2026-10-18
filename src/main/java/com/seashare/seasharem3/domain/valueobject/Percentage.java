@@ -28,7 +28,7 @@ public record Percentage(BigDecimal value) {
         Objects.requireNonNull(value, "value");
         value = value.setScale(Money.INTERNAL_SCALE, RoundingMode.HALF_UP);
         if (value.compareTo(MIN) < 0 || value.compareTo(MAX) > 0) {
-            throw new DomainException("Percentage fuera del rango 0–100: " + value);
+            throw new DomainException("Percentage out of range 0-100: " + value);
         }
     }
 
