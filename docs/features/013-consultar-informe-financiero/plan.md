@@ -118,7 +118,7 @@ src/test/java/com/seashare/seasharem3/
 | D-UC13-01 | La vista `v_financial_records` pertenece a UC12; UC13 la consume mediante puerto y no la crea ni la redefine | Aplicada |
 | D-UC13-02 | Fechas de negocio y períodos en `America/Bogota` (`seashare.timezone`); instantes en UTC, con `ClockPort` del núcleo compartido (general-plan D-12) | Aplicada |
 | D-UC13-03 | Los VOs compartidos (`Money`, `ReservationId`, `OwnerId`) y `ClockPort` no se redeclaran; se consumen del núcleo compartido | Aplicada |
-| D-UC13-04 | UC13 no aplica migraciones propias: consume la vista `v_financial_records` publicada por UC12; el historial Flyway único y su orden son los de general-plan D-31 | Aplicada |
+| D-UC13-04 | UC13 no define migraciones propias: consume la vista `v_financial_records`, creada por la migración inicial única (general-plan §4.2, D-31) | Aplicada |
 | D-UC13-05 | Seguridad fuera de alcance: el alcance viaja como dato plano (`scope`/`owner_id`), sin autenticación, `SecurityConfig` ni pruebas 401/403 (general-plan §7.1 y D-21) | Aplicada |
 
 ## Implementation Phases
@@ -157,7 +157,7 @@ src/test/java/com/seashare/seasharem3/
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009/T010 → T011 → T012..T018`.
 
-UC13 depende de la vista y registros confirmados publicados por UC12/UC10/UC09/UC05 y del núcleo compartido. No se aplican migraciones desde este plan: el historial Flyway único y su orden son los de general-plan D-31 (la vista `v_financial_records` se publica al final, con UC12).
+UC13 depende de la vista y registros confirmados publicados por UC12/UC10/UC09/UC05 y del núcleo compartido. No se definen migraciones desde este plan: la vista `v_financial_records` y todo el esquema pertenecen a la migración inicial única (general-plan §4.2, D-31).
 
 ## Notes
 

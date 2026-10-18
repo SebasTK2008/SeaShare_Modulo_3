@@ -334,6 +334,6 @@ T001 ─┬─> T002 ─┬─> T003 ──> T004 ──┐
 - [ ] Contradicciones `D-UC02-01` a `D-UC02-13` en «Discrepancias resueltas y decisiones» con decisión explícita; las decisiones de infraestructura compartida se expresan por puertos y tablas, no por tareas externas.
 - [ ] Cada RF/RNF/CE/HU del SPEC 02 trazado a componente y tarea; pruebas `ce001_…`, `ce002_…`, `ce003_…`.
 - [ ] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§11) aplicadas; sin tipo/categoría en DTOs.
-- [ ] UC02 sin tablas propias, sin migración propia, sin endpoint REST; solo consume la versión vigente de `financial_parameters` y `operational_failure` mediante sus puertos compartidos.
+- [ ] UC02 sin tablas propias ni migraciones propias (migración inicial única, general-plan D-31), sin endpoint REST; solo consume la versión vigente de `financial_parameters` y `operational_failure` mediante sus puertos compartidos.
 - [ ] `Money`, `BoatId` y `ClockPort` se consumen del núcleo compartido y no se redeclaran; `windowsForYear` publica las ventanas de temporada alta que UC11 consume.
 - [ ] Puerto `ProvideBaseRateUseCase` publicado con su firma (§Firmas referenciadas por otros planes); referencias por nombre con UC01/UC03 y UC11 declaradas.

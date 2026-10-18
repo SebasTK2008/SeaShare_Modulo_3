@@ -43,7 +43,7 @@ Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domai
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
 **Primary Dependencies**: Spring Boot 4.1.1; Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Actuator, Flyway, MapStruct, Resilience4j, Micrometer/Prometheus, ArchUnit y ShedLock opcional. UC10 usa especialmente JPA, AMQP, cliente HTTP de pasarela, Testcontainers, WireMock y Awaitility. Las dependencias pertenecen al núcleo compartido; este plan no modifica `pom.xml`. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
-**Storage**: PostgreSQL 16+, `NUMERIC(18,4)` para importes y `timestamptz` para instantes. UC10 es dueño de `settlement_intent`, `settlement_record` y `commission_record`, con DDL exacta en este plan; lee `reservation_information` y `charge_intent/charge_record` por puertos de sus dueños [general-plan §4].
+**Storage**: PostgreSQL 16+, `NUMERIC(18,4)` para importes y `timestamptz` para instantes. UC10 es dueño de `settlement_intent`, `settlement_record` y `commission_record`, creadas por la migración inicial única (general-plan §4.2, D-31); lee `reservation_information` y `charge_intent/charge_record` por puertos de sus dueños [general-plan §4].
 **Messaging**: RabbitMQ 3.13+ con outbox, colas quorum, confirmaciones de publicador y DLQ; comandos de pasarela se envían desde worker y los resultados entran por el webhook compartido [general-plan §5; contratos externos].  
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers PostgreSQL/RabbitMQ, WireMock para Mercado Pago, Awaitility y ArchUnit [CONV].  
 **Target Platform**: contenedores Docker sobre Linux; desarrollo con Docker Compose [SPEC general-plan].  
@@ -107,7 +107,7 @@ src/main/java/com/seashare/seasharem3/
     └── config/{GatewayWebhookConfig,ProblemDetailsConfig,ObservabilityConfig}.java
 
 src/main/resources/db/migration/
-└── settlement_tables.sql # DDL exacta propiedad de UC10; 6.ª migración del historial Flyway único (general-plan D-31)
+└── V1__initial_schema.sql # migración inicial única; contiene settlement_intent, settlement_record y commission_record (general-plan §4.2, D-31)
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/ArchitectureTest.java
@@ -197,7 +197,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 | **D-UC10-01** | Firmas del puerto publicado por UC10 para UC07/UC08 | Auditoría de planes | UC10 publica `RequestSettlementUseCase` aquí y copia su firma en UC07/UC08; cambios externos no se aplican | Aplicada |
 | **D-UC10-02** | La pasarela puede unificar el depósito o usar una operación relacionada | contrato comando de liquidación | El ACL decide la capacidad soportada; UC10 conserva siempre el componente de depósito | Aplicada |
 | **D-UC10-03** | El webhook es compartido por UC05/UC09/UC10 | contrato webhook compartido | UC10 consume solo los resultados asociados a su intención; no crea otro webhook | Aplicada |
-| **D-UC10-04** | Migraciones de UC10 en el historial Flyway único | general-plan §10 y D-31 | Historial Flyway único ordenado por fase (general-plan D-31); UC10 es la 6.ª fase (después de UC09) | Aplicada |
+| **D-UC10-04** | Migraciones de UC10 | general-plan §4.2 y D-31 | Migración inicial única `V1__initial_schema.sql` (general-plan D-31); UC10 no define ni ordena migraciones propias | Aplicada |
 | **D-UC10-05** | Mecanismo transversal de autenticación/autorización | general-plan §7.1 y D-21 | Seguridad fuera de alcance: sin autenticación ni autorización; UC10 no define ni hereda configuración de seguridad | Aplicada |
 | **D-UC10-06** | Campos del pagador y metadatos exigidos por la pasarela | contrato comando; mensaje de UC07 | `payer_email` viaja en `payment_metadata` (mensaje de UC07); `payment_method_id` ← `payment_method_type`; `installments` = 1; `description` la fija el sistema; `collector_id` = dato plano de la configuración de la integración (cuenta del Propietario), no se valida | Aplicada |
 | **D-UC10-07** | Tratamiento del seguro en la base de liquidación | SPEC 10 RF-004/RF-014 | El seguro no interviene: liquidación = alquiler bruto − comisión (general-plan D-30) | Aplicada |
@@ -229,7 +229,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 - [ ] **T010** [US1/US2/US3] Implementar `RequestSettlementUseCase`, outbox, envío a pasarela y reintentos con la misma clave.
 - [ ] **T011** [US4] Implementar recepción/verificación de webhook, consulta de detalle y `RegisterSettlementResultUseCase`.
 - [ ] **T012** [US4/US5] Implementar transacción de confirmación: actualizar intención; en éxito crear registro; la comisión solo se crea en la liquidación estándar con el % de la versión de parámetros referenciada por la reserva.
-- [ ] **T012a** Documentar la DDL exacta de `settlement_intent`, `settlement_record` y `commission_record`, incluyendo claves idempotentes, FKs, `dispute_id`, estados y restricciones de inmutabilidad.
+- [ ] **T012a** Verificar `settlement_intent`, `settlement_record` y `commission_record` contra la migración inicial única `V1__initial_schema.sql`, incluyendo claves idempotentes, FKs, `dispute_id`, estados y restricciones de inmutabilidad (general-plan §4.2, D-31).
 - [ ] **T013** `ce001_precision_financiera_100_casos`.
 - [ ] **T014** `ce002_comision_por_alcance`.
 - [ ] **T015** Prueba de depósito total y trazabilidad con disputa UC08.
@@ -248,7 +248,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012 → T013..T021`.
 
-UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettlementUseCase` para UC07/UC08. UC12/UC13 solo consumen sus registros confirmados. Las migraciones se aplican en el historial Flyway único ordenado por fase (general-plan D-31): UC10 es la 6.ª fase, después de UC09.
+UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettlementUseCase` para UC07/UC08. UC12/UC13 solo consumen sus registros confirmados. Las tablas de UC10 forman parte de la migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31); UC10 no define migraciones propias.
 
 ## Notes
 
@@ -260,4 +260,4 @@ No modificar `pom.xml`, `general-plan.md`, SPEC, contratos ni planes de UC03/UC0
 - [ ] Cada RF/RNF/CE/HU tiene componente, tarea y prueba.
 - [ ] Intención, registro, comisión, idempotencia e inmutabilidad están trazados.
 - [ ] Solo éxitos externos crean registros financieros.
-- [ ] DDL exacta de UC10 documentada; migraciones en el historial Flyway único ordenado por fase (UC10 = 6.ª fase, general-plan D-31).
+- [ ] Requisitos de esquema de UC10 verificados contra la migración inicial única (general-plan §4.2, D-31).

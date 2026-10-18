@@ -46,7 +46,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Reem
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1. Para UC09: Spring Data JPA, Spring AMQP, Resilience4j, cliente HTTP, Flyway, MapStruct, ArchUnit, WireMock y Awaitility. Se registran en el setup común sin referencias a tareas externas.
-**Storage**: PostgreSQL 16+; `refund_intent` y `refund_record` son tablas propias con DDL exacta en este plan; `NUMERIC(18,4)`, `timestamptz` [general-plan §4]. `operational_failure.reservation_id` es nullable y sin FK; `payload_ref` referencia el mensaje o JSON almacenado.
+**Storage**: PostgreSQL 16+; `refund_intent` y `refund_record` son tablas de UC09 (creadas por la migración inicial única, general-plan §4.2, D-31); `NUMERIC(18,4)`, `timestamptz` [general-plan §4]. `operational_failure.reservation_id` es nullable y sin FK; `payload_ref` referencia el mensaje o JSON almacenado.
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), WireMock, Awaitility, ArchUnit [general-plan]
 **Target Platform**: Contenedores Docker (Linux) [general-plan]
 **Project Type**: Servicio backend único (hexagonal) [general-plan]
@@ -124,7 +124,7 @@ src/main/java/com/seashare/seasharem3/
         └── RefundIntentPersistenceAdapter.java / RefundRecordPersistenceAdapter.java  # T009
 
 src/main/resources/db/migration/
-└── refund_intent_and_refund_record.sql                # T001  DDL exacta de UC09; 5.ª fase del historial Flyway (núcleo → UC11 → UC03 → UC05 → UC09) [general-plan D-31]
+└── V1__initial_schema.sql                # T001  migración inicial única; contiene refund_intent y refund_record (general-plan §4.2, D-31)
 
 src/test/java/com/seashare/seasharem3/
 ├── domain/service/RefundCalculatorTest.java                              # T003, T015
@@ -197,7 +197,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 |---|---|---|
 | Unitario (`domain`) | `RefundCalculator`: 5 triggers, el depósito siempre al 100 %, `BigDecimal` | `RefundCalculatorTest` |
 | Unitario (`application`) | datos faltantes, cobro original, idempotencia, resultados | `RequestRefundServiceTest`, `RegisterRefundResultServiceTest` |
-| Integración (Testcontainers PostgreSQL) | migración, FK, `UNIQUE(idempotency_key)`, trigger anti-mutación | `RefundPersistenceAdapterTest` |
+| Integración (Testcontainers PostgreSQL) | esquema (migración inicial única), FK, `UNIQUE(idempotency_key)`, trigger anti-mutación | `RefundPersistenceAdapterTest` |
 | Integración (RabbitMQ + WireMock) | outbox → worker → pasarela, misma clave en reintentos | `RefundCommandListenerTest`, `MercadoPagoRefundAdapterTest` |
 | Arquitectura | reglas §3.4 | `ArchitectureTest` (base y ampliación T027) |
 
@@ -214,7 +214,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 | ID | Descripción | Fuentes en conflicto | Decisión para avanzar | Estado |
 |---|---|---|---|---|
 | **D-UC09-01** | Las piezas técnicas compartidas no deben coordinarse mediante tareas externas | Auditoría de planes | UC09 consume `FailureRecorderPort`, `OutboxPort` y AMQP por contratos; no los redeclara ni referencia tareas de otro caso de uso | Aplicada |
-| **D-UC09-02** | `refund_intent` necesita `dispute_id` y detalle del estado externo | general-plan §4 vs SPEC 9 | La DDL exacta de UC09 incluye `dispute_id` nullable y `status_detail` | Aplicada |
+| **D-UC09-02** | `refund_intent` necesita `dispute_id` y detalle del estado externo | general-plan §4 vs SPEC 9 | El esquema de UC09 (migración inicial única) incluye `dispute_id` nullable y `status_detail` | Aplicada |
 | **D-UC09-03** | `sea-share.md` y `consistencia-m2-m3.md` dicen que la cancelación flexible reembolsa "menos costos transaccionales"; el SPEC 9 prohíbe calcularlos (RF-012) | `sea-share.md` §2.2 vs SPEC RF-012 | Rige el SPEC: se solicita el monto íntegro y se registra lo que la pasarela reporte | Decidida |
 | **D-UC09-04** | El contrato solo cubre `POST …/refunds`; el SPEC exige cubrir los montos de RF-002…RF-004 según el estado del cobro original | `pasarela-comando-reembolso.md` vs SPEC RF-002…RF-004 | Los reembolsos —totales o parciales— se ejecutan con `POST /v1/payments/{id}/refunds`; el cobro es directo con captura automática [general-plan D-32] | Decidida |
 | **D-UC09-05** | general-plan §3.5 lista 2 puertos de entrada para UC09; el diseño agrega `SendRefundToGatewayUseCase` y `ReconcileRefundIntentsUseCase` (el worker y el job son adaptadores y solo pueden invocar `port.in`) | general-plan §3.5 vs §3.4 | Se agregan como [CONV]; son puertos propios de UC09 | Aplicada |
@@ -234,7 +234,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 
 ### Phase 3: US1 — Reembolso por cancelación (HU1; RF-001…RF-003A, RF-005, RF-006, RF-010, RF-012; RNF-001…RNF-003)
 
-- [ ] **T001** · DDL exacta de `refund_intent` y `refund_record`: `dispute_id` nullable, `status_detail`, scopes vigentes, FK e índices, inmutabilidad de `refund_record` y privilegios. La migración es la 5.ª fase del historial único Flyway (núcleo → UC11 → UC03 → UC05 → UC09) [general-plan D-31].
+- [ ] **T001** · Verificar `refund_intent` y `refund_record` contra la migración inicial única: `dispute_id` nullable, `status_detail`, scopes vigentes, FK e índices, inmutabilidad de `refund_record` y privilegios. UC09 no define migraciones propias (general-plan §4.2, D-31).
 - [ ] **T002** · Dominio: `RefundTrigger`, `RefundScope`, `RefundOperationType`, `RefundIntentStatus`, `RefundIntent` (transiciones), `RefundRecord` (inmutable). · M: `none` · P: `pending`
 - [ ] **T003** · Pruebas de `RefundCalculator` para los 4 estados de cancelación con los importes ilustrativos (`990000.00`, `480000.00`, `30000.00`, `990000.00`), seguro excluido en moderada y tardía, y `BigDecimal` sin pérdida. · M: `none` · P: `pending`
 - [ ] **T004** · `RefundCalculator` (dominio puro). Redondeo final hacia la pasarela `HALF_UP` a 2 decimales **[CONV]** (README §3.1). · M: `none` · P: `pending`
@@ -282,7 +282,7 @@ Núcleo compartido + contratos publicados por UC05 ─> T001 ─> T002 ─> T003
 T015 ─> T016 ─> T017 ─> T018 ─> T019 ─> T020 ─> T021 ─> T022 ─> T023 ─> T024 ─> T025 ─> T026 ─> T027 ─> T028 ─> T029 ─> T030
 ```
 
-- **Depende de**: la DDL y función de inmutabilidad publicadas por UC05, `ChargeIntentRepository.findApprovedByReservationId`, el despachador webhook de UC05 y los puertos de información de reserva.
+- **Depende de**: el esquema (migración inicial única) y la función de inmutabilidad de `charge_record` publicados por UC05, `ChargeIntentRepository.findApprovedByReservationId`, el despachador webhook de UC05 y los puertos de información de reserva.
 - **Dependencias externas**: UC07 y UC08 consumen `RequestRefundUseCase` por su firma publicada; no se coordinan mediante tareas externas.
 - **Orden interno**: T011/T013 usan el contrato `pasarela-comando-reembolso.md`; T016 se apoya en `OpenDepositTrackingUseCase` (UC08, general-plan D-34).
 
