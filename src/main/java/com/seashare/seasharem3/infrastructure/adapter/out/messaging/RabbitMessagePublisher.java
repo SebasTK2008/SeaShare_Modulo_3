@@ -48,8 +48,8 @@ public class RabbitMessagePublisher implements MessageBrokerPort {
         try {
             CorrelationData.Confirm confirm = correlationData.getFuture().get(confirmTimeout.toMillis(),
                     TimeUnit.MILLISECONDS);
-            if (!confirm.isAck()) {
-                throw new AmqpException("Publication was not confirmed by the broker: " + confirm.getReason());
+            if (!confirm.ack()) {
+                throw new AmqpException("Publication was not confirmed by the broker: " + confirm.reason());
             }
             if (correlationData.getReturned() != null) {
                 throw new AmqpException("Message is not routable: " + correlationData.getReturned().getReplyText());
