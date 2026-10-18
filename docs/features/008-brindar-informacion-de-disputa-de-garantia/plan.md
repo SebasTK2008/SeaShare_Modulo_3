@@ -89,7 +89,7 @@ src/main/java/com/seashare/seasharem3/
     └── config/{AmqpConfig,ProblemDetailsConfig,ObservabilityConfig}.java
 
 src/main/resources/db/migration/
-└── dispute_tracking_tables.sql # DDL exacta de UC08; 7.ª fase del historial Flyway único (general-plan D-31)
+└── V1__initial_schema.sql # migración inicial única; contiene deposit_disposition y dispute_event_log (general-plan §4.2, D-31)
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/ArchitectureTest.java
@@ -166,8 +166,8 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC08
 
 | ID | Descripción | Decisión | Estado |
 |---|---|---|---|
-| **D-UC08-01** | UC08 es dueño de `deposit_disposition` y `dispute_event_log`; UC09/UC10 publican sus firmas | UC08 conserva la DDL exacta de ambas tablas, consume los `port.in` de UC09/UC10 y no redefine sus firmas | Aplicada |
-| **D-UC08-02** | Orden definitivo de migraciones | Historial Flyway único ordenado por fase (general-plan D-31); UC08 es la 7.ª fase (después de UC10) | Decidida |
+| **D-UC08-01** | UC08 es dueño de `deposit_disposition` y `dispute_event_log`; UC09/UC10 publican sus firmas | El esquema de ambas tablas se crea en la migración inicial única (general-plan §4.2, D-31); UC08 consume los `port.in` de UC09/UC10 y no redefine sus firmas | Aplicada |
+| **D-UC08-02** | Migraciones de UC08 | Migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31); UC08 no define ni ordena migraciones propias | Decidida |
 | **D-UC08-03** | Tratamiento de errores en cola | `ack` + fallo para lógica; `nack`/DLQ para transitorios | Aplicada |
 | **D-UC08-04** | Carrera entre creación de seguimiento y actualización de depósito | Reintento acotado o creación idempotente de la fila bajo `ReservationLockPort` (general-plan D-15) | Aplicada |
 | **D-UC08-05** | Seguridad transversal para AMQP | Seguridad fuera de alcance: sin autenticación ni autorización para AMQP y sin `SecurityConfig` propio o compartido (general-plan §7.1; D-21) | Aplicada |
@@ -209,7 +209,7 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC08
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 → T010 → T011 → T012..T018`.
 
-UC08 consume las firmas publicadas por UC09/UC10 y publica `OpenDepositTrackingUseCase` para UC07. Cualquier cambio a esos planes queda fuera y solo se documenta. UC08 es dueño de la DDL de `deposit_disposition` y `dispute_event_log`; su migración se aplica en la 7.ª fase del historial Flyway único ordenado por fase (general-plan D-31), después de UC10, y no define versiones propias.
+UC08 consume las firmas publicadas por UC09/UC10 y publica `OpenDepositTrackingUseCase` para UC07. Cualquier cambio a esos planes queda fuera y solo se documenta. `deposit_disposition` y `dispute_event_log` forman parte de la migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31); UC08 no define ni ordena migraciones propias.
 
 ## Notes
 
@@ -220,4 +220,4 @@ No modificar `pom.xml`, `general-plan.md`, SPEC, contratos ni planes de UC07/UC0
 - [ ] Alineado con `general-plan.md`, contrato UC08 y `contracts/README.md`.
 - [ ] Cada RF/RNF/CE/HU tiene componente, tarea y prueba.
 - [ ] Ack/nack, DLQ, idempotencia y exclusión mutua documentados.
-- [ ] Sin REST, jobs, montos externos ni migración aplicada.
+- [ ] Sin REST, jobs, montos externos ni migraciones propias (migración inicial única, general-plan D-31).

@@ -162,7 +162,7 @@ seashare-m3/
 │       ├── adapter/in/{web,messaging,webhook,scheduler}/   # Controllers + DTOs HTTP, listeners AMQP, webhook, jobs
 │       ├── adapter/out/{persistence,fleet,gateway,messaging}/  # JPA + mappers, cliente Flota, ACL pasarela, outbox
 │       └── config/           # Spring, AMQP, Problem Details, observabilidad
-├── src/main/resources/{application.properties, db/migration/V*.sql}
+├── src/main/resources/{application.properties, db/migration/V1__initial_schema.sql}  # migración inicial única; V2+ solo ante cambios posteriores (D-31)
 ├── src/test/java/…           # espejo de paquetes + arch/ (ArchUnit) + contract/
 ├── Dockerfile
 ├── docker-compose.yml
@@ -216,7 +216,7 @@ Contratos internos que un plan define y los demás consumen **por nombre**, sin 
 
 ## 4. Modelo de datos (PostgreSQL)
 
-Convenciones: `NUMERIC(18,4)` para dinero y porcentajes, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de los UC 02, 03, 04, 05, 09, 10, 11, 12 y 13]**, `timestamptz` para instantes, UUID v4 como identificadores (`financial_parameters` agrega además un `version_number` secuencial), migraciones versionadas con Flyway.
+Convenciones: `NUMERIC(18,4)` para dinero y porcentajes, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de los UC 02, 03, 04, 05, 09, 10, 11, 12 y 13]**, `timestamptz` para instantes, UUID v4 como identificadores (`financial_parameters` agrega además un `version_number` secuencial), **migración inicial única `V1__initial_schema.sql`** con todo este §4 (§4.2 y D-31); los cambios posteriores se añaden como versiones cronológicas `V2__…` (Flyway).
 
 | Tabla | Tipo | Propósito / columnas relevantes | Restricciones |
 |---|---|---|---|
@@ -449,6 +449,15 @@ erDiagram
     settlement_intent ||--o| commission_record : determines
     settlement_record ||--o| commission_record : contains
 ```
+
+### 4.2 Política de migraciones
+
+1. **Migración inicial única**: `V1__initial_schema.sql` (Flyway, en `src/main/resources/db/migration`) contiene **todo** el esquema de §4 y §4.1 en una sola migración: las 15 tablas, sus `CHECK`/`UNIQUE`/FK, índices, la vista `v_financial_records`, los triggers anti-mutación y los privilegios. Su fuente de autoría es §4/§4.1; ningún otro documento define esquema.
+2. **Sin migraciones por caso de uso**: ningún UC, fase o plan define, posee, numera ni ordena migraciones propias; los planes específicos solo referencian la migración única y las tablas/columnas que consumen.
+3. **Cambios posteriores**: los cambios de esquema que surjan en las implementaciones separadas se añaden como versiones nuevas (`V2__…`, `V3__…`) en orden estrictamente cronológico, *append-only*; una versión ya aplicada no se edita nunca. Una versión puede anotar en su encabezado el origen (p. ej. "implementación UC05"), pero la numeración es global y serial.
+4. **Canonicidad**: el historial de migraciones aplicado es la fuente canónica del esquema; §4 es su especificación de autoría. Ningún SPEC, contrato o plan puede contradecir la migración vigente.
+5. **Convención de nombres**: `V<n>__<descripcion_snake_case>.sql` (D-31).
+
 ---
 
 ## 5. Conexiones con otros módulos y mensajería (RabbitMQ)
@@ -622,7 +631,7 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
 | D-28 | **Varias `ChargeIntent` por reserva; la unicidad la da `UNIQUE(idempotency_key)`**, no `UNIQUE(reservation_id)`; reintentos técnicos reutilizan la clave y nuevos intentos de negocio generan una nueva | `UNIQUE(reservation_id)` en `charge_intent` (decisión anterior) | UC05 RF-004A permite múltiples intenciones por reserva (reintentos tras rechazo o expiración) y delega la prevención de cobro doble en la clave idempotente de cada intento | 005, 006, 007 |
 | D-29 | **Base del depósito de garantía = 10 % de la tarifa diaria vigente registrada** (la misma tarifa que se aplicó al alquiler, con la dinámica ya resuelta) | 10 % de la tarifa base sin dinámica; monto fijo | El SPEC 04 fija el porcentaje (10 %) pero no la base; usar la tarifa vigente registrada mantiene una única fuente entre alquiler y depósito | 004 |
 | D-30 | **Liquidación estándar = alquiler bruto − comisión** (comisión = % de la versión referenciada × alquiler bruto); el seguro náutico no interviene en el neto del Propietario | `alquiler − comisión − seguro` (modelo anterior); descontar el seguro del alquiler | SPEC 10 RF-004/RF-014: la comisión se calcula y se conserva en la intención; el seguro cubre un riesgo de la plataforma y no es ingreso del Propietario | 010, 011 |
-| D-31 | **Historial Flyway único y ordenado por fase**: núcleo → UC11 → UC03 → UC05 → UC09 → UC10 → UC08 → UC07 → UC12 (vista `v_financial_records` al final) | Una carpeta de migraciones por plan; versiones independientes por caso de uso | Un solo historial evita colisiones de versión y replica el orden real de dependencias entre tablas (§10) | Todos |
+| D-31 | **Migración inicial única**: `V1__initial_schema.sql` contiene todo el esquema de §4/§4.1 en una sola migración; los cambios que surjan en las implementaciones se añaden como versiones cronológicas `V2__…` (*append-only*) (§4.2) | Una carpeta de migraciones por plan; versiones independientes por caso de uso | Las migraciones son una división cronológica, no lógica ni modular por feature: un solo punto de partida evita colisiones de versión y propiedad artificial por caso de uso; el historial aplicado es la fuente canónica del esquema | Todos |
 | D-32 | **Cobro directo con captura automática**: no hay autorización retenida ni job de expiración; `AUTHORIZED` no ocurre, `authorization_expires_at` no existe y el reembolso (total o parcial) se hace con `/refunds` | Autorización + captura diferida con job de expiración y liberación (`RELEASE`) | El cobro ocurre al reservar con el token recibido (UC07 `PENDING`); un cobro directo elimina estados, jobs y un tipo de operación que los SPEC no exigen | 005, 009 |
 | D-33 | **Identidad de operación por intento**: `reservation_id` + `status` + `status_changed_at` (UC07 RF-009A); los estados terminales deduplican por (reserva, estado, tipo de operación) y solo `PENDING` admite intentos nuevos: un `status_changed_at` nuevo es un intento nuevo | Clave = reserva + estado (un reenvío legítimo se perdería); clave aleatoria por mensaje | El mensaje de estado trae `status_changed_at`; distingue reenvíos (se deduplican) de intentos nuevos legítimos tras un rechazo | 007, 005, 009, 010 |
 | D-34 | **`deposit_disposition` registra todos los desenlaces del depósito** (reembolso por cancelación, `REJECTED` = reembolso del depósito y `COMPLETED` = liquidación) mediante un único *compare-and-set*; UC08 es dueño del registro y UC07/UC09/UC10 lo invocan por `OpenDepositTrackingUseCase` | Registrar solo disputas; desenlace por caso de uso | UC07 RF-009B exige exclusión mutua: un único registro con CAS garantiza un solo desenlace aunque concurran cancelación y disputa | 007, 008, 009, 010 |
@@ -649,7 +658,7 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
 ### Qué debe contener cada plan específico por SPEC (`docs/features/NNN-…/plan.md`)
 1. Resumen y trazabilidad a los RF/RNF/CE del SPEC.
 2. Clases concretas (dominio, puertos, servicios, adaptadores) con rutas reales bajo `com.seashare.seasharem3`.
-3. Migración SQL exacta; referencia al contrato `.md` correspondiente.
+3. Esquema y migración: referencia a la migración inicial única (`V1__initial_schema.sql`) y a las tablas/columnas propias del UC en §4; prohibido definir o numerar migraciones por caso de uso — los cambios detectados se registran como versión posterior (D-31); referencia al contrato `.md` correspondiente.
 4. Reglas de negocio con ejemplos numéricos y manejo de errores por escenario.
 5. Estrategia de pruebas con una prueba por cada criterio de éxito (`CE-xxx`).
 6. Tareas granulares con dependencias entre sí.

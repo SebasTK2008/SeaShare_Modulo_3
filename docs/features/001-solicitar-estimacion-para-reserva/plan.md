@@ -7,7 +7,7 @@
 
 UC01 es el caso de uso **síncrono** por el que el Sistema de Reservas y Operaciones obtiene, ya calculadas, las estimaciones de precio de las embarcaciones, en dos modalidades: **lote** (HU1) y **individual** (HU2). En lote Reservas envía **únicamente** la lista de identificadores (`boat_ids`) y el sistema fija siempre 1 día, 1 pasajero y la **fecha actual** como fecha de evaluación; en individual Reservas envía `boat_id`, `start_date`, `end_date` y `passengers` y el sistema devuelve el total más una **advertencia obligatoria** que Reservas solo renderiza [SPEC RF-001, RF-002, RF-003, RF-004, RF-007, HU1, HU2]. Reservas no hace ninguna operación de precio (CE-002): toda la matemática reside en el sistema.
 
-Enfoque técnico: servicio backend Spring Boot con arquitectura hexagonal de tres capas (`domain` / `application` / `infrastructure`) bajo `com.seashare.seasharem3` [SPEC general-plan §3.2–§3.4]. UC01 **no calcula la tarifa dinámica**: delega en UC02 vía `ProvideBaseRateUseCase`, y lee los parámetros financieros mediante el puerto publicado por su dueño. Aplica la fórmula con `PricingCalculator` de dominio puro y responde por dos adaptadores REST. Los errores siguen Problem Details y `contracts/README.md` §3.4. UC01 no persiste nada ni tiene migración propia.
+Enfoque técnico: servicio backend Spring Boot con arquitectura hexagonal de tres capas (`domain` / `application` / `infrastructure`) bajo `com.seashare.seasharem3` [SPEC general-plan §3.2–§3.4]. UC01 **no calcula la tarifa dinámica**: delega en UC02 vía `ProvideBaseRateUseCase`, y lee los parámetros financieros mediante el puerto publicado por su dueño. Aplica la fórmula con `PricingCalculator` de dominio puro y responde por dos adaptadores REST. Los errores siguen Problem Details y `contracts/README.md` §3.4. UC01 no persiste nada ni define migraciones propias (migración inicial única, general-plan D-31).
 
 UC01 depende de UC02 para `ProvideBaseRateUseCase` y del núcleo compartido para `ClockPort`, `Money`, `BoatId` y los parámetros financieros. Los VOs compartidos son del núcleo compartido (general-plan §3.6) y no se redeclaran en este plan.
 
@@ -40,7 +40,7 @@ El tratamiento de una embarcación ausente del resultado de UC02 queda definido 
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC01: Spring Web MVC, Validation, Jackson, MapStruct, ArchUnit y WireMock/Resilience4j cuando correspondan. Las dependencias compartidas se coordinan fuera de este plan; no se modifica `pom.xml` aquí.
-**Storage**: PostgreSQL 16+; UC01 **no tiene tablas propias ni migración**. Solo **lee la versión vigente** de `financial_parameters` (tabla versionada de UC11) para la tarifa de seguro por pasajero [SPEC general-plan §4]
+**Storage**: PostgreSQL 16+; UC01 **no tiene tablas propias** y no define migraciones (migración inicial única, general-plan D-31). Solo **lee la versión vigente** de `financial_parameters` (tabla versionada de UC11) para la tarifa de seguro por pasajero [SPEC general-plan §4]
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, WireMock, ArchUnit, Testcontainers (para el contexto Spring de integración) [CONV]
 **Target Platform**: Contenedores Docker (Linux) [SPEC general-plan]
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio [SPEC general-plan]
@@ -159,7 +159,7 @@ Todas las reglas provienen del SPEC 01 (`spec.md`), sus contratos o el `general-
 16. **Precisión y redondeo** [SPEC RNF-002; D-UC01-07]: todos los montos son `BigDecimal`; el cálculo interno trabaja a **escala 4**; el campo `estimated_total` de la respuesta se serializa como **string decimal redondeado HALF_UP a 2 decimales**. UC01, como llamador, realiza el redondeo final de presentación.
 17. **Advertencia obligatoria (individual)** [SPEC HU2 escenario 1]: toda respuesta exitosa incluye `warning` con el texto exacto (sin punto final): `Valor estimado. El valor incluye el seguro náutico, pero no incluye el depósito de garantía ni penalidades o ajustes derivados de cambios posteriores de la reserva`. Es la evidencia funcional de CE-003 (métrica de negocio no automatizable, D-UC01-09).
 18. **Seguridad fuera de alcance** [general-plan §7.1, D-21]: el sistema **no implementa** autenticación ni autorización; los contratos ya no declaran `401 UNAUTHENTICATED` / `403 FORBIDDEN`. "Solo el Sistema de Reservas y Operaciones" describe al usuario esperado, no una validación: esta fase **no implementa** `SecurityConfig` ni pruebas de 401/403.
-19. **Sin persistencia ni migración** [SPEC; general-plan §3.3]: UC01 no crea tablas ni migraciones Flyway; es de solo lectura de la versión vigente de `financial_parameters` (UC11, tabla versionada append-only). Repetir la petición no produce efectos (idempotente) [contrato §6].
+19. **Sin persistencia ni migración** [SPEC; general-plan §3.3/§4.2]: UC01 no crea tablas ni migraciones: rige la migración inicial única (general-plan D-31); es de solo lectura de la versión vigente de `financial_parameters` (UC11, tabla versionada append-only). Repetir la petición no produce efectos (idempotente) [contrato §6].
 20. **Identificadores inexistentes** [SPEC casos extremos; contrato lote regla 4]: un `boat_id` no reconocido por Flota se **omite** del resultado (no aparece en `estimates` ni en `unavailable[]`); nunca se inventa precio.
 
 ## Contratos
@@ -356,7 +356,7 @@ T001 ─┬─> T002 ─┬─> T003 ─> T005 ─> T006 ─┬─> T007 ─┐
 - **Seguridad fuera de alcance**: el sistema **no implementa autenticación ni autorización** (general-plan §7.1, D-21); los contratos de UC01 ya no declaran `401`/`403` y este plan no incluye `SecurityConfig` ni pruebas de seguridad. "Solo el Sistema de Reservas y Operaciones" es el usuario esperado.
 - En el lote, un `boat_id` no reconocido por Flota se **omite** del resultado y una embarcación reconocida sin tarifa base se reporta en `unavailable[]` (D-UC01-05); nunca se inventa un precio.
 - `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId` y `BaseRateException` son de **UC02** (plan ya redactado): UC01 los consume por nombre, no los implementa ni los prueba.
-- `FinancialParametersRepository` y la tabla `financial_parameters` son de **UC11**: UC01 los consume por nombre (versión vigente, seguro por pasajero). UC01 **no** persiste ni migra nada.
+- `FinancialParametersRepository` y la tabla `financial_parameters` son de **UC11**: UC01 los consume por nombre (versión vigente, seguro por pasajero). UC01 **no** persiste nada ni define migraciones.
 - `FailureRecorderPort`/`operational_failure` **no** se usan en UC01 (D-UC01-04); UC02 registra los fallos de Flota.
 - El ejemplo del contrato de lote es ilustrativo; los ejemplos de este plan usan `2026-10-07` (miércoles) como fecha de evaluación (D-UC01-02).
 - Etiquetas usadas: `[SPEC]` (SPEC 01 y contratos), `[CONV]` (general-plan e inferido).
@@ -370,6 +370,6 @@ T001 ─┬─> T002 ─┬─> T003 ─> T005 ─> T006 ─┬─> T007 ─┐
 - [ ] Discrepancias `D-UC01-01` a `D-UC01-09` con decisión explícita, sin resolución silenciosa.
 - [ ] Cada RF/RNF/CE/HU del SPEC 01 trazado a componente, tarea y prueba; pruebas `ce001_…`–`ce005_…` (CE-003 con nota de no automatizable).
 - [ ] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§11) aplicadas.
-- [ ] UC01 sin tablas, sin migración, sin persistencia; solo lee la versión vigente de `financial_parameters` por nombre.
+- [ ] UC01 sin tablas ni migraciones propias (migración inicial única, general-plan D-31), sin persistencia; solo lee la versión vigente de `financial_parameters` por nombre.
 - [ ] «Firmas referenciadas por otros planes» declarado (UC01 no expone ninguna) y referencias por nombre a UC02/UC11.
 - [ ] Seguridad fuera de alcance documentada (general-plan §7.1); sin `SecurityConfig` ni pruebas 401/403.

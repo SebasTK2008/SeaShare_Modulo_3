@@ -89,7 +89,7 @@ src/main/java/com/seashare/seasharem3/
     └── config/{ProblemDetailsConfig,ObservabilityConfig}.java
 
 src/main/resources/db/migration/
-└── V*__create_financial_records_view.sql # historial Flyway único: 8.ª fase tras UC08, vista al final (general-plan D-31)
+└── V1__initial_schema.sql # migración inicial única: incluye la vista v_financial_records (general-plan §4.2, D-31)
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/ArchitectureTest.java
@@ -180,7 +180,7 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC12
 | **D-UC12-01** | Filtros técnicos del contrato (`reservation_id`, `date_from`/`date_to` y `owner_id` opcional) | Se aceptan sin ampliar el alcance declarado del SPEC; se validan los tipos y se combinan con AND | Aplicada |
 | **D-UC12-02** | Dueño y forma de `v_financial_records` | UC12 crea la vista con `record_id`, orden estable `(created_at DESC, record_id DESC)` y `NULL::text AS external_reference` para comisiones | Aplicada |
 | **D-UC12-03** | Seguridad transversal | Seguridad fuera de alcance (general-plan §7.1, D-21): el alcance declarado viaja como dato plano (`scope`/`owner_id`) y el sistema no emite `401`/`403` en REST; sin `SecurityConfig` | Aplicada |
-| **D-UC12-04** | Política y orden de migraciones | Historial Flyway único y ordenado por fase (general-plan D-31): UC12 es la 8.ª fase, tras UC08, y la vista `v_financial_records` queda al final | Aplicada |
+| **D-UC12-04** | Política de migraciones | Migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31); la vista `v_financial_records` se crea allí; UC12 no define migraciones propias | Aplicada |
 | **D-UC12-05** | Alcance de la consulta | UC12 expone exactamente los filtros del contrato (tipo, propietario, embarcación, reserva y rango de fechas), la paginación y el orden estable; no agrega métricas ni columnas propias | Aplicada |
 
 ## Implementation Phases
@@ -188,7 +188,7 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC12
 ### Phase 1: Setup
 
 - [ ] **T001** Consumir web, validación, errores y observabilidad del núcleo compartido.
-- [ ] **T002** Crear DDL de `v_financial_records` con `record_id`, `NULL::text AS external_reference` para comisiones y orden estable; incluir pruebas de esquema.
+- [ ] **T002** Verificar la vista `v_financial_records` en la migración inicial única con `record_id`, `NULL::text AS external_reference` para comisiones y orden estable; incluir pruebas de esquema.
 - [ ] **T003** Configurar parámetros de paginación y correlación; no agregar exportación ni cliente de Flota.
 
 ### Phase 2: Foundational
@@ -221,7 +221,7 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC12
 
 `T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009/T010 → T011 → T012..T020`.
 
-UC12 depende de los registros confirmados publicados por UC05, UC09 y UC10 y define la vista consumida por UC13. El historial Flyway es único y ordenado por fase (general-plan D-31): UC12 es la 8.ª fase, tras UC08, y la vista `v_financial_records` queda al final.
+UC12 depende de los registros confirmados publicados por UC05, UC09 y UC10 y define la vista consumida por UC13. La vista `v_financial_records` forma parte de la migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31); UC12 no define migraciones propias.
 
 ## Notes
 
@@ -233,4 +233,4 @@ No modificar `pom.xml`, `general-plan.md`, SPEC, contrato ni planes de UC05/UC09
 - [ ] RF/RNF/CE/HU trazados a componente, tarea y prueba.
 - [ ] Alcance, filtros, paginación estable y errores documentados.
 - [ ] Solo lectura, sin Flota y sin exportación.
-- [ ] DDL exacta de `v_financial_records` documentada; migración integrada en el historial Flyway único, tras UC08 y con la vista al final (general-plan D-31).
+- [ ] Requisitos de esquema de `v_financial_records` documentados; la vista se crea en la migración inicial única (general-plan §4.2, D-31).

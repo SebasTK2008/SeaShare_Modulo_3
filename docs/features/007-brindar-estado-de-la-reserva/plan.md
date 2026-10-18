@@ -112,7 +112,7 @@ src/main/java/com/seashare/seasharem3/
         └── ReservationStatusMessagingConfig.java  # T008  cola `finance.reservation-status.v1`, *binding*, 5 intentos con *backoff* (base 1 s), DLQ `<cola>.dlq` [CONV]
 
 src/main/resources/db/migration/
-└── reservation_status_log.sql                    # T001  DDL exacta propiedad de UC07; historial Flyway único ordenado por fase (general-plan D-31)
+└── V1__initial_schema.sql                    # T001  migración inicial única; contiene reservation_status_log (general-plan §4.2, D-31)
 
 src/test/java/com/seashare/seasharem3/
 ├── domain/service/ReservationStatusPolicyTest.java                      # T003
@@ -243,7 +243,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 
 ### Phase 3: US1 — Estados operativos, `INITIATED` y `PENDING` (HU1; RF-001, RF-002, RF-002A, RF-008, RF-009, RF-010; RNF-001, RNF-003; CE-001, CE-004, CE-007)
 
-- [ ] **T001** · DDL exacta de `reservation_status_log`: `reservation_id`, `status`, `operation_type`, `idempotency_key`, `status_changed_at`, `processed_at`, `outcome`, unicidad por `(reservation_id, status, operation_type, idempotency_key)` (general-plan §4) e historial Flyway único ordenado por fase (general-plan D-31).
+- [ ] **T001** · Verificar `reservation_status_log` contra la migración inicial única: `reservation_id`, `status`, `operation_type`, `idempotency_key`, `status_changed_at`, `processed_at`, `outcome`, unicidad por `(reservation_id, status, operation_type, idempotency_key)` (general-plan §4); UC07 no define migraciones propias (general-plan §4.2, D-31).
 - [ ] **T002** · Dominio: `ReservationStatus` (10 valores), `FinancialOperationType`, `PlannedOperation` y `ReservationStatusPolicy` (estado → operaciones: ninguna / cobro / reembolso y/o liquidación / liquidación estándar). Nunca incluye una operación sobre el depósito por `COMPLETED`. · M: `none` · P: `pending`
 - [ ] **T003** · Pruebas de `ReservationStatusPolicy`: los 10 estados con su plan exacto (cancelaciones de la tabla de §Reglas, punto 4); valor desconocido → sin plan. · M: `none` · P: `pending`
 - [ ] **T004** · Puertos: `HandleReservationStatusUseCase` + `ReservationStatusCommand`, `ReservationStatusLogRepository` y consumo del único `ReservationLockPort` compartido.
