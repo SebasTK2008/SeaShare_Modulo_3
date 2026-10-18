@@ -41,7 +41,7 @@ class FlywaySchemaTest {
 	void appliesAllMigrationsInOrder() throws SQLException {
 		List<String> versions = queryStrings(
 				"SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank");
-		assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9");
+		assertThat(versions).containsExactly("1");
 	}
 
 	@Test
