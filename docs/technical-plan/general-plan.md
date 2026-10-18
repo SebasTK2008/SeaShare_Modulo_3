@@ -450,7 +450,7 @@ erDiagram
     settlement_record ||--o| commission_record : contains
 ```
 
-### 4.2 Política de migraciones (canónica)
+### 4.2 Política de migraciones
 
 1. **Migración inicial única**: `V1__initial_schema.sql` (Flyway, en `src/main/resources/db/migration`) contiene **todo** el esquema de §4 y §4.1 en una sola migración: las 15 tablas, sus `CHECK`/`UNIQUE`/FK, índices, la vista `v_financial_records`, los triggers anti-mutación y los privilegios. Su fuente de autoría es §4/§4.1; ningún otro documento define esquema.
 2. **Sin migraciones por caso de uso**: ningún UC, fase o plan define, posee, numera ni ordena migraciones propias; los planes específicos solo referencian la migración única y las tablas/columnas que consumen.
