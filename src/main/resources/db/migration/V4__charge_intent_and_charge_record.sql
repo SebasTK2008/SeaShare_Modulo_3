@@ -23,6 +23,12 @@ CREATE TABLE charge_intent (
 CREATE INDEX idx_charge_intent_reservation_created
     ON charge_intent (reservation_id, created_at DESC);
 
+-- [CONV] general-plan §4 no define índice para external_reference; necesario para asociar el
+-- webhook de la pasarela (data.id) con la intención registrada (UC05 §Reglas 5).
+CREATE INDEX idx_charge_intent_external_reference
+    ON charge_intent (external_reference)
+    WHERE external_reference IS NOT NULL;
+
 CREATE TABLE charge_record (
     id                  UUID          PRIMARY KEY,
     charge_intent_id    UUID          NOT NULL,
@@ -37,7 +43,10 @@ CREATE TABLE charge_record (
     last_four           VARCHAR(4),
     external_reference  TEXT,
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    CONSTRAINT fk_charge_record_intent FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id)
+    CONSTRAINT fk_charge_record_intent FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id),
+    -- [CONV] general-plan §4.1 declara charge_intent ||--o| charge_record (0..1): una intención
+    -- exitosa genera a lo sumo un registro inmutable; evita duplicados por webhook concurrente.
+    CONSTRAINT uq_charge_record_charge_intent UNIQUE (charge_intent_id)
 );
 
 CREATE INDEX idx_charge_record_owner_created ON charge_record (owner_id, created_at DESC);

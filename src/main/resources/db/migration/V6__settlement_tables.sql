@@ -12,12 +12,21 @@ CREATE TABLE settlement_intent (
     charge_intent_id  UUID          NOT NULL,
     idempotency_key   VARCHAR(255)  NOT NULL,
     status            VARCHAR(32)   NOT NULL,
+    status_detail     TEXT,         -- [CONV] detalle del estado externo (simétrico a charge/refund_intent)
+    external_reference TEXT,        -- [CONV] referencia externa de la pasarela (UC10 plan T012a); omitida en general-plan §4
+    dispute_id        UUID,         -- [CONV] traza de la disputa adjudicada (UC10 plan T012a; scope DEPOSIT); omitida en general-plan §4
+    created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitida en general-plan §4
     CONSTRAINT uq_settlement_intent_idempotency_key UNIQUE (idempotency_key),
     CONSTRAINT fk_settlement_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id)
 );
 
 -- scope vigente: STANDARD | CANCELLATION_COMPENSATION | DEPOSIT (general-plan §4; sin DEPOSIT_DISPUTE).
 CREATE INDEX idx_settlement_intent_reservation ON settlement_intent (reservation_id);
+
+-- [CONV] índice para asociar el webhook de liquidación (data.id) con la intención (UC10 §Reglas).
+CREATE INDEX idx_settlement_intent_external_reference
+    ON settlement_intent (external_reference)
+    WHERE external_reference IS NOT NULL;
 
 CREATE TABLE settlement_record (
     id                   UUID          PRIMARY KEY,
@@ -32,7 +41,9 @@ CREATE TABLE settlement_record (
     deposit_amount       NUMERIC(18,4) NOT NULL,
     external_reference   TEXT,
     created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    CONSTRAINT fk_settlement_record_intent FOREIGN KEY (settlement_intent_id) REFERENCES settlement_intent (id)
+    CONSTRAINT fk_settlement_record_intent FOREIGN KEY (settlement_intent_id) REFERENCES settlement_intent (id),
+    -- [CONV] general-plan §4.1 declara settlement_intent ||--o| settlement_record (0..1).
+    CONSTRAINT uq_settlement_record_settlement_intent UNIQUE (settlement_intent_id)
 );
 
 CREATE INDEX idx_settlement_record_owner_created ON settlement_record (owner_id, created_at DESC);

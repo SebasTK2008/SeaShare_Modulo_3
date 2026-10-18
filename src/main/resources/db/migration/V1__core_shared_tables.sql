@@ -12,7 +12,15 @@ CREATE TABLE operational_failure (
 );
 
 -- Decisión (UC11 T046): reservation_id nullable y SIN FK a reservation_information.
--- GAP: no se documentan índices para operational_failure.
+-- [CONV] general-plan §4 no documenta índices para operational_failure; se crean para las dos
+-- consultas previsibles (fallos no resueltos en orden de antigüedad y fallos por reserva).
+CREATE INDEX idx_operational_failure_unresolved
+    ON operational_failure (created_at)
+    WHERE resolved = FALSE;
+
+CREATE INDEX idx_operational_failure_reservation
+    ON operational_failure (reservation_id)
+    WHERE reservation_id IS NOT NULL;
 
 CREATE TABLE outbox_message (
     id            UUID         PRIMARY KEY,
