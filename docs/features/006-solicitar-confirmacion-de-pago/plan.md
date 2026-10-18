@@ -31,7 +31,7 @@ Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasha
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1. Para UC06: Spring Web MVC, Validation, MapStruct (solo si se mapea con MapStruct), ArchUnit. Las dependencias se registran en el setup común, sin referencias a tareas externas. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
-**Storage**: PostgreSQL 16+; UC06 **solo lee** `charge_intent` (tabla de UC05) [general-plan §3.5]; no tiene migraciones propias
+**Storage**: PostgreSQL 16+; UC06 **solo lee** `charge_intent` (tabla de UC05) [general-plan §3.5]; no define migraciones propias (migración inicial única, general-plan D-31)
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers (PostgreSQL), WireMock (solo para demostrar CE-002), ArchUnit [general-plan]
 **Target Platform**: Contenedores Docker (Linux) [general-plan]
 **Project Type**: Servicio backend único (hexagonal) [general-plan]

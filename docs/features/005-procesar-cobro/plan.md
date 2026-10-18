@@ -51,7 +51,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Proc
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1. Para UC05: Spring Data JPA, Spring AMQP, Resilience4j, cliente HTTP, Flyway, MapStruct, ArchUnit, WireMock y Awaitility. Las dependencias se registran en el setup común del repositorio, sin coordinar mediante numeración de tareas externas.
-**Storage**: PostgreSQL 16+; tablas `charge_intent` y `charge_record` propiedad de UC05, con DDL exacta en este plan; `NUMERIC(18,4)` para dinero y `timestamptz` para instantes [general-plan §4]
+**Storage**: PostgreSQL 16+; tablas `charge_intent` y `charge_record` de UC05, creadas por la migración inicial única (general-plan §4.2, D-31); `NUMERIC(18,4)` para dinero y `timestamptz` para instantes [general-plan §4]
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), WireMock (pasarela), Awaitility, MockMvc, ArchUnit [general-plan]
 **Target Platform**: Contenedores Docker (Linux) [general-plan]
 **Project Type**: Servicio backend único (hexagonal) [general-plan]
@@ -134,7 +134,7 @@ src/main/java/com/seashare/seasharem3/
         └── ChargeIntentPersistenceAdapter.java / ChargeRecordPersistenceAdapter.java  # T009
 
 src/main/resources/db/migration/
-└── charge_intent_and_charge_record.sql               # T002  DDL exacta de las tablas propiedad de UC05; 4.ª fase del historial único de migraciones (núcleo → UC11 → UC03 → UC05) [general-plan D-31]
+└── V1__initial_schema.sql                            # T002  migración inicial única; contiene charge_intent y charge_record (general-plan §4.2, D-31)
 
 src/test/java/com/seashare/seasharem3/
 ├── domain/model/{ChargeIntentTest, ChargeRecordTest}.java                    # T004
@@ -207,7 +207,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 |---|---|---|
 | Unitario (`domain`) | transiciones de estado, `BigDecimal`, inmutabilidad del registro | `ChargeIntentTest`, `ChargeRecordTest` |
 | Unitario (`application`) | RF-002, RF-009, RF-013, RF-004A, resultados por estado | `ProcessChargeServiceTest`, `RegisterChargeResultServiceTest` |
-| Integración (Testcontainers PostgreSQL) | migración, FK, `UNIQUE(idempotency_key)`, varias intenciones por reserva, trigger anti-mutación | `ChargePersistenceAdapterTest` |
+| Integración (Testcontainers PostgreSQL) | esquema (migración inicial única), FK, `UNIQUE(idempotency_key)`, varias intenciones por reserva, trigger anti-mutación | `ChargePersistenceAdapterTest` |
 | Integración (Testcontainers RabbitMQ + WireMock) | outbox → worker → pasarela, mismo `X-Idempotency-Key` en reintentos, timeouts | `ChargeCommandListenerTest`, `MercadoPagoChargeAdapterTest` |
 | Web (MockMvc) | firma, `400`, `401`, `200` (duplicado o desconocido), `500` (el `401` es de la firma de Mercado Pago, no control de acceso — general-plan §7.1) | `GatewayWebhookControllerTest` |
 | Arquitectura | reglas §3.4 | `ArchitectureTest` (base y ampliación T030) |
@@ -227,7 +227,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 | ID | Descripción | Fuentes en conflicto | Decisión para avanzar | Estado |
 |---|---|---|---|---|
 | **D-UC05-01** | Las piezas técnicas compartidas no deben coordinarse mediante tareas de otro caso de uso | Auditoría de planes | UC05 consume `FailureRecorderPort`, `OutboxPort`, AMQP y dependencias por sus contratos; no los redeclara ni referencia tareas externas | Aplicada |
-| **D-UC05-02** | `charge_intent` requiere detalle de estado externo y monto solicitado | general-plan §4 vs SPEC 5/6 | La DDL exacta de UC05 documenta `status_detail` y `requested_amount`; el cobro es directo con captura automática (general-plan D-32) y los campos del pagador/medio de pago se resuelven desde el mensaje de UC07 (`payment_metadata.payer_email`, `payment_method_type`), con `installments` = 1 y `description` fijada por el sistema | Aplicada |
+| **D-UC05-02** | `charge_intent` requiere detalle de estado externo y monto solicitado | general-plan §4 vs SPEC 5/6 | El esquema de UC05 en la migración inicial única incluye `status_detail` y `requested_amount`; el cobro es directo con captura automática (general-plan D-32) y los campos del pagador/medio de pago se resuelven desde el mensaje de UC07 (`payment_metadata.payer_email`, `payment_method_type`), con `installments` = 1 y `description` fijada por el sistema | Aplicada |
 | **D-UC05-03** | general-plan §3.5 lista 3 puertos de entrada para UC05; el diseño necesita 2 más: `SendChargeToGatewayUseCase` (el *worker* es un adaptador y solo puede invocar `port.in`, §3.4) y `ReconcileChargeIntentsUseCase` (job de conciliación) | general-plan §3.5 vs §3.4 | Se agregan ambos como [CONV]: son puertos propios de UC05 | **Aplicada** |
 | **D-UC05-04** | El contrato de cobro usa `X-Idempotency-Key` de ejemplo `cobro-<reservation_id>`, igual para todos los intentos de una reserva; contradice RF-004A / D-28 (nuevo intento = clave nueva) | `pasarela-comando-cobro.md` §2 vs SPEC RF-004A | Rige el SPEC: clave por intento (`reservation_id` + `status` + `status_changed_at`; general-plan D-33). T031 corrige el ejemplo del contrato: el contrato de cobro es de UC05 | **Aplicada** |
 | **D-UC05-05** | La política exacta de acuse del webhook presenta reglas en tensión | `pasarela-webhook-resultados.md` §3.2 vs §3.7 | UC05 mantiene la recepción, la verificación y el despacho; `data.id`/`type` desconocidos → `200 OK` + registro en `operational_failure`; `type` no reconocido se registra y se confirma recepción; fallas internas → `500` para que Mercado Pago reintente | Aplicada |
@@ -250,7 +250,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 ### Phase 3: US1 — Enviar la solicitud de cobro (HU1; RF-001…RF-004B, RF-009…RF-011, RF-013, RF-015; CE-002, CE-003, CE-005)
 
 - [ ] **T036** · Propiedades de configuración de la pasarela (`seashare.gateway.*`), sin valores sensibles en el repositorio.
-- [ ] **T037** · DDL exacta de `charge_intent` y `charge_record`: unicidad de idempotencia, múltiples intenciones por reserva, FK de auditoría, índices, inmutabilidad de `charge_record` y privilegios. UC05 es la 4.ª fase del historial único de migraciones (núcleo → UC11 → UC03 → UC05; general-plan D-31).
+- [ ] **T037** · Verificar el esquema de `charge_intent` y `charge_record` contra la migración inicial única `V1__initial_schema.sql`: unicidad de idempotencia, múltiples intenciones por reserva, FK de auditoría, índices, inmutabilidad de `charge_record` y privilegios. UC05 no define migraciones propias; desviaciones ⇒ versión posterior `V2+` (general-plan §4.2, D-31).
 - [ ] **T038** · Dominio: `ChargeIntentStatus`, `ChargeIntent` (transiciones válidas), `ChargeRecord` (inmutable, sin *setters*), `PaymentMethodReference`, `IdempotencyKey`; valores de estado en inglés conforme al general-plan. La clave idempotente del intento se deriva de `reservation_id` + `status` + `status_changed_at` y los estados terminales deduplican por (reserva, estado, tipo de operación) [general-plan D-33].
 - [ ] **T004** · Excepciones `ReservationValueNotCalculatedException`, `InvalidPaymentTokenException` y pruebas unitarias de dominio (transiciones, inmutabilidad, `BigDecimal`). · M: `none` · P: `pending`
 - [ ] **T039** · Puertos de salida: `ChargeIntentRepository`, `ChargeRecordRepository`, `ChargeRecordQueryPort` y `ChargeGatewayPort`; solo `PENDING` admite nuevos intentos, los estados terminales son idempotentes [general-plan D-33].
@@ -296,7 +296,7 @@ T034–T040 (setup y contratos compartidos) ─> T001 ─> T002 ─> T003 ─> T
 T017 (pruebas) ─> T018 ─> T019 ─> T020 ─> T021 ─> T023 ─> T024 ─> T025 ─> T026…T029 ─> T030 ─> T031 ─> T032 ─> T033
 ```
 
-- **Dependencias externas**: los casos que consultan cobros consumen `ChargeIntentRepository`, `ChargeRecordQueryPort` y las tablas por sus firmas; UC07 consume `ProcessChargeUseCase`. La DDL de UC05 debe existir antes de las referencias FK posteriores, respetando el orden del historial único de migraciones (general-plan D-31).
+- **Dependencias externas**: los casos que consultan cobros consumen `ChargeIntentRepository`, `ChargeRecordQueryPort` y las tablas por sus firmas; UC07 consume `ProcessChargeUseCase`. El esquema de UC05 (`charge_intent`, `charge_record`) forma parte de la migración inicial única y está disponible antes de las referencias FK posteriores (general-plan §4.2, D-31).
 
 ## Notes
 

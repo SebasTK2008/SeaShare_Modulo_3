@@ -48,7 +48,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Conf
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC11 y la base compartida: Spring Web MVC, Validation, Flyway, MapStruct, ArchUnit, **Spring AMQP, Resilience4j, WireMock y Awaitility** (estos cuatro los requieren UC03, UC05, UC07, UC08, UC09 y UC10). **Sin *starter* de seguridad** (fuera de alcance, general-plan §7.1). **Hoy no están en el `pom.xml`** (solo hay `data-jpa`, `postgresql`, `mapstruct`, `lombok-mapstruct-binding` y Testcontainers); los nombres exactos de los artefactos deben verificarse al agregarlos [SPEC general-plan: Technical Context]
-**Storage**: PostgreSQL 16+ (`NUMERIC(18,4)` para dinero y porcentajes, `timestamptz` para instantes) [SPEC general-plan §4]; migraciones Flyway en `src/main/resources/db/migration` (**hoy no existen**)
+**Storage**: PostgreSQL 16+ (`NUMERIC(18,4)` para dinero y porcentajes, `timestamptz` para instantes) [SPEC general-plan §4]; migración inicial única `V1__initial_schema.sql` en `src/main/resources/db/migration` (**hoy no existe**)
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL y RabbitMQ — ya existe `src/test/java/com/seashare/seasharem3/TestcontainersConfiguration.java`), MockMvc, WireMock, Awaitility, ArchUnit [CONV]. *Hoy falta `spring-boot-starter-test` en el `pom.xml`*
 **Target Platform**: Contenedores Docker (Linux) [SPEC general-plan]
 **Project Type**: Servicio backend único (hexagonal), sin frontend propio [SPEC general-plan]
@@ -130,7 +130,7 @@ src/main/java/com/seashare/seasharem3/
 
 src/main/resources/
 └── db/migration/
-└── financial_parameters_and_shared_tables.sql    # T002  DDL exacta (financial_parameters append-only); historial de migraciones único ordenado por fase (UC11 es la 2.ª fase, tras el núcleo; general-plan D-31)
+└── V1__initial_schema.sql    # T002  migración inicial única (incluye financial_parameters, append-only); general-plan §4.2, D-31
 
 src/test/java/com/seashare/seasharem3/
 ├── arch/
@@ -191,7 +191,7 @@ Todas las reglas siguientes provienen del SPEC 11 (`spec.md`) salvo indicación.
 1. **Parámetros configurables** [SPEC RF-001…RF-004, HU1, HU2]: `commissionPct` (comisión de la plataforma), `insuranceFeePerPassenger` (tarifa del seguro náutico por pasajero), `weekendIncreasePct` (incremento fin de semana), `highSeasonIncreasePct` (incremento temporada alta). Ejemplo ilustrativo: comisión `20` (porcentaje entero), seguro `8,50` (importe por pasajero) — *los valores exactos son responsabilidad del Administrador Financiero; el SPEC no fija valores por defecto*.
 2. **Rangos y formatos de validación** [SPEC RF-013]: los tres porcentajes deben estar entre `0` y `100` (inclusive); la tarifa del seguro debe ser `>= 0`. Cuerpo con valores fuera de rango o no numéricos → `400 VALIDATION_ERROR` con el detalle de cada campo (`contracts/README.md` §3.3 y catálogo §3.4). Estos mismos límites (0–100 y ≥ 0) se replican como CHECK en la tabla (`general-plan.md` §4) y figuran en el contrato `UC11-guardar-parametros-financieros.md` **[CONV]**.
 3. **Versión nueva completa, sin actualizaciones parciales** [SPEC RF-005, RF-011, HU4]: el `PUT` envía los cuatro valores siempre obligatorios; si uno es inválido, no se persiste **ninguna versión nueva** (transacción única). Ejemplo ilustrativo: comisión `20` válida pero seguro `-1` inválido → respuesta `400` y la versión vigente **no** cambia ni se crea una versión parcial.
-4. **Sin efecto retroactivo** [SPEC RF-007, CE-002, HU4]: cada guardado crea una versión nueva que solo se aplica a cálculos posteriores; las reservas ya calculadas conservan sus importes y la referencia a su versión de parámetros (de la que se resuelven los valores aplicados), y **ninguna versión anterior se modifica ni se elimina** (append-only). UC11 no escribe en ninguna otra tabla. La inmutabilidad es política documentada; se **recomienda reforzarla en BD** (denegar `UPDATE`/`DELETE` sobre `financial_parameters`) en la migración de UC11 (2.ª fase del historial único de migraciones; general-plan D-31), ya que las reservas referencian versiones por FK.
+4. **Sin efecto retroactivo** [SPEC RF-007, CE-002, HU4]: cada guardado crea una versión nueva que solo se aplica a cálculos posteriores; las reservas ya calculadas conservan sus importes y la referencia a su versión de parámetros (de la que se resuelven los valores aplicados), y **ninguna versión anterior se modifica ni se elimina** (append-only). UC11 no escribe en ninguna otra tabla. La inmutabilidad es política documentada; se **recomienda reforzarla en BD** (denegar `UPDATE`/`DELETE` sobre `financial_parameters`) en la tabla creada por la migración inicial única (general-plan §4.2, D-31), ya que las reservas referencian versiones por FK.
 5. **Datos de solo lectura** [SPEC RF-012, HU3]:
    - `guarantee_deposit_rule` → regla textual `"10% de la tarifa base diaria"` (no es un importe editable; el 10% es dato de SPEC 2 / general-plan) **[CONV: se usa el texto del contrato]**.
    - `high_season_windows` → ventanas de temporada alta que UC11 obtiene de `HighSeasonCalendar.windowsForYear`; el contrato las declara como array de strings con el formato vigente **[CONV]**.
@@ -200,7 +200,7 @@ Todas las reglas siguientes provienen del SPEC 11 (`spec.md`) salvo indicación.
 8. **Versionado append-only, idempotencia y primera configuración** [SPEC casos extremos, HU3 esc. 2, HU4; general-plan D-24]:
    - Cada guardado válido con contenido **distinto** inserta una versión nueva (`version_number` secuencial, `UNIQUE`); ninguna versión anterior se modifica ni se elimina (sin `UPDATE`, sin `@Version`) **[CONV; D-UC11-03]**. La versión vigente es siempre la de mayor `version_number`.
    - Un `PUT` con los **mismos cuatro valores** que la versión vigente **no crea versión nueva** (idempotencia): devuelve el número de la versión vigente.
-   - La DDL no inserta versiones iniciales, de modo que mientras nadie haya guardado, el `GET` responde `404 PARAMETERS_NOT_CONFIGURED` (HU3 esc. 2) y no se inventan valores.
+   - La migración inicial única no inserta versiones iniciales (crea la tabla vacía), de modo que mientras nadie haya guardado, el `GET` responde `404 PARAMETERS_NOT_CONFIGURED` (HU3 esc. 2) y no se inventan valores.
    - La primera configuración es un `PUT` sobre la tabla vacía: crea la versión `1` mediante `INSERT` (append-only, T016) **[CONV; D-UC11-07]**.
 9. **Dependencias de otros planes**: la integración con UC02 se hace por su firma publicada (`HighSeasonCalendar`); no hay elementos sin definir.
 
@@ -271,7 +271,7 @@ Fuente: `general-plan.md` (Technical Context), `sdd-guide.MD` ("pruebas que demu
 | Unitario (`domain`) | rangos RF-013, inmutabilidad, `BigDecimal` RNF-002 | `domain/model/FinancialParametersTest` |
 | Unitario (`application`) | orquestación RF-005/RF-011, propagación de errores, semántica 404; las ventanas de temporada alta se prueban con un doble de `HighSeasonCalendar` (la lógica del calendario se prueba en UC02) | `application/service/FinancialParametersServiceTest` (Mockito sobre `FinancialParametersRepository` y `HighSeasonCalendar`) |
 | Contrato / Web (MockMvc + `@WebMvcTest` o Testcontainers) | cuerpos y códigos de los contratos UC11 | `contract/UC11SaveFinancialParametersContractTest`, `UC11GetFinancialParametersContractTest` |
-| Integración (Testcontainers PostgreSQL) | DDL de UC11 + CHECK de BD + versionado append-only (`UNIQUE(version_number)`) + atomicidad | `FinancialParametersPersistenceAdapterTest`, `FinancialParametersConsistencyTest` |
+| Integración (Testcontainers PostgreSQL) | esquema de UC11 (migración inicial única) + CHECK de BD + versionado append-only (`UNIQUE(version_number)`) + atomicidad | `FinancialParametersPersistenceAdapterTest`, `FinancialParametersConsistencyTest` |
 | Integración (Testcontainers PostgreSQL + RabbitMQ) | base compartida: `operational_failure`, `outbox_message`, relay | `SharedFoundationPersistenceTest`, `OutboxRelayJobTest` (T047) |
 | Arquitectura | reglas de capas §3.4 | `arch/ArchitectureTest` |
 
@@ -298,7 +298,7 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 | **D-UC11-04** | Nombres JSON distintos de columnas | contratos (`platform_commission_percentage`…) vs tabla (`commission_pct`…) | mapeo explícito en el mapper (el dominio no renombra) | **Aplicada** |
 | **D-UC11-05** | RNF-001 pide "DTO general" de carga/guardado vs dos cuerpos HTTP distintos | SPEC 11 RNF-001 vs contratos GET/PUT | DTOs separados HTTP + command/result en aplicación. **Cierre:** decisión interna de UC11 | **Aplicada** |
 | **D-UC11-06** | `TestcontainersConfiguration` usa `postgres:latest` vs `postgres:16` | repo actual vs PostgreSQL 16+ del general-plan | alinear a `postgres:16` al ampliar los tests (T001) | **Aplicada** — la imagen de Testcontainers la usan también las pruebas del núcleo compartido (fundacional) y de UC12/UC13 |
-| **D-UC11-07** | Caso extremo "primera configuración": HU3 exige `404` sin fila, pero RF-005 requiere persistir la configuración | HU3 vs RF-005 | migración sin versiones iniciales; el primer `PUT` crea la versión `1`; el `GET` previo responde `404`. **Cierre:** decisión de la tabla propia de UC11 | **Aplicada** |
+| **D-UC11-07** | Caso extremo "primera configuración": HU3 exige `404` sin fila, pero RF-005 requiere persistir la configuración | HU3 vs RF-005 | `V1__initial_schema.sql` crea la tabla sin versiones iniciales; el primer `PUT` crea la versión `1`; el `GET` previo responde `404`. **Cierre:** decisión de la tabla propia de UC11 | **Aplicada** |
 
 ## Implementation Phases
 
@@ -309,7 +309,7 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 Dependencias mínimas del proyecto para que UC11 y los demás casos de uso puedan existir (incluye las dependencias de la fase 1 del general: Web, Validation, Flyway y test; **sin** *starter* de seguridad — fuera de alcance, general-plan §7.1).
 
 - [ ] **T001** · agregar al `pom.xml` los starters y dependencias del servicio y del núcleo compartido; alinear Testcontainers a `postgres:16` (D-UC11-06).
-- [ ] **T002** · documentar la DDL exacta de `financial_parameters` (**versionada append-only**: `id UUID` PK, `version_number BIGINT` con `UNIQUE`, `commission_pct`, `insurance_fee_per_passenger`, `weekend_increase_pct`, `high_season_increase_pct`, `created_at`, `created_by` —dato plano, opcional—, CHECK de rangos 0–100 y seguro ≥ 0), `operational_failure` y `outbox_message`; el historial único de migraciones se ordena por fase, con UC11 en 2.º lugar tras el núcleo (general-plan D-31).
+- [ ] **T002** · verificar el esquema de `financial_parameters` (**versionada append-only**: `id UUID` PK, `version_number BIGINT` con `UNIQUE`, `commission_pct`, `insurance_fee_per_passenger`, `weekend_increase_pct`, `high_season_increase_pct`, `created_at`, `created_by` —dato plano, opcional—, CHECK de rangos 0–100 y seguro ≥ 0), `operational_failure` y `outbox_message` contra la migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31); UC11 no define ni numera migraciones propias.
 - [ ] **T003** · `ArchitectureTest` con las reglas de `general-plan` §3.4 y configuración base de aplicación.
 
 ### Phase 2: Foundational
@@ -405,7 +405,7 @@ T001 ─┬─> T002 ─> T003 ─┬─> T004 ─> T005 ─> T006 ─┬─> T0
 ## Notes
 
 - El SPEC 11 **no** define metas de rendimiento, formato del array `high_season_windows`, redacción literal del depósito ni mecanismo de autenticación; el plan aplica las decisiones adoptadas (sin meta propia de rendimiento; ventanas en `MM-dd→MM-dd` / `semana-santa`; regla textual del contrato para el depósito) y la autenticación queda **fuera de alcance** (general-plan §7.1, D-21).
-- La primera configuración (HU3 esc. 2) exige `404` en lectura y creación en escritura → D-UC11-07 (migración sin versiones + INSERT de la versión `1` en T016).
+- La primera configuración (HU3 esc. 2) exige `404` en lectura y creación en escritura → D-UC11-07 (`V1` crea la tabla sin versiones iniciales + INSERT de la versión `1` en T016).
 - `HighSeasonCalendar` es de UC02: UC11 solo lo consume (T029, T031). El ejemplo «15-dic a 15-ene» del contrato `UC11-obtener…` contradice al SPEC 2 (15 de noviembre); rige el SPEC 2 (D-UC11-01).
 - Los consumidores de la **versión vigente** (UC01/UC02/UC04) están fuera de este plan: RF-006 solo expone el puerto; UC10 usa la comisión de la **versión referenciada** por la reserva y no lee la tabla (la resuelve el adaptador de UC03); su ausencia se maneja en cada HU correspondiente. La coordinación entre planes se hace por firmas publicadas.
 - UC11 publica `HighSeasonCalendar` mediante contrato; la configuración AMQP compartida usa DLQ `<cola>.dlq`.

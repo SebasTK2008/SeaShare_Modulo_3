@@ -16,7 +16,7 @@ Enfoque técnico: servicio backend Spring Boot con arquitectura hexagonal de tre
 - **Concurrencia** (D-UC04-05): la lectura-modificación-escritura se ejecuta en una transacción única y se serializa con el bloqueo asesor por reserva (`pg_advisory_xact_lock`; general-plan D-15), compartido con el *upsert* de UC03.
 - **Registro de fallos**: el SPEC 04 pide "registra el fallo" en los casos de información incompleta y de parámetros sin configurar → UC04 usa `FailureRecorderPort` **por nombre**. El `404` **no** registra (estado transitorio esperado; ver D-UC04-06).
 
-UC04 corresponde a la **fase 5** de la hoja de ruta [general-plan §10]: depende de UC03 (crea `reservation_information` y publica su repositorio) y del núcleo compartido de parámetros financieros. **No depende directamente de UC02**: la tarifa vigente ya quedó registrada por UC03. **No persiste tablas nuevas ni aporta migración**: rige el historial Flyway único ordenado por fase (general-plan D-31).
+UC04 corresponde a la **fase 5** de la hoja de ruta [general-plan §10]: depende de UC03 (crea `reservation_information` y publica su repositorio) y del núcleo compartido de parámetros financieros. **No depende directamente de UC02**: la tarifa vigente ya quedó registrada por UC03. **No persiste tablas nuevas ni define migraciones**: rige la migración inicial única (general-plan §4.2, D-31).
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -44,7 +44,7 @@ UC04 corresponde a la **fase 5** de la hoja de ruta [general-plan §10]: depende
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC04: Spring Web MVC, Validation, Jackson, Spring Data JPA, MapStruct, ArchUnit y Testcontainers PostgreSQL. Las dependencias se documentan en el setup común del repositorio, sin editar el `pom.xml` en silencio.
-**Storage**: PostgreSQL 16+ — **escritura/lectura** de `reservation_information` (tabla de UC03/UC04; UC03 la crea y su adaptador resuelve el congelado con un join de solo lectura, UC04 la completa) y **solo lectura de la versión vigente** de `financial_parameters` (tabla versionada de UC11). `NUMERIC(18,4)` para dinero y porcentajes, `timestamptz` para instantes [SPEC general-plan §4]. **Sin tablas propias ni migración**
+**Storage**: PostgreSQL 16+ — **escritura/lectura** de `reservation_information` (tabla de UC03/UC04; UC03 la crea y su adaptador resuelve el congelado con un join de solo lectura, UC04 la completa) y **solo lectura de la versión vigente** de `financial_parameters` (tabla versionada de UC11). `NUMERIC(18,4)` para dinero y porcentajes, `timestamptz` para instantes [SPEC general-plan §4]. **Sin tablas propias ni migraciones** (rige la migración inicial única, general-plan D-31)
 **Messaging**: No aplica (REST síncrono; sin RabbitMQ en UC04) [contrato UC04]
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers (PostgreSQL), ArchUnit [CONV]; los fallos se prueban con un doble `InMemoryFailureRecorder` del puerto compartido
 **Target Platform**: Contenedores Docker (Linux) [SPEC general-plan]
@@ -74,7 +74,7 @@ docs/technical-plan/contracts/
     └── UC04-valor-calculado-reserva.md              # POST /api/v1/reservations/{reservation_id}/calculated-value (HU1)
 ```
 
-Contratos/piezas de otros planes (solo referencia; **no se re-planifican**): plan de UC03 (`ReservationInformation`, `ReservationId`, `ReservationInformationRepository`, DDL de la tabla) y núcleo compartido (`FinancialParameters`, `FinancialParametersRepository`, `ProblemDetailsConfig`, `DomainException`, `FailureRecorderPort`, `operational_failure`).
+Contratos/piezas de otros planes (solo referencia; **no se re-planifican**): plan de UC03 (`ReservationInformation`, `ReservationId`, `ReservationInformationRepository` y el esquema de la tabla en la migración inicial única) y núcleo compartido (`FinancialParameters`, `FinancialParametersRepository`, `ProblemDetailsConfig`, `DomainException`, `FailureRecorderPort`, `operational_failure`).
 
 ### Source Code (repository root)
 
@@ -190,21 +190,21 @@ Todas las reglas provienen del SPEC 04 (`spec.md`), su contrato o el `general-pl
 16. **Registro de fallos** [SPEC casos extremos; D-UC04-06]: los casos 422 (información incompleta) y 503 (parámetros no configurados) **registran el fallo** en `operational_failure` vía `FailureRecorderPort` (por nombre, D-UC04-08), porque el SPEC 04 lo exige textualmente. El `404` **no** registra: es un estado transitorio esperado (Reservas puede reintentar; carrera con UC03).
 17. **Orden de validación** [CONV; README §4.3/§4.5]: `E1 → E2 → E3 → E4 → E6` (sin filas de autenticación: seguridad fuera de alcance; `E7` sin uso). La existencia de la reserva (E3) se evalúa antes de leer los parámetros (E4) y de comprobar la completitud (E6); una petición mal formada (E2) nunca llega a la base de datos. `E5` **no aplica** (UC04 no llama a ninguna dependencia externa).
 18. **Concurrencia y atomicidad** [general-plan D-15]: la lectura-modificación-escritura se ejecuta en una **transacción única** y se serializa con un **bloqueo asesor de PostgreSQL por `reservation_id`** (`pg_advisory_xact_lock`), de modo que un *upsert* concurrente de UC03 no pierde la escritura de montos ni viceversa. Un fallo en cualquier paso deja la fila intacta (ni montos nuevos ni invalidación parcial).
-19. **Sin persistencia propia ni migración** [general-plan §3.3/§4]: UC04 no crea tablas ni archivos Flyway; escribe columnas ya existentes de `reservation_information` (V1 aportada por UC03). Repetir la petición no añade filas.
+19. **Sin persistencia propia ni migración** [general-plan §3.3/§4.2]: UC04 no crea tablas ni archivos Flyway; escribe columnas ya existentes de `reservation_information` (migración inicial única, general-plan D-31). Repetir la petición no añade filas.
 20. **Seguridad fuera de alcance** [general-plan §7.1, D-21]: el sistema **no implementa** autenticación ni autorización; los contratos ya no declaran `401 UNAUTHENTICATED` / `403 FORBIDDEN` [SPEC RF-001]. "Solo el Sistema de Reservas y Operaciones" describe al usuario esperado, no una validación: esta fase **no implementa** `SecurityConfig` ni pruebas 401/403.
 
-## Migración
+## Esquema (migración única)
 
-**UC04 no aporta DDL.** No crea tablas ni archivos Flyway: la migración V1 de `reservation_information` es de UC03 y el historial único de migraciones está ordenado por fase (general-plan D-31). La tabla `reservation_information`, propiedad de UC03, debe contener las columnas que UC04 escribe [general-plan §4]:
+**UC04 no define migraciones.** No crea tablas ni archivos Flyway: `reservation_information` forma parte de la migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31). La tabla debe contener las columnas que UC04 escribe [general-plan §4]:
 
 | Columna | Tipo | Origen | Uso en UC04 |
 |---|---|---|---|
-| `rental_amount` | `NUMERIC(18,4)` | DDL V1 de UC03 | `UPDATE` (monto de alquiler) |
-| `insurance_amount` | `NUMERIC(18,4)` | DDL V1 de UC03 | `UPDATE` (seguro náutico) |
-| `deposit_amount` | `NUMERIC(18,4)` | DDL V1 de UC03 | `UPDATE` (depósito de garantía) |
-| `total_amount` | `NUMERIC(18,4)` | DDL V1 de UC03 | `UPDATE` (valor total) |
-| `frozen_parameters_id` | `UUID` | DDL V1 de UC03 | `UPDATE` (FK: referencia a la versión usada de `financial_parameters`; única fuente de los valores aplicados) |
-| `calculated_at` | `TIMESTAMPTZ` | DDL V1 de UC03 | `UPDATE` (instante del cálculo) |
+| `rental_amount` | `NUMERIC(18,4)` | Migración inicial única (general-plan §4) | `UPDATE` (monto de alquiler) |
+| `insurance_amount` | `NUMERIC(18,4)` | Migración inicial única (general-plan §4) | `UPDATE` (seguro náutico) |
+| `deposit_amount` | `NUMERIC(18,4)` | Migración inicial única (general-plan §4) | `UPDATE` (depósito de garantía) |
+| `total_amount` | `NUMERIC(18,4)` | Migración inicial única (general-plan §4) | `UPDATE` (valor total) |
+| `frozen_parameters_id` | `UUID` | Migración inicial única (general-plan §4) | `UPDATE` (FK: referencia a la versión usada de `financial_parameters`; única fuente de los valores aplicados) |
+| `calculated_at` | `TIMESTAMPTZ` | Migración inicial única (general-plan §4) | `UPDATE` (instante del cálculo) |
 
 La operación de UC04 sobre la tabla es `SELECT … FOR UPDATE`/`UPDATE` de esas columnas **sin** tocar el bloque informativo. El adaptador de UC03 ya anula estas columnas (incluida `frozen_parameters_id`) en su *upsert* (invalidación, `UC03·T016`); UC04 las completa con los montos, la **referencia a la versión usada** (`frozen_parameters_id`) y `calculated_at`. Los valores aplicados **no se escriben**: se resuelven de la versión referenciada al leer el agregado (join de solo lectura en el adaptador de UC03, D-27; `UC03·T015`). No hay índices ni columnas nuevas.
 
@@ -300,7 +300,7 @@ Registro de contradicciones detectadas al elaborar este plan y de las decisiones
 | ID | Descripción | Fuentes en conflicto | Decisión para avanzar | Estado |
 |---|---|---|---|---|
 | **D-UC04-01** | El contrato describe la solicitud repetida como devolver "los ya registrados"; rige D-17: UC04 **recalcula siempre** desde la información registrada y la **versión de parámetros referenciada** (`frozen_parameters_id`; la vigente si no hay referencia) | Contrato UC04 §3 regla 7; general-plan D-17 | Rige D-17: UC04 recalcula siempre desde la información registrada y la versión referenciada (`frozen_parameters_id`; la vigente si no hay referencia); el efecto es determinista y equivalente a devolver los ya registrados | Decidida |
-| **D-UC04-02** | El SPEC 04 asume que puede existir información registrada incompleta por una falla previa de UC03, pero el plan de UC03 **nunca** persiste información incompleta | SPEC 04 casos extremos vs plan UC03 (DDL `base_rate NOT NULL`, regla 10 de UC03) | `422 RESERVATION_INFO_INCOMPLETE` queda como vía **defensiva** de integridad; el caso normal de "aún no registrada" es `404`. Se conserva el código por estar en el catálogo | Decidida |
+| **D-UC04-02** | El SPEC 04 asume que puede existir información registrada incompleta por una falla previa de UC03, pero el plan de UC03 **nunca** persiste información incompleta | SPEC 04 casos extremos vs plan UC03 (columna `base_rate NOT NULL` en el esquema, regla 10 de UC03) | `422 RESERVATION_INFO_INCOMPLETE` queda como vía **defensiva** de integridad; el caso normal de "aún no registrada" es `404`. Se conserva el código por estar en el catálogo | Decidida |
 | **D-UC04-03** | La base del depósito de garantía quedó fijada transversalmente | SPEC 04 HU1/RF-005; general-plan D-29 | El depósito es el **10 % de la tarifa diaria vigente registrada** (la misma del alquiler, con la tarifa dinámica ya resuelta); UC04 no consulta Flota ni recalcula la tarifa base | Aplicada |
 | **D-UC04-04** | RNF-002 exige precisión interna y el contrato ilustra montos con dos decimales | SPEC 04 RNF-002/CE-001; `contracts/README.md` §3.1 | Política del catálogo aplicada: `BigDecimal` con **4 decimales internos** y toda salida monetaria redondeada `HALF_UP` a **2 decimales**; CE-001 la verifica | Aplicada |
 | **D-UC04-05** | La firma publicada por UC03 de `ReservationInformationRepository` no permite guardar montos: su `save` **anula** las columnas calculadas | `general-plan.md` §4 (tabla entidad de UC03/UC04) vs plan UC03 («Firmas referenciadas por otros planes») | UC04 **amplía** el mismo puerto con `saveCalculatedAmounts` (implementado en el adaptador de UC03; misma pieza de UC03). Se publica la firma en «Firmas referenciadas por otros planes». Concurrencia con `pg_advisory_xact_lock(reservation_id)` | Decidida |
@@ -389,7 +389,7 @@ T001 ─┬─> T002 ─┬─> T003 ─> T004 ─┐
 - **Determinismo (D-17)**: UC04 recalcula siempre desde la información registrada y la versión de parámetros referenciada (`frozen_parameters_id`; la vigente si no hay referencia); la mención del contrato a "se devuelven los ya registrados" es la consecuencia (D-UC04-01). Los valores aplicados no se copian en la reserva (D-UC04-10).
 - **Redondeo (D-UC04-04)**: 4 decimales internos; las salidas monetarias se redondean `HALF_UP` a 2 decimales (`contracts/README.md` §3.1).
 - **Depósito (D-UC04-03)**: 10 % de la tarifa diaria vigente registrada (general-plan D-29); UC04 no reconsulta Flota ni recalcula la tarifa (CE-002).
-- **Sin migración**: UC04 usa las columnas calculadas de `reservation_information`; rige el historial Flyway único ordenado por fase (general-plan D-31).
+- **Sin migraciones propias**: UC04 usa las columnas calculadas de `reservation_information`; rige la migración inicial única (general-plan §4.2, D-31).
 - `ReservationInformation`/`ReservationId`/`ReservationInformationRepository` son de **UC03**: UC04 los consume y **amplía** el puerto con `saveCalculatedAmounts` (D-UC04-05); la firma se publica en «Firmas referenciadas por otros planes».
 - `FinancialParameters`/`FinancialParametersRepository` pertenecen al núcleo compartido: UC04 los consume por nombre.
 - `FailureRecorderPort`/`operational_failure` son **compartidos**: UC04 los referencia por nombre y usa `InMemoryFailureRecorder` en pruebas; registra en 422/503, no en 404 (D-UC04-06).
@@ -398,13 +398,13 @@ T001 ─┬─> T002 ─┬─> T003 ─> T004 ─┐
 
 ## Checklist de auto-revisión
 
-- [ ] Estructura idéntica a `plan-template.md` (Summary con tabla de trazabilidad, Technical Context, Project Structure, Reglas de negocio, Migración/Contratos, Estrategia de testing, fases con `T0NN`, Dependencies, Notes).
+- [ ] Estructura idéntica a `plan-template.md` (Summary con tabla de trazabilidad, Technical Context, Project Structure, Reglas de negocio, Esquema/Contratos, Estrategia de testing, fases con `T0NN`, Dependencies, Notes).
 - [ ] Sin placeholders ni tareas de ejemplo; sin etiquetas "Option 1/2".
 - [ ] Fecha `2026-10-09` y enlace a `spec.md`.
 - [ ] Toda regla marcada `[SPEC]` o `[CONV]`.
 - [ ] Discrepancias `D-UC04-01` a `D-UC04-10` en «Discrepancias y decisiones» con decisión explícita y estado final (decididas o aplicadas).
 - [ ] Cada RF/RNF/CE/HU del SPEC 04 trazado a componente, tarea y prueba; pruebas `ce001_…`–`ce004_…`.
-- [ ] Migración: UC04 **no** aporta DDL; solo escribe columnas existentes de `reservation_information`; rige el historial único ordenado por fase (general-plan D-31).
+- [ ] Esquema: UC04 **no** aporta DDL; solo escribe columnas existentes de `reservation_information`; rige la migración inicial única (general-plan §4.2, D-31).
 - [ ] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§11) aplicadas; sin Flota/UC02/tarifa dinámica en UC04 (CE-002).
 - [ ] «Firmas referenciadas por otros planes» declarado: `CalculateReservationValueUseCase` no se expone; se publica la ampliación `saveCalculatedAmounts` del puerto de salida de UC03.
 - [ ] Referencias por nombre: `ReservationInformationRepository` (UC03, ampliado), `FinancialParametersRepository`, `FailureRecorderPort`/`operational_failure` y VOs compartidos; sin coordinación por tareas externas.
