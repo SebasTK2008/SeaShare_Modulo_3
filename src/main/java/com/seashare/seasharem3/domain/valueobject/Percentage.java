@@ -18,11 +18,22 @@ public record Percentage(BigDecimal value) {
     /** Límite superior permitido (inclusive). Fuente: UC11 plan §Reglas 2. */
     public static final BigDecimal MAX = new BigDecimal("100");
 
+    /** Porcentaje nulo. Fuente: general-plan §3.6 (operaciones mínimas del VO). */
+    public static final Percentage ZERO = new Percentage(BigDecimal.ZERO);
+
+    /** Porcentaje máximo (100 %). Fuente: general-plan §3.6 (operaciones mínimas del VO). */
+    public static final Percentage HUNDRED = new Percentage(MAX);
+
     public Percentage {
         Objects.requireNonNull(value, "value");
         value = value.setScale(Money.INTERNAL_SCALE, RoundingMode.HALF_UP);
         if (value.compareTo(MIN) < 0 || value.compareTo(MAX) > 0) {
             throw new DomainException("Percentage fuera del rango 0–100: " + value);
         }
+    }
+
+    /** {@code true} si el porcentaje es 0 %. Fuente: general-plan §3.6. */
+    public boolean isZero() {
+        return value.signum() == 0;
     }
 }
