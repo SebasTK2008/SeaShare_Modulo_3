@@ -20,9 +20,10 @@ import java.math.BigDecimal;
  * {@link BigDecimal} y {@link Money} como string decimal de 2 decimales HALF_UP, {@link Percentage} de 2,
  * {@link BaseRate} como su monto y los identificadores como UUID plano. Las fechas e instantes usan ISO-8601:
  * en Jackson 3 {@code WRITE_DATES_AS_TIMESTAMPS} vive en {@link DateTimeFeature} y Boot 4 ya no la expone
- * como propiedad, por lo que se desactiva aquí. Aplica al ObjectMapper web y al de AMQP por compartir el
- * JsonMapper de Spring Boot, pero NO a clientes de pasarela construidos aparte: [CONV] los adaptadores
- * externos (Mercado Pago) deben registrar su propia configuración si el proveedor exige números.
+ * como propiedad, por lo que se desactiva aquí. Aplica al JsonMapper de Spring Boot que consumen la API web
+ * y el converter AMQP (RabbitTopologyConfig lo recibe inyectado), pero NO a clientes de pasarela construidos
+ * aparte: [CONV] los adaptadores externos (Mercado Pago) deben registrar su propia configuración si el
+ * proveedor exige números.
  */
 @Configuration
 public class JacksonConfig {

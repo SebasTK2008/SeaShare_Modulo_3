@@ -122,6 +122,8 @@ Todos los errores REST usan *Problem Details* (RFC 9457) con dos campos adiciona
 }
 ```
 
+**Punto único de traducción** [CONV núcleo compartido]: un solo `GlobalExceptionHandler` (`infrastructure.adapter.in.web.error`) traduce las excepciones de dominio y las del framework (`MethodArgumentTypeMismatchException`, `MissingServletRequestParameterException`, `ServletRequestBindingException`, `BindException`, fallback) a este formato, incluidos `code` y `retryable`. Los UC **no** declaran consejos (`@RestControllerAdvice`) propios: agregan su excepción de dominio y su entrada al catálogo de la §3.4.
+
 ### 3.4 Catálogo de códigos de error
 
 Ordenado por HTTP. La columna **Fila** remite a la fila de la tabla de decisión (§4.2) que justifica el código. Ningún contrato define un `code` ni un HTTP que no esté aquí; si un caso nuevo lo requiere, primero se ubica su fila en la §4 y luego se agrega al catálogo.
@@ -151,18 +153,22 @@ Ordenado por HTTP. La columna **Fila** remite a la fila de la tabla de decisión
 
 ### 3.5 Contratos de colas (resumen)
 
-Los tres contratos de `events/` comparten:
+Los contratos de `events/` y las colas internas de comando comparten:
 
 | Propiedad AMQP | Valor | Origen |
 |---|---|---|
-| Exchange | `seashare.reservations` (`topic`, durable) | [CONV] |
+| Exchange de eventos | `seashare.reservations` (`topic`, durable) | [CONV] |
 | Colas consumidoras | `finance.reservation-info.v1` (UC03), `finance.reservation-status.v1` (UC07), `finance.guarantee-dispute.v1` (UC08); DLQ `<cola>.dlq` | [CONV] |
+| Exchange de comandos | `seashare.finance.commands` (`direct`, durable) | [CONV] |
 | Colas internas de comando (UC05/09/10) | `finance.charge-command.v1`, `finance.refund-command.v1`, `finance.settlement-command.v1`; DLQ `<cola>.dlq` | [CONV] |
+| Tipo de cola | *quorum* durable (las seis colas de trabajo) | [CONV] |
 | `content_type` | `application/json` | [CONV] |
 | `delivery_mode` | `2` (persistente) | [CONV] |
 | Respuesta al productor | **Ninguna** (unidireccional) | [SPEC UC03 RF-006, UC07 RF-009, UC08 RF-009] |
 | Fallos | Se registran internamente (`operational_failure`) | [SPEC UC03 RNF-003, UC07 RF-010, UC08 RNF-003] |
 | Qué hacer ante cada tipo de error | Ver §4.4 | [CONV] |
+
+**Payload del outbox** [CONV núcleo compartido]: dentro de su propia transacción, el caso de uso escribe en `outbox_message` el `exchange`, la `routing_key` y el **mismo payload JSON** que define el contrato de la cola (claves `snake_case` y formatos de la §3.1). `OutboxRelayJob` lo publica **verbatim** con *publisher confirms* y marca `published_at`; la entrega es *at-least-once*, por lo que los consumidores deduplican por la clave idempotente del mensaje (general-plan D-08).
 
 ## 4. Tabla de decisión de errores
 
@@ -211,14 +217,16 @@ Los canales sin respuesta al productor no pueden usar HTTP. Se aplican las misma
 
 | Canal | Situación | Acción | Origen |
 |---|---|---|---|
-| Cola (UC03, UC07, UC08) | Mensaje inválido, estado desconocido, reserva sin información previa, validación fallida (equivale a E2/E6) | `ack` y registro en `operational_failure`. Sin reintento ni DLQ: reintentar no cambia el resultado | [SPEC UC03 RNF-003, UC07 RF-010, UC08 RNF-003] |
-| Cola (UC03, UC07, UC08) | Falla transitoria: BD, Flota (equivale a E5/E8) | `nack` con reintentos y *backoff* (5 con base 1 s, plan general §7.2); al agotarlos va a la DLQ y se registra en `operational_failure` | [CONV] |
+| Cola (todas: UC03, UC05, UC07, UC08, UC09, UC10) | Mensaje inválido, estado desconocido, reserva sin información previa, validación fallida (equivale a E2/E6) | `ack` y registro en `operational_failure`. Sin reintento ni DLQ: reintentar no cambia el resultado | [SPEC UC03 RNF-003, UC07 RF-010, UC08 RNF-003] |
+| Cola (todas) | Falla transitoria: BD, Flota o pasarela (equivale a E5/E8) | Reintentos con *backoff* exponencial base 1 s hasta **5 intentos** (1 inicial + 4 reintentos); al agotarlos se rechaza a la DLQ y se registra en `operational_failure` | [CONV]; plan general §7.2 |
 | Cola (UC07, UC08) | Mensaje repetido (misma clave idempotente) | `ack` sin operación monetaria adicional | [SPEC UC07 casos extremos, UC08 RF-008] |
 | Webhook | Firma ausente o inválida | `401 UNAUTHENTICATED` | [CONV] — requisito de la integración con Mercado Pago, no control de acceso del sistema (general-plan §7.1) |
 | Webhook | Payload mal formado (E2) | `400 VALIDATION_ERROR` | [CONV] |
 | Webhook | Resultado ya registrado (duplicado) | `200 OK`, sin modificar el registro | [SPEC UC05 casos extremos, UC10 casos extremos] |
 | Webhook | Falla interna: BD no disponible (E8) | `500 INTERNAL_ERROR`, para que la Pasarela reintente | [CONV] |
 | Webhook | Resultado sin `IntenciónDe…` asociada (ningún `external_reference` coincide con el `data.id`) | `200 OK` y registro en `operational_failure` (evita reintentos infinitos de la Pasarela; el SPEC UC05 exige registrar el evento sin crear un registro de cobro) | [SPEC UC05 casos extremos] + [CONV] |
+
+**Política compartida del núcleo** [CONV núcleo compartido]: las seis colas de trabajo son *quorum* con DLQ `<cola>.dlq`. `spring.rabbitmq.listener.simple.retry.max-retries=4` fija el contrato de **5 intentos**: Boot 4 / Spring Framework 7 cuentan los reintentos **después** del intento inicial (1 + 4 = 5), con *backoff* exponencial base 1 s (×2, máx. 16 s). Un único `MessageRecoverer` (`OperationalFailureMessageRecoverer`) traduce la cola al UC dueño, registra la causa raíz con transacción independiente (`REQUIRES_NEW`) y rechaza el mensaje a la DLQ. Para los errores lógicos, `AmqpListenerFailurePolicy.recordAndAcknowledge` registra y confirma. Ningún UC redefine esta política ni declara recoverers propios.
 
 ### 4.5 Lista de verificación para cada contrato
 

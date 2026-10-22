@@ -32,7 +32,7 @@ La fuente es `v_financial_records`, creada por UC12 con `record_id` y `NULL::tex
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
-**Primary Dependencies**: Spring Boot 4.1.1; Web MVC, Validation, Data JPA, Actuator, MapStruct, Micrometer/Prometheus, ArchUnit y librería CSV. Cambios de dependencias pertenecen al núcleo compartido y no se aplican desde este plan. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
+**Primary Dependencies**: Spring Boot 4.1.1; Web MVC, Validation, Data JPA, Actuator, MapStruct, Micrometer/Prometheus, ArchUnit y librería CSV (`commons-csv` 1.14.1, incorporada por el núcleo compartido). Cambios de dependencias pertenecen al núcleo compartido y no se aplican desde este plan. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
 **Storage**: PostgreSQL 16+; lectura de `v_financial_records` (`UNION ALL`, orden `created_at DESC, record_id DESC`), `NUMERIC(18,4)` y `timestamptz`. UC13 no crea tablas.
 **Messaging**: N/A; ambos endpoints son REST síncronos y de solo lectura.
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers PostgreSQL y ArchUnit.

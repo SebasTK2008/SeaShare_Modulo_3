@@ -10,6 +10,7 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Declara la topología congelada: exchange de eventos (topic) y sus tres colas consumidoras, más el
@@ -126,10 +127,16 @@ public class RabbitTopologyConfig {
         return BindingBuilder.bind(queue).to(financeCommandsExchange).with(AmqpNames.ROUTING_SETTLEMENT_COMMAND);
     }
 
-    /** Conversor JSON (Jackson 3) para listeners AMQP: contenido JSON ↔ DTOs de la aplicación. */
+    /**
+     * Conversor JSON (Jackson 3) para listeners AMQP: contenido JSON ↔ DTOs de la aplicación.
+     * [CONV] reutiliza el {@code JsonMapper} de Spring Boot (mismo que la API) para heredar
+     * {@code spring.jackson.property-naming-strategy=SNAKE_CASE} y los escalares del dominio de
+     * {@link com.seashare.seasharem3.infrastructure.config.web.JacksonConfig}; el mapper propio del
+     * converter rompería la forma de los contratos y perdería {@code Money}/{@code Percentage}/IDs.
+     */
     @Bean
-    public JacksonJsonMessageConverter jsonMessageConverter() {
-        return new JacksonJsonMessageConverter();
+    public JacksonJsonMessageConverter jsonMessageConverter(JsonMapper jsonMapper) {
+        return new JacksonJsonMessageConverter(jsonMapper);
     }
 
     private static Queue quorum(String name) {

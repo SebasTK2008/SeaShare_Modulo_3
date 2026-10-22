@@ -12,7 +12,7 @@ import java.util.UUID;
 /**
  * Registra el fallo en {@code operational_failure} con transacción independiente (REQUIRES_NEW),
  * para que sobreviva al rollback de la transacción del llamador.
- * Fuente: UC11 plan §Núcleo compartido (FailureRecorderPersistenceAdapter) y general-plan §4.
+ * Fuente: UC11 plan §Núcleo compartido (OperationalFailurePersistenceAdapter) y general-plan §4.
  */
 @Component
 public class OperationalFailurePersistenceAdapter implements FailureRecorderPort {
