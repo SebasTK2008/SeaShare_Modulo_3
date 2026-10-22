@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
@@ -134,7 +135,7 @@ class GlobalExceptionHandlerTest {
     void reservationInfoIncompleteIsMappedToUnprocessableEntity() throws Exception {
         mockMvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"value\":\"reservation-incomplete\"}"))
-                .andExpect(status().isUnprocessableEntity())
+                .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("RESERVATION_INFO_INCOMPLETE"))
                 .andExpect(jsonPath("$.retryable").value(false));
     }
@@ -177,10 +178,11 @@ class GlobalExceptionHandlerTest {
         assertThat(problem.getProperties()).containsEntry("retryable", true);
     }
 
+    @RequestMapping("/probe")
     @RestController
     static class ProbeController {
 
-        @PostMapping(path = "/probe", consumes = MediaType.APPLICATION_JSON_VALUE)
+        @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
         void probe(@Valid @RequestBody ProbeBody body) {
             switch (body.value()) {
                 case "contract" -> throw new ContractException(ErrorCode.INVALID_PERIOD, "The period is invalid.");
@@ -196,15 +198,15 @@ class GlobalExceptionHandlerTest {
             }
         }
 
-        @GetMapping("/probe/type/{id}")
+        @GetMapping("/type/{id}")
         void pathVariable(@PathVariable UUID id) {
         }
 
-        @GetMapping("/probe/type")
+        @GetMapping("/type")
         void queryParameter(@RequestParam("mode") ProbeMode mode, @RequestParam("count") int count) {
         }
 
-        @GetMapping("/probe/binding")
+        @GetMapping("/binding")
         void binding() throws BindException {
             BeanPropertyBindingResult result = new BeanPropertyBindingResult(new ProbeBody(""), "probeBody");
             result.rejectValue("value", "NotBlank", "must not be blank");
