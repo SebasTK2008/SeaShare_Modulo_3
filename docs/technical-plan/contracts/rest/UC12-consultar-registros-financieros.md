@@ -33,7 +33,7 @@ Permite a Propietarios y Administradores Financieros consultar el histórico de 
 | `scope` | string | Sí | Alcance declarado: `OWNER` (Propietario) o `PLATFORM` (Administrador Financiero) | [CONV] — dato plano; el sistema aplica lo declarado sin validar identidad (seguridad fuera de alcance) |
 | `page` | integer | Sí | Número de página (1-indexed) | [SPEC RF-001] |
 | `size` | integer | No | Tamaño de página (por defecto 10; máximo 100, general-plan D-22) | [SPEC RF-001, RF-008] |
-| `transaction_type` | string | No | Filtro por tipo: `COBRO`, `REEMBOLSO`, `DISPERSION`, `COMISION` | [SPEC RF-002, D-18] |
+| `transaction_type` | string | No | Filtro por tipo: `CHARGE`, `REFUND`, `SETTLEMENT`, `COMMISSION` | [SPEC RF-002, D-18] |
 | `owner_id` | UUID | Sí si `scope=OWNER` | Propietario asociado: con `scope=OWNER` es la identidad declarada cuyos registros se devuelven (el sistema no valida pertenencia); con `scope=PLATFORM` es un filtro opcional | [SPEC RF-002, RF-003, casos extremos] |
 | `boat_id` | UUID | No | Filtro por embarcación asociada | [SPEC RF-002] |
 | `reservation_id` | UUID | No | Filtro por reserva asociada. Permite aislar todos los registros financieros de una reserva concreta | [CONV] |
@@ -46,8 +46,8 @@ Permite a Propietarios y Administradores Financieros consultar el histórico de 
    - Si es **`OWNER`**: solo se devuelven registros asociados al `owner_id` declarado (obligatorio en este caso). Otros filtros (`boat_id`, `reservation_id`, etc.) se aplican dentro de ese alcance y nunca lo amplían [SPEC RF-003, casos extremos].
    - Si es **`PLATFORM`**: se consultan los registros de toda la plataforma; `owner_id` actúa como filtro opcional [SPEC RF-003].
 2. **Origen de datos**: Solo se consultan las cuatro tablas de registros inmutables. Las operaciones en curso o fallidas (intenciones) se ignoran [SPEC RF-004, casos extremos].
-3. **Filtro `COMISION`**: Si `transaction_type=COMISION`, se devuelven únicamente registros de tipo `RegistroDeComisión`. No se hacen comparaciones numéricas [SPEC RF-002, casos extremos].
-4. **Paginación**: Se garantiza que no se omiten ni duplican registros entre páginas [SPEC RNF-003]. Si `page` es mayor al total disponible, se devuelve error controlado [SPEC RF-009, casos extremos]. Si no hay resultados para los filtros, se devuelve una página vacía [SPEC casos extremos].
+3. **Filtro `COMMISSION`**: Si `transaction_type=COMMISSION`, se devuelven únicamente registros de tipo `RegistroDeComisión`. No se hacen comparaciones numéricas [SPEC RF-002, casos extremos].
+4. **Paginación**: El orden es estable: `created_at DESC` y, ante empate, `record_id DESC` [CONV, D-18]. Se garantiza que no se omiten ni duplican registros entre páginas [SPEC RNF-003]. Si no hay resultados para los filtros, se devuelve una página vacía (`total_elements = 0`) [SPEC casos extremos]. `page` fuera de rango devuelve el error controlado de §5: 404 `PAGE_OUT_OF_RANGE` si y solo si `page > max(total_pages, 1)` [SPEC RF-009, casos extremos].
 5. **Independencia de Flota**: No se consulta a Flota para resolver el alcance [SPEC RF-012].
 
 ## 4. Respuesta exitosa
@@ -66,7 +66,7 @@ Estructura de cada elemento en `content` (DTO `RegistroFinancieroResultado` [SPE
 
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
-| `record_type` | string | Tipo de registro: `COBRO`, `REEMBOLSO`, `DISPERSION`, `COMISION` | [SPEC RF-005] |
+| `record_type` | string | Tipo de registro: `CHARGE`, `REFUND`, `SETTLEMENT`, `COMMISSION` | [SPEC RF-005] |
 | `reservation_id` | UUID | Reserva asociada | [SPEC RF-005] |
 | `owner_id` | UUID | Propietario asociado | [SPEC RF-005] |
 | `boat_id` | UUID | Embarcación asociada | [SPEC RF-005] |
@@ -78,7 +78,7 @@ Estructura de cada elemento en `content` (DTO `RegistroFinancieroResultado` [SPE
 {
   "content": [
     {
-      "record_type": "COBRO",
+      "record_type": "CHARGE",
       "reservation_id": "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10",
       "owner_id": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
       "boat_id": "3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01",
@@ -99,7 +99,7 @@ Estructura de cada elemento en `content` (DTO `RegistroFinancieroResultado` [SPE
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|
 | 400 | `VALIDATION_ERROR` | `page` < 1, o enumeración inválida | No | [SPEC RF-009] |
-| 404 | `PAGE_OUT_OF_RANGE` | La página solicitada excede el total de páginas disponibles | No | [SPEC casos extremos] |
+| 404 | `PAGE_OUT_OF_RANGE` | La página solicitada excede el total de páginas disponibles (`page > max(total_pages, 1)`) | No | [SPEC casos extremos] |
 | 500 | `INTERNAL_ERROR` | Error no previsto | Sí | [CONV] |
 
 ## 6. Idempotencia y reintentos

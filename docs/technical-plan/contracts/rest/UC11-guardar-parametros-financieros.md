@@ -63,7 +63,7 @@ El Administrador Financiero guarda la configuración financiera global (comisió
 { "version_number": 8 }
 ```
 
-**[CONV]** Devuelve el número de la nueva versión vigente para facilitar la trazabilidad (general-plan D-24). Un `204 No Content` también sería válido; se prefiere exponer la versión.
+**[CONV]** Devuelve el número de la nueva versión vigente para facilitar la trazabilidad (general-plan D-24).
 
 ## 5. Respuestas de error
 
@@ -76,9 +76,9 @@ El Administrador Financiero guarda la configuración financiera global (comisió
 ```json
 {
   "type": "about:blank",
-  "title": "Error de validación",
+  "title": "Invalid request",
   "status": 400,
-  "detail": "El porcentaje de comisión (150.00) debe estar entre 0 y 100.",
+  "detail": "The commission percentage (150.00) must be between 0 and 100.",
   "code": "VALIDATION_ERROR",
   "retryable": false
 }

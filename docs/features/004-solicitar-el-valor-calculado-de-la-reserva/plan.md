@@ -29,14 +29,14 @@ UC04 corresponde a la **fase 5** de la hoja de ruta [general-plan §10]: depende
 | **RF-005** depósito = 10 % de la tarifa diaria vigente registrada, sin multiplicadores | `ReservationValueCalculator` | T008 | T009, T022 |
 | **RF-006** total = alquiler + seguro + depósito (monto de UC05) | `ReservationValueCalculator`, `CalculateReservationValueService` | T008, T011 | T022, T025 (CE-004) |
 | **RF-007** devolver el desglose completo | `ReservationValueResponse`, `ReservationValueController` | T012 | T013 |
-| **RF-008** congelar la referencia de versión, actualizar la información interna e invalidación | `FrozenParameters`, transición en `ReservationInformation`, `saveCalculatedAmounts`, `CalculateReservationValueService` | T006, T007, T011 | T015, T016, T025 (CE-004) |
-| **RF-009** error controlado si no hay información registrada | `CalculateReservationValueService`, `ReservationValueExceptionHandler` | T011, T012 | T017, T024 (CE-003) |
+| **RF-008** congelar la referencia de versión, actualizar la información interna e invalidación | `frozen_parameters_id` (UUID), transición `ReservationInformation.withCalculated(...)`, `saveCalculatedAmounts`, `CalculateReservationValueService` | T006, T007, T011 | T015, T016, T025 (CE-004) |
+| **RF-009** error controlado si no hay información registrada | `CalculateReservationValueService`, `GlobalExceptionHandler` (núcleo compartido) | T011, T012 | T017, T024 (CE-003) |
 | **RNF-001** DTOs para la comunicación | `CalculateReservationValueCommand`, `ReservationValueResult`, `ReservationValueResponse` | T010, T012 | T013 |
 | **RNF-002** `BigDecimal` con precisión interna de 4 decimales | `Money` (de UC02), `ReservationValueCalculator` | T006, T008 | T009, T022 |
-| **RNF-003** manejo de errores robusto (info ausente/incompleta, seguro no configurado) | `CalculateReservationValueService` + `FailureRecorderPort` + `ReservationValueExceptionHandler` | T004, T011, T012 | T014, T018, T024 |
+| **RNF-003** manejo de errores robusto (info ausente/incompleta, seguro no configurado) | `CalculateReservationValueService` + `FailureRecorderPort` + `GlobalExceptionHandler` (núcleo compartido) | T004, T011, T012 | T014, T018, T024 |
 | **CE-001** precisión: total = suma exacta, cero errores de redondeo | `ReservationValueCalculator` + aceptación | T008 | **T022 `ce001_…`** |
 | **CE-002** cálculo solo desde la información registrada (sin Flota / tarifa dinámica) | `ReservationValueCalculator`, `CalculateReservationValueService` + ArchUnit | T008, T011, T026 | **T023 `ce002_…`** |
-| **CE-003** sin información registrada → error controlado | `CalculateReservationValueService`, `ReservationValueExceptionHandler` | T011, T012 | **T024 `ce003_…`** |
+| **CE-003** sin información registrada → error controlado | `CalculateReservationValueService`, `GlobalExceptionHandler` (núcleo compartido) | T011, T012 | **T024 `ce003_…`** |
 | **CE-004** desglose disponible internamente para "Procesar cobro" | `saveCalculatedAmounts` + integración | T007, T011 | **T025 `ce004_…`** |
 | **HU1** (P1) | Fases 3–5 | T010–T028 | T013–T028 |
 
@@ -88,7 +88,6 @@ src/main/java/com/seashare/seasharem3/
 │   │   ├── ReservationId.java                       # de UC03·T008 — consumido por nombre
 │   │   ├── Money.java                               # de UC02·T006 — consumido por nombre [general-plan §11, D-11]
 │   │   ├── Percentage.java                          # VO del catálogo compartido; consumido por nombre
-│   │   ├── FrozenParameters.java                    # T006 [SPEC RF-008; general-plan §11]
 │   │   └── ReservationValue.java                    # T006 [SPEC "DesgloseValorReserva"; nombre [CONV]]
 │   ├── service/
 │   │   └── ReservationValueCalculator.java          # T008 [SPEC RF-003…RF-006, RNF-002; general-plan §3.3]
@@ -112,7 +111,6 @@ src/main/java/com/seashare/seasharem3/
 └── infrastructure/
     ├── adapter/in/web/
     │   ├── ReservationValueController.java          # T012 [CONV]
-    │   ├── ReservationValueExceptionHandler.java    # T012 [CONV; Problem Details, README §3.3/§3.4]
     │   └── dto/
     │       └── ReservationValueResponse.java        # T012 [contrato UC04; snake_case, montos string 2 dec]
     └── adapter/out/persistence/
@@ -123,7 +121,7 @@ src/test/java/com/seashare/seasharem3/
 ├── arch/
 │   └── ArchitectureTest.java                        # T002 (base) + T026 (reglas UC04)
 ├── domain/valueobject/
-│   └── ReservationValueFrozenParametersTest.java    # T009
+│   └── ReservationValueTest.java                    # T009 [CONV núcleo: la transición recibe UUID, no el VO]
 ├── domain/service/
 │   └── ReservationValueCalculatorTest.java          # T009
 ├── application/service/
@@ -157,16 +155,16 @@ public interface ReservationInformationRepository {
 Además, el dominio `ReservationInformation` (UC03) incorpora un **método de transición** para construir la versión con montos calculados (T007; coordinado con el plan de UC03):
 
 ```java
-ReservationInformation withCalculatedAmounts(ReservationValue value,
-                                             FrozenParameters frozen,
-                                             Instant calculatedAt);
+ReservationInformation withCalculated(ReservationValue value,
+                                      UUID frozenParametersId,
+                                      Instant calculatedAt);
 ```
 
-`FrozenParameters` conserva `parametersId` + valores resueltos: el adaptador de UC03 **reconstruye los valores desde la versión referenciada al leer** (join de solo lectura, D-27) y UC04 persiste únicamente la **referencia** (`parametersId` → `frozen_parameters_id`).
+[CONV núcleo, congelado] `ReservationInformation` persiste únicamente la **referencia** `frozen_parameters_id` (UUID, FK a `financial_parameters`); el VO compartido `FrozenParameters` (`parametersId`, `commissionPct`, `insuranceFeePerPassenger`, general-plan §11) representa los valores resueltos de esa versión y se obtiene con `FinancialParametersRepository.findById(...)` (D-27); no se copia en la reserva. La transición congelada recibe solo el UUID, no el VO.
 
 Los demás planes siguen leyendo `reservation_information` **por nombre**; el consumo de UC05 es de lectura directa de las columnas calculadas, sin recalcular (CE-004).
 
-**Structure Decision**: servicio backend único con Arquitectura Hexagonal de tres capas (`domain`, `application`, `infrastructure`) en un solo módulo Maven, con subpaquetes temáticos sin reglas entre sí, bajo la raíz `com.seashare.seasharem3` [SPEC general-plan §3.2, §3.3, D-02, D-03]. Reglas del §3.4 aplicadas aquí: `domain` sin Spring/JPA/Jackson; `application` solo depende de `domain`; `infrastructure.adapter.in` solo invoca `application.port.in`; `infrastructure.adapter.out` solo implementa `application.port.out`; ningún controller accede a un repositorio; la entidad JPA no sale de `adapter.out.persistence`; los DTOs HTTP viven en `infrastructure.adapter.in` y `application` trabaja con `command`/`result` (RNF-001). Identificadores en inglés (D-23) y lenguaje ubicuo §11 (*InformaciónDeReserva → `ReservationInformation`*, *Depósito de garantía → `GuaranteeDeposit`*, *Parámetros congelados → `FrozenParameters`*). `DesgloseValorReserva` y `SolicitudValorReserva` del SPEC 04 no están en §11 → `ReservationValue` (dominio) / `ReservationValueResult` (aplicación) y `CalculateReservationValueCommand` (aplicación) **[CONV, D-UC04-07]**.
+**Structure Decision**: servicio backend único con Arquitectura Hexagonal de tres capas (`domain`, `application`, `infrastructure`) en un solo módulo Maven, con subpaquetes temáticos sin reglas entre sí, bajo la raíz `com.seashare.seasharem3` [SPEC general-plan §3.2, §3.3, D-02, D-03]. Reglas del §3.4 aplicadas aquí: `domain` sin Spring/JPA/Jackson; `application` solo depende de `domain`; `infrastructure.adapter.in` solo invoca `application.port.in`; `infrastructure.adapter.out` solo implementa `application.port.out`; ningún controller accede a un repositorio; la entidad JPA no sale de `adapter.out.persistence`; los DTOs HTTP viven en `infrastructure.adapter.in` y `application` trabaja con `command`/`result` (RNF-001). Identificadores en inglés (D-23) y lenguaje ubicuo §11 (*InformaciónDeReserva → `ReservationInformation`*, *Depósito de garantía → `GuaranteeDeposit`*, *Parámetros congelados → `frozen_parameters_id` como referencia y VO compartido `FrozenParameters` para los valores resueltos*). `DesgloseValorReserva` y `SolicitudValorReserva` del SPEC 04 no están en §11 → `ReservationValue` (dominio) / `ReservationValueResult` (aplicación) y `CalculateReservationValueCommand` (aplicación) **[CONV, D-UC04-07]**.
 
 ## Reglas de negocio
 
@@ -255,7 +253,7 @@ Fuente: `contracts/rest/UC04-valor-calculado-reserva.md` y `contracts/README.md`
 }
 ```
 
-**Mapeo de excepciones** (lo implementa `ReservationValueExceptionHandler`, T012):
+**Mapeo de excepciones** (lo implementa `GlobalExceptionHandler`, pieza del núcleo compartido; UC04 no declara advice propio):
 
 | Origen (dominio/aplicación) | HTTP / `code` |
 |---|---|
@@ -277,10 +275,10 @@ Fuente: `general-plan.md` (Technical Context), contrato UC04 y SPEC 04. Cobertur
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
-| Unitario (`domain`) | `FrozenParameters`/`ReservationValue`, fórmula (RF-003–RF-006), días inclusivos, depósito sin multiplicadores, precisión y redondeo a 2 dec (RNF-002, D-UC04-04) | `domain/valueobject/ReservationValueFrozenParametersTest`, `domain/service/ReservationValueCalculatorTest` |
+| Unitario (`domain`) | `ReservationValue` (la referencia congelada es `UUID frozenParametersId`; el VO `FrozenParameters` representa los valores resueltos), fórmula (RF-003–RF-006), días inclusivos, depósito sin multiplicadores, precisión y redondeo a 2 dec (RNF-002, D-UC04-04) | `domain/valueobject/ReservationValueTest`, `domain/service/ReservationValueCalculatorTest` |
 | Unitario (`application`) | orquestación: 404 sin fila, 422 incompleta, 503 parámetros ausentes/nulos, escritura única, registro de fallos, determinismo (D-17) | `CalculateReservationValueServiceTest` (Mockito sobre `ReservationInformationRepository`, `FinancialParametersRepository`, `FailureRecorderPort` + `java.time.Clock` fijo) |
 | Contrato / Web (MockMvc) | cuerpo y códigos del contrato: 200 feliz, 400, 404 `retryable`, 422, 503, 500 | `ReservationValueControllerContractTest` |
-| Integración (Testcontainers PostgreSQL) | `saveCalculatedAmounts` escribe montos + `frozen_parameters_id` + `calculated_at`; repetición idempotente; una nueva versión de parámetros globales no altera la referencia ni los valores resueltos; lectura del agregado con `FrozenParameters` resuelto desde la versión referenciada (join); tras invalidación de UC03, UC04 recalcula; bloqueo asesor serializa UC04/UC03 | `ReservationValuePersistenceAdapterTest` |
+| Integración (Testcontainers PostgreSQL) | `saveCalculatedAmounts` escribe montos + `frozen_parameters_id` + `calculated_at`; repetición idempotente; una nueva versión de parámetros globales no altera la referencia ni los valores resueltos; la lectura expone `frozenParametersId` y UC04 resuelve los valores con `FinancialParametersRepository.findById(...)`; tras invalidación de UC03, UC04 recalcula; bloqueo asesor serializa UC04/UC03 | `ReservationValuePersistenceAdapterTest` |
 | Aceptación | CE-001…CE-004 | `ReservationValueAcceptanceTest` |
 | Arquitectura | reglas §3.4; CE-002 (sin Flota/UC02/tarifa dinámica) | `arch/ArchitectureTest` |
 
@@ -324,19 +322,19 @@ Registro de contradicciones detectadas al elaborar este plan y de las decisiones
 - [ ] **T003** · `DomainException` (`domain/exception`), base del árbol de excepciones del núcleo compartido.
 - [ ] **T004** · consumir por nombre `FailureRecorderPort` y `operational_failure`; el registro usa `REQUIRES_NEW`, `reservation_id` nullable, `payload_ref` referencial y procedimiento de reproceso.
 - [ ] **T005** · consumir por nombre `ReservationInformation`, `ReservationId`, `ReservationInformationRepository`, `FinancialParameters`, `FinancialParametersRepository` y `Money`; UC04 no los implementa ni los redeclara.
-- [ ] **T006** · VOs de dominio: `FrozenParameters` (`parametersId`, `commissionPct`, `insuranceFeePerPassenger`) [general-plan §11] y `ReservationValue` (`rentalAmount`, `insuranceAmount`, `guaranteeDeposit`, `totalAmount` como `Money`) [SPEC "DesgloseValorReserva"; D-UC04-07]. Los valores de `FrozenParameters` se resuelven de la versión referenciada al leer (D-UC04-10); solo `parametersId` se persiste.
-- [ ] **T007** · Extensión del puerto de UC03 (D-UC04-05): método de transición `ReservationInformation.withCalculatedAmounts(...)` y ampliación del puerto `ReservationInformationRepository` con `saveCalculatedAmounts(...)` (firma publicada en «Firmas referenciadas por otros planes»); el adaptador JPA de UC03 implementa el método como `UPDATE` de los montos + `frozen_parameters_id` + `calculated_at` **sin** anular el bloque informativo, en transacción única con `pg_advisory_xact_lock(reservation_id)`. No escribe copias de parámetros (D-UC04-10).
+- [ ] **T006** · VO de dominio `ReservationValue` (`rentalAmount`, `insuranceAmount`, `guaranteeDeposit`, `totalAmount` como `Money`) [SPEC "DesgloseValorReserva"; D-UC04-07]. El VO compartido `FrozenParameters` (general-plan §11) representa los valores resueltos de la versión referenciada y se consume por nombre; **no se persiste**: `reservation_information` guarda solo `frozen_parameters_id` (UUID) y la firma congelada de la transición es `withCalculated(ReservationValue, UUID, Instant)`. UC04 resuelve los valores con `FinancialParametersRepository.findById(...)` (D-27).
+- [ ] **T007** · Extensión del puerto de UC03 (D-UC04-05): método de transición `ReservationInformation.withCalculated(ReservationValue, UUID, Instant)` y ampliación del puerto `ReservationInformationRepository` con `saveCalculatedAmounts(...)` (firma publicada en «Firmas referenciadas por otros planes»); el adaptador JPA de UC03 implementa el método como `UPDATE` de los montos + `frozen_parameters_id` + `calculated_at` **sin** anular el bloque informativo, en transacción única con `pg_advisory_xact_lock(reservation_id)`. No escribe copias de parámetros (D-UC04-10).
 - [ ] **T008** · `ReservationValueCalculator` (`domain/service`): `ReservationValue calculate(ReservationInformation info, FinancialParameters params)`. Fórmulas de RF-003–RF-006 y días inclusivos; depósito = **10 % de la tarifa diaria vigente registrada** (general-plan D-29), con precisión interna de 4 decimales y salidas monetarias redondeadas `HALF_UP` a 2 decimales (`contracts/README.md` §3.1).
 - [ ] **T009** · Pruebas unitarias de VOs y del calculator: ejemplo del contrato (`900000.00/60000.00/30000.00/990000.00`), `start == end` (1 día), casos con 4 decimales y redondeo, depósito no multiplicado por días/pasajeros (RF-003–RF-006, RNF-002).
 - [ ] **T010** · `CalculateReservationValueUseCase` + `CalculateReservationValueCommand` (`ReservationId`) + `ReservationValueResult` (los cuatro montos) + excepciones de dominio `ReservationInfoNotFoundException`, `ReservationInfoIncompleteException` y `FinancialParametersNotConfiguredException` [RNF-001; general-plan §3.5].
 
 ### Phase 3: US1 — Flujo feliz de cálculo y persistencia (HU1; RF-001, RF-002, RF-003, RF-004, RF-005, RF-006, RF-007, RF-008; CE-001, CE-004)
 
-- [ ] **T011** · `CalculateReservationValueService`: `findByReservationId` → E3 (`404` si vacío) → si hay `frozen_parameters_id` (recálculo) usa la versión referenciada ya resuelta por el repositorio; si no, lee `FinancialParametersRepository.findCurrent()` (versión vigente) → E4 (`503` si no existe versión vigente o `insurance`/`commission` nulos, registra fallo) → verifica completitud → E6 (`422` si `base_rate` nula, registra fallo) → `ReservationValueCalculator.calculate(...)` → `saveCalculatedAmounts(...)` en transacción única con bloqueo asesor; **no** invoca UC02 ni Flota; `calculated_at` desde un `java.time.Clock` inyectado.
-- [ ] **T012** · `ReservationValueController` (`POST /api/v1/reservations/{reservation_id}/calculated-value`, sin cuerpo) + `ReservationValueResponse` (claves `snake_case`, montos string a 2 dec) + `ReservationValueExceptionHandler` (`@RestControllerAdvice`; *Problem Details* con `code`/`retryable` del catálogo §3.4, reutilizando `ProblemDetailsConfig`; **sin** reglas de seguridad — fuera de alcance, general-plan §7.1).
+- [ ] **T011** · `CalculateReservationValueService`: `findByReservationId` → E3 (`404` si vacío) → si hay `frozen_parameters_id` (recálculo) resuelve esa versión con `FinancialParametersRepository.findById(...)`; si no, lee `FinancialParametersRepository.findCurrent()` (versión vigente) → E4 (`503` si no existe versión vigente o `insurance`/`commission` nulos, registra fallo) → verifica completitud → E6 (`422` si `base_rate` nula, registra fallo) → `ReservationValueCalculator.calculate(...)` → `saveCalculatedAmounts(...)` en transacción única con bloqueo asesor; **no** invoca UC02 ni Flota; `calculated_at` desde un `java.time.Clock` inyectado.
+- [ ] **T012** · `ReservationValueController` (`POST /api/v1/reservations/{reservation_id}/calculated-value`, sin cuerpo) + `ReservationValueResponse` (claves `snake_case`, montos string a 2 dec). **Sin** advice propio: las excepciones de dominio (`ReservationInfoNotFoundException`, `ReservationInfoIncompleteException`, `FinancialParametersNotConfiguredException`) ya se traducen en el `GlobalExceptionHandler` del núcleo compartido (*Problem Details* con `code`/`retryable` del catálogo §3.4). **Sin** reglas de seguridad — fuera de alcance, general-plan §7.1.
 - [ ] **T013** · Tests de contrato MockMvc del flujo feliz: `200` con el ejemplo del contrato (4 claves + `reservation_id`), aceptación de `X-Correlation-Id` y `400 VALIDATION_ERROR` con UUID inválido.
 - [ ] **T014** · Pruebas unitarias del servicio (Mockito + `InMemoryFailureRecorder` + `Clock` fijo): flujo feliz; una sola escritura; sin fila → `404`; info incompleta → `422` + registro; parámetros ausentes/nulos → `503` + registro; **sin llamadas a Flota**.
-- [ ] **T015** · Pruebas de integración del adaptador (Testcontainers PostgreSQL): `saveCalculatedAmounts` escribe los cuatro montos, `frozen_parameters_id` y `calculated_at`; una solicitud repetida con los mismos insumos produce el mismo desglose (idempotencia; el recálculo usa la versión referenciada, no la vigente); una nueva versión de `financial_parameters` no altera la referencia ni los valores resueltos; la lectura del agregado reconstruye `FrozenParameters` con un join a la versión referenciada.
+- [ ] **T015** · Pruebas de integración del adaptador (Testcontainers PostgreSQL): `saveCalculatedAmounts` escribe los cuatro montos, `frozen_parameters_id` y `calculated_at`; una solicitud repetida con los mismos insumos produce el mismo desglose (idempotencia; el recálculo usa la versión referenciada, no la vigente); una nueva versión de `financial_parameters` no altera la referencia ni los valores resueltos; la lectura expone `frozenParametersId` y la versión referenciada se resuelve con `FinancialParametersRepository.findById(...)`.
 - [ ] **T016** · Pruebas de integración: `saveCalculatedAmounts` **preserva** el bloque informativo (fechas, `base_rate`, pasajeros, propietario, capacidad); tras un *upsert* de UC03 (columnas calculadas a `NULL`), una nueva llamada a UC04 recalcula y completa los montos con los parámetros vigentes.
 
 ### Phase 4: US1 — Errores, idempotencia y concurrencia (HU1; RF-008, RF-009; RNF-003; CE-002, CE-003)

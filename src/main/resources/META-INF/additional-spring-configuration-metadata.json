@@ -1,0 +1,86 @@
+{
+  "properties": [
+    {
+      "name": "seashare.timezone",
+      "type": "java.lang.String",
+      "description": "Zona horaria de negocio para fechas y períodos (general-plan §7.4, D-12).",
+      "defaultValue": "America/Bogota"
+    },
+    {
+      "name": "seashare.estimates.max-batch-size",
+      "type": "java.lang.Integer",
+      "description": "Máximo de identificadores por lote de UC01; superarlo devuelve 400 BATCH_SIZE_EXCEEDED (general-plan §7.4, D-22).",
+      "defaultValue": 50
+    },
+    {
+      "name": "seashare.reporting.max-page-size",
+      "type": "java.lang.Integer",
+      "description": "Máximo de registros por página en UC12 (general-plan §7.4, D-22).",
+      "defaultValue": 100
+    },
+    {
+      "name": "seashare.outbox.relay-interval",
+      "type": "java.time.Duration",
+      "description": "Intervalo entre ciclos del relay del outbox.",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "seashare.outbox.batch-size",
+      "type": "java.lang.Integer",
+      "description": "Máximo de mensajes publicados por ciclo del relay del outbox.",
+      "defaultValue": 100
+    },
+    {
+      "name": "seashare.outbox.publish-confirm-timeout",
+      "type": "java.time.Duration",
+      "description": "Espera máxima del publisher confirm de RabbitMQ antes de fallar la publicación.",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "seashare.fleet.base-url",
+      "type": "java.lang.String",
+      "description": "URL base del Sistema de Gestión de Flota (UC02).",
+      "defaultValue": "http://localhost:8081"
+    },
+    {
+      "name": "seashare.fleet.connect-timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout de conexión hacia Flota.",
+      "defaultValue": "1s"
+    },
+    {
+      "name": "seashare.fleet.read-timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout de lectura hacia Flota (SLA de UC01 RNF-003).",
+      "defaultValue": "1s"
+    },
+    {
+      "name": "seashare.gateway.base-url",
+      "type": "java.lang.String",
+      "description": "URL base de la pasarela de pago (Mercado Pago).",
+      "defaultValue": "https://api.mercadopago.com"
+    },
+    {
+      "name": "seashare.gateway.access-token",
+      "type": "java.lang.String",
+      "description": "Token de acceso de la pasarela (Authorization: Bearer); se aporta por entorno."
+    },
+    {
+      "name": "seashare.gateway.read-timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout de lectura hacia la pasarela.",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "seashare.gateway.connect-timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout de conexión hacia la pasarela.",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "seashare.gateway.webhook-secret",
+      "type": "java.lang.String",
+      "description": "Secreto de la firma x-signature del webhook de la pasarela; se aporta por entorno."
+    }
+  ]
+}

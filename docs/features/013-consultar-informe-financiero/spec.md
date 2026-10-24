@@ -57,12 +57,12 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 1. **Escenario**: Exportación del informe de la plataforma.
    - **Dado** que el Administrador Financiero ha seleccionado una periodicidad y un período válidos.
    - **Cuando** solicita la exportación del informe.
-   - **Entonces** el sistema genera un archivo `.csv` con los datos agregados de toda la plataforma, la periodicidad, el período, el solicitante y la fecha y hora de generación.
+   - **Entonces** el sistema genera un archivo `.csv` con los datos agregados de toda la plataforma, la periodicidad, el período y la fecha y hora de generación.
 
 2. **Escenario**: Exportación del informe propio.
    - **Dado** que el Propietario ha seleccionado una periodicidad y un período válidos.
    - **Cuando** solicita la exportación del informe.
-   - **Entonces** el sistema genera un archivo `.csv` con los datos agregados únicamente de sus reservas, la periodicidad, el período, el solicitante y la fecha y hora de generación.
+   - **Entonces** el sistema genera un archivo `.csv` con los datos agregados únicamente de sus reservas, la periodicidad, el período y la fecha y hora de generación.
 
 ### Casos Extremos (Edge Cases)
 
@@ -119,7 +119,7 @@ Como Administrador Financiero o Propietario, quiero exportar el informe financie
 - **RegistroDeComisión (Entidad Inmutable, definida en SPEC 10)**: En este caso de uso es únicamente consultada como métrica informativa de las comisiones confirmadas; no participa en cálculos de cobro, reembolso o dispersión.
 - **SolicitudInformeFinanciero (DTO)**: Información recibida del Administrador Financiero o del Propietario. Contiene el alcance declarado (rol y `owner_id` cuando corresponda), la periodicidad y el período seleccionado.
 - **InformeFinancieroResultado (DTO)**: Resultado agregado que contiene las métricas del período, el alcance, la periodicidad y la comparación con el período anterior equivalente.
-- **ArchivoExportacionInformeFinanciero (DTO)**: Archivo `.csv` que contiene el informe agregado, la periodicidad, el período, el alcance declarado, el solicitante declarado y la fecha y hora de generación.
+- **ArchivoExportacionInformeFinanciero (DTO)**: Archivo `.csv` que contiene el informe agregado, la periodicidad, el período, el alcance declarado y la fecha y hora de generación.
 
 ## Criterios de Éxito *(obligatorio)*
 

@@ -18,11 +18,9 @@ En Mercado Pago, esto se gestiona mediante el esquema de **Marketplace** / **Spl
 
 ## 2. Petición (Llamada a Mercado Pago)
 
-Dependiendo de la integración de Mercado Pago elegida para el flujo (Advanced Payments, Split directo en el cobro, o transferencias directas API), el envío de fondos se instrumenta usualmente liberando o dispersando a la cuenta del vendedor (`application_fee`).
-Asumiendo un modelo de Advanced Payments o dispersión (Transfer):
+La dispersión se instrumenta con la sub-API de **Advanced Payments** de Mercado Pago, liberando el neto hacia la cuenta del vendedor:
 
 `POST /v1/advanced_payments/{id}/disbursements`
-*(o equivalente según la sub-API exacta que use el proyecto para el modelo de Marketplace).*
 
 ### Headers
 

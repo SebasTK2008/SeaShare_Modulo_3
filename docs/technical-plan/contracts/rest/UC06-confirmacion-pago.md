@@ -90,9 +90,9 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
 ```json
 {
   "type": "about:blank",
-  "title": "Cobro no iniciado",
+  "title": "Charge intent not found",
   "status": 404,
-  "detail": "No existe una IntenciónDeCobro para la reserva b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10.",
+  "detail": "There is no ChargeIntent for reservation b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10.",
   "code": "CHARGE_INTENT_NOT_FOUND",
   "retryable": true
 }

@@ -32,16 +32,16 @@ Genera un archivo `.csv` con los mismos datos agregados del informe financiero c
 |---|---|---|---|---|
 | `scope` | string | Sí | Alcance declarado: `OWNER` (Propietario) o `PLATFORM` (Administrador Financiero) | [CONV] — dato plano; el sistema aplica lo declarado sin validar identidad (seguridad fuera de alcance) |
 | `owner_id` | UUID | Sí si `scope=OWNER` | Identidad declarada del Propietario cuyos registros se exportan; el sistema no valida pertenencia | [SPEC RF-006] |
-| `periodicity` | string | Sí | `QUINCENAL`, `MENSUAL`, `TRIMESTRAL` | [SPEC RF-013] |
+| `periodicity` | string | Sí | `SEMI_MONTHLY`, `MONTHLY`, `QUARTERLY` | [SPEC RF-013] |
 | `period` | string | Sí | Identificador explícito del período a exportar, en el formato canónico según periodicidad (ver tabla) | [SPEC RF-013] |
 
 **Formato canónico de `period` según `periodicity`** (idéntico al contrato de consulta):
 
 | `periodicity` | Formato | Ejemplos |
 |---|---|---|
-| `QUINCENAL` | `YYYY-MM-H1` (días 1-15) / `YYYY-MM-H2` (días 16-fin) | `2026-10-H1`, `2026-10-H2` |
-| `MENSUAL` | `YYYY-MM` | `2026-10` |
-| `TRIMESTRAL` | `YYYY-Q1` (Ene-Mar) / `YYYY-Q2` (Abr-Jun) / `YYYY-Q3` (Jul-Sep) / `YYYY-Q4` (Oct-Dic) | `2026-Q4` |
+| `SEMI_MONTHLY` | `YYYY-MM-H1` (días 1-15) / `YYYY-MM-H2` (días 16-fin) | `2026-10-H1`, `2026-10-H2` |
+| `MONTHLY` | `YYYY-MM` | `2026-10` |
+| `QUARTERLY` | `YYYY-Q1` (Ene-Mar) / `YYYY-Q2` (Abr-Jun) / `YYYY-Q3` (Jul-Sep) / `YYYY-Q4` (Oct-Dic) | `2026-Q4` |
 
 Un valor de `period` que no coincida con el formato de `periodicity` recibido devuelve `400 INVALID_PERIOD` [SPEC RF-004, casos extremos].
 
@@ -49,7 +49,7 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
 
 1. **Igualdad de cálculo**: Utiliza internamente el mismo flujo que `GET /api/v1/financial-report` para determinar el alcance declarado (`scope`/`owner_id`, datos planos) y realizar las agregaciones [SPEC RNF-004].
 2. **Formato CSV**: Transforma el resultado en un archivo de texto plano delimitado por comas [SPEC RF-012].
-3. **Contenido**: El CSV debe incluir métricas agregadas (neto/ganancia, totales por tipo), período, periodicidad, el alcance declarado y el nombre/id declarado del solicitante, y la fecha y hora de la generación [SPEC HU3 escenarios 1 y 2, RF-013].
+3. **Contenido**: El CSV debe incluir métricas agregadas (neto/ganancia, totales por tipo), período, periodicidad, el alcance declarado y la fecha y hora de la generación [SPEC HU3 escenarios 1 y 2, RF-013].
 
 ## 4. Respuesta exitosa
 
@@ -57,8 +57,8 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
 Header sugerido: `Content-Disposition: attachment; filename="informe_financiero_2026-10.csv"`
 
 ```csv
-Fecha de Generacion,Solicitante,Alcance,Periodicidad,Periodo,Neto Generado,Total Cobros,Total Reembolsos,Total Dispersiones,Total Comisiones
-2026-11-01T10:00:00Z,AdminFinanzas,PLATFORM,MENSUAL,2026-10,150000.00,1150000.00,100000.00,900000.00,135000.00
+Fecha de Generacion,Alcance,Periodicidad,Periodo,Neto Generado,Total Cobros,Total Reembolsos,Total Dispersiones,Total Comisiones
+2026-11-01T10:00:00Z,PLATFORM,MONTHLY,2026-10,150000.00,1150000.00,100000.00,900000.00,135000.00
 ```
 
 ## 5. Respuestas de error

@@ -37,7 +37,7 @@ El sistema consulta al Sistema de Gestión de Flota la tarifa base vigente para 
 {
   "boat_ids": [
     "3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01",
-    "9c10-5a2b7e6f1d01-3f2c1a54-8b3e-4d7a"
+    "4d7a9c10-5a2b-4e6f-8d01-3f2c1a548b3e"
   ]
 }
 ```

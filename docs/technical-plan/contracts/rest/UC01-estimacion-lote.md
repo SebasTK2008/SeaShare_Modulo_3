@@ -76,7 +76,7 @@ El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de 
 | `estimates[].estimated_total` | string decimal | Costo estimado | [SPEC RF-002] |
 | `unavailable` | array | Embarcaciones reconocidas **sin tarifa base** | [SPEC casos extremos] + [CONV] |
 | `unavailable[].boat_id` | UUID | Identificador | — |
-| `unavailable[].reason` | string | `SIN_TARIFA_BASE` ("sin estimación disponible") | [SPEC casos extremos] |
+| `unavailable[].reason` | string | `NO_BASE_RATE` ("sin estimación disponible") | [SPEC casos extremos] |
 
 ```json
 {
@@ -87,7 +87,7 @@ El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de 
     { "boat_id": "3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01", "estimated_total": "365000.00" }
   ],
   "unavailable": [
-    { "boat_id": "9a1b7c33-2e4f-4b58-8d6a-0c9e5f3a2b02", "reason": "SIN_TARIFA_BASE" }
+    { "boat_id": "9a1b7c33-2e4f-4b58-8d6a-0c9e5f3a2b02", "reason": "NO_BASE_RATE" }
   ]
 }
 ```
@@ -115,9 +115,9 @@ Lista vacía:
 ```json
 {
   "type": "about:blank",
-  "title": "Lote demasiado grande",
+  "title": "Batch too large",
   "status": 400,
-  "detail": "La solicitud contiene 1000 identificadores y el máximo permitido es 50.",
+  "detail": "The request contains 1000 identifiers and the maximum allowed is 50.",
   "code": "BATCH_SIZE_EXCEEDED",
   "retryable": false
 }

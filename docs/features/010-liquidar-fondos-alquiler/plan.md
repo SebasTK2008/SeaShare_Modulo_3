@@ -78,7 +78,9 @@ src/main/java/com/seashare/seasharem3/
 ├── application/
 │   ├── port/in/
 │   │   ├── RequestSettlementUseCase.java          # UC07/UC08 lo consumen
-│   │   └── RegisterSettlementResultUseCase.java   # webhook/worker
+│   │   ├── RegisterSettlementResultUseCase.java   # webhook/worker
+│   │   ├── SendSettlementToGatewayUseCase.java    # worker de envío (núcleo compartido)
+│   │   └── ReconcileSettlementIntentsUseCase.java # job de conciliación (núcleo compartido)
 │   ├── port/out/
 │   │   ├── SettlementGatewayPort.java             # ACL Mercado Pago
 │   │   ├── SettlementIntentRepository.java
@@ -92,9 +94,9 @@ src/main/java/com/seashare/seasharem3/
 │   ├── service/SettlementService.java
 │   └── dto/
 │       ├── SettlementCommand.java
-│       ├── SettlementResultCommand.java
+│       ├── SettlementRequestResult.java           # firma congelada [CONV núcleo]
 │       ├── GatewaySettlementRequest.java
-│       └── GatewaySettlementResult.java
+│       └── GatewaySettlementResult.java           # status, externalId, statusDetail [CONV núcleo]
 └── infrastructure/
     ├── adapter/in/scheduler/SettlementWorker.java  # reintentos/outbox
     ├── adapter/out/
@@ -119,9 +121,9 @@ src/test/java/com/seashare/seasharem3/
 └── integration/SettlementProcessingIT.java
 ```
 
-**Structure Decision**: sigue `general-plan.md` §3.2–§3.4. UC05 es dueño del receptor/verificación/despachador del webhook; UC10 solo registra su manejador y define sus puertos `SendSettlementCommand`/`ReconcileSettlementResult`. `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`.
+**Structure Decision**: sigue `general-plan.md` §3.2–§3.4. UC05 es dueño del receptor/verificación/despachador del webhook; UC10 solo registra su manejador y define sus puertos `SendSettlementToGatewayUseCase`/`ReconcileSettlementIntentsUseCase` (núcleo compartido), además de `RegisterSettlementResultUseCase` para el resultado. `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`.
 
-**Firmas referenciadas**: UC10 publica `RequestSettlementUseCase` para UC07 y UC08, y define `SendSettlementCommand`/`ReconcileSettlementResult` para el webhook/despachador de UC05. `SettlementCommand` incluye `trigger`, `scope` y `dispute_id` cuando aplica. Consume `ReservationInformationRepository`, `ChargeRecordQueryPort`, `FailureRecorderPort`, `ReservationLockPort` y `OutboxPort` por nombre.
+**Firmas referenciadas**: UC10 publica `RequestSettlementUseCase` para UC07 y UC08, y define `SendSettlementToGatewayUseCase`/`ReconcileSettlementIntentsUseCase` (núcleo compartido) y `RegisterSettlementResultUseCase` para el webhook/despachador de UC05. `SettlementCommand` incluye `trigger`, `scope` y `dispute_id` cuando aplica. Consume `ReservationInformationRepository`, `ChargeRecordQueryPort`, `FailureRecorderPort`, `ReservationLockPort` y `OutboxPort` por nombre.
 
 ## Reglas de negocio
 
@@ -137,7 +139,7 @@ src/test/java/com/seashare/seasharem3/
 10. **Trazabilidad** [SPEC RF-009A, RF-015, RF-016]: registros incluyen intención, reserva, propietario, embarcación, bruto, seguro, depósito, monto confirmado, detalle, referencia externa y fecha de creación.
 11. **Faltantes** [SPEC RF-013]: alquiler/seguro/depósito requerido ausente → registrar fallo, no calcular parcialmente ni llamar pasarela.
 12. **Timeout/error** [SPEC RNF-003; contrato comando]: un timeout o `5xx` deja la intención en `COMMUNICATION_ERROR` y el worker reintenta con la misma clave idempotente (`reservation_id` + `status` + `status_changed_at`, general-plan D-33); nunca se interpreta como éxito; el webhook resuelve el resultado. Fallos de negocio (`400`) → estado fallido para resolución manual.
-13. **Webhook** [contrato webhook]: UC05 verifica firma y despacha por `type`; UC10 solo reconcilia su resultado mediante `ReconcileSettlementResult` y no implementa receptor propio.
+13. **Webhook** [contrato webhook]: UC05 verifica firma y despacha por `type`; UC10 solo registra su resultado mediante `RegisterSettlementResultUseCase` (webhook) y concilia sus intenciones con `ReconcileSettlementIntentsUseCase` (job); no implementa receptor propio.
 14. **Inmutabilidad** [SPEC RF-010..RF-014; general-plan §2]: registros confirmados nunca se actualizan ni eliminan.
 
 ## Contratos
@@ -150,9 +152,14 @@ Fuentes: `external/pasarela-comando-liquidacion.md` y `external/pasarela-webhook
 
 ```java
 SettlementRequestResult request(SettlementCommand command);
+
+// [CONV núcleo, congelado] composición mínima: intención registrada + estado
+public record SettlementRequestResult(UUID settlementIntentId, SettlementStatus status) {}
 ```
 
 El comando debe expresar reserva, desencadenante/alcance, idempotency key y referencias internas; no acepta un monto arbitrario de Reservas. El adaptador recupera y calcula los importes desde registros internos.
+
+El resultado de la pasarela se registra con `RegisterSettlementResultUseCase.register(GatewaySettlementResult)`, siendo `GatewaySettlementResult(String status, String externalId, String statusDetail)` el único DTO de entrada [CONV núcleo, congelado]. `SendSettlementToGatewayUseCase.send(UUID settlementIntentId)` y `ReconcileSettlementIntentsUseCase.reconcile()` son los puertos propios del worker y del job de conciliación. **No existe** `SettlementResultCommand`.
 
 ### Comando a Mercado Pago
 
@@ -218,7 +225,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 
 - [ ] **T004** Crear `SettlementScope`, `SettlementTrigger`, estados y `SettlementCalculator`; `Money`, `ReservationId`, `OwnerId` y `ClockPort` se consumen del núcleo compartido y no se redeclaran.
 - [ ] **T005** Crear puertos, `SettlementCommand`/results y adaptadores de consulta para reserva/cobro; el command incluye `trigger`, `scope` y `dispute_id` cuando aplica. Consume piezas de UC03/UC05 por nombre.
-- [ ] **T005a** Congelar la firma pública `SettlementRequestResult request(SettlementCommand)`; `scope` usa el valor vigente del catálogo y `DEPOSIT_DISPUTE` solo cuando existe `dispute_id`. No se usa `void` ni se inventa otro valor.
+- [ ] **T005a** Congelar la firma pública `SettlementRequestResult request(SettlementCommand)`; `SettlementRequestResult(UUID settlementIntentId, SettlementStatus status)` [CONV núcleo] y `scope` usa el valor vigente del catálogo y `DEPOSIT_DISPUTE` solo cuando existe `dispute_id`. No se usa `void` ni se inventa otro valor.
 - [ ] **T006** Crear `SettlementGatewayPort`, DTOs del comando/resultado y mapper ACL de Mercado Pago.
 - [ ] **T007** Crear modelos de intención/registro/comisión y repositorios; definir restricciones de idempotencia e inmutabilidad.
 - [ ] **T008** Implementar persistencia de intención antes del envío y consulta de intención para webhook/worker.

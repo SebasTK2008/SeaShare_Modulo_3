@@ -101,7 +101,7 @@ src/main/java/com/seashare/seasharem3/
 │       ├── EstimateBatchCommand.java                # T008   # List<BoatId> [SPEC RNF-001; nombre [CONV]]
 │       ├── BatchEstimateResult.java                 # T008   # evaluationDate, durationDays, passengers, estimates, unavailable
 │       ├── BoatEstimate.java                        # T008   # boatId + estimatedTotal
-│       ├── UnavailableBoat.java                     # T008   # boatId + reason (SIN_TARIFA_BASE)
+│       ├── UnavailableBoat.java                     # T008   # boatId + reason (NO_BASE_RATE)
 │       ├── EstimateSingleCommand.java               # T014   # boatId, startDate, endDate, passengers
 │       ├── SingleEstimateResult.java                # T014   # boatId, start/end, durationDays, passengers, estimatedTotal, warning
 │       └── EstimateWarning.java                     # T005   # texto literal obligatorio de HU2 [SPEC]
@@ -185,7 +185,7 @@ Body: **solo** `boat_ids` (array de UUID; puede ser `[]`; máximo 50).
     { "boat_id": "3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01", "estimated_total": "365000.00" }
   ],
   "unavailable": [
-    { "boat_id": "9a1b7c33-2e4f-4b58-8d6a-0c9e5f3a2b02", "reason": "SIN_TARIFA_BASE" }
+    { "boat_id": "9a1b7c33-2e4f-4b58-8d6a-0c9e5f3a2b02", "reason": "NO_BASE_RATE" }
   ]
 }
 ```

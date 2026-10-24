@@ -32,16 +32,16 @@ Devuelve datos agregados de los registros financieros para un período específi
 |---|---|---|---|---|
 | `scope` | string | Sí | Alcance declarado: `OWNER` (Propietario) o `PLATFORM` (Administrador Financiero) | [CONV] — dato plano; el sistema aplica lo declarado sin validar identidad (seguridad fuera de alcance) |
 | `owner_id` | UUID | Sí si `scope=OWNER` | Identidad declarada del Propietario cuyos registros se agregan; el sistema no valida pertenencia | [SPEC RF-006] |
-| `periodicity` | string | Sí | `QUINCENAL`, `MENSUAL`, `TRIMESTRAL` | [SPEC RF-001, D-18] |
+| `periodicity` | string | Sí | `SEMI_MONTHLY`, `MONTHLY`, `QUARTERLY` | [SPEC RF-001, D-18] |
 | `period` | string | No | Identificador del período en el formato canónico según periodicidad (ver tabla). Si no se envía, el sistema usa el último período cerrado | [SPEC RF-001, RF-003] |
 
 **Formato canónico de `period` según `periodicity`**:
 
 | `periodicity` | Formato | Ejemplos |
 |---|---|---|
-| `QUINCENAL` | `YYYY-MM-H1` (días 1-15) / `YYYY-MM-H2` (días 16-fin) | `2026-10-H1`, `2026-10-H2` |
-| `MENSUAL` | `YYYY-MM` | `2026-10` |
-| `TRIMESTRAL` | `YYYY-Q1` (Ene-Mar) / `YYYY-Q2` (Abr-Jun) / `YYYY-Q3` (Jul-Sep) / `YYYY-Q4` (Oct-Dic) | `2026-Q4` |
+| `SEMI_MONTHLY` | `YYYY-MM-H1` (días 1-15) / `YYYY-MM-H2` (días 16-fin) | `2026-10-H1`, `2026-10-H2` |
+| `MONTHLY` | `YYYY-MM` | `2026-10` |
+| `QUARTERLY` | `YYYY-Q1` (Ene-Mar) / `YYYY-Q2` (Abr-Jun) / `YYYY-Q3` (Jul-Sep) / `YYYY-Q4` (Oct-Dic) | `2026-Q4` |
 
 Un valor de `period` que no coincida con el formato de `periodicity` recibido devuelve `400 INVALID_PERIOD` [SPEC RF-004, casos extremos].
 
@@ -56,7 +56,7 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
    - **`OWNER`**: `Ganancia = Total Dispersiones` (a favor del `owner_id` declarado) [SPEC RF-008].
 4. **Comisiones**: El total de comisiones es informativo. NO se suma ni resta nuevamente en las fórmulas anteriores [SPEC RF-009].
 5. **Cantidades**: Se agrupa el número de registros por tipo (cobros, reembolsos, dispersiones, comisiones) [SPEC RF-009].
-6. **Comparación temporal**: Se calcula contra el período inmediatamente anterior equivalente. Variación absoluta y porcentual. Si el valor anterior es 0, la variación porcentual es `null` o se marca como no calculable [SPEC RF-010].
+6. **Comparación temporal**: Se calcula contra el período inmediatamente anterior equivalente. Variación absoluta y porcentual. Si el valor anterior es 0, la variación porcentual se devuelve como `null` (no calculable) [SPEC RF-010].
 7. **Período en curso**: Si el período consultado no ha cerrado, se identifica como abierto [SPEC casos extremos].
 8. **Inclusión de registros**: Se usa la `created_at` de las tablas de registros inmutables. Operaciones pendientes, incluyendo depósitos pendientes sin desenlace, se ignoran [SPEC RNF-003, RF-014].
 
@@ -75,12 +75,12 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
 | `total_refunds` | string decimal | Suma de `RegistroDeReembolso` | [SPEC RF-007] |
 | `total_settlements` | string decimal | Suma de `RegistroDeDispersión` | [SPEC RF-007] |
 | `total_commissions` | string decimal | Suma de `RegistroDeComisión` (informativo) | [SPEC RF-009] |
-| `counts` | object | Cantidad de registros (ej. `{"COBRO": 15, "REEMBOLSO": 2, ...}`) | [SPEC RF-009] |
+| `counts` | object | Cantidad de registros (ej. `{"CHARGE": 15, "REFUND": 2, ...}`) | [SPEC RF-009] |
 | `comparison` | object | Comparación global con el período anterior | [SPEC RF-010] |
 
 ```json
 {
-  "periodicity": "MENSUAL",
+  "periodicity": "MONTHLY",
   "period": "2026-10",
   "is_closed": true,
   "scope": "PLATFORM",
@@ -90,10 +90,10 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
   "total_settlements": "900000.00",
   "total_commissions": "135000.00",
   "counts": {
-    "COBRO": 10,
-    "REEMBOLSO": 2,
-    "DISPERSION": 8,
-    "COMISION": 8
+    "CHARGE": 10,
+    "REFUND": 2,
+    "SETTLEMENT": 8,
+    "COMMISSION": 8
   },
   "comparison": {
     "previous_period": "2026-09",
