@@ -7,7 +7,7 @@
 
 UC13 consulta y exporta informes agregados de registros financieros confirmados para el alcance declarado `PLATFORM` (Administrador Financiero) o `OWNER` (Propietario con `owner_id`). Usa períodos quincenales, mensuales y trimestrales, el período anterior equivalente y el mismo agregador para JSON y CSV [SPEC RF-001..RF-015, HU1..HU3].
 
-La fuente es `v_financial_records`, creada por UC12 con `record_id` y `NULL::text AS external_reference` para comisiones. El alcance se obtiene del **alcance declarado** (`scope`/`owner_id` como **datos planos**, sin validar identidad; general-plan §7.1); UC13 no consulta Flota, no devuelve el detalle paginado de UC12 y no modifica registros. `q` y las métricas adicionales quedan **fuera** del contrato y del CSV: este incluye únicamente los campos exigidos por el SPEC.
+La fuente es `v_financial_records`, creada en `V1__initial_schema.sql` con `record_id` y `NULL::text AS external_reference` para comisiones. El alcance se obtiene del **alcance declarado** (`scope`/`owner_id` como **datos planos**, sin validar identidad; general-plan §7.1); UC13 no consulta Flota, no devuelve el detalle paginado de UC12 y no modifica registros. `q` y las métricas adicionales quedan **fuera** del contrato y del CSV: este incluye únicamente los campos exigidos por el SPEC.
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -115,7 +115,7 @@ src/test/java/com/seashare/seasharem3/
 
 | ID | Decisión | Estado |
 |---|---|---|
-| D-UC13-01 | La vista `v_financial_records` pertenece a UC12; UC13 la consume mediante puerto y no la crea ni la redefine | Aplicada |
+| D-UC13-01 | La vista `v_financial_records` pertenece a `V1__initial_schema.sql`; UC12 y UC13 la consumen mediante puerto y no la crean ni la redefinen | Aplicada |
 | D-UC13-02 | Fechas de negocio y períodos en `America/Bogota` (`seashare.timezone`); instantes en UTC, con `ClockPort` del núcleo compartido (general-plan D-12) | Aplicada |
 | D-UC13-03 | Los VOs compartidos (`Money`, `ReservationId`, `OwnerId`) y `ClockPort` no se redeclaran; se consumen del núcleo compartido | Aplicada |
 | D-UC13-04 | UC13 no define migraciones propias: consume la vista `v_financial_records`, creada por la migración inicial única (general-plan §4.2, D-31) | Aplicada |

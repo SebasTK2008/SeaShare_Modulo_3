@@ -7,6 +7,7 @@ import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Persistencia de refund_intent (UC09).
@@ -15,6 +16,8 @@ import java.util.Optional;
  * [CONV] núcleo: findByExternalReference asocia el webhook de reembolso y findByStatusIn alimenta la conciliación.
  */
 public interface RefundIntentRepository {
+
+    Optional<RefundIntent> findById(UUID id);
 
     RefundIntent save(RefundIntent refundIntent);
 

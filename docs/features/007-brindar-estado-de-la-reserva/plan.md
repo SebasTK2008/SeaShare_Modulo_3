@@ -102,6 +102,7 @@ src/main/java/com/seashare/seasharem3/
 └── infrastructure/
     ├── adapter/in/messaging/
     │   ├── ReservationStatusListener.java       # T008
+    │   ├── ReservationStatusMessageMapper.java  # T008  texto del contrato → ReservationStatus; desconocido = fallo lógico
     │   └── dto/ReservationStatusMessage.java    # T008  campos del contrato [SPEC RNF-001]
     ├── adapter/out/persistence/
     │   ├── ReservationStatusLogJpaEntity.java / ReservationStatusLogJpaRepository.java   # T007
@@ -117,6 +118,7 @@ src/main/resources/db/migration/
 src/test/java/com/seashare/seasharem3/
 ├── domain/service/ReservationStatusPolicyTest.java                      # T003
 ├── application/service/HandleReservationStatusServiceTest.java          # T005, T012, T017
+├── infrastructure/adapter/in/messaging/ReservationStatusMessageMapperTest.java  # T008
 ├── infrastructure/adapter/in/messaging/ReservationStatusListenerTest.java  # T009
 ├── infrastructure/adapter/out/persistence/ReservationStatusLogPersistenceAdapterTest.java  # T007
 └── acceptance/Uc07AcceptanceTest.java                                   # T010, T011, T014–T016, T019–T021
@@ -139,13 +141,15 @@ public interface HandleReservationStatusUseCase {
 }
 public record ReservationStatusCommand(
     UUID reservationId,
-    String status,                          // texto crudo: un valor desconocido es una inconsistencia, no un error de parseo
+    ReservationStatus status,               // solo valores conocidos; el listener rechaza desconocidos antes de construir el command
     Instant statusChangedAt,                // fechaHoraEstado [SPEC RNF-001]
     String paymentTokenRef,                 // solo con PENDING [SPEC RF-002A]
     String paymentMethodType,               // nullable
     Map<String, String> paymentMetadata     // nullable, no sensibles
 ) {}
 ```
+
+El mensaje AMQP conserva `status` como texto (contrato §2). `ReservationStatusMessageMapper` lo convierte al enum; si el valor no es uno de los 10 estados, lanza una excepción lógica que el listener registra con `AmqpListenerFailurePolicy.recordAndAcknowledge(...)` y confirma el mensaje. El command solo transporta estados conocidos.
 
 La clave de operación (RF-009A) no viaja en el comando: el servicio la deriva de `reservationId` + `status` + `statusChangedAt` (ver §Reglas, punto 7).
 
@@ -155,7 +159,7 @@ La clave de operación (RF-009A) no viaja en el comando: el servicio la deriva d
 
 Todas provienen del SPEC 7 y del contrato `UC07-estado-reserva.md` salvo indicación.
 
-1. **Reconocimiento** [SPEC RF-001; contrato §3.1]: solo `AVAILABLE`, `INITIATED`, `RESERVED`, `IN_NAVIGATION`, `PENDING`, `CANCELLED_FLEXIBLE`, `CANCELLED_MODERATE`, `CANCELLED_STRICT`, `CANCELLED_BY_HOST`, `COMPLETED`. Cualquier otro valor: no se ejecuta ninguna operación y se registra la inconsistencia (`operational_failure`), con `ack`.
+1. **Reconocimiento** [SPEC RF-001; contrato §3.1]: solo `AVAILABLE`, `INITIATED`, `RESERVED`, `IN_NAVIGATION`, `PENDING`, `CANCELLED_FLEXIBLE`, `CANCELLED_MODERATE`, `CANCELLED_STRICT`, `CANCELLED_BY_HOST`, `COMPLETED`. El listener convierte el texto del contrato al enum; cualquier otro valor se rechaza antes de construir el command, no ejecuta ninguna operación y se registra la inconsistencia (`operational_failure`), con `ack`.
 2. **Estados sin acción financiera** [SPEC RF-002, RF-008]: `AVAILABLE`, `RESERVED`, `IN_NAVIGATION` y `INITIATED` se reconocen sin operaciones. `INITIATED` marca el comienzo del TTL de 15 minutos; UC07 no lo administra ni lo reinicia.
 3. **`PENDING`** [SPEC RF-002A; HU1 escenario 3]: invoca `ProcessChargeUseCase` con el token recibido; no reinicia el TTL y no dispara reembolso ni liquidación. Si el mensaje no trae `payment_token_ref` (obligatorio con `PENDING`, contrato §2) se trata como mensaje inválido: `ack` + `operational_failure`, sin llamar a UC05 **[CONV]**.
 4. **Cancelaciones** [SPEC RF-003, RF-004, RF-005, RF-005A; contrato §3.4]:
@@ -173,7 +177,7 @@ Todas provienen del SPEC 7 y del contrato `UC07-estado-reserva.md` salvo indicac
 7. **Identidad única de operación** [SPEC RF-009A; general-plan §3.5, D-33]: reserva + estado notificado + tipo de operación + clave idempotente. La clave idempotente por intento es `reservationId` + `status` + `statusChangedAt` **[CONV]**: es igual en un reenvío de la misma transición y distinta en una nueva transición. Los estados terminales deduplican por (reserva, estado, tipo de operación) y solo `PENDING` admite intentos nuevos (un `statusChangedAt` nuevo tras un rechazo de pago habilita un nuevo intento de cobro, UC05 RF-004A); no se usa `Message-Id` (general-plan D-07). Antes de cada operación se inserta una fila en `reservation_status_log` con `INSERT … ON CONFLICT DO NOTHING` **[CONV]**; si ya existía, la operación no se repite. Las notificaciones repetidas no duplican cobros (UC05 RNF-003), reembolsos ni liquidaciones. Una notificación con dos operaciones (moderada, tardía) crea **dos filas**. La misma clave se entrega como `operationKey` a UC05, UC09 y UC10.
 8. **Persistencia** [SPEC Entidades Clave; general-plan D-25]: el estado operativo de la reserva **no** se persiste; `reservation_status_log` solo guarda lo necesario para idempotencia, y solo para los estados que disparan operaciones monetarias (`PENDING`, las cancelaciones y `COMPLETED`) **[CONV]**. `operation_type` toma los valores `CHARGE`, `REFUND` y `SETTLEMENT`; `outcome` es un texto corto sin valores fijados **[CONV]**.
 9. **Concurrencia** [general-plan D-15, §3.6]: bloqueo asesor por reserva —`ReservationLockPort` del núcleo compartido, consumido por UC07/UC08/UC09/UC10— y **una sola transacción** por mensaje (log + delegaciones), de modo que las dos operaciones de una cancelación moderada/tardía se confirman o se revierten juntas.
-10. **Unidireccional y errores** [SPEC RF-009, RF-010; README §4.4]: nunca se responde a Reservas. Mensaje inválido, estado desconocido, reserva sin información o sin cálculo → `ack` + `operational_failure`. Falla transitoria (BD, broker) → `nack` con 5 intentos y *backoff* exponencial (base 1 s) y, al agotarlos, DLQ `<cola>.dlq` y registro en `operational_failure` **[general-plan §7.2]**. Mensaje repetido (misma identidad) → `ack` sin operación adicional.
+10. **Unidireccional y errores** [SPEC RF-009, RF-010; README §4.4]: nunca se responde a Reservas. Mensaje inválido, estado desconocido (detectado por el mapper del listener), reserva sin información o sin cálculo → `ack` + `operational_failure`. Falla transitoria (BD, broker) → `nack` con 5 intentos y *backoff* exponencial (base 1 s) y, al agotarlos, DLQ `<cola>.dlq` y registro en `operational_failure` **[general-plan §7.2]**. Mensaje repetido (misma identidad) → `ack` sin operación adicional.
 
 ## Contratos de API
 
@@ -197,9 +201,10 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. `RequestSet
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
 | Unitario (`domain`) | 10 estados → plan de operaciones; el depósito nunca se opera | `ReservationStatusPolicyTest` |
-| Unitario (`application`) | prerrequisitos, estado desconocido, identidad/duplicados, delegación por estado | `HandleReservationStatusServiceTest` (Mockito sobre los `port.in`) |
+| Unitario (`application`) | prerrequisitos, identidad/duplicados, delegación por estado (solo estados conocidos) | `HandleReservationStatusServiceTest` (Mockito sobre los `port.in`) |
+| Unitario (`infrastructure`) | mapeo texto → enum; valor desconocido → fallo lógico | `ReservationStatusMessageMapperTest` |
 | Integración (Testcontainers PostgreSQL) | `UNIQUE` del log, bloqueo asesor, transacción única | `ReservationStatusLogPersistenceAdapterTest` |
-| Integración (Testcontainers RabbitMQ) | `ack`/`nack`, reintentos, DLQ, mensaje inválido | `ReservationStatusListenerTest` |
+| Integración (Testcontainers RabbitMQ) | `ack`/`nack`, reintentos, DLQ, mensaje inválido y estado desconocido | `ReservationStatusListenerTest` |
 | Arquitectura | reglas §3.4 | `ArchitectureTest` (base y ampliación T022) |
 
 **Pruebas de aceptación (CE-001…CE-007)**:
@@ -246,12 +251,12 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 - [ ] **T001** · Verificar `reservation_status_log` contra la migración inicial única: `reservation_id`, `status`, `operation_type`, `idempotency_key`, `status_changed_at`, `processed_at`, `outcome`, unicidad por `(reservation_id, status, operation_type, idempotency_key)` (general-plan §4); UC07 no define migraciones propias (general-plan §4.2, D-31).
 - [ ] **T002** · Dominio: `ReservationStatus` (10 valores), `FinancialOperationType`, `PlannedOperation` y `ReservationStatusPolicy` (estado → operaciones: ninguna / cobro / reembolso y/o liquidación / liquidación estándar). Nunca incluye una operación sobre el depósito por `COMPLETED`. · M: `none` · P: `pending`
 - [ ] **T003** · Pruebas de `ReservationStatusPolicy`: los 10 estados con su plan exacto (cancelaciones de la tabla de §Reglas, punto 4); valor desconocido → sin plan. · M: `none` · P: `pending`
-- [ ] **T004** · Puertos: `HandleReservationStatusUseCase` + `ReservationStatusCommand`, `ReservationStatusLogRepository` y consumo del único `ReservationLockPort` compartido.
-- [ ] **T005** · Pruebas de `HandleReservationStatusService`: estados operativos sin delegación; `PENDING` → `ProcessChargeUseCase` con token; estado desconocido → `operational_failure`; reserva sin información o sin cálculo → fallo sin delegar; `INITIATED` repetida sin efectos; montos leídos como `BigDecimal` (RNF-002). · M: `none` · P: `pending`
+- [ ] **T004** · Puertos: `HandleReservationStatusUseCase` + `ReservationStatusCommand` (`status: ReservationStatus`), `ReservationStatusLogRepository` y consumo del único `ReservationLockPort` compartido.
+- [ ] **T005** · Pruebas de `HandleReservationStatusService`: estados operativos sin delegación; `PENDING` → `ProcessChargeUseCase` con token; reserva sin información o sin cálculo → fallo sin delegar; `INITIATED` repetida sin efectos; montos leídos como `BigDecimal` (RNF-002). El servicio solo recibe estados conocidos; el desconocido se prueba en T008/T009.
 - [ ] **T006** · `HandleReservationStatusService` (reconocimiento, prerrequisitos, `PENDING`, registro de fallos con `FailureRecorderPort`; deriva identidad de `(reservationId, status, operationType)`). Consume los puertos de UC05, UC09, UC10 y UC08 por nombre.
 - [ ] **T007** · Persistencia: entidad, repositorio, mapper y adaptador de `reservation_status_log` (`INSERT … ON CONFLICT DO NOTHING`) y bloqueo asesor de PostgreSQL por `reservation_id`; prueba de integración (Testcontainers) del `UNIQUE` y del bloqueo. · M: `none` · P: `pending`
-- [ ] **T008** · `ReservationStatusListener` + `ReservationStatusMessage` + `ReservationStatusMessagingConfig`: cola `finance.reservation-status.v1` y *binding* del contrato, mensaje inválido/`PENDING` sin token → `ack` + fallo, fallas transitorias → `nack` con 5 intentos y *backoff* exponencial (base 1 s) y DLQ `<cola>.dlq`, sin respuesta a Reservas (RF-009). · M: `none` · P: `pending`
-- [ ] **T009** · Pruebas del *listener* (Testcontainers RabbitMQ): `ack` en errores lógicos, `nack` y DLQ en transitorios, ninguna respuesta publicada. · M: `none` · P: `pending`
+- [ ] **T008** · `ReservationStatusListener` + `ReservationStatusMessage` + `ReservationStatusMessageMapper` + `ReservationStatusMessagingConfig`: cola `finance.reservation-status.v1` y *binding* del contrato; el mapper convierte `status` al enum y lanza un fallo lógico si es desconocido; mensaje inválido/estado desconocido/`PENDING` sin token → `ack` + fallo, fallas transitorias → `nack` con 5 intentos y *backoff* exponencial (base 1 s) y DLQ `<cola>.dlq`, sin respuesta a Reservas (RF-009). · M: `none` · P: `pending`
+- [ ] **T009** · Pruebas del *listener* (Testcontainers RabbitMQ): `ack` en errores lógicos, estado desconocido → `ack` + `operational_failure`, `nack` y DLQ en transitorios, ninguna respuesta publicada. · M: `none` · P: `pending`
 - [ ] **T010** · **`ce001_decision_financiera_correcta_por_estado`** (CE-001). · M: `none` · P: `pending`
 - [ ] **T011** · **`ce007_iniciada_pendiente_sin_reinicio_ttl_identidad_y_exclusion_mutua`** (CE-007). · M: `none` · P: `pending`
 

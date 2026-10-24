@@ -40,7 +40,7 @@ Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domai
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]  
 **Primary Dependencies**: Spring Boot 4.1.1; Spring Web MVC, Validation, Data JPA (Hibernate), Actuator, Flyway, MapStruct, Micrometer/Prometheus y ArchUnit. UC12 usa especialmente Web MVC, JPA/read-only query, MockMvc, Testcontainers y pruebas de arquitectura. Las dependencias pertenecen al núcleo compartido; este plan no modifica `pom.xml`. (Sin *starter* de seguridad: fuera de alcance, general-plan §7.1.)
-**Storage**: PostgreSQL 16+; UC12 crea `v_financial_records` como `UNION ALL` de `charge_record`, `refund_record`, `settlement_record` y `commission_record`, con `record_id`, orden estable `(created_at DESC, record_id DESC)` y `NULL::text AS external_reference` para comisiones. Usa `NUMERIC(18,4)` y `timestamptz` [D-11].
+**Storage**: PostgreSQL 16+; `v_financial_records` se crea en `V1__initial_schema.sql` como `UNION ALL` de `charge_record`, `refund_record`, `settlement_record` y `commission_record`, con `record_id`, orden estable `(created_at DESC, record_id DESC)` y `NULL::text AS external_reference` para comisiones. UC12 solo la consulta. Usa `NUMERIC(18,4)` y `timestamptz` [D-11].
 **Messaging**: N/A para la entrada de UC12; no consume ni publica eventos en este caso de uso.  
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, Testcontainers PostgreSQL y ArchUnit [CONV].  
 **Target Platform**: contenedores Docker sobre Linux; desarrollo local con Docker Compose [SPEC general-plan].  
@@ -178,7 +178,7 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC12
 | ID | Descripción | Decisión | Estado |
 |---|---|---|---|
 | **D-UC12-01** | Filtros técnicos del contrato (`reservation_id`, `date_from`/`date_to` y `owner_id` opcional) | Se aceptan sin ampliar el alcance declarado del SPEC; se validan los tipos y se combinan con AND | Aplicada |
-| **D-UC12-02** | Dueño y forma de `v_financial_records` | UC12 crea la vista con `record_id`, orden estable `(created_at DESC, record_id DESC)` y `NULL::text AS external_reference` para comisiones | Aplicada |
+| **D-UC12-02** | Dueño y forma de `v_financial_records` | La vista pertenece a `V1__initial_schema.sql`; UC12 solo la consume, con `record_id`, orden estable `(created_at DESC, record_id DESC)` y `NULL::text AS external_reference` para comisiones | Aplicada |
 | **D-UC12-03** | Seguridad transversal | Seguridad fuera de alcance (general-plan §7.1, D-21): el alcance declarado viaja como dato plano (`scope`/`owner_id`) y el sistema no emite `401`/`403` en REST; sin `SecurityConfig` | Aplicada |
 | **D-UC12-04** | Política de migraciones | Migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31); la vista `v_financial_records` se crea allí; UC12 no define migraciones propias | Aplicada |
 | **D-UC12-05** | Alcance de la consulta | UC12 expone exactamente los filtros del contrato (tipo, propietario, embarcación, reserva y rango de fechas), la paginación y el orden estable; no agrega métricas ni columnas propias | Aplicada |

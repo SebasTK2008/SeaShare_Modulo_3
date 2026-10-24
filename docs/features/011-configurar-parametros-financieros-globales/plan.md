@@ -157,11 +157,12 @@ src/test/java/com/seashare/seasharem3/
 ```java
 public interface FinancialParametersRepository {
     Optional<FinancialParameters> findCurrent();             // versión vigente (mayor version_number); vacío si no existe ninguna (→ 404)
+    Optional<FinancialParameters> findById(UUID parametersId); // versión referenciada por frozen_parameters_id (D-27; UC04/UC10)
     FinancialParameters saveNewVersion(FinancialParameters params);  // INSERT de una versión nueva (append-only); nunca UPDATE
 }
 ```
 
-Lo consumen UC01, UC02 y UC04 por nombre. Los puertos de entrada (`LoadFinancialParametersUseCase`, `SaveFinancialParametersUseCase`) son internos de UC11 y no se exponen a otros casos de uso.
+Lo consumen UC01, UC02, UC04 y UC10 por nombre. Los puertos de entrada (`LoadFinancialParametersUseCase`, `SaveFinancialParametersUseCase`) son internos de UC11 y no se exponen a otros casos de uso.
 
 **Núcleo compartido**, firmas [CONV]:
 
@@ -226,7 +227,7 @@ Devuelve la **versión vigente** (identificada por su `version_number`) + `guara
 }
 ```
 
-- **404 `PARAMETERS_NOT_CONFIGURED`** cuando no existe ninguna versión (primera vez; HU3 escenario 2) [SPEC HU3; contrato].
+- **404 `PARAMETERS_NOT_CONFIGURED`** cuando no existe ninguna versión (primera vez; HU3 escenario 2) [SPEC HU3; contrato]. No confundir con el **503 `FINANCIAL_PARAMETERS_NOT_CONFIGURED`** de UC01/UC04: UC11 `load` debe lanzar `ContractException(ErrorCode.PARAMETERS_NOT_CONFIGURED)` para el 404; `FinancialParametersNotConfiguredException` queda reservada para el 503 de los consumidores que no pueden calcular.
 - **500 `INTERNAL_ERROR`** (catálogo §3.4) si aplica [SPEC]. Sin `401`: no hay autenticación (seguridad fuera de alcance, general-plan §7.1).
 - Nota: los porcentajes se serializan como **string decimal** (RNF-002 + `contracts/README.md` §3.1). El formato de cada elemento de `high_season_windows` es `MM-dd→MM-dd` para las ventanas fijas y `semana-santa` para la ventana móvil.
 - **Discrepancia con el contrato**: el ejemplo de `UC11-obtener-parametros-financieros.md` mostraba `"Fin de año (ej. 15-dic a 15-ene)"`, pero la ventana de fin de año del SPEC 2 RF-006 es del **15 de noviembre** al 15 de enero (el plan general y `contexto-modulo3.md` coinciden con el SPEC 2). Rige el SPEC 2; el ejemplo de ese contrato era incorrecto y **ya se corrigió** (ver T044). El ejemplo JSON de este plan ya usa `11-15→01-15`. Ver **D-UC11-01**.
@@ -329,7 +330,7 @@ Prerrequisitos transversales sin los cuales ninguna tarea de UC11 es testeable.
 - [ ] **T010** · Test de contrato del `PUT` para los dos campos de US1: cuerpo válido → 204; string decimal aceptado (RNF-002). · M: `none` · P: `pending`
 - [ ] **T011** · Prueba unitaria de `FinancialParametersService.save` con command de HU1 (Mockito sobre el puerto). · M: `none` · P: `pending`
 - [ ] **T012** · `SaveFinancialParametersUseCase` + `FinancialParametersCommand` (los cuatro campos obligatorios, RNF-001). · M: `none` · P: `pending`
-- [ ] **T013** · `FinancialParametersRepository` (out) — definido en T007; aquí se congelan sus métodos `findCurrent`/`saveNewVersion` para consumidores RF-006. · M: `none` · P: `pending`
+- [ ] **T013** · `FinancialParametersRepository` (out) — definido en T007; aquí se congelan sus métodos `findCurrent`/`findById`/`saveNewVersion` para consumidores RF-006 y para resolver versiones congeladas. · M: `none` · P: `pending`
 - [ ] **T014** · `FinancialParametersJpaEntity` + `FinancialParametersJpaRepository` sobre la tabla **versionada** (`@Table(name = "financial_parameters")`, PK `id UUID`, `version_number` único; sin `UPDATE`). · M: `none` · P: `pending`
 - [ ] **T015** · `FinancialParametersMapper` (MapStruct): dominio ↔ entidad, con mapeo D-UC11-04 (`platform_commission_percentage`→`commission_pct`…). · M: `none` · P: `pending`
 - [ ] **T016** · `FinancialParametersPersistenceAdapter` (out): `saveNewVersion` atómico (INSERT append-only; primera configuración = versión `1`, D-UC11-07) y degradación de errores a `PARAMETERS_SAVE_FAILED`. · M: `none` · P: `pending`
