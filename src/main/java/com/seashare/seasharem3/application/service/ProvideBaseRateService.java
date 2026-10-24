@@ -66,7 +66,14 @@ public class ProvideBaseRateService implements ProvideBaseRateUseCase {
 
         FinancialParameters parameters = null;
         if (dynamicRatePolicy.requiresAdjustment(evaluatedDate)) {
-            parameters = financialParametersRepository.findCurrent().orElse(null);
+            try {
+                parameters = financialParametersRepository.findCurrent().orElse(null);
+            } catch (RuntimeException exception) {
+                recordFailure(BaseRateFailureReason.PARAMETERS_UNAVAILABLE,
+                        invocationPayload(evaluatedDate, uniqueBoatIds));
+                throw new BaseRateException(BaseRateFailureReason.PARAMETERS_UNAVAILABLE,
+                        "Financial parameters could not be read", exception);
+            }
             if (parameters == null) {
                 recordFailure(BaseRateFailureReason.DYNAMIC_RATE_NOT_CONFIGURED,
                         invocationPayload(evaluatedDate, uniqueBoatIds));

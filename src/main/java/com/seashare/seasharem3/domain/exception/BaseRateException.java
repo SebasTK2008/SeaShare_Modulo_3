@@ -8,12 +8,14 @@ public class BaseRateException extends DomainException {
 
     /**
      * Motivo de la falla con su marca transitorio/permanente.
-     * Fuente: UC02 plan T014 (transitorios: FLEET_UNAVAILABLE y DYNAMIC_RATE_NOT_CONFIGURED;
-     * permanente: BASE_RATE_NOT_AVAILABLE). [CONV] enum anidado (el plan referencia un único archivo).
+     * Fuente: UC02 plan T014 (transitorios: FLEET_UNAVAILABLE, DYNAMIC_RATE_NOT_CONFIGURED y
+     * PARAMETERS_UNAVAILABLE; permanente: BASE_RATE_NOT_AVAILABLE). [CONV] enum anidado (el plan
+     * referencia un único archivo).
      */
     public enum BaseRateFailureReason {
         FLEET_UNAVAILABLE(true),
         DYNAMIC_RATE_NOT_CONFIGURED(true),
+        PARAMETERS_UNAVAILABLE(true),
         BASE_RATE_NOT_AVAILABLE(false);
 
         private final boolean transientFailure;

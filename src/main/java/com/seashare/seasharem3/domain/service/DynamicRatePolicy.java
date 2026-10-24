@@ -1,6 +1,5 @@
 package com.seashare.seasharem3.domain.service;
 
-import com.seashare.seasharem3.domain.exception.BaseRateException;
 import com.seashare.seasharem3.domain.model.FinancialParameters;
 import com.seashare.seasharem3.domain.valueobject.BaseRate;
 import com.seashare.seasharem3.domain.valueobject.Money;
@@ -35,8 +34,11 @@ public class DynamicRatePolicy {
 
     /**
      * Aplica la condición dinámica vigente. Si la fecha es regular no usa los parámetros; si
-     * requiere ajuste y no hay parámetros, falla con {@code DYNAMIC_RATE_NOT_CONFIGURED}.
+     * requiere ajuste, {@code parameters} y sus porcentajes deben estar presentes por invariante
+     * de {@link FinancialParameters}. {@code ProvideBaseRateService} comprueba la ausencia de la
+     * versión vigente antes de invocar este método.
      *
+     * @throws NullPointerException si una fecha que requiere ajuste llega sin parámetros
      * @return tarifa final a escala 4, sin redondeo final a centavos
      */
     public BaseRate apply(BaseRate baseRate, LocalDate date, FinancialParameters parameters) {
@@ -49,38 +51,22 @@ public class DynamicRatePolicy {
         if (!weekend && !highSeason) {
             return baseRate;
         }
-        if (parameters == null) {
-            throw notConfigured();
-        }
+        FinancialParameters requiredParameters = Objects.requireNonNull(parameters, "parameters");
 
         if (weekend && highSeason) {
-            Money weekendAmount = baseRate.amount().increaseBy(
-                    requiredPercentage(parameters.weekendIncreasePct()));
-            Money highSeasonAmount = baseRate.amount().increaseBy(
-                    requiredPercentage(parameters.highSeasonIncreasePct()));
+            Money weekendAmount = baseRate.amount().increaseBy(requiredParameters.weekendIncreasePct());
+            Money highSeasonAmount = baseRate.amount().increaseBy(requiredParameters.highSeasonIncreasePct());
             return new BaseRate(weekendAmount.max(highSeasonAmount));
         }
 
         Percentage percentage = weekend
-                ? parameters.weekendIncreasePct()
-                : parameters.highSeasonIncreasePct();
-        return new BaseRate(baseRate.amount().increaseBy(requiredPercentage(percentage)));
+                ? requiredParameters.weekendIncreasePct()
+                : requiredParameters.highSeasonIncreasePct();
+        return new BaseRate(baseRate.amount().increaseBy(percentage));
     }
 
     private static boolean isWeekend(LocalDate date) {
         DayOfWeek day = date.getDayOfWeek();
         return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
-    }
-
-    private static Percentage requiredPercentage(Percentage percentage) {
-        if (percentage == null) {
-            throw notConfigured();
-        }
-        return percentage;
-    }
-
-    private static BaseRateException notConfigured() {
-        return new BaseRateException(BaseRateException.BaseRateFailureReason.DYNAMIC_RATE_NOT_CONFIGURED,
-                "A dynamic rate percentage is required for the evaluated date but is not configured");
     }
 }

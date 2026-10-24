@@ -167,6 +167,32 @@ class ProvideBaseRateServiceTest {
     }
 
     @Test
+    void recordsAndPropagatesParameterReadFailuresWithoutCallingFleet() {
+        RuntimeException readFailure = new IllegalStateException("financial_parameters is unavailable");
+        when(dynamicRatePolicy.requiresAdjustment(WEEKEND_DATE)).thenReturn(true);
+        when(financialParametersRepository.findCurrent()).thenThrow(readFailure);
+
+        assertThatThrownBy(() -> service.provideBaseRates(
+                new ProvideBaseRateCommand(List.of(BOAT_A), WEEKEND_DATE)))
+                .isInstanceOf(BaseRateException.class)
+                .satisfies(exception -> {
+                    BaseRateException baseRateException = (BaseRateException) exception;
+                    assertThat(baseRateException.reason())
+                            .isEqualTo(BaseRateFailureReason.PARAMETERS_UNAVAILABLE);
+                    assertThat(baseRateException).hasCause(readFailure);
+                });
+
+        verifyNoInteractions(fleetRatePort);
+        assertThat(failureRecorder.failures()).singleElement().satisfies(failure -> {
+            assertThat(failure.useCase()).isEqualTo("UC02");
+            assertThat(failure.reservationId()).isNull();
+            assertThat(failure.reason()).isEqualTo(BaseRateFailureReason.PARAMETERS_UNAVAILABLE.name());
+            assertThat(failure.payloadRef()).contains("evaluatedDate=" + WEEKEND_DATE)
+                    .contains(BOAT_A.value().toString());
+        });
+    }
+
+    @Test
     void recordsAndPropagatesMissingDynamicParametersWithoutCallingFleet() {
         when(dynamicRatePolicy.requiresAdjustment(WEEKEND_DATE)).thenReturn(true);
         when(financialParametersRepository.findCurrent()).thenReturn(Optional.empty());

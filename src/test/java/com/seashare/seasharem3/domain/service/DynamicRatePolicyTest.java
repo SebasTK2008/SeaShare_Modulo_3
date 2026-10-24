@@ -1,6 +1,5 @@
 package com.seashare.seasharem3.domain.service;
 
-import com.seashare.seasharem3.domain.exception.BaseRateException;
 import com.seashare.seasharem3.domain.model.FinancialParameters;
 import com.seashare.seasharem3.domain.valueobject.BaseRate;
 import com.seashare.seasharem3.domain.valueobject.Money;
@@ -15,7 +14,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 class DynamicRatePolicyTest {
 
@@ -73,12 +72,12 @@ class DynamicRatePolicyTest {
         assertThat(result.amount().amount().scale()).isEqualTo(4);
     }
 
-    @Test
-    void failsWhenAdjustmentIsRequiredButParametersAreMissing() {
-        assertThatExceptionOfType(BaseRateException.class)
-                .isThrownBy(() -> policy.apply(baseRate, LocalDate.parse("2026-10-03"), null))
-                .satisfies(exception -> assertThat(exception.reason())
-                        .isEqualTo(BaseRateException.BaseRateFailureReason.DYNAMIC_RATE_NOT_CONFIGURED));
+    @ParameterizedTest
+    @ValueSource(strings = {"2026-10-03", "2026-10-07", "2026-12-20"})
+    void rejectsMissingParametersAsAProgrammingErrorWhenAdjustmentIsRequired(String date) {
+        assertThatNullPointerException()
+                .isThrownBy(() -> policy.apply(baseRate, LocalDate.parse(date), null))
+                .withMessage("parameters");
     }
 
     @ParameterizedTest

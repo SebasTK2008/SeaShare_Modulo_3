@@ -138,6 +138,7 @@ public class GlobalExceptionHandler {
         ErrorCode code = switch (exception.reason()) {
             case FLEET_UNAVAILABLE -> ErrorCode.FLEET_UNAVAILABLE;
             case DYNAMIC_RATE_NOT_CONFIGURED -> ErrorCode.FINANCIAL_PARAMETERS_NOT_CONFIGURED;
+            case PARAMETERS_UNAVAILABLE -> ErrorCode.INTERNAL_ERROR;
             case BASE_RATE_NOT_AVAILABLE -> ErrorCode.BASE_RATE_NOT_AVAILABLE;
         };
         return problems.create(code, exception.getMessage());

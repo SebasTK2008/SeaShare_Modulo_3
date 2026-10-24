@@ -1,6 +1,7 @@
 # Implementation Plan: UC01 - Solicitar Estimación para Reserva
 
 **Date**: 2026-10-09
+**Updated**: 2026-10-24 (criterio de integración real con UC02)
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -252,7 +253,7 @@ Fuente: `general-plan.md` (Technical Context), `contracts/rest/UC01-*` y SPEC 01
 | Unitario (`domain`) | fórmula y precisión escala 4 (RF-002/RF-003, RNF-002), días inclusivos | `domain/service/PricingCalculatorTest` |
 | Unitario (`application`) | orquestación del lote y del individual, dedupe, lista vacía, sin tarifa, parámetros faltantes, propagación de `FLEET_UNAVAILABLE`, mapeo a `unavailable[]`/`422` | `application/service/EstimateBatchServiceTest` (Mockito sobre `ProvideBaseRateUseCase`, `FinancialParametersRepository`, `ClockPort`) |
 | Contrato / Web (MockMvc) | cuerpos y códigos de los dos contratos; DTO estricto del lote; límite de lote | `EstimateControllerContractTest`, `EstimateControllerValidationTest` |
-| Integración (WireMock + Spring) | fallas de Flota → 503 sin parciales; cortocircuito de parámetros | `integration/EstimateResilienceIT` |
+| Integración (WireMock + Spring) | fallas de Flota → 503 sin parciales; cortocircuito de parámetros; con `ProvideBaseRateService` real (no un mock del puerto) | `integration/EstimateResilienceIT` |
 | Aceptación | CE-001, CE-002, CE-003, CE-004, CE-005 + carga ligera HU3 | `application/service/EstimateAcceptanceTest` |
 | Arquitectura | reglas §3.4; sin lógica de tarifa dinámica en UC01 | `arch/ArchitectureTest` |
 
@@ -263,6 +264,8 @@ Fuente: `general-plan.md` (Technical Context), `contracts/rest/UC01-*` y SPEC 01
 - **`ce003_aviso_obligatorio_presente`** (CE-003, T023): verifica que **toda** respuesta individual exitosa incluye exactamente el texto `warning`. La métrica de negocio (<2 % de tickets de "tarifas inesperadas" en 60 días) **no es automatizable**: se traza aquí y queda como criterio de negocio verificado fuera del sistema [SPEC CE-003].
 - **`ce004_fallas_simuladas_sin_estimacion_parcial`** (CE-004, T020): con WireMock (timeout > 1 s, puerto cerrado, cuerpo inválido, `500` y circuito abierto) y con parámetros ausentes, el sistema responde `503 FLEET_UNAVAILABLE` o `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED` completa, **sin estimaciones parciales ni cálculos asumidos**.
 - **`ce005_lote_con_atributos_extra_rechazado`** (CE-005, T021): parametrizada con `start_date`, `end_date`, `passengers` y campos desconocidos → `400 VALIDATION_ERROR` en el 100 % de los casos, sin ejecutar cálculo; y 0 estimaciones calculadas con fecha/pasajeros provistos.
+
+**Integración real con UC02 (criterio obligatorio):** CE-004 (T020) y la carga ligera HU3 (T022) deben construir el `ProvideBaseRateService` **real** de UC02 (con `FleetRateRestClient` sobre WireMock y dobles en memoria de `FinancialParametersRepository`/`FailureRecorderPort`), no un mock de `ProvideBaseRateUseCase`. Así se detecta cualquier regresión de firma o de manejo de fallos de UC02 antes de cerrar UC01; las reglas internas de UC02 se siguen probando en su propio plan.
 
 Además, **carga ligera HU3** (T022): batch de 50 embarcaciones contra un stub WireMock de Flota, verificando una **única** consulta a Flota y finalización dentro del presupuesto del cliente (timeout 1 s). El SLA real (< 500 ms) es compromiso de Flota [SPEC HU3].
 
@@ -316,9 +319,9 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 
 ### Phase 5: Resiliencia y aceptación (RNF-003; CE-001, CE-002, CE-003, CE-004, CE-005; HU3)
 
-- [ ] **T018** `EstimateResilienceIT`: timeout, `500`, cuerpo inválido y circuito abierto → `503 FLEET_UNAVAILABLE` sin estimaciones parciales; parámetros ausentes → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`.
+- [ ] **T018** `EstimateResilienceIT`: timeout, `500`, cuerpo inválido y circuito abierto → `503 FLEET_UNAVAILABLE` sin estimaciones parciales; parámetros ausentes → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`. Construye `ProvideBaseRateService` real (WireMock + dobles de parámetros/registro), no un mock de `ProvideBaseRateUseCase`.
 - [ ] **T019** · **`ce001_precision_financiera_100_casos`** (CE-001): parametrizada con ≥ 100 casos (fechas regular/FE/TA/coincidencia, tarifas, días inclusivos y pasajeros, ambas modalidades) y total exacto a 2 decimales.
-- [ ] **T020** · **`ce004_fallas_simuladas_sin_estimacion_parcial`** (CE-004): fallas simuladas de Flota y parámetros ausentes → respuesta controlada completa, sin salida parcial.
+- [ ] **T020** · **`ce004_fallas_simuladas_sin_estimacion_parcial`** (CE-004): fallas simuladas de Flota y parámetros ausentes → respuesta controlada completa, sin salida parcial; con `ProvideBaseRateService` real (no un mock del puerto).
 - [ ] **T021** · **`ce005_lote_con_atributos_extra_rechazado`** (CE-005): parametrizada con `start_date`/`end_date`/`passengers`/desconocidos → `400 VALIDATION_ERROR`, 0 cálculos.
 - [ ] **T022** · HU3: carga ligera de 50 embarcaciones contra stub WireMock de Flota verificando una única consulta y finalización dentro del presupuesto del cliente (timeout 1 s). El SLA < 500 ms es de Flota.
 - [ ] **T023** · **`ce002_…`** (CE-002, ArchUnit) + **`ce003_aviso_obligatorio_presente`** (CE-003, texto del `warning` en toda respuesta individual; métrica de negocio no automatizable).
@@ -355,7 +358,7 @@ T001 ─┬─> T002 ─┬─> T003 ─> T005 ─> T006 ─┬─> T007 ─┐
 - El SPEC 01 **no** define meta de rendimiento propia, zona horaria, máximo de lote ni rango de `passengers`; se fijan, respectivamente, por el timeout de 1 s del cliente de Flota, `America/Bogota` (`seashare.timezone`, general-plan D-12), el máximo de **50** (general-plan D-22) y la decisión D-UC01-06 (entero ≥ 1, sin máximo).
 - **Seguridad fuera de alcance**: el sistema **no implementa autenticación ni autorización** (general-plan §7.1, D-21); los contratos de UC01 ya no declaran `401`/`403` y este plan no incluye `SecurityConfig` ni pruebas de seguridad. "Solo el Sistema de Reservas y Operaciones" es el usuario esperado.
 - En el lote, un `boat_id` no reconocido por Flota se **omite** del resultado y una embarcación reconocida sin tarifa base se reporta en `unavailable[]` (D-UC01-05); nunca se inventa un precio.
-- `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId` y `BaseRateException` son de **UC02** (plan ya redactado): UC01 los consume por nombre, no los implementa ni los prueba.
+- `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId` y `BaseRateException` son de **UC02** (plan ya redactado): UC01 los consume por nombre y no los implementa; sus reglas internas se prueban en UC02. La aceptación de UC01 sí ejecuta el `ProvideBaseRateService` real para detectar regresiones de integración.
 - `FinancialParametersRepository` y la tabla `financial_parameters` son de **UC11**: UC01 los consume por nombre (versión vigente, seguro por pasajero). UC01 **no** persiste nada ni define migraciones.
 - `FailureRecorderPort`/`operational_failure` **no** se usan en UC01 (D-UC01-04); UC02 registra los fallos de Flota.
 - El ejemplo del contrato de lote es ilustrativo; los ejemplos de este plan usan `2026-09-30` (miércoles) como fecha de evaluación (D-UC01-02).
