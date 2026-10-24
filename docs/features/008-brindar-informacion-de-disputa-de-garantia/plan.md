@@ -102,7 +102,7 @@ src/test/java/com/seashare/seasharem3/
 
 **Structure Decision**: sigue `general-plan.md` §3.2–§3.4: `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`; ningún listener accede directamente a repositorios; DTOs AMQP viven en infraestructura y aplicación trabaja con commands/results.
 
-**Firmas referenciadas**: UC08 publica `OpenDepositTrackingUseCase` para UC07 y es dueño de `deposit_disposition` (desenlace con un único *compare-and-set*; general-plan D-34). Consume `RequestRefundUseCase` de UC09 y `RequestSettlementUseCase` de UC10 por sus puertos publicados; no redefine ni implementa esos casos. No expone REST ni responde a Reservas.
+**Firmas referenciadas**: UC08 publica `OpenDepositTrackingUseCase.open(OpenDepositTrackingCommand)` para UC07 y es dueño de `deposit_disposition` (desenlace con un único *compare-and-set*; general-plan D-34). [CONV núcleo, congelado] el retorno es `DepositTrackingResult(ReservationId reservationId, DepositDispositionStatus status, boolean created)`: `created` distingue la apertura nueva del desenlace ya existente para que UC07 no repita la operación. Consume `RequestRefundUseCase` de UC09 y `RequestSettlementUseCase` de UC10 por sus puertos publicados; no redefine ni implementa esos casos. No expone REST ni responde a Reservas.
 
 ## Reglas de negocio
 
@@ -185,7 +185,7 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC08
 - [ ] **T004** Crear `DisputeStatus`, value objects, `DisputeEvent` y reglas canónicas.
 - [ ] **T005** Consumir por nombre puertos de UC09/UC10, repositorios de reserva/cobro, `FailureRecorderPort`, `ReservationLockPort` y `OutboxPort`; no implementarlos.
 - [ ] **T006** Crear DTO AMQP estricto y mapearlo a `DisputeNotificationCommand`.
-- [ ] **T007** Crear `HandleDisputeNotificationUseCase`, `OpenDepositTrackingUseCase` y result interno.
+- [ ] **T007** Crear `HandleDisputeNotificationUseCase`, `OpenDepositTrackingUseCase` y el result interno `DepositTrackingResult(ReservationId reservationId, DepositDispositionStatus status, boolean created)` [CONV núcleo, congelado].
 
 ### Phase 3: US1 — Recibir y procesar disputa (P1)
 

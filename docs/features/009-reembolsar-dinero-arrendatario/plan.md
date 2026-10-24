@@ -19,7 +19,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Reem
 | **RF-002** flexible y anfitrión: 100 % del total | `RefundCalculator` | T004, T008 | T003, T007 |
 | **RF-003** moderada: 50 % del alquiler + 100 % del depósito, sin seguro | `RefundCalculator` | T004 | T003 |
 | **RF-003A** tardía: 100 % del depósito | `RefundCalculator` | T004 | T003 |
-| **RF-004** `REJECTED` de disputa: depósito íntegro | `RefundCalculator`, `RequestRefundService` (trigger `DISPUTA_RECHAZADO`) | T016 | T015, T017 |
+| **RF-004** `REJECTED` de disputa: depósito íntegro | `RefundCalculator`, `RequestRefundService` (trigger `DISPUTE_REJECTED`) | T016 | T015, T017 |
 | **RF-005** sin retención parcial del depósito | `RefundCalculator` (el depósito siempre al 100 %) | T004, T016 | T015, T026 |
 | **RF-006** intención con cobro original y clave idempotente | `RefundIntent`, `RefundIntentRepository`, `charge_intent_id` | T001, T002, T008, T009 | T007, T010 |
 | **RF-006A** `RegistroDeReembolso` con `intencionDeReembolsoId` | `refund_record.refund_intent_id` (FK `NOT NULL`) | T001, T002, T020 | T010, T024 |
@@ -37,7 +37,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Reem
 | **CE-002** 0 decisiones de daños, 0 retenciones parciales, 0 descuentos | `RefundCalculator`, adaptador | T004, T016 | **T026** |
 | **CE-003** trazabilidad intención → registro | FK `refund_intent_id` | T001, T020 | **T024** |
 | **CE-004** fallas de comunicación sin estado indefinido | Worker + conciliación | T013, T023 | **T025** |
-| **CE-005** historias unificadas para `REJECTED` | Un solo trigger `DISPUTA_RECHAZADO` sin atributo de origen | T016 | **T018** |
+| **CE-005** historias unificadas para `REJECTED` | Un solo trigger `DISPUTE_REJECTED` sin atributo de origen | T016 | **T018** |
 | **HU1** reembolso por cancelación (P1) | Fase 3 | T001–T014 | T003, T007, T010, T012, T014 |
 | **HU2** reembolso del depósito por disputa rechazada (P1) | Fase 4 | T015–T018 | T015, T017, T018 |
 | **HU3** registrar resultado de la pasarela (P1) | Fase 5 | T019–T026 | T019, T021–T026 |
@@ -85,7 +85,7 @@ src/main/java/com/seashare/seasharem3/
 │   │   ├── RefundIntent.java                    # T002  [SPEC RF-006]
 │   │   └── RefundRecord.java                    # T002  inmutable [SPEC RF-006A, RF-013]
 │   ├── valueobject/
-│   │   ├── RefundTrigger.java                   # T002  estados de cancelación + DISPUTA_RECHAZADO [CONV]
+│   │   ├── RefundTrigger.java                   # T002  estados de cancelación + DISPUTE_REJECTED [CONV]
 │   │   ├── RefundScope.java                     # T002  FULL / HALF_RENTAL_PLUS_DEPOSIT / DEPOSIT_ONLY [CONV]
 │   │   ├── RefundOperationType.java             # T002  REFUND [SPEC SolicitudReembolsoPasarela]
 │   │   └── RefundIntentStatus.java              # T002  [general-plan §8]
@@ -143,8 +143,8 @@ public interface RequestRefundUseCase {
 public record RefundRequestCommand(
     UUID reservationId,
     RefundTrigger trigger,   // CANCELLED_FLEXIBLE | CANCELLED_MODERATE | CANCELLED_STRICT
-                             // | CANCELLED_BY_HOST | DISPUTA_RECHAZADO
-    UUID disputeId,          // nullable; solo con DISPUTA_RECHAZADO [SPEC RF-013]
+                             // | CANCELLED_BY_HOST | DISPUTE_REJECTED
+    UUID disputeId,          // nullable; solo con DISPUTE_REJECTED [SPEC RF-013]
     String operationKey      // identidad de operación de UC07 (RF-009A) o event_key de UC08 (RF-008), tomada tal cual [CONV]
 ) {}
 ```
@@ -165,7 +165,7 @@ Todas provienen del SPEC 9 salvo indicación. Los importes del ejemplo salen del
 | `CANCELLED_BY_HOST` | 100 % del valor total pagado | `FULL` | `990000.00` |
 | `CANCELLED_MODERATE` | 50 % del alquiler + 100 % del depósito; **el seguro no se reembolsa** | `HALF_RENTAL_PLUS_DEPOSIT` | `450000.00 + 30000.00 = 480000.00` |
 | `CANCELLED_STRICT` | 100 % del depósito; alquiler y seguro no se reembolsan | `DEPOSIT_ONLY` | `30000.00` |
-| `DISPUTA_RECHAZADO` | 100 % del depósito cobrado y registrado; sin retención parcial | `DEPOSIT_ONLY` | `30000.00` |
+| `DISPUTE_REJECTED` | 100 % del depósito cobrado y registrado; sin retención parcial | `DEPOSIT_ONLY` | `30000.00` |
 
    Rendimiento del 50 %: escala interna de 4 decimales; redondeo final hacia la pasarela `HALF_UP` a 2 decimales **[CONV]** (README §3.1).
 2. **Origen único del monto** [SPEC RF-001; UC08 RF-007]: los importes salen de `reservation_information` (`rental_amount`, `insurance_amount`, `deposit_amount`, `total_amount`). Reservas nunca envía montos.
@@ -251,8 +251,8 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %.
 
 ### Phase 4: US2 — Reembolso del depósito por disputa rechazada (HU2; RF-004, RF-005; CE-001, CE-005)
 
-- [ ] **T015** · Pruebas: `DISPUTA_RECHAZADO` → 100 % del depósito (`30000.00`), nunca parcial; con `disputeId`; el comando no lleva atributo de origen. · M: `none` · P: `pending`
-- [ ] **T016** · Implementar `DISPUTA_RECHAZADO` en `RefundCalculator` y `RequestRefundService`, copiando `disputeId` a la intención. Interacción con `deposit_disposition` (UC08, único *compare-and-set*) por `OpenDepositTrackingUseCase` [general-plan D-34]. · M: `none` · P: `pending`
+- [ ] **T015** · Pruebas: `DISPUTE_REJECTED` → 100 % del depósito (`30000.00`), nunca parcial; con `disputeId`; el comando no lleva atributo de origen. · M: `none` · P: `pending`
+- [ ] **T016** · Implementar `DISPUTE_REJECTED` en `RefundCalculator` y `RequestRefundService`, copiando `disputeId` a la intención. Interacción con `deposit_disposition` (UC08, único *compare-and-set*) por `OpenDepositTrackingUseCase` [general-plan D-34]. · M: `none` · P: `pending`
 - [ ] **T017** · **`ce001_reembolso_por_disputa_rechazada_es_el_100_por_ciento_del_deposito`** (CE-001). · M: `none` · P: `pending`
 - [ ] **T018** · **`ce005_rechazado_de_disputa_y_ausencia_de_reclamo_se_tratan_igual`** (CE-005). · M: `none` · P: `pending`
 

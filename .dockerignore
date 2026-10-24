@@ -1,0 +1,11 @@
+# Contexto de build mínimo: solo lo necesario para compilar la imagen.
+target/
+.git/
+.github/
+.vscode/
+docs/
+.env
+.env.example
+docker-compose*.yml
+*.md
+.mvn/wrapper/*.jar

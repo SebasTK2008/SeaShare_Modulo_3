@@ -83,9 +83,9 @@ Reservas pide el valor definitivo de una reserva ya registrada (UC03). El sistem
 ```json
 {
   "type": "about:blank",
-  "title": "Reserva sin información registrada",
+  "title": "Reservation information not found",
   "status": 404,
-  "detail": "No existe información registrada para la reserva b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10.",
+  "detail": "There is no registered information for reservation b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10.",
   "code": "RESERVATION_INFO_NOT_FOUND",
   "retryable": true
 }

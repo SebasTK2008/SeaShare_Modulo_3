@@ -582,6 +582,7 @@ Actuator (`/health`, `/metrics`), Micrometer + Prometheus, logs JSON con `reserv
 
 ### 7.4 Configuración **[TÉC]** (sobreescribible por entorno)
 `seashare.timezone=America/Bogota`, `seashare.estimates.max-batch-size=50`, `seashare.reporting.max-page-size=100`, `seashare.fleet.*`, `seashare.gateway.*`. No hay configuración de ventanas ni de disputas (24 h, vigencias): la administra Reservas [SPEC 008 RF-009].
+Perfiles de Spring: `dev` (por defecto; defaults locales alineados con `docker-compose.yml`) y `prod` (activo con `SPRING_PROFILES_ACTIVE=prod`; `application-prod.properties` no define defaults para credenciales ni secretos —llegan por variables de entorno o Docker secrets— y Actuator expone solo `health,info`).
 
 ---
 

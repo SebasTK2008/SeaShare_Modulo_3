@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: seashare-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-seashare}
+      POSTGRES_USER: ${POSTGRES_USER:-seashare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seashare}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-seashare} -d ${POSTGRES_DB:-seashare}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: seashare-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-seashare}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-seashare}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  app:
+    build: .
+    container_name: seashare-app
+    profiles: ["app"]
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-seashare}
+      DB_USERNAME: ${POSTGRES_USER:-seashare}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-seashare}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-seashare}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-seashare}
+      SEASHARE_TIMEZONE: ${SEASHARE_TIMEZONE:-America/Bogota}
+      GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-https://api.mercadopago.com}
+      GATEWAY_ACCESS_TOKEN: ${GATEWAY_ACCESS_TOKEN:-}
+      GATEWAY_WEBHOOK_SECRET: ${GATEWAY_WEBHOOK_SECRET:-}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/liveness"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+volumes:
+  postgres-data:

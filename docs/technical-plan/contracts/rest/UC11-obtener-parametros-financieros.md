@@ -34,7 +34,7 @@ No aplica.
 
 1. Se recupera la **versión vigente** de `ParámetrosFinancierosGlobales` (la de mayor `version_number`); las versiones anteriores se conservan como historial inmutable [SPEC RF-006].
 2. Si no existe ninguna versión de la configuración, el sistema informa que está pendiente y **no inventa valores** para ningún parámetro [SPEC HU3 escenario 2]. En REST esto se modela devolviendo un `404 Not Found` [CONV].
-3. La regla del depósito de garantía se informa como texto (`guarantee_deposit_rule`): **10 % de la tarifa diaria vigente registrada de la reserva** (general-plan D-29); al nivel de parámetros globales se informa la regla, no un monto, porque el monto depende de la embarcación [SPEC RF-012, HU3].
+3. La regla del depósito de garantía se informa como texto (`guarantee_deposit_rule`): `"10% de la tarifa base diaria"`; la base de cálculo es la tarifa base diaria vigente registrada de la reserva (con la tarifa dinámica ya resuelta; general-plan D-29). Al nivel de parámetros globales se informa la regla, no un monto, porque el monto depende de la embarcación [SPEC RF-012, HU3].
 4. El sistema incluye las ventanas de temporada alta calculadas por el calendario [SPEC HU3, RF-012].
 
 ## 4. Respuesta exitosa
@@ -58,7 +58,7 @@ No aplica.
   "insurance_fee_per_passenger": "15000.00",
   "weekend_increase_percentage": "10.00",
   "high_season_increase_percentage": "25.00",
-  "guarantee_deposit_rule": "10% de la tarifa diaria vigente registrada",
+  "guarantee_deposit_rule": "10% de la tarifa base diaria",
   "high_season_windows": [
     "11-15→01-15",
     "06-01→07-30",
@@ -78,9 +78,9 @@ No aplica.
 ```json
 {
   "type": "about:blank",
-  "title": "Configuración no encontrada",
+  "title": "Financial parameters not configured",
   "status": 404,
-  "detail": "La configuración de parámetros financieros globales aún no se ha realizado.",
+  "detail": "The global financial parameters have not been configured yet.",
   "code": "PARAMETERS_NOT_CONFIGURED",
   "retryable": true
 }

@@ -15,7 +15,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 La Pasarela de Pago (Mercado Pago) notifica de forma asíncrona el resultado de las operaciones (cobros, reembolsos, dispersiones). El sistema asocia el resultado a la intención original mediante la clave idempotente o la referencia del cobro y actualiza sus registros, generando los registros inmutables de auditoría si la operación fue exitosa.
 
 1. **Notificación entrante**: MP hace `POST` al endpoint del sistema con un payload mínimo y query params identificadores. El sistema responde `200 OK` inmediatamente para acusar recibo.
-2. **Consulta activa a la API de MP**: El sistema usa el `data.id` recibido para consultar la API de Mercado Pago y obtener el estado y detalle completo de la operación, y actualiza sus registros internos.
+2. **Consulta activa a la API de MP**: El sistema usa el `data.id` recibido —que es el `external_reference` con el que la intención quedó asociada— para consultar la API de Mercado Pago y obtener el estado y detalle completo de la operación, y actualiza sus registros internos.
 
 Este contrato describe únicamente el paso 1 (el endpoint que el sistema expone a MP). El paso 2 se describe en los contratos de comando de cobro, reembolso y liquidación.
 
@@ -95,7 +95,7 @@ MP firma cada notificación con HMAC-SHA256 usando el **secret del webhook** con
    - `type=refund` → operación de reembolso (UC09) → actualiza `IntenciónDeReembolso`, genera `RegistroDeReembolso` inmutable [SPEC 9 RF-007].
    - `type=merchant_order` con estado de captura completada → liquidación (UC10) → genera `RegistroDeDispersión` y `RegistroDeComisión` atómicamente [SPEC 10 RF-010].
 
-5. **Deduplicación**: Se usa el `data.id` de MP junto con la `idempotency_key` del comando original para localizar la intención interna y evitar procesar dos veces la misma notificación.
+5. **Deduplicación**: La notificación se asocia a la intención interna por el `external_reference` de la intención —el `data.id` del recurso que la pasarela devolvió al crear la operación y que el sistema guardó—, de modo que dos notificaciones de la misma operación no se procesan dos veces.
 
 6. **`data.id` o `type` desconocidos**: Si el ID o el tipo no pueden asociarse a ninguna intención interna, el sistema responde `200 OK` (para evitar reintentos infinitos de MP) y registra el evento en `operational_failure` para revisión manual [CONV].
 
@@ -119,4 +119,4 @@ MP firma cada notificación con HMAC-SHA256 usando el **secret del webhook** con
 
 ## 6. Idempotencia y reintentos
 
-Mercado Pago reintenta la notificación si no recibe `200 OK` o `204 No Content` (lo hace ante cualquier `4xx` o `5xx`, excepto `401`). El sistema garantiza idempotencia en el paso 2 mediante la deduplicación por `data.id` de MP e `idempotency_key` interna.
+Mercado Pago reintenta la notificación si no recibe `200 OK` o `204 No Content` (lo hace ante cualquier `4xx` o `5xx`, excepto `401`). El sistema garantiza idempotencia en el paso 2 asociando la notificación por el `external_reference` de la intención (el `data.id` de MP) y tratando el resultado ya registrado como duplicado.

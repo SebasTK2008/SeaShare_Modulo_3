@@ -105,9 +105,9 @@ Texto exacto de `warning` (sin punto final, como en el SPEC):
 ```json
 {
   "type": "about:blank",
-  "title": "Rango de fechas inválido",
+  "title": "Invalid date range",
   "status": 400,
-  "detail": "La fecha de fin 2026-12-19 es anterior a la fecha de inicio 2026-12-20.",
+  "detail": "The end date 2026-12-19 is before the start date 2026-12-20.",
   "code": "INVALID_DATE_RANGE",
   "retryable": false
 }

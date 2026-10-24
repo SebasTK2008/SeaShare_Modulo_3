@@ -35,7 +35,7 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
 | `token` | string | Sí | Token seguro de la tarjeta generado por el SDK de Mercado Pago | [SPEC RF-001, RF-011] |
 | `description` | string | Sí | Descripción de la reserva para el estado de cuenta; la fija el sistema (p. ej. `Reserva <reservation_id>`) | [CONV] |
 | `installments` | integer | Sí | Número de cuotas; el sistema fija `1` | [CONV] |
-| `payment_method_id` | string | Sí | ID del medio de pago; se envía el `payment_method_type` recibido en el mensaje de UC07 (ej. `visa`, `master`) | [SPEC] + [CONV] |
+| `payment_method_id` | string | Sí | ID del medio de pago; se envía el `payment_method_type` recibido en el mensaje de UC07 con una única traducción: `CREDIT_CARD` → `credit_card` (valor que exige Mercado Pago); cualquier otro valor pasa tal cual (ej. `visa`, `master`) | [SPEC] + [CONV] |
 | `payer.email` | string | Sí | Email del arrendatario; se envía `payment_metadata.payer_email` del mensaje de UC07 (dato plano) | [SPEC] + [CONV] |
 | `external_reference` | string | Sí | Identificador de la reserva para trazabilidad cruzada | [SPEC SolicitudCobroPasarela] |
 
@@ -67,7 +67,7 @@ Mercado Pago responde confirmando la recepción y estado inicial del pago. El re
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
 | `status` | string | Estado en MP (`approved`, `in_process`, `rejected`) | [SPEC RF-006] |
-| `id` | integer | Identificador único del pago en Mercado Pago (`external_reference` interno) | [SPEC RF-012] |
+| `id` | integer | Identificador único del pago en Mercado Pago; se guarda en `charge_intent.external_reference` y con él se asocian el webhook y la conciliación | [SPEC RF-012] + [CONV] |
 | `status_detail` | string | Detalle del estado (ej. `accredited`, `cc_rejected_bad_filled_other`) | [SPEC] |
 
 ## 5. Manejo de Errores

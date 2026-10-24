@@ -123,7 +123,7 @@ src/main/java/com/seashare/seasharem3/
     │   ├── FinancialParametersJpaRepository.java    # T014  [CONV]
     │   ├── FinancialParametersMapper.java           # T015  [general-plan D-04, MapStruct; nombre [CONV]]
     │   ├── FinancialParametersPersistenceAdapter.java # T016, T033 [general-plan §3.4]
-    │   ├── FailureRecorderPersistenceAdapter.java   # T046  base compartida [CONV]
+    │   ├── OperationalFailurePersistenceAdapter.java # T046  base compartida [CONV]
     │   └── OutboxPersistenceAdapter.java            # T046  base compartida [CONV]
     └── config/
         └── ProblemDetailsConfig.java                # T008, T039 [CONV: nombre [CONV]; RFC 9457]
@@ -321,7 +321,7 @@ Prerrequisitos transversales sin los cuales ninguna tarea de UC11 es testeable.
 - [ ] **T006** · Pruebas unitarias de dominio: rangos válidos/inválidos, null, formatos (RF-013, RNF-002). · M: `none` · P: `pending`
 - [ ] **T007** · `FinancialParametersRepository`, `SaveFinancialParametersUseCase`, `LoadFinancialParametersUseCase` y los puertos compartidos `FailureRecorderPort`, `OutboxPort`, `ReservationLockPort`, `ClockPort`, además de los VOs `Money`, `BoatId`, `ReservationId`, `OwnerId` y `Percentage`; publicar sus firmas por nombre.
 - [ ] **T008** · `ProblemDetailsConfig` (RFC 9457, `contracts/README.md` §3.3) con mapeo `VALIDATION_ERROR` 400, `PARAMETERS_NOT_CONFIGURED` 404, `PARAMETERS_SAVE_FAILED` 500, `INTERNAL_ERROR` 500. · M: `none` · P: `pending`
-- [ ] **T046** · adaptadores `FailureRecorderPersistenceAdapter` (`REQUIRES_NEW`) y `OutboxPersistenceAdapter`, además de `OutboxRelayJob`; `operational_failure.reservation_id` nullable y sin FK, `payload_ref` referencial y procedimiento de reproceso.
+- [ ] **T046** · adaptador `OperationalFailurePersistenceAdapter` (`REQUIRES_NEW`, con `OperationalFailureJpaEntity`/`OperationalFailureJpaRepository`) y `OutboxPersistenceAdapter`, además de `OutboxRelayJob`; `operational_failure.reservation_id` nullable y sin FK, `payload_ref` referencial y procedimiento de reproceso.
 - [ ] **T047** · pruebas de PostgreSQL/RabbitMQ para fallo aislado, outbox transaccional, relay, DLQ `<cola>.dlq`, lock único y reintentos idempotentes.
 
 ### Phase 3: US1 — Comisión de plataforma y tarifa de seguro (HU1, RF-001, RF-002, RNF-001/002, CE-001, CE-002, CE-004)
