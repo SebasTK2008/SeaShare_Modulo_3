@@ -1,6 +1,7 @@
 # Implementation Plan: UC03 - Brindar Información de Reserva
 
 **Date**: 2026-10-09
+**Updated**: 2026-10-24 (criterio de integración real con UC02)
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -254,9 +255,11 @@ Fuente: `general-plan.md` (Technical Context), contrato UC03 y SPEC 03. Cobertur
 - **`ce001_reserva_notificada_registrada_completa_y_upsert`** (CE-001, T019): integración (Testcontainers PostgreSQL): la reserva del ejemplo del contrato queda registrada con los 7 campos + `base_rate` exactos; un segundo mensaje con la misma `reservation_id` sobrescribe e **invalida** los montos (NULL); cero discrepancias.
 - **`ce002_unidireccional_sin_respuesta_ni_desglose`** (CE-002, T022): ArchUnit — no existe `@RestController`/adaptador web para UC03; el listener no envía mensajes (sin `RabbitTemplate` de salida ni outbox) y `RegisterReservationInformationUseCase` devuelve `void`; ninguna clase de UC03 depende de `PricingCalculator`/`ReservationValueCalculator` (RF-007).
 - **`ce003_fallas_registradas_sin_informacion_incompleta`** (CE-003, T021): con dobles (`InMemoryFailureRecorder` + stub de `ProvideBaseRateUseCase`): UC02 falla (FLEET/DYNAMIC), sin tarifa, `owner_id` ausente, `max_capacity` ausente, validación fallida → en el 100 % de los casos el fallo queda registrado internamente, **no se persiste información incompleta** y la versión válida previa se conserva.
-- **`ce004_cero_consultas_a_flota_por_propietario_y_capacidad`** (CE-004, T023): integración con WireMock sobre Flota (a través del adaptador de UC02): (a) el **único** request a Flota contiene únicamente `boat_ids` (sin `owner_id` ni `max_capacity`); (b) si el mensaje llega sin `owner_id` o sin `max_capacity`, la validación falla **antes** de invocar a UC02 y no se realiza ninguna llamada a Flota (cero requests).
+- **`ce004_cero_consultas_a_flota_por_propietario_y_capacidad`** (CE-004, T023): integración con WireMock sobre Flota (a través del adaptador de UC02): (a) el **único** request a Flota contiene únicamente `boat_ids` (sin `owner_id` ni `max_capacity`); (b) si el mensaje llega sin `owner_id` o sin `max_capacity`, la validación falla **antes** de invocar a UC02 y no se realiza ninguna llamada a Flota (cero requests). Usa el `ProvideBaseRateService` **real**, no un mock de `ProvideBaseRateUseCase`.
 
-Además: la regresión de consumidores **no forma parte de este plan** (UC04 completará los montos, `frozen_parameters_id` y `calculated_at`; los demás planes leen la tabla por nombre; aquí solo se publica la firma del repositorio).
+**Integración real con UC02 (criterio obligatorio):** CE-004 (T023) debe construir el `ProvideBaseRateService` **real** de UC02 (con `FleetRateRestClient` sobre WireMock y dobles en memoria de `FinancialParametersRepository`/`FailureRecorderPort`), no un mock de `ProvideBaseRateUseCase`. Así se detecta cualquier regresión de firma o de comportamiento del `<<include>>` antes de cerrar UC03; las reglas internas de UC02 se siguen probando en su propio plan.
+
+Además: la regresión de consumidores se cubre con el criterio anterior; UC04 completará los montos, `frozen_parameters_id` y `calculated_at`; los demás planes leen la tabla por nombre; aquí solo se publica la firma del repositorio.
 
 ## Decisiones de diseño (D-UC03-xx)
 
@@ -316,7 +319,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 - [ ] **T020** · Implementar la política de acuse del listener (tabla de decisión de §Contratos) y `ReservationInfoListenerRetryPolicyTest` (Testcontainers RabbitMQ): mensaje inválido/sin tarifa → `ack` + registro; `FLEET_UNAVAILABLE` → `nack` + reintentos → DLQ `finance.reservation-info.v1.dlq`; fallo de BD → `nack`.
 - [ ] **T021** · **`ce003_fallas_registradas_sin_informacion_incompleta`** (CE-003): con dobles — UC02 falla (FLEET/DYNAMIC), sin tarifa, `owner_id` ausente, `max_capacity` ausente, validación fallida → registro interno en el 100 % de los casos y **cero información incompleta persistida**; versión válida previa conservada.
 - [ ] **T022** · **`ce002_unidireccional_sin_respuesta_ni_desglose`** (CE-002): ArchUnit — sin `@RestController` ni adaptador web; el listener no publica (sin `RabbitTemplate` de salida ni `OutboxPort`); `RegisterReservationInformationUseCase` devuelve `void`; ninguna clase de UC03 usa `PricingCalculator`/`ReservationValueCalculator` (RF-007).
-- [ ] **T023** · **`ce004_cero_consultas_a_flota_por_propietario_y_capacidad`** (CE-004): integración con WireMock sobre Flota (a través del adaptador de UC02): el request a Flota contiene solo `boat_ids` (sin `owner_id`/`max_capacity`); si falta `owner_id`/`max_capacity`, cero llamadas a Flota (validación previa, regla 15).
+- [ ] **T023** · **`ce004_cero_consultas_a_flota_por_propietario_y_capacidad`** (CE-004): integración con WireMock sobre Flota (a través del adaptador de UC02): el request a Flota contiene solo `boat_ids` (sin `owner_id`/`max_capacity`); si falta `owner_id`/`max_capacity`, cero llamadas a Flota (validación previa, regla 15). Usa `ProvideBaseRateService` real, no un mock del puerto.
 - [ ] **T024** · ArchUnit (reglas §3.4 y específicas de UC03): `domain` sin Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; `infrastructure.adapter.in.messaging` solo invoca `application.port.in`; entidad JPA no sale de `adapter.out.persistence`; sin `PricingCalculator`/`ReservationValueCalculator` (CE-002).
 
 ### Phase 6: Polish — **parcialmente compartido con la Fase general**
@@ -357,7 +360,7 @@ T001 ─┬─> T002 ─┬─> T003 ─> T004 ─┐
 - **Política AMQP vigente**: cola `finance.reservation-info.v1` con DLQ `finance.reservation-info.v1.dlq` [CONV]; los fallos transitorios se reintentan 5 veces con *backoff* exponencial (base 1 s) antes de la DLQ; el reproceso manual de mensajes queda fuera del alcance de este plan. Sin meta de rendimiento propia. La seguridad del canal está **fuera de alcance** (general-plan §7.1; D-21).
 - **Migraciones**: migración inicial única `V1__initial_schema.sql` con todo el esquema (general-plan §4.2, D-31); UC03 no aporta ni numera migraciones; los cambios detectados se registran como versión posterior `V2+`.
 - **Reentregas**: sin dedup por `Message-Id` (D-07); el *upsert* re-invalida montos y UC04 recalcula determinista (D-17). Una reentrega idéntica después de un cálculo obliga a re-ejecutar UC04 antes de un nuevo cobro (D-UC03-03).
-- `ProvideBaseRateUseCase`, `BoatId`, `BaseRate` y `BaseRateException` son de **UC02** (plan ya redactado): UC03 los consume por nombre y por `port.in`, no los implementa ni los prueba.
+- `ProvideBaseRateUseCase`, `BoatId`, `BaseRate` y `BaseRateException` son de **UC02** (plan ya redactado): UC03 los consume por nombre y por `port.in` y no los implementa; sus reglas internas se prueban en UC02. La aceptación CE-004 sí ejecuta el `ProvideBaseRateService` real para detectar regresiones de integración.
 - `FailureRecorderPort`/`operational_failure` son **compartidos**: UC03 los referencia por nombre y usa `InMemoryFailureRecorder` en las pruebas. El registro se aísla con `REQUIRES_NEW` y existe procedimiento de reproceso.
 - UC03 **no depende del puerto de `financial_parameters`** (no calcula seguro; RF-007); la versión usada por la tarifa dinámica llega vía `BaseRateResult.parametersId` (UC02) y se persiste como `base_rate_parameters_id`. El adaptador de UC03 persiste y devuelve `frozen_parameters_id` como `UUID`; **no** hace join ni reconstruye `FrozenParameters` [CONV núcleo]: esa resolución corresponde a UC04/UC10 vía `FinancialParametersRepository.findById(...)` (D-27). **No usa** `PricingCalculator`/`ReservationValueCalculator` (esos cálculos son de UC01 y UC04).
 - Los planes posteriores leerán `reservation_information` por nombre; la firma de `ReservationInformationRepository` se publica en «Firmas referenciadas por otros planes».

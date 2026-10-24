@@ -2,6 +2,7 @@ package com.seashare.seasharem3.infrastructure.adapter.in.web.error;
 
 import com.seashare.seasharem3.application.exception.ContractException;
 import com.seashare.seasharem3.application.exception.ErrorCode;
+import com.seashare.seasharem3.domain.exception.BaseRateException;
 import com.seashare.seasharem3.domain.exception.ChargeIntentNotFoundException;
 import com.seashare.seasharem3.domain.exception.InvalidPageException;
 import com.seashare.seasharem3.domain.exception.ReservationInfoIncompleteException;
@@ -159,6 +160,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void unreadableFinancialParametersReturnInternalError() throws Exception {
+        mockMvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"value\":\"parameters-unavailable\"}"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.retryable").value(true));
+    }
+
+    @Test
     void unhandledErrorReturnsInternalErrorWithoutLeakingTechnicalDetail() throws Exception {
         mockMvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"value\":\"boom\"}"))
@@ -192,6 +202,9 @@ class GlobalExceptionHandlerTest {
                         throw new ReservationInfoIncompleteException("Reservation information is incomplete.");
                 case "charge-not-found" -> throw new ChargeIntentNotFoundException("Charge intent not found.");
                 case "invalid-page" -> throw new InvalidPageException("Page out of range.");
+                case "parameters-unavailable" -> throw new BaseRateException(
+                        BaseRateException.BaseRateFailureReason.PARAMETERS_UNAVAILABLE,
+                        "Financial parameters could not be read.");
                 case "boom" -> throw new IllegalStateException("secret trace that must not leak");
                 default -> {
                 }

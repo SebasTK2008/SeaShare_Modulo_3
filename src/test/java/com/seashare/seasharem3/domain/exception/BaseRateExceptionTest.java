@@ -12,6 +12,8 @@ class BaseRateExceptionTest {
                 .isTransient()).isTrue();
         assertThat(new BaseRateException(BaseRateException.BaseRateFailureReason.DYNAMIC_RATE_NOT_CONFIGURED, "missing")
                 .isTransient()).isTrue();
+        assertThat(new BaseRateException(BaseRateException.BaseRateFailureReason.PARAMETERS_UNAVAILABLE, "unreadable")
+                .isTransient()).isTrue();
         assertThat(new BaseRateException(BaseRateException.BaseRateFailureReason.BASE_RATE_NOT_AVAILABLE, "no base rate")
                 .isTransient()).isFalse();
     }

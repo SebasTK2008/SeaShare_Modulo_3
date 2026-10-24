@@ -34,6 +34,7 @@
         <archunit.version>1.5.1</archunit.version>
         <wiremock.version>3.13.2</wiremock.version>
         <commons-csv.version>1.14.1</commons-csv.version>
+        <jacoco.version>0.8.15</jacoco.version>
     </properties>
     <dependencies>
         <dependency>
@@ -225,6 +226,71 @@
                                     <version>0.2.0</version>
                                 </path>
                             </annotationProcessorPaths>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com/seashare/seasharem3/domain/service/*</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/BaseRate</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/BoatId</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/HighSeasonWindow*</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/Money</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/Percentage</include>
+                                        <include>com/seashare/seasharem3/domain/exception/BaseRateException*</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com/seashare/seasharem3/application/service/ProvideBaseRateService</include>
+                                        <include>com/seashare/seasharem3/application/dto/ProvideBaseRateCommand</include>
+                                        <include>com/seashare/seasharem3/application/dto/BaseRateResult</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
                         </configuration>
                     </execution>
                 </executions>
