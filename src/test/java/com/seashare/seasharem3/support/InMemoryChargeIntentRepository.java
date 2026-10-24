@@ -24,6 +24,11 @@ public class InMemoryChargeIntentRepository implements ChargeIntentRepository {
     private final Map<UUID, ChargeIntent> intents = new LinkedHashMap<>();
 
     @Override
+    public Optional<ChargeIntent> findById(UUID id) {
+        return Optional.ofNullable(intents.get(id));
+    }
+
+    @Override
     public Optional<ChargeIntent> findLatestByReservationId(ReservationId reservationId) {
         return intents.values().stream()
                 .filter(intent -> intent.reservationId().equals(reservationId))

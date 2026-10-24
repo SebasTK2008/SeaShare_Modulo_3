@@ -228,7 +228,7 @@ CREATE INDEX idx_refund_intent_external_reference
     WHERE external_reference IS NOT NULL;
 
 -- CHOQUE (general-plan §4.1): el ER declara refund_intent.dispute_id como string; aquí se tipa UUID
--- (DisputeId) siguiendo D-UC09-02 y la entrada de disputas del sistema. Registrado en core-gaps.md.
+-- (DisputeId) siguiendo D-UC09-02 y la entrada de disputas del sistema.
 
 CREATE TABLE refund_record (
     id                 UUID          PRIMARY KEY,
@@ -355,7 +355,7 @@ CREATE TABLE deposit_disposition (
 -- El desenlace se aplica con un único compare-and-set sobre disposition (general-plan D-34).
 
 -- CHOQUE (general-plan §4.1): el ER declara deposit_disposition.dispute_id como string; aquí se tipa
--- UUID (DisputeId) de forma consistente con refund_record/refund_intent. Registrado en core-gaps.md.
+-- UUID (DisputeId) de forma consistente con refund_record/refund_intent.
 
 CREATE TABLE dispute_event_log (
     id                UUID         PRIMARY KEY,
@@ -395,7 +395,7 @@ CREATE TABLE reservation_status_log (
 
 -- =====================================================================
 -- UC12/UC13 · vista v_financial_records (antes V9__v_financial_records_view.sql)
--- Fuente: general-plan §4 "Vista de lectura (UC12/UC13)" y core-gaps.md (V9 propuesta).
+-- Fuente: general-plan §4 "Vista de lectura (UC12/UC13)".
 -- UNION ALL de las cuatro tablas inmutables con columnas comunes.
 -- =====================================================================
 

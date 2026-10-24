@@ -26,11 +26,11 @@ El tratamiento de una embarcación ausente del resultado de UC02 queda definido 
 | **RF-007** rechazar todo atributo distinto de `boat_ids` en el lote | `BatchEstimateRequest` (DTO estricto) | T011 | T013, T021 |
 | **RNF-001** DTOs mínimos en la comunicación | `BatchEstimateRequest/Response`, `SingleEstimateRequest/Response`, commands/results de aplicación | T008, T011, T014, T016 | T013, T017 |
 | **RNF-002** `BigDecimal`, precisión interna de 4 decimales antes del redondeo final | `Money` (de UC02), `PricingCalculator` | T005, T006 | T019 |
-| **RNF-003** manejo de errores (*timeouts*, *fallbacks*) y sin valores parciales | `EstimateExceptionHandler`, Resilience4j en el cliente de Flota (de UC02) | T007, T018 | T020 |
+| **RNF-003** manejo de errores (*timeouts*, *fallbacks*) y sin valores parciales | `GlobalExceptionHandler`, Resilience4j en el cliente de Flota (de UC02) | T007, T018 | T020 |
 | **CE-001** precisión financiera en 100 pruebas | `PricingCalculator` + `EstimateAcceptanceTest` | T005, T019 | **T019 `ce001_…`** |
 | **CE-002** 0 lógica de precio en Reservas (arquitectura) | ArchUnit + `EstimateController` (solo mapea) | T023, T024 | **T023 `ce002_…`** |
 | **CE-003** negocio / transparencia (<2% tickets) | `warning` obligatorio de HU2 (métrica de negocio, no automatizable) | T005, T016 | **T023 `ce003_…`** |
-| **CE-004** resiliencia: fallas simuladas → fallback elegante | `EstimateExceptionHandler` + `EstimateResilienceIT` | T018, T020 | **T020 `ce004_…`** |
+| **CE-004** resiliencia: fallas simuladas → fallback elegante | `GlobalExceptionHandler` + `EstimateResilienceIT` | T018, T020 | **T020 `ce004_…`** |
 | **CE-005** 100% de lotes con atributos extra rechazados sin cálculo | `BatchEstimateRequest` estricto | T011 | **T021 `ce005_…`** |
 | **HU1** lote (P1) | Fase 3 | T008–T013 | T010, T013, T019 |
 | **HU2** individual + aviso (P1) | Fase 4 | T014–T017 | T017 |
@@ -108,7 +108,7 @@ src/main/java/com/seashare/seasharem3/
 └── infrastructure/
     └── adapter/in/web/
         ├── EstimateController.java                  # T011 (batch), T016 (individual) [CONV]
-        ├── EstimateExceptionHandler.java            # T007   # @RestControllerAdvice → códigos del catálogo [CONV]
+        ├── error/GlobalExceptionHandler.java        # T007   # compartido, ya existe; mapea códigos del catálogo [CONV]
         └── dto/
             ├── BatchEstimateRequest.java            # T011   # boat_ids + rechazo de campos extra [SPEC RF-007]
             ├── BatchEstimateResponse.java           # T011   # snake_case, estimated_total string 2 dec
@@ -231,7 +231,7 @@ Body: `boat_id`, `start_date`, `end_date`, `passengers` (todos obligatorios).
 | 503 | `FINANCIAL_PARAMETERS_NOT_CONFIGURED` | No existe versión vigente de parámetros o falta el valor exigido por el inicio [E4] | Sí |
 | 500 | `INTERNAL_ERROR` | Error no previsto [E8] | Sí |
 
-**Mapeo de excepciones** (implementado por `EstimateExceptionHandler`, T007):
+**Mapeo de excepciones** (implementado por el `GlobalExceptionHandler` compartido; T007 verifica):
 
 | Origen | `reason` | HTTP / `code` |
 |---|---|---|
@@ -296,7 +296,7 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 - [ ] **T003** Consumir por nombre `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId`, `BaseRateException` y `FinancialParametersRepository`; UC01 no los implementa ni redeclara.
 - [ ] **T005** · `PricingCalculator` (`domain/service`): `Money estimate(Money finalBaseRatePerDay, int days, Money insurancePerPassenger, int passengers)` con `BigDecimal` a escala 4 y **sin redondeo final** (RNF-002); y constante `EstimateWarning.TEXT` con el texto literal de HU2 [SPEC].
 - [ ] **T006** · Pruebas unitarias de `PricingCalculator`: días inclusivos, distintos pasajeros, escala 4, casos borde (1 día / 1 pasajero) y montos con 4 decimales (RNF-002).
-- [ ] **T007** `EstimateExceptionHandler`: mapea `BaseRateException`, parámetros faltantes y validación a Problem Details del catálogo; **sin reglas de seguridad** (fuera de alcance, general-plan §7.1).
+- [ ] **T007** Verificar que el `GlobalExceptionHandler` compartido mapea `BaseRateException`, parámetros faltantes y validación a Problem Details del catálogo; **sin reglas de seguridad** (fuera de alcance, general-plan §7.1). No se crea un *advice* por caso de uso.
 
 ### Phase 3: US1 — Estimación en lote (HU1; RF-001, RF-002, RF-004, RF-005, RF-006, RF-007; CE-001, CE-005)
 
@@ -345,7 +345,7 @@ T001 ─┬─> T002 ─┬─> T003 ─> T005 ─> T006 ─┬─> T007 ─┐
 ```
 
 - **Grupo 1 (T001–T007)**: Setup y Foundational propios + consumo de puertos y VOs compartidos.
-- **US1 (T008–T013)** → **US2 (T014–T017)**: el individual reutiliza `PricingCalculator` (T005) y el `EstimateExceptionHandler` (T007); pueden desarrollarse en paralelo por archivos distintos (el controller es compartido: coordinar T011/T016 en el mismo archivo).
+- **US1 (T008–T013)** → **US2 (T014–T017)**: el individual reutiliza `PricingCalculator` (T005) y el `GlobalExceptionHandler` (T007); pueden desarrollarse en paralelo por archivos distintos (el controller es compartido: coordinar T011/T016 en el mismo archivo).
 - **Resiliencia y aceptación (T018–T023)**: después de ambas modalidades; T018/T022 dependen de los artefactos de UC02/UC11.
 - **Polish (T024–T027)**: al final.
 - **Riesgo de secuencia**: escala/redondeo (D-UC01-07) e identificadores no reconocidos por Flota (D-UC01-05) quedan resueltos y no bloquean el orden; seguridad fuera de alcance (general-plan §7.1).

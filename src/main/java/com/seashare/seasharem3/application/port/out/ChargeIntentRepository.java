@@ -7,6 +7,7 @@ import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Puerto de UC05 consumido por UC06, UC09 y UC10.
@@ -16,6 +17,8 @@ import java.util.Optional;
  * findByStatusIn alimenta las conciliaciones (UC05/UC09/UC10).
  */
 public interface ChargeIntentRepository {
+
+    Optional<ChargeIntent> findById(UUID id);
 
     Optional<ChargeIntent> findLatestByReservationId(ReservationId reservationId);
 
