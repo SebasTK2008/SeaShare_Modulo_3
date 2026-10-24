@@ -178,7 +178,7 @@ Body: **solo** `boat_ids` (array de UUID; puede ser `[]`; máximo 50).
 
 ```json
 {
-  "evaluation_date": "2026-10-07",
+  "evaluation_date": "2026-09-30",
   "duration_days": 1,
   "passengers": 1,
   "estimates": [
@@ -273,7 +273,7 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 | ID | Descripción | Fuentes en conflicto | Decisión adoptada | Estado |
 |---|---|---|---|---|
 | **D-UC01-01** | El SPEC RF-004 habla de "un *endpoint*" para ambas modalidades; los contratos definen dos rutas | SPEC 01 RF-004 vs contratos UC01 (lote/individual) | Rigen los contratos: dos endpoints [CONV]; los montos y reglas son idénticos salvo fechas/pasajeros y el `warning` | Decidida |
-| **D-UC01-02** | El ejemplo del contrato de lote usa `evaluation_date: 2026-10-03`, que **es sábado**, y muestra `350000.00` sin ajuste de fin de semana | `UC01-estimacion-lote.md` §4 vs calendario (SPEC 02 RF-006) | El ejemplo es ilustrativo y su tarifa mostrada ya es la final tras la dinámica; en este plan se usa `2026-10-07` (miércoles) | Decidida |
+| **D-UC01-02** | El ejemplo del contrato de lote usa `evaluation_date: 2026-10-03`, que **es sábado**, y muestra `350000.00` sin ajuste de fin de semana | `UC01-estimacion-lote.md` §4 vs calendario (SPEC 02 RF-006) | El ejemplo es ilustrativo y su tarifa mostrada ya es la final tras la dinámica; en este plan se usa `2026-09-30` (miércoles) | Decidida |
 | **D-UC01-03** | El contrato de lote regla 3 dice "invoca UC02 **por cada embarcación**", pero el diseño publicado de UC02 es *batch-only* (una consulta a Flota por invocación) | `UC01-estimacion-lote.md` §3 regla 3 vs plan UC02 (T016, regla 9) | UC01 invoca `ProvideBaseRateUseCase` **una sola vez** con la lista completa y deduplicada; la redacción "por cada embarcación" del contrato queda superada por el diseño de UC02 | Decidida |
 | **D-UC01-04** | `general-plan.md` §3.5 asigna `FailureRecorderPort` a UC03 y §4 define la tabla `operational_failure`, pero el plan de UC11 no incluye su implementación | `general-plan.md` §3.5/§4 vs plan UC11 | UC01 **no usa** `FailureRecorderPort` (es síncrono y responde; UC02 registra los fallos de Flota); el puerto y la tabla pertenecen al núcleo compartido y los consumen los planes que sí los necesitan | Decidida |
 | **D-UC01-05** | El SPEC permite interpretar de forma distinta los IDs no reconocidos y los casos sin tarifa | SPEC 01 vs contrato Flota/UC02 | En el lote, los identificadores no reconocidos por Flota se **omiten** del resultado y las embarcaciones reconocidas sin tarifa base se reportan en `unavailable[]`; en la individual, ambos casos → `422 BASE_RATE_NOT_AVAILABLE`. Nunca se asume un precio | Decidida |
@@ -358,7 +358,7 @@ T001 ─┬─> T002 ─┬─> T003 ─> T005 ─> T006 ─┬─> T007 ─┐
 - `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId` y `BaseRateException` son de **UC02** (plan ya redactado): UC01 los consume por nombre, no los implementa ni los prueba.
 - `FinancialParametersRepository` y la tabla `financial_parameters` son de **UC11**: UC01 los consume por nombre (versión vigente, seguro por pasajero). UC01 **no** persiste nada ni define migraciones.
 - `FailureRecorderPort`/`operational_failure` **no** se usan en UC01 (D-UC01-04); UC02 registra los fallos de Flota.
-- El ejemplo del contrato de lote es ilustrativo; los ejemplos de este plan usan `2026-10-07` (miércoles) como fecha de evaluación (D-UC01-02).
+- El ejemplo del contrato de lote es ilustrativo; los ejemplos de este plan usan `2026-09-30` (miércoles) como fecha de evaluación (D-UC01-02).
 - Etiquetas usadas: `[SPEC]` (SPEC 01 y contratos), `[CONV]` (general-plan e inferido).
 
 ## Checklist de auto-revisión
