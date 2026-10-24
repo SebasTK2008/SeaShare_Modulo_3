@@ -39,8 +39,7 @@
     {
       "name": "seashare.fleet.base-url",
       "type": "java.lang.String",
-      "description": "URL base del Sistema de Gestión de Flota (UC02).",
-      "defaultValue": "http://localhost:8081"
+      "description": "URL base del Sistema de Gestión de Flota (UC02). Dev usa un default local; prod exige FLEET_BASE_URL sin default."
     },
     {
       "name": "seashare.fleet.connect-timeout",
@@ -53,6 +52,48 @@
       "type": "java.time.Duration",
       "description": "Timeout de lectura hacia Flota (SLA de UC01 RNF-003).",
       "defaultValue": "1s"
+    },
+    {
+      "name": "seashare.fleet.retry.max-attempts",
+      "type": "java.lang.Integer",
+      "description": "Número total de intentos hacia Flota (1 inicial + reintentos).",
+      "defaultValue": 2
+    },
+    {
+      "name": "seashare.fleet.retry.wait-duration",
+      "type": "java.time.Duration",
+      "description": "Espera corta entre reintentos hacia Flota.",
+      "defaultValue": "100ms"
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.failure-rate-threshold",
+      "type": "java.lang.Float",
+      "description": "Porcentaje de fallos que abre el circuit breaker de Flota.",
+      "defaultValue": 50.0
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.minimum-number-of-calls",
+      "type": "java.lang.Integer",
+      "description": "Llamadas mínimas antes de evaluar el circuit breaker de Flota.",
+      "defaultValue": 5
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.sliding-window-size",
+      "type": "java.lang.Integer",
+      "description": "Tamaño de la ventana deslizante del circuit breaker de Flota.",
+      "defaultValue": 10
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.wait-duration-in-open-state",
+      "type": "java.time.Duration",
+      "description": "Tiempo que el circuit breaker de Flota permanece abierto.",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.permitted-number-of-calls-in-half-open-state",
+      "type": "java.lang.Integer",
+      "description": "Llamadas permitidas en estado semiabierto del circuit breaker de Flota.",
+      "defaultValue": 1
     },
     {
       "name": "seashare.gateway.base-url",
