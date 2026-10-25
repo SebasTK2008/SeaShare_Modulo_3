@@ -4,6 +4,7 @@ import com.seashare.seasharem3.application.exception.ApiFieldError;
 import com.seashare.seasharem3.application.exception.ContractException;
 import com.seashare.seasharem3.application.exception.ErrorCode;
 import com.seashare.seasharem3.domain.exception.BaseRateException;
+import com.seashare.seasharem3.domain.exception.DomainException;
 import com.seashare.seasharem3.domain.exception.ChargeIntentNotFoundException;
 import com.seashare.seasharem3.domain.exception.FinancialParametersNotConfiguredException;
 import com.seashare.seasharem3.domain.exception.InvalidPageException;
@@ -171,6 +172,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidPaymentTokenException.class)
     public ProblemDetail handleInvalidPaymentToken(InvalidPaymentTokenException exception) {
+        return problems.create(ErrorCode.VALIDATION_ERROR, exception.getMessage());
+    }
+
+    @ExceptionHandler(DomainException.class)
+    public ProblemDetail handleDomain(DomainException exception) {
         return problems.create(ErrorCode.VALIDATION_ERROR, exception.getMessage());
     }
 
