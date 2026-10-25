@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.transaction.annotation.Transactional;
+
 /**
  * Servicio de aplicación de UC11: guarda y carga los parámetros financieros globales.
  * Fuente: UC11 plan T017 (save) y T031 (load); SPEC RF-005, RF-007, RF-009, RF-011,
@@ -50,6 +52,7 @@ public class FinancialParametersService implements SaveFinancialParametersUseCas
      * Un fallo de persistencia se convierte en {@link ErrorCode#PARAMETERS_SAVE_FAILED} [SPEC HU4 esc. 3].
      */
     @Override
+    @Transactional
     public FinancialParametersResult save(FinancialParametersCommand command) {
         Optional<FinancialParameters> current = repository.findCurrent();
 
