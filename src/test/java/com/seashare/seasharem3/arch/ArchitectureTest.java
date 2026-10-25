@@ -109,7 +109,6 @@ class ArchitectureTest {
                 || packageName.startsWith("java.")
                 || packageName.startsWith("com.seashare.seasharem3.domain")
                 || packageName.startsWith("com.seashare.seasharem3.application")
-                || packageName.startsWith("org.springframework.transaction.annotation")
-                || packageName.startsWith("org.springframework.stereotype");
+                || packageName.startsWith("org.springframework.transaction.annotation");
     }
 }

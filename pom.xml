@@ -283,6 +283,8 @@
                                     <element>CLASS</element>
                                     <includes>
                                         <include>com/seashare/seasharem3/application/service/ProvideBaseRateService</include>
+                                        <include>com/seashare/seasharem3/application/service/EstimateBatchService</include>
+                                        <include>com/seashare/seasharem3/application/service/EstimateSingleService</include>
                                         <include>com/seashare/seasharem3/application/dto/ProvideBaseRateCommand</include>
                                         <include>com/seashare/seasharem3/application/dto/BaseRateResult</include>
                                     </includes>

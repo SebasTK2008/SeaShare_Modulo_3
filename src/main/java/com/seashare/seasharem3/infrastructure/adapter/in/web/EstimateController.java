@@ -17,8 +17,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.stream.Collectors;
-
 @RestController
 @RequestMapping("/api/v1/estimates")
 public class EstimateController {
@@ -58,14 +56,11 @@ public class EstimateController {
                 r.durationDays(),
                 r.passengers(),
                 r.estimates().stream()
-                        .map(e -> new BatchEstimateResponse.EstimateItem(
-                                e.boatId(),
-                                e.estimatedTotal().toOutputAmount().toPlainString()))
-                        .collect(Collectors.toList()),
+                        .map(e -> new BatchEstimateResponse.EstimateItem(e.boatId(), e.estimatedTotal()))
+                        .toList(),
                 r.unavailable().stream()
-                        .map(u -> new BatchEstimateResponse.UnavailableItem(
-                                u.boatId(), u.reason()))
-                        .collect(Collectors.toList()));
+                        .map(u -> new BatchEstimateResponse.UnavailableItem(u.boatId(), u.reason()))
+                        .toList());
     }
 
     private static SingleEstimateResponse toSingleResponse(SingleEstimateResult r) {
@@ -75,7 +70,7 @@ public class EstimateController {
                 r.endDate(),
                 r.durationDays(),
                 r.passengers(),
-                r.estimatedTotal().toOutputAmount().toPlainString(),
+                r.estimatedTotal(),
                 r.warning());
     }
 }

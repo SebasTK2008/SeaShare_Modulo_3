@@ -53,8 +53,8 @@ El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de 
 1. **Lista vacía** → respuesta `200` con arreglos vacíos, sin error [SPEC casos extremos, `boat_ids` vacía].
 2. **Más identificadores que el máximo** → se rechaza **sin procesar ningún elemento** [SPEC RF-006, casos extremos "1,000 embarcaciones"]. Reservas debe partir la solicitud en lotes.
 3. El sistema consulta a Flota **una sola vez enviando la lista de IDs** [SPEC RF-005] — ver [`../external/flota-consulta-tarifas-base.md`](../external/flota-consulta-tarifas-base.md) — e invoca UC02 por cada embarcación.
-4. **Identificadores inexistentes**: se omiten (Flota no los confirma) y se estima solo a las reconocidas con tarifa [SPEC casos extremos].
-5. **Embarcación sin tarifa base** (nula o faltante): no se estima, el resto del lote se devuelve y nunca se muestra un precio asumido [SPEC casos extremos]; este contrato la **marca** en `unavailable`, y los identificadores no reconocidos por Flota se **omiten** (no aparecen en `estimates` ni en `unavailable`).
+4. **Identificadores inexistentes o sin tarifa**: Flota no distingue entre una embarcación inexistente y una reconocida sin tarifa; en ambos casos la omite de su respuesta. UC01 **no inventa** un precio y reporta **todo** `boat_id` solicitado que no aparezca en el resultado de UC02 en `unavailable[]` con `reason = "NO_BASE_RATE"` [SPEC casos extremos + decisión D-UC01-05, desviación aprobada frente a la omisión literal del SPEC].
+5. **Invariante de cobertura**: `estimates` y `unavailable` son **disjuntos** y su unión es exactamente el conjunto de identificadores únicos solicitados. Ningún `boat_id` solicitado desaparece del resultado: o lleva `estimated_total` o aparece en `unavailable`. El resto del lote siempre se devuelve y nunca se muestra un precio asumido [SPEC casos extremos].
 6. **Supuestos fijos del lote** (no son valores por defecto configurables): duración **1 día**, **1 pasajero** y **fecha actual** como fecha de evaluación de la tarifa [SPEC RF-002, HU1].
 7. **Fórmula**: `estimated_total = (tarifa base final × duración en días) + (tarifa de seguro × pasajeros)` [SPEC RF-002]. La tarifa base final ya incluye la tarifa dinámica (UC02).
 8. La estimación **no incluye** el depósito de garantía ni penalidades o ajustes posteriores [SPEC RF-002].
@@ -74,7 +74,7 @@ El lote se define **únicamente** por `boat_ids`: no lleva fechas ni número de 
 | `estimates` | array | Una entrada por embarcación estimada | [SPEC HU1 flujo 4: "arreglo de estimaciones"] |
 | `estimates[].boat_id` | UUID | Identificador de la embarcación | [SPEC] |
 | `estimates[].estimated_total` | string decimal | Costo estimado | [SPEC RF-002] |
-| `unavailable` | array | Embarcaciones reconocidas **sin tarifa base** | [SPEC casos extremos] + [CONV] |
+| `unavailable` | array | Embarcaciones solicitadas **sin estimación**: ausentes del resultado de UC02, ya sea porque no existen o porque no tienen tarifa base (Flota no expone el motivo) | [SPEC casos extremos] + [CONV] |
 | `unavailable[].boat_id` | UUID | Identificador | — |
 | `unavailable[].reason` | string | `NO_BASE_RATE` ("sin estimación disponible") | [SPEC casos extremos] |
 
@@ -102,7 +102,7 @@ Lista vacía:
 
 ## 5. Respuestas de error
 
-**Orden de validación** [CONV] (§4.3 del índice): E1 → E2 → E4 → E5 (E3 no aplica: no hay recurso en la URL; E6 no produce error en el lote: los identificadores no reconocidos se omiten y los sin tarifa se reportan en `unavailable`). La petición se valida completa (E2) antes de consultar los parámetros financieros (E4) o llamar a Flota (E5).
+**Orden de validación** [CONV] (§4.3 del índice): E1 → E2 → E4 → E5 (E3 no aplica: no hay recurso en la URL; E6 no produce error en el lote: toda embarcación ausente del resultado de UC02 —inexistente o sin tarifa— se reporta en `unavailable` con `NO_BASE_RATE`, reglas 4–5). La petición se valida completa (E2) antes de consultar los parámetros financieros (E4) o llamar a Flota (E5).
 
 | HTTP | `code` | Cuándo | `retryable` | Origen |
 |---|---|---|---|---|

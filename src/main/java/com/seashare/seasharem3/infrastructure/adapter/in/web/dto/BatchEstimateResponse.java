@@ -2,6 +2,7 @@ package com.seashare.seasharem3.infrastructure.adapter.in.web.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.seashare.seasharem3.domain.valueobject.BoatId;
+import com.seashare.seasharem3.domain.valueobject.Money;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -15,7 +16,7 @@ public record BatchEstimateResponse(
 
     public record EstimateItem(
             @JsonProperty("boat_id") BoatId boatId,
-            @JsonProperty("estimated_total") String estimatedTotal) {
+            @JsonProperty("estimated_total") Money estimatedTotal) {
     }
 
     public record UnavailableItem(

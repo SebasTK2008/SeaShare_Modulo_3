@@ -31,7 +31,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import tools.jackson.databind.exc.InvalidFormatException;
 
+import java.time.temporal.TemporalAccessor;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 /**
@@ -112,8 +115,34 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ProblemDetail handleUnreadableBody(HttpMessageNotReadableException exception) {
+        if (isTemporalParseFailure(exception)) {
+            return problems.create(ErrorCode.INVALID_DATE_RANGE,
+                    "start_date and end_date must be ISO-8601 dates (yyyy-MM-dd).");
+        }
         return problems.create(ErrorCode.VALIDATION_ERROR,
                 "The request body is not valid JSON or does not match the contract.");
+    }
+
+    /**
+     * Un formato de fecha invalido en el cuerpo es {@code INVALID_DATE_RANGE}, no un error de
+     * validacion generico (contrato individual §5). Se distingue del resto de fallos de lectura
+     * inspeccionando el tipo destino del error de Jackson o un {@link DateTimeParseException} anidado.
+     */
+    private static boolean isTemporalParseFailure(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof DateTimeParseException) {
+                return true;
+            }
+            if (current instanceof InvalidFormatException invalidFormat) {
+                Class<?> targetType = invalidFormat.getTargetType();
+                if (targetType != null && TemporalAccessor.class.isAssignableFrom(targetType)) {
+                    return true;
+                }
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return false;
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

@@ -4,13 +4,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.seashare.seasharem3.domain.valueobject.BoatId;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.AssertTrue;
 
 import java.time.LocalDate;
 
 /**
  * Body del POST /api/v1/estimates/individual.
- * Fuente: UC01 contrato est/UC01-estimacion-individual.md §2-§3.
+ *
+ * <p>El rango de fechas NO se valida aqui: {@code EstimateSingleService} lo comprueba contra
+ * {@code ClockPort.today()} y responde {@code 400 INVALID_DATE_RANGE} (contrato individual §3).</p>
+ *
+ * Fuente: UC01 contrato rest/UC01-estimacion-individual.md §2-§3.
  */
 public record SingleEstimateRequest(
         @NotNull(message = "boat_id is required")
@@ -29,9 +32,4 @@ public record SingleEstimateRequest(
         @Positive(message = "passengers must be at least 1")
         @JsonProperty("passengers")
         Integer passengers) {
-
-        @AssertTrue(message = "start_date must be before or equal to end_date")
-        public boolean isValidDates() {
-            return startDate == null || endDate == null || !startDate.isAfter(endDate);
-        }
 }
