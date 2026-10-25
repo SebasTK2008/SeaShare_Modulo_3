@@ -20,7 +20,7 @@ import java.util.List;
 
 /**
  * Servicio de aplicacion UC01 - estimacion en lote (HU1).
- * P1+P2 basico: orquesta UC02, lee parametros vigentes (UC11), aplica PricingCalculator.
+ * Orquesta UC02, lee parametros vigentes (UC11), aplica PricingCalculator.
  */
 public class EstimateBatchService implements EstimateBatchUseCase {
 
