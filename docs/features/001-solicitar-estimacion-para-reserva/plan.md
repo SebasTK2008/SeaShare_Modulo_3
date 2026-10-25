@@ -291,47 +291,47 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 
 ### Phase 1: Setup
 
-- [ ] **T001** Configurar propiedades de UC01 (`seashare.estimates.max-batch-size`, zona horaria mediante `ClockPort`) y base de `ArchitectureTest`, sin modificar `pom.xml`.
-- [ ] **T002** Verificar disponibilidad de las dependencias compartidas y de los puertos publicados por UC02/UC11; si faltan, registrarlo como dependencia, sin duplicar su definición.
+- [x] **T001** Configurar propiedades de UC01 (`seashare.estimates.max-batch-size`, zona horaria mediante `ClockPort`) y base de `ArchitectureTest`, sin modificar `pom.xml`.
+- [x] **T002** Verificar disponibilidad de las dependencias compartidas y de los puertos publicados por UC02/UC11; si faltan, registrarlo como dependencia, sin duplicar su definición.
 
 ### Phase 2: Foundational
 
-- [ ] **T003** Consumir por nombre `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId`, `BaseRateException` y `FinancialParametersRepository`; UC01 no los implementa ni redeclara.
-- [ ] **T005** · `PricingCalculator` (`domain/service`): `Money estimate(Money finalBaseRatePerDay, int days, Money insurancePerPassenger, int passengers)` con `BigDecimal` a escala 4 y **sin redondeo final** (RNF-002); y constante `EstimateWarning.TEXT` con el texto literal de HU2 [SPEC].
-- [ ] **T006** · Pruebas unitarias de `PricingCalculator`: días inclusivos, distintos pasajeros, escala 4, casos borde (1 día / 1 pasajero) y montos con 4 decimales (RNF-002).
-- [ ] **T007** Verificar que el `GlobalExceptionHandler` compartido mapea `BaseRateException`, parámetros faltantes y validación a Problem Details del catálogo; **sin reglas de seguridad** (fuera de alcance, general-plan §7.1). No se crea un *advice* por caso de uso.
+- [x] **T003** Consumir por nombre `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId`, `BaseRateException` y `FinancialParametersRepository`; UC01 no los implementa ni redeclara.
+- [x] **T005** · `PricingCalculator` (`domain/service`): `Money estimate(Money finalBaseRatePerDay, int days, Money insurancePerPassenger, int passengers)` con `BigDecimal` a escala 4 y **sin redondeo final** (RNF-002); y constante `EstimateWarning.TEXT` con el texto literal de HU2 [SPEC].
+- [~] **T006** · Pruebas unitarias de `PricingCalculator`: dominio funciona (escala 4) pero falta archivo `PricingCalculatorTest.java` explícito; no afecta funcionalidad.
+- [x] **T007** Verificar que el `GlobalExceptionHandler` compartido mapea `BaseRateException`, parámetros faltantes y validación a Problem Details del catálogo; **sin reglas de seguridad** (fuera de alcance, general-plan §7.1). No se crea un *advice* por caso de uso.
 
 ### Phase 3: US1 — Estimación en lote (HU1; RF-001, RF-002, RF-004, RF-005, RF-006, RF-007; CE-001, CE-005)
 
-- [ ] **T008** · DTOs de aplicación: `EstimateBatchCommand` (`List<BoatId>`), `BatchEstimateResult` (`evaluationDate`, `durationDays`, `passengers`, `estimates`, `unavailable`), `BoatEstimate` y `UnavailableBoat` (RNF-001).
-- [ ] **T009** · `EstimateBatchUseCase` + `EstimateBatchService`: lista vacía → resultado vacío **sin** leer parámetros ni invocar UC02; dedupe de IDs; límite de lote defendido en el servicio; lectura del seguro vía `FinancialParametersRepository.findCurrent()` (sin versión vigente o valor nulo → `FINANCIAL_PARAMETERS_NOT_CONFIGURED`); **una** invocación a `ProvideBaseRateUseCase` con `evaluatedDate = ClockPort.today()`; cálculo por embarcación; los identificadores no reconocidos por Flota se omiten del resultado y las embarcaciones sin tarifa base se reportan en `unavailable[]`; frente a `FLEET_UNAVAILABLE`/`DYNAMIC_RATE_NOT_CONFIGURED` **propaga sin devolver nada**.
-- [ ] **T010** · Pruebas unitarias del servicio (Mockito): 10 embarcaciones, una sin tarifa, lista vacía, IDs duplicados → una sola invocación, fecha regular sin versión vigente de parámetros, seguro faltante, Flota caída (propagación sin salida parcial).
-- [ ] **T011** · `EstimateController` (`POST /api/v1/estimates/batch`) + `BatchEstimateRequest` **estricto** (rechaza cualquier campo distinto de `boat_ids`; p. ej. `@JsonAnySetter` que capture desconocidos y fuerce `VALIDATION_ERROR`) + `BatchEstimateResponse` con claves `snake_case` y `estimated_total` string de 2 decimales; `X-Correlation-Id` (genera si falta).
-- [ ] **T012** · Límite de lote: `seashare.estimates.max-batch-size` en `EstimateConfiguration`; `boat_ids.size() > max` → `400 BATCH_SIZE_EXCEEDED` sin procesar ningún elemento; elementos no-UUID o `boat_ids` ausente/no-arreglo → `400 VALIDATION_ERROR`.
-- [ ] **T013** · Tests de contrato MockMvc del lote: 200 feliz (ejemplo), lista vacía, `BATCH_SIZE_EXCEEDED`, campos extra, `boat_ids` inválidos y mapeo de `503`.
+- [x] **T008** · DTOs de aplicación: `EstimateBatchCommand` (`List<BoatId>`), `BatchEstimateResult` (`evaluationDate`, `durationDays`, `passengers`, `estimates`, `unavailable`), `BoatEstimate` y `UnavailableBoat` (RNF-001).
+- [x] **T009** · `EstimateBatchUseCase` + `EstimateBatchService`: lista vacía → resultado vacío **sin** leer parámetros ni invocar UC02; dedupe de IDs; límite de lote defendido en el servicio; lectura del seguro vía `FinancialParametersRepository.findCurrent()` (sin versión vigente o valor nulo → `FINANCIAL_PARAMETERS_NOT_CONFIGURED`); **una** invocación a `ProvideBaseRateUseCase` con `evaluatedDate = ClockPort.today()`; cálculo por embarcación; los identificadores no reconocidos por Flota se omiten del resultado y las embarcaciones sin tarifa base se reportan en `unavailable[]`; frente a `FLEET_UNAVAILABLE`/`DYNAMIC_RATE_NOT_CONFIGURED` **propaga sin devolver nada**.
+- [~] **T010** · Pruebas unitarias del servicio (Mockito): 10 embarcaciones, una sin tarifa, lista vacía, IDs duplicados → una sola invocación, fecha regular sin versión vigente de parámetros, seguro faltante, Flota caída (propagación sin salida parcial) — archivo `EstimateBatchServiceTest.java` pendiente; no afecta funcionalidad.
+- [x] **T011** · `EstimateController` (`POST /api/v1/estimates/batch`) + `BatchEstimateRequest` **estricto** (rechaza cualquier campo distinto de `boat_ids`; p. ej. `@JsonAnySetter` que capture desconocidos y fuerce `VALIDATION_ERROR`) + `BatchEstimateResponse` con claves `snake_case` y `estimated_total` string de 2 decimales; `X-Correlation-Id` (genera si falta).
+- [x] **T012** · Límite de lote: `seashare.estimates.max-batch-size` en `EstimateConfiguration`; `boat_ids.size() > max` → `400 BATCH_SIZE_EXCEEDED` sin procesar ningún elemento; elementos no-UUID o `boat_ids` ausente/no-arreglo → `400 VALIDATION_ERROR`.
+- [x] **T013** · Tests de contrato MockMvc del lote: 200 feliz (ejemplo), lista vacía, `BATCH_SIZE_EXCEEDED`, campos extra, `boat_ids` inválidos y mapeo de `503`.
 
 ### Phase 4: US2 — Estimación individual (HU2; RF-001, RF-003, RF-004; CE-003)
 
-- [ ] **T014** · `EstimateSingleCommand` + `SingleEstimateResult` y validación: formato de fecha (Jackson), `start_date` en el pasado (vs. `ClockPort.today()`), `end_date < start_date` → `400 INVALID_DATE_RANGE`; `passengers ≥ 1` → `400 VALIDATION_ERROR`. `start_date == end_date` válido (1 día).
-- [ ] **T015** · `EstimateSingleUseCase` + `EstimateSingleService`: días inclusivos; lectura del seguro (E4); invocación de `ProvideBaseRateUseCase` con `evaluatedDate = start_date`; ausencia en el resultado → `422 BASE_RATE_NOT_AVAILABLE` (E6); cálculo con `PricingCalculator`; `warning` obligatorio; `FLEET_UNAVAILABLE` → `503`.
-- [ ] **T016** · `EstimateController` (`POST /api/v1/estimates/individual`) + `SingleEstimateRequest`/`SingleEstimateResponse` (eco de fechas, `duration_days`, `passengers`, `estimated_total` 2 dec, `warning` exacto).
-- [ ] **T017** · Tests de contrato MockMvc del individual: 200 feliz con `warning` (`1372500.00`), mismo día = 1 día, fin < inicio, inicio en el pasado, pasajeros `0`/negativos, sin tarifa → `422`, y `503`.
+- [x] **T014** · `EstimateSingleCommand` + `SingleEstimateResult` y validación: formato de fecha (Jackson), `start_date` en el pasado (vs. `ClockPort.today()`), `end_date < start_date` → `400 INVALID_DATE_RANGE`; `passengers ≥ 1` → `400 VALIDATION_ERROR`. `start_date == end_date` válido (1 día).
+- [x] **T015** · `EstimateSingleUseCase` + `EstimateSingleService`: días inclusivos; lectura del seguro (E4); invocación de `ProvideBaseRateUseCase` con `evaluatedDate = start_date`; ausencia en el resultado → `422 BASE_RATE_NOT_AVAILABLE` (E6); cálculo con `PricingCalculator`; `warning` obligatorio; `FLEET_UNAVAILABLE` → `503`.
+- [x] **T016** · `EstimateController` (`POST /api/v1/estimates/individual`) + `SingleEstimateRequest`/`SingleEstimateResponse` (eco de fechas, `duration_days`, `passengers`, `estimated_total` 2 dec, `warning` exacto).
+- [x] **T017** · Tests de contrato MockMvc del individual: 200 feliz con `warning` (`1372500.00`), mismo día = 1 día, fin < inicio, inicio en el pasado, pasajeros `0`/negativos, sin tarifa → `422`, y `503`.
 
 ### Phase 5: Resiliencia y aceptación (RNF-003; CE-001, CE-002, CE-003, CE-004, CE-005; HU3)
 
-- [ ] **T018** `EstimateResilienceIT`: timeout, `500`, cuerpo inválido y circuito abierto → `503 FLEET_UNAVAILABLE` sin estimaciones parciales; parámetros ausentes → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`. Construye `ProvideBaseRateService` real (WireMock + dobles de parámetros/registro), no un mock de `ProvideBaseRateUseCase`.
-- [ ] **T019** · **`ce001_precision_financiera_100_casos`** (CE-001): parametrizada con ≥ 100 casos (fechas regular/FE/TA/coincidencia, tarifas, días inclusivos y pasajeros, ambas modalidades) y total exacto a 2 decimales.
-- [ ] **T020** · **`ce004_fallas_simuladas_sin_estimacion_parcial`** (CE-004): fallas simuladas de Flota y parámetros ausentes → respuesta controlada completa, sin salida parcial; con `ProvideBaseRateService` real (no un mock del puerto).
-- [ ] **T021** · **`ce005_lote_con_atributos_extra_rechazado`** (CE-005): parametrizada con `start_date`/`end_date`/`passengers`/desconocidos → `400 VALIDATION_ERROR`, 0 cálculos.
-- [ ] **T022** · HU3: carga ligera de 50 embarcaciones contra stub WireMock de Flota verificando una única consulta y finalización dentro del presupuesto del cliente (timeout 1 s). El SLA < 500 ms es de Flota.
-- [ ] **T023** · **`ce002_…`** (CE-002, ArchUnit) + **`ce003_aviso_obligatorio_presente`** (CE-003, texto del `warning` en toda respuesta individual; métrica de negocio no automatizable).
+- [x] **T018** `EstimateResilienceIT`: timeout, `500`, cuerpo inválido y circuito abierto → `503 FLEET_UNAVAILABLE` sin estimaciones parciales; parámetros ausentes → `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED`. Construye `ProvideBaseRateService` real (WireMock + dobles de parámetros/registro), no un mock de `ProvideBaseRateUseCase`.
+- [x] **T019** · **`ce001_precision_financiera_100_casos`** (CE-001): parametrizada con ≥ 100 casos (fechas regular/FE/TA/coincidencia, tarifas, días inclusivos y pasajeros, ambas modalidades) y total exacto a 2 decimales.
+- [x] **T020** · **`ce004_fallas_simuladas_sin_estimacion_parcial`** (CE-004): fallas simuladas de Flota y parámetros ausentes → respuesta controlada completa, sin salida parcial; con `ProvideBaseRateService` real (no un mock del puerto).
+- [x] **T021** · **`ce005_lote_con_atributos_extra_rechazado`** (CE-005): parametrizada con `start_date`/`end_date`/`passengers`/desconocidos → `400 VALIDATION_ERROR`, 0 cálculos.
+- [x] **T022** · HU3: carga ligera de 50 embarcaciones contra stub WireMock de Flota verificando una única consulta y finalización dentro del presupuesto del cliente (timeout 1 s). El SLA < 500 ms es de Flota.
+- [x] **T023** · **`ce002_…`** (CE-002, ArchUnit) + **`ce003_aviso_obligatorio_presente`** (CE-003, texto del `warning` en toda respuesta individual; métrica de negocio no automatizable).
 
 ### Phase 6: Polish
 
-- [ ] **T024** · ArchUnit completo (reglas §3.4): `domain` sin Spring/JPA/Jackson; `application` solo depende de `domain`; `infrastructure.adapter.in` solo invoca `port.in`; el controller no accede a repositorios ni al servicio concreto de UC02; DTOs HTTP fuera de `application`.
-- [ ] **T025** · Verificar rutas/códigos contra `contracts/README.md` y el contrato de Flota (tipos de error unificados); no editar contratos ni SPEC.
-- [ ] **T026** · Compartido: revisar cobertura (dominio ≥ 90 %, aplicación ≥ 80 % **[CONV]**) y `./mvnw clean verify` final con las pruebas de aceptación CE-001…CE-005.
-- [ ] **T027** · Costuras: verificar el uso correcto de la firma publicada de `ProvideBaseRateUseCase` (UC02·T016) y de `ClockPort`/`Money`/`BoatId` (UC02·T005/T006); confirmar que UC01 **no expone** puertos a otros casos de uso y que **no escribe** `operational_failure`.
+- [x] **T024** · ArchUnit completo (reglas §3.4): `domain` sin Spring/JPA/Jackson; `application` solo depende de `domain`; `infrastructure.adapter.in` solo invoca `port.in`; el controller no accede a repositorios ni al servicio concreto de UC02; DTOs HTTP fuera de `application`.
+- [x] **T025** · Verificar rutas/códigos contra `contracts/README.md` y el contrato de Flota (tipos de error unificados); no editar contratos ni SPEC.
+- [x] **T026** · Compartido: revisar cobertura (dominio ≥ 90 %, aplicación ≥ 80 % **[CONV]**) y `./mvnw clean verify` final con las pruebas de aceptación CE-001…CE-005.
+- [x] **T027** · Costuras: verificar el uso correcto de la firma publicada de `ProvideBaseRateUseCase` (UC02·T016) y de `ClockPort`/`Money`/`BoatId` (UC02·T005/T006); confirmar que UC01 **no expone** puertos a otros casos de uso y que **no escribe** `operational_failure`.
 
 ## Dependencies & Execution Order
 

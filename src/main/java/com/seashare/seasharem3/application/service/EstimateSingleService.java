@@ -14,19 +14,26 @@ import com.seashare.seasharem3.domain.valueobject.Money;
 import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
+import java.util.Objects;
 
+import org.springframework.stereotype.Service;
+
+/**
+ * Servicio de aplicacion UC01 - estimacion individual (HU2).
+ * Usa fechas inclusivas, calcula duracion, incluye advertencia obligatoria.
+ * Usa USE_CASE="UC01". Fuente: UC01 plan T014/T015; contrato rest/UC01-estimacion-individual.md §3.
+ */
+@Service
 public class EstimateSingleService implements EstimateSingleUseCase {
 
     private final ProvideBaseRateUseCase baseRateUseCase;
     private final FinancialParametersRepository paramsRepo;
-    private final PricingCalculator pricingCalculator;
+    private final PricingCalculator pricingCalculator = new PricingCalculator();
 
     public EstimateSingleService(ProvideBaseRateUseCase baseRateUseCase,
-                                 FinancialParametersRepository paramsRepo,
-                                 PricingCalculator pricingCalculator) {
-        this.baseRateUseCase = baseRateUseCase;
-        this.paramsRepo = paramsRepo;
-        this.pricingCalculator = pricingCalculator;
+                                 FinancialParametersRepository paramsRepo) {
+        this.baseRateUseCase = Objects.requireNonNull(baseRateUseCase, "baseRateUseCase");
+        this.paramsRepo = Objects.requireNonNull(paramsRepo, "paramsRepo");
     }
 
     @Override

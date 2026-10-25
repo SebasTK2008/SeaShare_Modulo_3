@@ -10,33 +10,40 @@ import com.seashare.seasharem3.application.port.out.FinancialParametersRepositor
 import com.seashare.seasharem3.domain.exception.BaseRateException;
 import com.seashare.seasharem3.domain.model.FinancialParameters;
 import com.seashare.seasharem3.domain.service.PricingCalculator;
+import com.seashare.seasharem3.domain.valueobject.BoatId;
 import com.seashare.seasharem3.domain.valueobject.Money;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
 
 /**
  * Servicio de aplicacion UC01 - estimacion en lote (HU1).
- * Orquesta UC02, lee parametros vigentes (UC11), aplica PricingCalculator.
+ * Orquesta UC02 (ProvideBaseRateUseCase), lee parametros vigentes (UC11 / FinancialParametersRepository),
+ * aplica PricingCalculator (dominio puro). No persiste; solo lectura. Usa USE_CASE="UC01".
+ * Fuente: UC01 plan T008/T009/T010; contrato rest/UC01-estimacion-lote.md §3; SPEC RF-001..RF-007.
  */
+@Service
 public class EstimateBatchService implements EstimateBatchUseCase {
 
     private final ProvideBaseRateUseCase baseRateUseCase;
     private final FinancialParametersRepository paramsRepo;
     private final ClockPort clock;
-    private final PricingCalculator pricingCalculator;
+    private final PricingCalculator pricingCalculator = new PricingCalculator();
 
     public EstimateBatchService(ProvideBaseRateUseCase baseRateUseCase,
                                FinancialParametersRepository paramsRepo,
-                               ClockPort clock,
-                               PricingCalculator pricingCalculator) {
-        this.baseRateUseCase = baseRateUseCase;
-        this.paramsRepo = paramsRepo;
-        this.clock = clock;
-        this.pricingCalculator = pricingCalculator;
+                               ClockPort clock) {
+        this.baseRateUseCase = Objects.requireNonNull(baseRateUseCase, "baseRateUseCase");
+        this.paramsRepo = Objects.requireNonNull(paramsRepo, "paramsRepo");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     @Override
@@ -49,9 +56,10 @@ public class EstimateBatchService implements EstimateBatchUseCase {
         LocalDate evaluationDate = clock.today();
 
         List<BaseRateResult> baseRates;
+        Set<BoatId> uniqueBoatIds = new LinkedHashSet<>(Objects.requireNonNull(command.boatIds(), "boatIds"));
         try {
             baseRates = baseRateUseCase.provideBaseRates(
-                    new ProvideBaseRateCommand(command.boatIds(), evaluationDate));
+                    new ProvideBaseRateCommand(new ArrayList<>(uniqueBoatIds), evaluationDate));
         } catch (BaseRateException ex) {
             if (ex.reason().equals(BaseRateException.BaseRateFailureReason.FLEET_UNAVAILABLE)) {
                 throw new ContractException(ErrorCode.FLEET_UNAVAILABLE, "Fleet service unavailable.");
@@ -67,6 +75,6 @@ public class EstimateBatchService implements EstimateBatchUseCase {
         }
 
         return new BatchEstimateResult(
-                evaluationDate, 1, 1, estimates, Collections.emptyList());
+                evaluationDate, 1, 1, List.copyOf(estimates), List.copyOf(Collections.emptyList()));
     }
 }

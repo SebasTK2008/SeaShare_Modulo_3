@@ -4,6 +4,7 @@ import com.seashare.seasharem3.domain.valueobject.BaseRate;
 import com.seashare.seasharem3.domain.valueobject.Money;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 
 /**
  * Calculo de estimacion de precio para UC01 (solo lectura, sin persistencia).
@@ -14,6 +15,8 @@ import java.math.BigDecimal;
 public class PricingCalculator {
 
     public BigDecimal calculate(BaseRate baseRatePerDay, int durationDays, int passengers, Money insuranceFeePerPassenger) {
+        Objects.requireNonNull(baseRatePerDay, "baseRatePerDay");
+        Objects.requireNonNull(insuranceFeePerPassenger, "insuranceFeePerPassenger");
         BigDecimal rental = baseRatePerDay.amount().amount().multiply(BigDecimal.valueOf(durationDays));
         BigDecimal insurance = insuranceFeePerPassenger.amount().multiply(BigDecimal.valueOf(passengers));
         return rental.add(insurance);

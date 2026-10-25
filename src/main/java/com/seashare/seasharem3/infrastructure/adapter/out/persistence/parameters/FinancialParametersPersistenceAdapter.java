@@ -2,8 +2,6 @@ package com.seashare.seasharem3.infrastructure.adapter.out.persistence.parameter
 
 import com.seashare.seasharem3.application.port.out.FinancialParametersRepository;
 import com.seashare.seasharem3.domain.model.FinancialParameters;
-import com.seashare.seasharem3.domain.valueobject.Money;
-import com.seashare.seasharem3.domain.valueobject.Percentage;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,13 +26,13 @@ public class FinancialParametersPersistenceAdapter implements FinancialParameter
     @Transactional(readOnly = true)
     public Optional<FinancialParameters> findCurrent() {
         return repository.findFirstByOrderByVersionNumberDesc()
-                .map(FinancialParametersPersistenceAdapter::toDomain);
+                .map(FinancialParametersMapper::toDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<FinancialParameters> findById(UUID parametersId) {
-        return repository.findById(parametersId).map(FinancialParametersPersistenceAdapter::toDomain);
+        return repository.findById(parametersId).map(FinancialParametersMapper::toDomain);
     }
 
     @Override
@@ -44,18 +42,6 @@ public class FinancialParametersPersistenceAdapter implements FinancialParameter
             throw new IllegalStateException(
                     "financial_parameters is append-only: id already exists " + params.id());
         }
-        return toDomain(repository.saveAndFlush(FinancialParametersJpaEntity.from(params)));
-    }
-
-    private static FinancialParameters toDomain(FinancialParametersJpaEntity entity) {
-        return FinancialParameters.create(
-                entity.getId(),
-                entity.getVersionNumber(),
-                new Percentage(entity.getCommissionPct()),
-                new Money(entity.getInsuranceFeePerPassenger()),
-                new Percentage(entity.getWeekendIncreasePct()),
-                new Percentage(entity.getHighSeasonIncreasePct()),
-                entity.getCreatedBy(),
-                entity.getCreatedAt());
+        return FinancialParametersMapper.toDomain(repository.saveAndFlush(FinancialParametersMapper.toEntity(params)));
     }
 }

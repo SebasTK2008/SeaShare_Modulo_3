@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.seashare.seasharem3.domain.valueobject.BoatId;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.AssertTrue;
 
 import java.time.LocalDate;
 
@@ -28,4 +29,9 @@ public record SingleEstimateRequest(
         @Positive(message = "passengers must be at least 1")
         @JsonProperty("passengers")
         Integer passengers) {
+
+        @AssertTrue(message = "start_date must be before or equal to end_date")
+        public boolean isValidDates() {
+            return startDate == null || endDate == null || !startDate.isAfter(endDate);
+        }
 }
