@@ -3,6 +3,7 @@ package com.seashare.seasharem3.arch;
 import com.seashare.seasharem3.application.dto.RegisterReservationInformationCommand;
 import com.seashare.seasharem3.application.port.in.RegisterReservationInformationUseCase;
 import com.seashare.seasharem3.application.port.out.FleetRatePort;
+import com.seashare.seasharem3.application.port.out.MessageBrokerPort;
 import com.seashare.seasharem3.application.port.out.OutboxPort;
 import com.seashare.seasharem3.application.service.RegisterReservationInformationService;
 import com.seashare.seasharem3.domain.service.DynamicRatePolicy;
@@ -39,7 +40,9 @@ class Uc03ArchitectureTest {
 
     @Test
     void ce002_uc03HasNoWebAdapter() {
-        noClasses().that().resideInAPackage("..infrastructure.adapter.in.web..")
+        noClasses().that().resideInAnyPackage(
+                        "..infrastructure.adapter.in.web..",
+                        "..infrastructure.adapter.in.scheduler..")
                 .should().dependOnClassesThat().haveFullyQualifiedName(
                         RegisterReservationInformationUseCase.class.getName())
                 .because("CE-002: UC03 es unidireccional y no expone una respuesta HTTP")
@@ -55,6 +58,26 @@ class Uc03ArchitectureTest {
         noClasses().that().resideInAPackage("..infrastructure.adapter.in.messaging..")
                 .should().dependOnClassesThat().areAssignableTo(OutboxPort.class)
                 .because("CE-002: UC03 no usa outbox ni responde al productor")
+                .check(MAIN_CLASSES);
+        noClasses().that().resideInAPackage("..infrastructure.adapter.in.messaging..")
+                .should().dependOnClassesThat().areAssignableTo(MessageBrokerPort.class)
+                .because("CE-002: el listener de UC03 no publica mensajes de salida")
+                .check(MAIN_CLASSES);
+    }
+
+    @Test
+    void ce002_serviceDoesNotPublishMessages() {
+        noClasses().that().haveFullyQualifiedName(RegisterReservationInformationService.class.getName())
+                .should().dependOnClassesThat().areAssignableTo(RabbitTemplate.class)
+                .because("CE-002: UC03 no publica mensajes de salida")
+                .check(MAIN_CLASSES);
+        noClasses().that().haveFullyQualifiedName(RegisterReservationInformationService.class.getName())
+                .should().dependOnClassesThat().areAssignableTo(OutboxPort.class)
+                .because("CE-002: UC03 no usa outbox ni responde al productor")
+                .check(MAIN_CLASSES);
+        noClasses().that().haveFullyQualifiedName(RegisterReservationInformationService.class.getName())
+                .should().dependOnClassesThat().areAssignableTo(MessageBrokerPort.class)
+                .because("CE-002: UC03 no publica mensajes de salida")
                 .check(MAIN_CLASSES);
     }
 

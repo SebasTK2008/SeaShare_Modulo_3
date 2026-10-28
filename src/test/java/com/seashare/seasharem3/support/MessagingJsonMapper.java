@@ -1,12 +1,13 @@
 package com.seashare.seasharem3.support;
 
-import tools.jackson.databind.DeserializationFeature;
+import com.seashare.seasharem3.infrastructure.config.web.JacksonConfig;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * {@link JsonMapper} de pruebas con la forma de los contratos AMQP: {@code snake_case} y fallo ante
- * campos desconocidos, igual que el mapper de Spring Boot configurado por {@code JacksonConfig}.
+ * {@link JsonMapper} de pruebas con la forma de los contratos AMQP. Reutiliza el customizer de
+ * {@link JacksonConfig} para no divergir del mapper de producción (snake_case, campos desconocidos,
+ * fechas ISO y escalares del dominio).
  */
 public final class MessagingJsonMapper {
 
@@ -14,9 +15,9 @@ public final class MessagingJsonMapper {
     }
 
     public static JsonMapper create() {
-        return JsonMapper.builder()
-                .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true)
-                .build();
+        JsonMapper.Builder builder = JsonMapper.builder()
+                .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+        new JacksonConfig().domainScalarsCustomizer().customize(builder);
+        return builder.build();
     }
 }

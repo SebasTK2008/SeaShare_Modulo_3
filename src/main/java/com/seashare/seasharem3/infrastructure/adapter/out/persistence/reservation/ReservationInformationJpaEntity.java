@@ -70,13 +70,6 @@ public class ReservationInformationJpaEntity {
     protected ReservationInformationJpaEntity() {
     }
 
-    static ReservationInformationJpaEntity from(ReservationInformation information) {
-        ReservationInformationJpaEntity entity = new ReservationInformationJpaEntity();
-        entity.applyInformative(information);
-        entity.applyCalculated(information);
-        return entity;
-    }
-
     /** Columnas informativas del upsert de UC03: tarifa base y datos de la reserva. */
     void applyInformative(ReservationInformation information) {
         this.reservationId = information.reservationId().value();

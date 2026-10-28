@@ -51,7 +51,7 @@ class ReservationInformationPersistenceAdapterTest {
 
     @Test
     void saveAcquiresTheReservationLockBeforeTheUpsert() {
-        ReservationInformationJpaEntity entity = ReservationInformationJpaEntity.from(INFORMATION);
+        ReservationInformationJpaEntity entity = entity();
         when(repository.findById(INFORMATION.reservationId().value())).thenReturn(Optional.empty());
         when(repository.saveAndFlush(any())).thenReturn(entity);
 
@@ -63,7 +63,7 @@ class ReservationInformationPersistenceAdapterTest {
 
     @Test
     void saveCalculatedAmountsAcquiresTheReservationLockBeforeTheUpdate() {
-        ReservationInformationJpaEntity entity = ReservationInformationJpaEntity.from(INFORMATION);
+        ReservationInformationJpaEntity entity = entity();
         when(repository.findById(INFORMATION.reservationId().value())).thenReturn(Optional.of(entity));
         when(repository.saveAndFlush(any())).thenReturn(entity);
 
@@ -71,5 +71,12 @@ class ReservationInformationPersistenceAdapterTest {
 
         verify(reservationLockPort).lock(INFORMATION.reservationId());
         verify(repository).saveAndFlush(any());
+    }
+
+    private static ReservationInformationJpaEntity entity() {
+        ReservationInformationJpaEntity entity = new ReservationInformationJpaEntity();
+        entity.applyInformative(INFORMATION);
+        entity.applyCalculated(INFORMATION);
+        return entity;
     }
 }

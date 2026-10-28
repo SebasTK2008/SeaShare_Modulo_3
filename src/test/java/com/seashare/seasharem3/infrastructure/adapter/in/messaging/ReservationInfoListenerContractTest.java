@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.dao.DataAccessResourceFailureException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
@@ -192,6 +193,84 @@ class ReservationInfoListenerContractTest {
     }
 
     @Test
+    void acknowledgesStringPassengers() {
+        String body = CONTRACT_JSON.replace("\"passengers\": 4", "\"passengers\": \"4\"");
+
+        assertThatCode(() -> listener.onMessage(message(body, "application/json", "msg-1")))
+                .doesNotThrowAnyException();
+
+        verifyNoInteractions(useCase);
+        assertFailureRecorded(RESERVATION_UUID);
+    }
+
+    @Test
+    void acknowledgesFractionalPassengers() {
+        String body = CONTRACT_JSON.replace("\"passengers\": 4", "\"passengers\": 4.5");
+
+        assertThatCode(() -> listener.onMessage(message(body, "application/json", "msg-1")))
+                .doesNotThrowAnyException();
+
+        verifyNoInteractions(useCase);
+        assertFailureRecorded(RESERVATION_UUID);
+    }
+
+    @Test
+    void acknowledgesBooleanPassengers() {
+        String body = CONTRACT_JSON.replace("\"passengers\": 4", "\"passengers\": true");
+
+        assertThatCode(() -> listener.onMessage(message(body, "application/json", "msg-1")))
+                .doesNotThrowAnyException();
+
+        verifyNoInteractions(useCase);
+        assertFailureRecorded(RESERVATION_UUID);
+    }
+
+    @Test
+    void acknowledgesStringMaxCapacity() {
+        String body = CONTRACT_JSON.replace("\"max_capacity\": 6", "\"max_capacity\": \"6\"");
+
+        assertThatCode(() -> listener.onMessage(message(body, "application/json", "msg-1")))
+                .doesNotThrowAnyException();
+
+        verifyNoInteractions(useCase);
+        assertFailureRecorded(RESERVATION_UUID);
+    }
+
+    @Test
+    void acknowledgesFractionalMaxCapacity() {
+        String body = CONTRACT_JSON.replace("\"max_capacity\": 6", "\"max_capacity\": 6.5");
+
+        assertThatCode(() -> listener.onMessage(message(body, "application/json", "msg-1")))
+                .doesNotThrowAnyException();
+
+        verifyNoInteractions(useCase);
+        assertFailureRecorded(RESERVATION_UUID);
+    }
+
+    @Test
+    void acknowledgesNumericReservationId() {
+        String body = CONTRACT_JSON.replace("\"reservation_id\": \"" + RESERVATION_UUID + "\"",
+                "\"reservation_id\": 123");
+
+        assertThatCode(() -> listener.onMessage(message(body, "application/json", "msg-1")))
+                .doesNotThrowAnyException();
+
+        verifyNoInteractions(useCase);
+        assertFailureRecorded(null);
+    }
+
+    @Test
+    void acknowledgesNumericStartDate() {
+        String body = CONTRACT_JSON.replace("\"start_date\": \"2026-12-20\"", "\"start_date\": 20261220");
+
+        assertThatCode(() -> listener.onMessage(message(body, "application/json", "msg-1")))
+                .doesNotThrowAnyException();
+
+        verifyNoInteractions(useCase);
+        assertFailureRecorded(RESERVATION_UUID);
+    }
+
+    @Test
     void acknowledgesInvalidUuid() {
         String body = CONTRACT_JSON.replace(RESERVATION_UUID.toString(), "not-a-uuid");
 
@@ -285,6 +364,16 @@ class ReservationInfoListenerContractTest {
 
         assertThatThrownBy(() -> listener.onMessage(message(CONTRACT_JSON, "application/json", "msg-1")))
                 .isInstanceOf(IllegalStateException.class);
+
+        assertThat(failureRecorder.failures()).isEmpty();
+    }
+
+    @Test
+    void propagatesPersistenceFailures() {
+        doThrow(new DataAccessResourceFailureException("database down")).when(useCase).register(any());
+
+        assertThatThrownBy(() -> listener.onMessage(message(CONTRACT_JSON, "application/json", "msg-1")))
+                .isInstanceOf(DataAccessResourceFailureException.class);
 
         assertThat(failureRecorder.failures()).isEmpty();
     }

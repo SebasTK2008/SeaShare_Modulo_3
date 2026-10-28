@@ -18,6 +18,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -47,10 +48,10 @@ public class ReservationInfoListener {
             ReservationInfoMessageMapper mapper,
             AmqpListenerFailurePolicy failurePolicy,
             JsonMapper jsonMapper) {
-        this.useCase = useCase;
-        this.mapper = mapper;
-        this.failurePolicy = failurePolicy;
-        this.jsonMapper = jsonMapper;
+        this.useCase = Objects.requireNonNull(useCase, "useCase");
+        this.mapper = Objects.requireNonNull(mapper, "mapper");
+        this.failurePolicy = Objects.requireNonNull(failurePolicy, "failurePolicy");
+        this.jsonMapper = Objects.requireNonNull(jsonMapper, "jsonMapper");
     }
 
     @RabbitListener(queues = AmqpNames.QUEUE_RESERVATION_INFO)
@@ -67,19 +68,40 @@ public class ReservationInfoListener {
             return;
         }
 
-        ReservationInfoMessage payload;
+        JsonNode root;
         try {
-            payload = jsonMapper.readValue(message.getBody(), ReservationInfoMessage.class);
+            root = jsonMapper.readTree(message.getBody());
         } catch (RuntimeException exception) {
-            recordAndAcknowledge(reservationIdOrNull(message), new ReservationInformationValidationException(
+            recordAndAcknowledge(null, new ReservationInformationValidationException(
                     "reservation.info.provided body is not valid JSON for the contract", exception), payloadRef);
             return;
         }
-        if (payload == null) {
+        if (root == null || !root.isObject()) {
             recordAndAcknowledge(null, new ReservationInformationValidationException(
                     "reservation.info.provided body must be a JSON object"), payloadRef);
             return;
         }
+
+        UUID reservationId = reservationIdOrNull(root);
+        ReservationInfoMessage payload;
+        try {
+            validateScalarTypes(root);
+            payload = jsonMapper.treeToValue(root, ReservationInfoMessage.class);
+        } catch (ReservationInformationValidationException exception) {
+            recordAndAcknowledge(reservationId, exception, payloadRef);
+            return;
+        } catch (RuntimeException exception) {
+            recordAndAcknowledge(reservationId, new ReservationInformationValidationException(
+                    "reservation.info.provided body does not match the contract", exception), payloadRef);
+            return;
+        }
+        if (payload == null) {
+            recordAndAcknowledge(reservationId, new ReservationInformationValidationException(
+                    "reservation.info.provided body must be a JSON object"), payloadRef);
+            return;
+        }
+
+        log.info("Reservation info event parsed (messageId={}, reservationId={})", messageId, reservationId);
 
         try {
             useCase.register(mapper.toCommand(payload));
@@ -109,13 +131,39 @@ public class ReservationInfoListener {
         return "queue=" + AmqpNames.QUEUE_RESERVATION_INFO + (messageId != null ? ";messageId=" + messageId : "");
     }
 
+    private static void validateScalarTypes(JsonNode root) {
+        requireText(root, "reservation_id");
+        requireText(root, "boat_id");
+        requireText(root, "start_date");
+        requireText(root, "end_date");
+        requireText(root, "owner_id");
+        requireIntegral(root, "passengers");
+        requireIntegral(root, "max_capacity");
+    }
+
+    private static void requireText(JsonNode root, String field) {
+        JsonNode value = root.get(field);
+        if (value != null && !value.isNull() && !value.isString()) {
+            throw new ReservationInformationValidationException(field + " must be a string");
+        }
+    }
+
+    private static void requireIntegral(JsonNode root, String field) {
+        JsonNode value = root.get(field);
+        if (value != null && !value.isNull() && !value.isIntegralNumber()) {
+            throw new ReservationInformationValidationException(field + " must be an integer");
+        }
+    }
+
     /** Identificador best effort para registrar un mensaje mal formado sin impedir el {@code ack}. */
-    private UUID reservationIdOrNull(Message message) {
+    private static UUID reservationIdOrNull(JsonNode root) {
+        JsonNode value = root.get("reservation_id");
+        if (value == null || !value.isString()) {
+            return null;
+        }
         try {
-            JsonNode node = jsonMapper.readTree(message.getBody());
-            JsonNode value = node.get("reservation_id");
-            return value != null && value.isString() ? UUID.fromString(value.stringValue()) : null;
-        } catch (RuntimeException malformed) {
+            return UUID.fromString(value.stringValue());
+        } catch (IllegalArgumentException notUuid) {
             return null;
         }
     }

@@ -77,6 +77,23 @@ class OperationalFailureMessageRecovererTest {
     }
 
     @Test
+    void includesMessageIdInPayloadRef() {
+        MessageProperties properties = new MessageProperties();
+        properties.setConsumerQueue(AmqpNames.QUEUE_RESERVATION_INFO);
+        properties.setMessageId("msg-123");
+        Message message = new Message("{}".getBytes(StandardCharsets.UTF_8), properties);
+
+        assertThatThrownBy(() -> recoverer.recover(message, new RuntimeException("fleet down")))
+                .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+
+        assertThat(recorder.failures()).singleElement().satisfies(recorded -> {
+            assertThat(recorded.useCase()).isEqualTo("UC03");
+            assertThat(recorded.payloadRef())
+                    .isEqualTo("queue=" + AmqpNames.QUEUE_RESERVATION_INFO + ";messageId=msg-123");
+        });
+    }
+
+    @Test
     void unknownQueueAndMalformedBodyStillRejectAndRecordWithoutReservationId() {
         MessageProperties properties = new MessageProperties();
         properties.setConsumerQueue("finance.unknown.v1");

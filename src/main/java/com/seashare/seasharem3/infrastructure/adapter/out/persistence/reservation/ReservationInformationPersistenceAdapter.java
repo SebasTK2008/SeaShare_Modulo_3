@@ -17,7 +17,7 @@ import java.util.Optional;
 
 /**
  * Adaptador JPA de {@code reservation_information}: upsert de UC03 que invalida las columnas calculadas
- * (D-UC03-02) y escritura de montos de UC04. Fuente: UC03 plan T008/T009; UC04 plan T007; general-plan §4.
+ * (D-UC03-02) y escritura de montos de UC04. Fuente: UC03 plan T014/T015; UC04 plan T007; general-plan §4.
  * El adaptador adquiere el bloqueo asesor por reserva al inicio de su transacción (D-15), de modo que
  * el upsert de UC03 y el cálculo de UC04 se serializan por reserva; el bloqueo se libera al confirmar.
  */
@@ -44,7 +44,7 @@ public class ReservationInformationPersistenceAdapter implements ReservationInfo
     public ReservationInformation save(ReservationInformation information) {
         reservationLockPort.lock(information.reservationId());
         ReservationInformationJpaEntity entity = repository.findById(information.reservationId().value())
-                .orElseGet(() -> ReservationInformationJpaEntity.from(information));
+                .orElseGet(ReservationInformationJpaEntity::new);
         entity.applyInformative(information);
         entity.invalidateCalculated();
         return toDomain(repository.saveAndFlush(entity));
