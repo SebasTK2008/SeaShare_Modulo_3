@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -132,6 +133,11 @@ class FlywaySchemaTest {
 		assertRejectsMutation("refund_record", refundRecordId);
 		assertRejectsMutation("settlement_record", settlementRecordId);
 		assertRejectsMutation("commission_record", commissionRecordId);
+
+		assertRejectsTruncate("charge_record");
+		assertRejectsTruncate("refund_record");
+		assertRejectsTruncate("settlement_record");
+		assertRejectsTruncate("commission_record");
 	}
 
 	@Test
@@ -142,6 +148,49 @@ class FlywaySchemaTest {
 				.isInstanceOf(SQLException.class);
 		assertThatThrownBy(() -> execute(
 				"DELETE FROM financial_parameters WHERE id = ?", parametersId))
+				.isInstanceOf(SQLException.class);
+		assertRejectsTruncate("financial_parameters");
+	}
+
+	@Test
+	void createsTruncateGuardsForImmutableTables() throws SQLException {
+		List<String> triggers = queryStrings(
+				"SELECT tgname FROM pg_trigger WHERE tgname LIKE '%no_truncate' ORDER BY tgname");
+		assertThat(triggers).containsExactly(
+				"trg_charge_record_no_truncate",
+				"trg_commission_record_no_truncate",
+				"trg_financial_parameters_no_truncate",
+				"trg_refund_record_no_truncate",
+				"trg_settlement_record_no_truncate");
+	}
+
+	@Test
+	void enforcesFinancialParametersRangeChecks() {
+		assertThatThrownBy(() -> insertParametersWithValues(3000L, "100.0001", "5", "15", "20"))
+				.isInstanceOf(SQLException.class);
+		assertThatThrownBy(() -> insertParametersWithValues(3001L, "-0.0001", "5", "15", "20"))
+				.isInstanceOf(SQLException.class);
+		assertThatThrownBy(() -> insertParametersWithValues(3002L, "10", "5", "100.0001", "20"))
+				.isInstanceOf(SQLException.class);
+		assertThatThrownBy(() -> insertParametersWithValues(3003L, "10", "5", "15", "100.0001"))
+				.isInstanceOf(SQLException.class);
+		assertThatThrownBy(() -> insertParametersWithValues(3004L, "10", "-0.0001", "15", "20"))
+				.isInstanceOf(SQLException.class);
+	}
+
+	@Test
+	void acceptsFinancialParametersBoundaries() {
+		assertThatCode(() -> insertParametersWithValues(3010L, "0", "0", "0", "0"))
+				.doesNotThrowAnyException();
+		assertThatCode(() -> insertParametersWithValues(3011L, "100", "0", "100", "100"))
+				.doesNotThrowAnyException();
+	}
+
+	@Test
+	void enforcesUniqueFinancialParametersVersionNumber() throws SQLException {
+		insertParameters(3020L);
+
+		assertThatThrownBy(() -> insertParameters(3020L))
 				.isInstanceOf(SQLException.class);
 	}
 
@@ -236,12 +285,26 @@ class FlywaySchemaTest {
 				.isInstanceOf(SQLException.class);
 	}
 
+	private static void assertRejectsTruncate(String table) {
+		assertThatCode(() -> execute("TRUNCATE TABLE " + table))
+				.isInstanceOf(SQLException.class);
+	}
+
 	private static UUID insertParameters(long versionNumber) throws SQLException {
 		UUID id = UUID.randomUUID();
 		execute("INSERT INTO financial_parameters (id, version_number, commission_pct,"
 				+ " insurance_fee_per_passenger, weekend_increase_pct, high_season_increase_pct)"
 				+ " VALUES (?, ?, 10, 5, 15, 20)", id, versionNumber);
 		return id;
+	}
+
+	private static void insertParametersWithValues(long versionNumber, String commission,
+			String insurance, String weekend, String highSeason) throws SQLException {
+		execute("INSERT INTO financial_parameters (id, version_number, commission_pct,"
+				+ " insurance_fee_per_passenger, weekend_increase_pct, high_season_increase_pct)"
+				+ " VALUES (?, ?, ?, ?, ?, ?)",
+				UUID.randomUUID(), versionNumber, new BigDecimal(commission), new BigDecimal(insurance),
+				new BigDecimal(weekend), new BigDecimal(highSeason));
 	}
 
 	private static void execute(String sql, Object... args) throws SQLException {

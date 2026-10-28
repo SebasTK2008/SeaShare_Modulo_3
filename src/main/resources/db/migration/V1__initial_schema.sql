@@ -31,7 +31,7 @@ CREATE TABLE financial_parameters (
         CHECK (insurance_fee_per_passenger >= 0)
 );
 
--- Refuerzo append-only recomendado por UC11 §Reglas 4 (denegar UPDATE/DELETE en BD).
+-- Refuerzo append-only de UC11 §Reglas 4: se prohíben UPDATE, DELETE y TRUNCATE en BD.
 CREATE OR REPLACE FUNCTION reject_financial_parameters_mutation()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -42,6 +42,18 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_financial_parameters_immutable
     BEFORE UPDATE OR DELETE ON financial_parameters
     FOR EACH ROW EXECUTE FUNCTION reject_financial_parameters_mutation();
+
+-- Trigger de sentencia para cubrir TRUNCATE, que no dispara el trigger de fila anterior.
+CREATE OR REPLACE FUNCTION reject_truncate()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'La tabla % es append-only: se prohíbe TRUNCATE', TG_TABLE_NAME;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_financial_parameters_no_truncate
+    BEFORE TRUNCATE ON financial_parameters
+    FOR EACH STATEMENT EXECUTE FUNCTION reject_truncate();
 
 -- GAP: la primera versión (version_number = 1) la crea el PUT de UC11, no esta migración.
 
@@ -124,7 +136,8 @@ CREATE TABLE shedlock (
 );
 
 -- GAP: general-plan §4 solo lista la columna name; se usan las 4 columnas canónicas de ShedLock.
--- GAP: los privilegios por rol no están documentados en ningún plan.
+-- Los privilegios por rol son específicos del entorno y no forman parte de la migración; la
+-- inmutabilidad se refuerza con triggers de UPDATE/DELETE/TRUNCATE.
 
 -- =====================================================================
 -- UC05 · charge_intent y charge_record (antes V4__charge_intent_and_charge_record.sql)
@@ -195,8 +208,12 @@ CREATE TRIGGER trg_charge_record_immutable
     BEFORE UPDATE OR DELETE ON charge_record
     FOR EACH ROW EXECUTE FUNCTION reject_record_mutation();
 
--- GAP: privilegios del usuario de aplicación sobre las tablas *_record no documentados
--- (además del trigger, denegar UPDATE/DELETE por GRANT/REVOKE según entorno).
+CREATE TRIGGER trg_charge_record_no_truncate
+    BEFORE TRUNCATE ON charge_record
+    FOR EACH STATEMENT EXECUTE FUNCTION reject_truncate();
+
+-- Los privilegios por rol son específicos del entorno; la migración refuerza la inmutabilidad con
+-- triggers de UPDATE/DELETE/TRUNCATE.
 
 -- =====================================================================
 -- UC09 · refund_intent y refund_record (antes V5__refund_intent_and_refund_record.sql)
@@ -254,6 +271,10 @@ CREATE INDEX idx_refund_record_reservation   ON refund_record (reservation_id);
 CREATE TRIGGER trg_refund_record_immutable
     BEFORE UPDATE OR DELETE ON refund_record
     FOR EACH ROW EXECUTE FUNCTION reject_record_mutation();
+
+CREATE TRIGGER trg_refund_record_no_truncate
+    BEFORE TRUNCATE ON refund_record
+    FOR EACH STATEMENT EXECUTE FUNCTION reject_truncate();
 
 -- =====================================================================
 -- UC10 · settlement_intent, settlement_record y commission_record (antes V6__settlement_tables.sql)
@@ -313,6 +334,10 @@ CREATE TRIGGER trg_settlement_record_immutable
     BEFORE UPDATE OR DELETE ON settlement_record
     FOR EACH ROW EXECUTE FUNCTION reject_record_mutation();
 
+CREATE TRIGGER trg_settlement_record_no_truncate
+    BEFORE TRUNCATE ON settlement_record
+    FOR EACH STATEMENT EXECUTE FUNCTION reject_truncate();
+
 CREATE TABLE commission_record (
     id                   UUID          PRIMARY KEY,
     settlement_record_id UUID          NOT NULL,
@@ -334,6 +359,10 @@ CREATE INDEX idx_commission_record_reservation   ON commission_record (reservati
 CREATE TRIGGER trg_commission_record_immutable
     BEFORE UPDATE OR DELETE ON commission_record
     FOR EACH ROW EXECUTE FUNCTION reject_record_mutation();
+
+CREATE TRIGGER trg_commission_record_no_truncate
+    BEFORE TRUNCATE ON commission_record
+    FOR EACH STATEMENT EXECUTE FUNCTION reject_truncate();
 
 -- =====================================================================
 -- UC08 · deposit_disposition y dispute_event_log (antes V7__dispute_tracking_tables.sql)

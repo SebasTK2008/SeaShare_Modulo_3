@@ -4,6 +4,7 @@ import com.seashare.seasharem3.application.exception.ContractException;
 import com.seashare.seasharem3.application.exception.ErrorCode;
 import com.seashare.seasharem3.domain.exception.BaseRateException;
 import com.seashare.seasharem3.domain.exception.ChargeIntentNotFoundException;
+import com.seashare.seasharem3.domain.exception.FinancialParametersValidationException;
 import com.seashare.seasharem3.domain.exception.InvalidPageException;
 import com.seashare.seasharem3.domain.exception.ReservationInfoIncompleteException;
 import com.seashare.seasharem3.domain.exception.ReservationInfoNotFoundException;
@@ -160,6 +161,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void financialParametersValidationReturnsFieldError() throws Exception {
+        mockMvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"value\":\"negative-insurance\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.retryable").value(false))
+                .andExpect(jsonPath("$.errors[0].field").value("insurance_fee_per_passenger"));
+    }
+
+    @Test
     void unreadableFinancialParametersReturnInternalError() throws Exception {
         mockMvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"value\":\"parameters-unavailable\"}"))
@@ -202,6 +213,9 @@ class GlobalExceptionHandlerTest {
                         throw new ReservationInfoIncompleteException("Reservation information is incomplete.");
                 case "charge-not-found" -> throw new ChargeIntentNotFoundException("Charge intent not found.");
                 case "invalid-page" -> throw new InvalidPageException("Page out of range.");
+                case "negative-insurance" -> throw new FinancialParametersValidationException(
+                        "insuranceFeePerPassenger",
+                        "The insurance fee per passenger must be greater than or equal to 0: -1.0000");
                 case "parameters-unavailable" -> throw new BaseRateException(
                         BaseRateException.BaseRateFailureReason.PARAMETERS_UNAVAILABLE,
                         "Financial parameters could not be read.");

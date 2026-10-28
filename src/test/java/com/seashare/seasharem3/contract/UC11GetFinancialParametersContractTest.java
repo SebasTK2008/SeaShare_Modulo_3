@@ -56,7 +56,7 @@ class UC11GetFinancialParametersContractTest {
 
     @Test
     void getFinancialParametersReturns200WithAllFieldsAndDecimalStrings() throws Exception {
-        // T026: 200 con los 6 campos (4 editables + guarantee_deposit_rule + high_season_windows) y strings decimales (RF-009, RNF-002).
+        // T026: 200 con los 7 campos (version_number + 4 editables + 2 derivados) y strings decimales.
         loadUseCase.result = new FinancialParametersResult(
                 7,
                 new Percentage(new BigDecimal("15.00")),
@@ -70,15 +70,35 @@ class UC11GetFinancialParametersContractTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.version_number").value(7))
-                .andExpect(jsonPath("$.platform_commission_percentage").value("15.00"))
-                .andExpect(jsonPath("$.insurance_fee_per_passenger").value("15000.00"))
-                .andExpect(jsonPath("$.weekend_increase_percentage").value("10.00"))
-                .andExpect(jsonPath("$.high_season_increase_percentage").value("25.00"))
+                .andExpect(jsonPath("$.platform_commission_percentage").value("15.0000"))
+                .andExpect(jsonPath("$.insurance_fee_per_passenger").value("15000.0000"))
+                .andExpect(jsonPath("$.weekend_increase_percentage").value("10.0000"))
+                .andExpect(jsonPath("$.high_season_increase_percentage").value("25.0000"))
                 .andExpect(jsonPath("$.guarantee_deposit_rule").value("10% de la tarifa base diaria"))
                 .andExpect(jsonPath("$.high_season_windows[0]").value("11-15\u219201-15"))
                 .andExpect(jsonPath("$.high_season_windows[1]").value("06-01\u219207-30"))
                 .andExpect(jsonPath("$.high_season_windows[2]").value("semana-santa"))
                 .andExpect(jsonPath("$.high_season_windows[3]").value("10-05\u219210-12"));
+    }
+
+    @Test
+    void getFinancialParametersPreservesFourDecimalPlacesForRoundTrip() throws Exception {
+        // A1: el valor almacenado y el devuelto deben coincidir para que PUT→GET→PUT sea idempotente.
+        loadUseCase.result = new FinancialParametersResult(
+                9,
+                new Percentage(new BigDecimal("15.1234")),
+                new Money(new BigDecimal("15000.1234")),
+                new Percentage(new BigDecimal("10.1234")),
+                new Percentage(new BigDecimal("25.1234")),
+                "10% de la tarifa base diaria",
+                List.of("semana-santa"));
+
+        mockMvc.perform(get(ENDPOINT).accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.platform_commission_percentage").value("15.1234"))
+                .andExpect(jsonPath("$.insurance_fee_per_passenger").value("15000.1234"))
+                .andExpect(jsonPath("$.weekend_increase_percentage").value("10.1234"))
+                .andExpect(jsonPath("$.high_season_increase_percentage").value("25.1234"));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.seashare.seasharem3.domain.model;
 
 import com.seashare.seasharem3.domain.exception.DomainException;
+import com.seashare.seasharem3.domain.exception.FinancialParametersValidationException;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.Percentage;
 
@@ -39,10 +40,14 @@ public final class FinancialParameters {
         if (versionNumber < 1) {
             throw new DomainException("version_number must be at least 1: " + versionNumber);
         }
-        insuranceFeePerPassenger.requireNonNegative();
+        if (insuranceFeePerPassenger.isNegative()) {
+            throw new FinancialParametersValidationException("insuranceFeePerPassenger",
+                    "The insurance fee per passenger must be greater than or equal to 0: "
+                            + insuranceFeePerPassenger.amount());
+        }
     }
 
-    /** Crea una versión nueva (append-only). Fuente: UC11 plan T002; DDL V2. */
+    /** Crea una versión nueva (append-only). Fuente: UC11 plan T002; DDL de `financial_parameters` en `V1__initial_schema.sql`. */
     public static FinancialParameters create(UUID id, long versionNumber, Percentage commissionPct,
             Money insuranceFeePerPassenger, Percentage weekendIncreasePct, Percentage highSeasonIncreasePct,
             String createdBy, Instant createdAt) {
@@ -74,7 +79,11 @@ public final class FinancialParameters {
         return highSeasonIncreasePct;
     }
 
-    /** Dato plano opcional ([SPEC]); {@code null} si no se recibió. Fuente: general-plan §4. */
+    /**
+     * Dato plano opcional ([SPEC]); {@code null} si no se recibió.
+     * El PUT de UC11 no transporta identidad y la seguridad está fuera de alcance (D-UC11-09).
+     * Fuente: general-plan §4.
+     */
     public String createdBy() {
         return createdBy;
     }

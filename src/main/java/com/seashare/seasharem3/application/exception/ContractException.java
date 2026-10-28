@@ -14,11 +14,19 @@ public class ContractException extends RuntimeException {
     private final List<ApiFieldError> errors;
 
     public ContractException(ErrorCode code, String detail) {
-        this(code, detail, List.of());
+        this(code, detail, List.of(), null);
     }
 
     public ContractException(ErrorCode code, String detail, List<ApiFieldError> errors) {
-        super(detail);
+        this(code, detail, errors, null);
+    }
+
+    public ContractException(ErrorCode code, String detail, Throwable cause) {
+        this(code, detail, List.of(), cause);
+    }
+
+    public ContractException(ErrorCode code, String detail, List<ApiFieldError> errors, Throwable cause) {
+        super(detail, cause);
         this.code = code;
         this.errors = List.copyOf(errors);
     }

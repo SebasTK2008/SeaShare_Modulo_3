@@ -75,6 +75,11 @@ Casos de uso **sin contrato propio**:
 | Períodos de informe (`period`) | `YYYY-MM-H1`/`YYYY-MM-H2` (quincenal), `YYYY-MM` (mensual), `YYYY-Q1`…`YYYY-Q4` (trimestral) | [CONV] UC13 |
 | Escala y precisión | `NUMERIC(18,4)` en BD; `BigDecimal` con 4 decimales internos; toda salida monetaria (REST, comandos a la pasarela y registros) redondea `HALF_UP` a 2 decimales | [SPEC RNF-002] + [CONV] |
 
+**Nota — UC11 conserva 4 decimales**: los cuatro parámetros configurables de
+`GET /api/v1/financial-parameters` se serializan con 4 decimales para que el valor leído sea
+exactamente el almacenado y `PUT → GET → PUT` sea idempotente. La regla de 2 decimales sigue
+aplicando al resto de salidas monetarias.
+
 **Nota — forma numérica para la pasarela**: la forma de string decimal de esta tabla aplica a la API REST, a los contratos de colas y a los registros del sistema. Cuando la pasarela exija número JSON (por ejemplo, `transaction_amount` en `POST /v1/payments`), el adaptador de la pasarela define su propia serialización; la forma externa del sistema no cambia [CONV].
 
 ### 3.2 Headers comunes (REST)

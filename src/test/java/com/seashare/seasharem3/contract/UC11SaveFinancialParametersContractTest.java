@@ -1,13 +1,12 @@
 package com.seashare.seasharem3.contract;
 
 import com.seashare.seasharem3.application.dto.FinancialParametersCommand;
-import com.seashare.seasharem3.application.dto.FinancialParametersResult;
+import com.seashare.seasharem3.application.dto.SaveFinancialParametersResult;
 import com.seashare.seasharem3.application.exception.ContractException;
 import com.seashare.seasharem3.application.exception.ErrorCode;
 import com.seashare.seasharem3.application.port.in.LoadFinancialParametersUseCase;
 import com.seashare.seasharem3.application.port.in.SaveFinancialParametersUseCase;
-import com.seashare.seasharem3.domain.valueobject.Money;
-import com.seashare.seasharem3.domain.valueobject.Percentage;
+import com.seashare.seasharem3.domain.exception.FinancialParametersValidationException;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.FinancialParametersController;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.error.ApiProblemDetailsFactory;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.error.GlobalExceptionHandler;
@@ -20,10 +19,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.math.BigDecimal;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -60,14 +57,7 @@ class UC11SaveFinancialParametersContractTest {
     @Test
     void saveValidParametersReturns200WithVersionNumber() throws Exception {
         // T010 / T041: PUT válido -> 200 OK con { version_number: N }, string decimal aceptado (RNF-002)
-        saveUseCase.resultToReturn = new FinancialParametersResult(
-                8,
-                new Percentage(new BigDecimal("15.00")),
-                new Money(new BigDecimal("15000.00")),
-                new Percentage(new BigDecimal("10.00")),
-                new Percentage(new BigDecimal("25.00")),
-                "10% de la tarifa base diaria",
-                List.of("11-15\u219201-15", "06-01\u219207-30", "semana-santa", "10-05\u219210-12"));
+        saveUseCase.resultToReturn = new SaveFinancialParametersResult(8);
 
         String requestBody = """
                 {
@@ -87,13 +77,13 @@ class UC11SaveFinancialParametersContractTest {
                 .andExpect(jsonPath("$.version_number").value(8));
 
         assertThat(saveUseCase.receivedCommand).isNotNull();
-        assertThat(saveUseCase.receivedCommand.commissionPct().value()).isEqualByComparingTo(new BigDecimal("15.00"));
-        assertThat(saveUseCase.receivedCommand.insuranceFeePerPassenger().amount()).isEqualByComparingTo(new BigDecimal("15000.00"));
+        assertThat(saveUseCase.receivedCommand.commissionPct().value()).isEqualByComparingTo("15.00");
+        assertThat(saveUseCase.receivedCommand.insuranceFeePerPassenger().amount()).isEqualByComparingTo("15000.00");
     }
 
     @Test
-    void saveWithOutOfRangeValueReturns400ValidationError() throws Exception {
-        // T021: PUT con valor fuera de rango (>100 %) -> 400 VALIDATION_ERROR y sin persistencia (CE-004)
+    void saveWithOutOfRangeValueReturns400WithFieldDetail() throws Exception {
+        // T021: PUT con valor fuera de rango (>100 %) -> 400 VALIDATION_ERROR con detalle de campo
         String requestBody = """
                 {
                   "platform_commission_percentage": "150.00",
@@ -112,14 +102,16 @@ class UC11SaveFinancialParametersContractTest {
                 .andExpect(jsonPath("$.type").value("about:blank"))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.retryable").value(false));
+                .andExpect(jsonPath("$.retryable").value(false))
+                .andExpect(jsonPath("$.errors[0].field").value("platform_commission_percentage"))
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("0-100")));
 
         assertThat(saveUseCase.receivedCommand).isNull();
     }
 
     @Test
-    void saveWithNegativeInsuranceFeeReturns400ValidationError() throws Exception {
-        // RF-013: tarifa del seguro náutico >= 0
+    void saveWithNegativeInsuranceFeeReturns400WithFieldDetail() throws Exception {
+        // RF-013: tarifa del seguro náutico >= 0; la validación vive en el dominio.
         String requestBody = """
                 {
                   "platform_commission_percentage": "15.00",
@@ -136,9 +128,48 @@ class UC11SaveFinancialParametersContractTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.retryable").value(false));
+                .andExpect(jsonPath("$.retryable").value(false))
+                .andExpect(jsonPath("$.errors[0].field").value("insurance_fee_per_passenger"))
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("greater than or equal to 0")));
+    }
 
-        assertThat(saveUseCase.receivedCommand).isNull();
+    @Test
+    void saveWithNonNumericValuesReturns400WithFieldDetail() throws Exception {
+        // RF-013: formato no numérico en los cuatro campos.
+        assertFieldError("abc", "platform_commission_percentage");
+        assertFieldError("abc", "insurance_fee_per_passenger");
+        assertFieldError("abc", "weekend_increase_percentage");
+        assertFieldError("abc", "high_season_increase_percentage");
+    }
+
+    @Test
+    void saveWithJsonNumbersReturns400WithFieldDetail() throws Exception {
+        assertJsonNumberError("platform_commission_percentage", "15.00");
+        assertJsonNumberError("insurance_fee_per_passenger", "15000.00");
+        assertJsonNumberError("weekend_increase_percentage", "10.00");
+        assertJsonNumberError("high_season_increase_percentage", "25.00");
+    }
+
+    @Test
+    void saveAcceptsBoundaryValues() throws Exception {
+        // RF-013: 0 y 100 son inclusivos.
+        saveUseCase.resultToReturn = new SaveFinancialParametersResult(1);
+
+        String requestBody = """
+                {
+                  "platform_commission_percentage": "0.00",
+                  "insurance_fee_per_passenger": "0.00",
+                  "weekend_increase_percentage": "0.00",
+                  "high_season_increase_percentage": "100.00"
+                }
+                """;
+
+        mockMvc.perform(put(ENDPOINT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version_number").value(1));
     }
 
     @Test
@@ -146,7 +177,9 @@ class UC11SaveFinancialParametersContractTest {
         // RF-013: ningún campo obligatorio puede faltar ni ser null
         String requestBody = """
                 {
-                  "platform_commission_percentage": "15.00"
+                  "platform_commission_percentage": "15.00",
+                  "weekend_increase_percentage": "10.00",
+                  "high_season_increase_percentage": "25.00"
                 }
                 """;
 
@@ -157,7 +190,8 @@ class UC11SaveFinancialParametersContractTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.retryable").value(false));
+                .andExpect(jsonPath("$.retryable").value(false))
+                .andExpect(jsonPath("$.errors[0].field").value("insurance_fee_per_passenger"));
 
         assertThat(saveUseCase.receivedCommand).isNull();
     }
@@ -188,14 +222,67 @@ class UC11SaveFinancialParametersContractTest {
                 .andExpect(jsonPath("$.retryable").value(true));
     }
 
+    private void assertFieldError(String value, String field) throws Exception {
+        String commission = field.equals("platform_commission_percentage") ? value : "15.00";
+        String insurance = field.equals("insurance_fee_per_passenger") ? value : "15000.00";
+        String weekend = field.equals("weekend_increase_percentage") ? value : "10.00";
+        String highSeason = field.equals("high_season_increase_percentage") ? value : "25.00";
+        String requestBody = """
+                {
+                  "platform_commission_percentage": "%s",
+                  "insurance_fee_per_passenger": "%s",
+                  "weekend_increase_percentage": "%s",
+                  "high_season_increase_percentage": "%s"
+                }
+                """.formatted(commission, insurance, weekend, highSeason);
+
+        mockMvc.perform(put(ENDPOINT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].field").value(field))
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("decimal")));
+    }
+
+    private void assertJsonNumberError(String field, String number) throws Exception {
+        String commission = field.equals("platform_commission_percentage") ? number : "\"15.00\"";
+        String insurance = field.equals("insurance_fee_per_passenger") ? number : "\"15000.00\"";
+        String weekend = field.equals("weekend_increase_percentage") ? number : "\"10.00\"";
+        String highSeason = field.equals("high_season_increase_percentage") ? number : "\"25.00\"";
+        String requestBody = """
+                {
+                  "platform_commission_percentage": %s,
+                  "insurance_fee_per_passenger": %s,
+                  "weekend_increase_percentage": %s,
+                  "high_season_increase_percentage": %s
+                }
+                """.formatted(commission, insurance, weekend, highSeason);
+
+        mockMvc.perform(put(ENDPOINT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.errors[0].field").value(field))
+                .andExpect(jsonPath("$.errors[0].message").value(containsString("decimal")));
+    }
+
     private static class StubSaveUseCase implements SaveFinancialParametersUseCase {
         FinancialParametersCommand receivedCommand;
-        FinancialParametersResult resultToReturn;
+        SaveFinancialParametersResult resultToReturn;
         RuntimeException exceptionToThrow;
 
         @Override
-        public FinancialParametersResult save(FinancialParametersCommand command) {
+        public SaveFinancialParametersResult save(FinancialParametersCommand command) {
             this.receivedCommand = command;
+            if (command.insuranceFeePerPassenger().isNegative()) {
+                throw new FinancialParametersValidationException("insuranceFeePerPassenger",
+                        "The insurance fee per passenger must be greater than or equal to 0: "
+                                + command.insuranceFeePerPassenger().amount());
+            }
             if (exceptionToThrow != null) {
                 throw exceptionToThrow;
             }

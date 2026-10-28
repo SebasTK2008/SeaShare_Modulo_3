@@ -7,6 +7,8 @@ import com.seashare.seasharem3.domain.service.HighSeasonCalendar;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Clock;
+
 /**
  * Ensambla UC11 manteniendo {@code application} libre de Spring.
  * Fuente: general-plan §3.4-2 (application depende solo de domain).
@@ -18,8 +20,9 @@ public class FinancialParametersConfiguration {
     public FinancialParametersService financialParametersService(
             FinancialParametersRepository repository,
             HighSeasonCalendar highSeasonCalendar,
-            ClockPort clock) {
-        return new FinancialParametersService(repository, highSeasonCalendar, clock);
+            ClockPort clock,
+            Clock instantClock) {
+        return new FinancialParametersService(repository, highSeasonCalendar, clock, instantClock);
     }
 }
 

@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JacksonConfigTest {
 
@@ -55,6 +56,14 @@ class JacksonConfigTest {
                 .isEqualTo(new Percentage(new BigDecimal("15")));
         assertThat(mapper.readValue("\"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01\"", BoatId.class))
                 .isEqualTo(new BoatId(BOAT_UUID));
+    }
+
+    @Test
+    void rejectsJsonNumbersForMoneyAndPercentage() {
+        assertThatThrownBy(() -> mapper.readValue("350000.00", Money.class))
+                .hasMessageContaining("must be a decimal string");
+        assertThatThrownBy(() -> mapper.readValue("15.00", Percentage.class))
+                .hasMessageContaining("must be a decimal string");
     }
 
     private static JsonMapper buildMapper() {

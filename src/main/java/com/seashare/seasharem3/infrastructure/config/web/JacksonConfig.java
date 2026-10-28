@@ -11,6 +11,7 @@ import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomize
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.module.SimpleModule;
 
 import java.math.BigDecimal;
@@ -48,6 +49,7 @@ public class JacksonConfig {
         module.addDeserializer(DisputeId.class, new UuidScalarDeserializer<>(DisputeId::new));
         return builder -> builder
                 .configure(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS, false)
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true)
                 .addModule(module);
     }
 }

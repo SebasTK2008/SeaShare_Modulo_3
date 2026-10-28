@@ -14,9 +14,10 @@ import jakarta.validation.constraints.NotNull;
  *
  * <p>Los cuatro campos son obligatorios ({@code @NotNull}); un campo ausente o {@code null} en el JSON
  * produce {@code MethodArgumentNotValidException} → {@code 400 VALIDATION_ERROR} con el detalle del campo
- * [SPEC RF-013]. La validación de rangos (0–100 para porcentajes, ≥ 0 para el seguro) la aplica el
- * constructor del VO al deserializar, que lanza {@code DomainException}; el {@code GlobalExceptionHandler}
- * la traduce a {@code 400 VALIDATION_ERROR} [SPEC RF-013, UC11 plan §Reglas 2].
+ * [SPEC RF-013]. Los rangos (0–100 para porcentajes, ≥ 0 para el seguro) los validan los VOs y el
+ * dominio; el {@code GlobalExceptionHandler} extrae el campo del path de Jackson o de
+ * {@code FinancialParametersValidationException} y lo publica en {@code errors[]}
+ * [SPEC RF-013, UC11 plan §Reglas 2].
  *
  * <p>Fuente: UC11 plan T018; contrato {@code rest/UC11-guardar-parametros-financieros.md} §2–§3 [CONV].
  */

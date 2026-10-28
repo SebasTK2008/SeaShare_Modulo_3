@@ -62,6 +62,10 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
@@ -260,6 +264,7 @@
                                     <element>CLASS</element>
                                     <includes>
                                         <include>com/seashare/seasharem3/domain/service/*</include>
+                                        <include>com/seashare/seasharem3/domain/model/FinancialParameters</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/BaseRate</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/BoatId</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/HighSeasonWindow*</include>
@@ -279,6 +284,9 @@
                                     <element>CLASS</element>
                                     <includes>
                                         <include>com/seashare/seasharem3/application/service/ProvideBaseRateService</include>
+                                        <include>com/seashare/seasharem3/application/service/EstimateBatchService</include>
+                                        <include>com/seashare/seasharem3/application/service/EstimateSingleService</include>
+                                        <include>com/seashare/seasharem3/application/service/FinancialParametersService</include>
                                         <include>com/seashare/seasharem3/application/dto/ProvideBaseRateCommand</include>
                                         <include>com/seashare/seasharem3/application/dto/BaseRateResult</include>
                                     </includes>
