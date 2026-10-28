@@ -131,6 +131,24 @@ class ReservationInformationPersistenceAdapterIntegrationTest {
     }
 
     @Test
+    void repeatingSaveCalculatedAmountsIsIdempotentAndKeepsASingleRow() {
+        UUID reservationId = UUID.randomUUID();
+        UUID parametersId = newParametersVersion();
+        ReservationInformation information = newReservation(reservationId, parametersId);
+        adapter.save(information);
+        ReservationInformation calculated = calculated(information, parametersId);
+
+        ReservationInformation first = adapter.saveCalculatedAmounts(calculated);
+        ReservationInformation second = adapter.saveCalculatedAmounts(calculated);
+
+        assertThat(second).isEqualTo(first);
+        assertThat(adapter.findByReservationId(new ReservationId(reservationId)).orElseThrow()).isEqualTo(first);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM reservation_information WHERE reservation_id = ?", Long.class, reservationId))
+                .isEqualTo(1L);
+    }
+
+    @Test
     void saveAgainRewritesBaseRateParametersId() {
         UUID reservationId = UUID.randomUUID();
         UUID firstParametersId = newParametersVersion();
@@ -165,6 +183,27 @@ class ReservationInformationPersistenceAdapterIntegrationTest {
 
         assertThat(adapter.findByReservationId(new ReservationId(reservationId)).orElseThrow())
                 .isEqualTo(valid);
+    }
+
+    @Test
+    void saveCalculatedAmountsPreservesTheInformativeBlock() {
+        UUID reservationId = UUID.randomUUID();
+        UUID baseRateParametersId = newParametersVersion();
+        ReservationInformation information = newReservation(reservationId, baseRateParametersId);
+        adapter.save(information);
+
+        adapter.saveCalculatedAmounts(calculated(information, newParametersVersion()));
+
+        // Relectura desde la fila: si un campo informativo hubiera quedado en NULL, toDomain lo rechazaría.
+        ReservationInformation found = adapter.findByReservationId(new ReservationId(reservationId)).orElseThrow();
+        assertThat(found.startDate()).isEqualTo(information.startDate());
+        assertThat(found.endDate()).isEqualTo(information.endDate());
+        assertThat(found.passengers()).isEqualTo(information.passengers());
+        assertThat(found.ownerId()).isEqualTo(information.ownerId());
+        assertThat(found.maxCapacity()).isEqualTo(information.maxCapacity());
+        assertThat(found.baseRate()).isEqualTo(information.baseRate());
+        assertThat(found.baseRateParametersId()).isEqualTo(baseRateParametersId);
+        assertThat(found.isCalculated()).isTrue();
     }
 
     private UUID newParametersVersion() {
