@@ -43,8 +43,9 @@ public class OperationalFailureMessageRecoverer implements MessageRecoverer {
         MessageProperties properties = message.getMessageProperties();
         String queue = resolveQueue(properties);
         String useCase = USE_CASE_BY_QUEUE.getOrDefault(queue, "AMQP");
-        failurePolicy.recordAndReject(useCase, resolveReservationId(properties, message.getBody()), cause,
-                "queue=" + queue);
+        String payloadRef = "queue=" + queue
+                + (properties.getMessageId() != null ? ";messageId=" + properties.getMessageId() : "");
+        failurePolicy.recordAndReject(useCase, resolveReservationId(properties, message.getBody()), cause, payloadRef);
     }
 
     private static String resolveQueue(MessageProperties properties) {

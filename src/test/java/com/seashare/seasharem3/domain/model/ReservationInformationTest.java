@@ -23,9 +23,13 @@ class ReservationInformationTest {
     private static final LocalDate END = LocalDate.of(2026, 10, 10);
 
     private static ReservationInformation create() {
+        return create(START, END, 2, 4);
+    }
+
+    private static ReservationInformation create(LocalDate start, LocalDate end, int passengers, int maxCapacity) {
         return ReservationInformation.create(new ReservationId(UUID.randomUUID()), new BoatId(UUID.randomUUID()),
-                new BaseRate(new Money(new BigDecimal("350000.00"))), null, START, END, 2,
-                new OwnerId(UUID.randomUUID()), 4);
+                new BaseRate(new Money(new BigDecimal("350000.00"))), null, start, end, passengers,
+                new OwnerId(UUID.randomUUID()), maxCapacity);
     }
 
     @Test
@@ -36,6 +40,27 @@ class ReservationInformationTest {
         assertThat(information.totalAmount()).isNull();
         assertThat(information.frozenParametersId()).isNull();
         assertThat(information.calculatedAt()).isNull();
+    }
+
+    @Test
+    void acceptsSameStartAndEndDate() {
+        ReservationInformation information = create(START, START, 2, 4);
+
+        assertThat(information.startDate()).isEqualTo(information.endDate());
+    }
+
+    @Test
+    void acceptsOnePassenger() {
+        ReservationInformation information = create(START, END, 1, 4);
+
+        assertThat(information.passengers()).isEqualTo(1);
+    }
+
+    @Test
+    void acceptsPassengersAtCapacity() {
+        ReservationInformation information = create(START, END, 4, 4);
+
+        assertThat(information.passengers()).isEqualTo(information.maxCapacity());
     }
 
     @Test

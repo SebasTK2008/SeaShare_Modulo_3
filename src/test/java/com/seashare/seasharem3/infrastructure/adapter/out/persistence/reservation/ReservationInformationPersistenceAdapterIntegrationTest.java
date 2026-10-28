@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -127,6 +128,43 @@ class ReservationInformationPersistenceAdapterIntegrationTest {
         assertThatThrownBy(() -> adapter.saveCalculatedAmounts(information))
                 .isInstanceOf(ReservationInfoNotFoundException.class)
                 .hasMessageContaining(information.reservationId().value().toString());
+    }
+
+    @Test
+    void saveAgainRewritesBaseRateParametersId() {
+        UUID reservationId = UUID.randomUUID();
+        UUID firstParametersId = newParametersVersion();
+        UUID secondParametersId = newParametersVersion();
+        adapter.save(newReservation(reservationId, firstParametersId));
+
+        ReservationInformation updated = ReservationInformation.create(
+                new ReservationId(reservationId), new BoatId(UUID.randomUUID()),
+                new BaseRate(new Money(new BigDecimal("150.5"))), secondParametersId,
+                LocalDate.of(2027, 2, 1), LocalDate.of(2027, 2, 3), 2,
+                new OwnerId(UUID.randomUUID()), 5);
+
+        adapter.save(updated);
+
+        assertThat(adapter.findByReservationId(new ReservationId(reservationId)).orElseThrow()
+                .baseRateParametersId()).isEqualTo(secondParametersId);
+    }
+
+    @Test
+    void saveWithMissingParametersKeepsThePreviousValidRow() {
+        UUID reservationId = UUID.randomUUID();
+        ReservationInformation valid = newReservation(reservationId, newParametersVersion());
+        adapter.save(valid);
+
+        ReservationInformation invalid = ReservationInformation.create(
+                new ReservationId(reservationId), new BoatId(UUID.randomUUID()),
+                new BaseRate(new Money(new BigDecimal("200.5"))), UUID.randomUUID(),
+                LocalDate.of(2027, 1, 1), LocalDate.of(2027, 1, 3), 3,
+                new OwnerId(UUID.randomUUID()), 8);
+
+        assertThatThrownBy(() -> adapter.save(invalid)).isInstanceOf(DataAccessException.class);
+
+        assertThat(adapter.findByReservationId(new ReservationId(reservationId)).orElseThrow())
+                .isEqualTo(valid);
     }
 
     private UUID newParametersVersion() {
