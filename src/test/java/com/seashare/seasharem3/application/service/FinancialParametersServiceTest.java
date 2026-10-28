@@ -2,6 +2,7 @@ package com.seashare.seasharem3.application.service;
 
 import com.seashare.seasharem3.application.dto.FinancialParametersCommand;
 import com.seashare.seasharem3.application.dto.FinancialParametersResult;
+import com.seashare.seasharem3.application.dto.SaveFinancialParametersResult;
 import com.seashare.seasharem3.application.exception.ContractException;
 import com.seashare.seasharem3.application.exception.ErrorCode;
 import com.seashare.seasharem3.domain.model.FinancialParameters;
@@ -15,8 +16,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,16 +28,18 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /**
  * Pruebas unitarias del servicio de aplicación UC11 (T011/T037).
- * Usa el calendario de dominio real y fakes en memoria para el repositorio y el reloj,
+ * Usa el calendario de dominio real y fakes en memoria para el repositorio y los relojes,
  * conforme al plan UC11 §Testing (nivel unitario application).
  */
 class FinancialParametersServiceTest {
 
     private static final LocalDate FIXED_DATE = LocalDate.of(2026, 10, 24);
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-10-24T12:00:00Z");
 
     private InMemoryFinancialParametersRepository repository;
     private HighSeasonCalendar calendar;
     private FixedClockPort clock;
+    private Clock instantClock;
     private FinancialParametersService service;
 
     @BeforeEach
@@ -41,7 +47,8 @@ class FinancialParametersServiceTest {
         repository = new InMemoryFinancialParametersRepository();
         calendar = new HighSeasonCalendar();
         clock = new FixedClockPort(FIXED_DATE);
-        service = new FinancialParametersService(repository, calendar, clock);
+        instantClock = Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC);
+        service = new FinancialParametersService(repository, calendar, clock, instantClock);
     }
 
     // ---- load() ----
@@ -70,7 +77,7 @@ class FinancialParametersServiceTest {
 
     @Test
     void saveCreatesVersionOneWhenNoVersionExists() {
-        FinancialParametersResult result = service.save(sampleCommand());
+        SaveFinancialParametersResult result = service.save(sampleCommand());
 
         assertThat(result.versionNumber()).isEqualTo(1);
     }
@@ -85,10 +92,10 @@ class FinancialParametersServiceTest {
                 new Percentage(new BigDecimal("15")),
                 new Percentage(new BigDecimal("20")));
 
-        FinancialParametersResult result = service.save(different);
+        SaveFinancialParametersResult result = service.save(different);
 
         assertThat(result.versionNumber()).isEqualTo(2);
-        assertThat(result.commissionPct().value()).isEqualByComparingTo(new BigDecimal("25"));
+        assertThat(service.load().commissionPct().value()).isEqualByComparingTo(new BigDecimal("25"));
     }
 
     @Test
@@ -96,8 +103,8 @@ class FinancialParametersServiceTest {
         // T017: idempotencia — mismos valores no crean versión nueva (D-UC11-03)
         givenSavedVersion(1);
 
-        FinancialParametersResult first = service.save(sampleCommand());
-        FinancialParametersResult second = service.save(sampleCommand());
+        SaveFinancialParametersResult first = service.save(sampleCommand());
+        SaveFinancialParametersResult second = service.save(sampleCommand());
 
         assertThat(first.versionNumber()).isEqualTo(second.versionNumber()).isEqualTo(1);
         assertThat(repository.findCurrent().orElseThrow().versionNumber()).isEqualTo(1);
@@ -105,28 +112,55 @@ class FinancialParametersServiceTest {
 
     @Test
     void saveThrowsParametersSaveFailedWhenRepositoryFails() {
-        // T037: repositorio que lanza excepción → PARAMETERS_SAVE_FAILED
+        // T037: repositorio que lanza excepción → PARAMETERS_SAVE_FAILED con causa (M1)
+        RuntimeException simulatedFailure = new RuntimeException("simulated DB failure");
         InMemoryFinancialParametersRepository failingRepo = new InMemoryFinancialParametersRepository() {
             @Override
             public FinancialParameters saveNewVersion(FinancialParameters params) {
-                throw new RuntimeException("simulated DB failure");
+                throw simulatedFailure;
             }
         };
         FinancialParametersService failingService =
-                new FinancialParametersService(failingRepo, calendar, clock);
+                new FinancialParametersService(failingRepo, calendar, clock, instantClock);
 
         assertThatExceptionOfType(ContractException.class)
                 .isThrownBy(() -> failingService.save(sampleCommand()))
-                .satisfies(ex -> assertThat(ex.code()).isEqualTo(ErrorCode.PARAMETERS_SAVE_FAILED));
+                .satisfies(ex -> {
+                    assertThat(ex.code()).isEqualTo(ErrorCode.PARAMETERS_SAVE_FAILED);
+                    assertThat(ex.getCause()).isSameAs(simulatedFailure);
+                });
     }
 
     @Test
-    void saveIncludesReadOnlyDataInResult() {
-        FinancialParametersResult result = service.save(sampleCommand());
+    void saveDoesNotComputeReadOnlyData() {
+        // M1/B7: un fallo del calendario no debe reportarse como fallo de persistencia.
+        HighSeasonCalendar throwingCalendar = new HighSeasonCalendar() {
+            @Override
+            public List<HighSeasonWindow> windowsForYear(int year) {
+                throw new IllegalStateException("the save must not compute high-season windows");
+            }
+        };
+        FinancialParametersService serviceWithoutCalendar =
+                new FinancialParametersService(repository, throwingCalendar, clock, instantClock);
 
-        assertThat(result.guaranteeDepositRule()).isEqualTo(FinancialParametersService.GUARANTEE_DEPOSIT_RULE);
-        assertThat(result.highSeasonWindows()).hasSize(4);
-        assertThat(result.highSeasonWindows()).contains("semana-santa");
+        SaveFinancialParametersResult result = serviceWithoutCalendar.save(sampleCommand());
+
+        assertThat(result.versionNumber()).isEqualTo(1);
+    }
+
+    @Test
+    void saveUsesInjectedClockForCreatedAt() {
+        service.save(sampleCommand());
+
+        assertThat(repository.findCurrent().orElseThrow().createdAt()).isEqualTo(FIXED_INSTANT);
+    }
+
+    @Test
+    void saveStoresCreatedByAsNull() {
+        // D-UC11-09: el PUT no transporta identidad.
+        service.save(sampleCommand());
+
+        assertThat(repository.findCurrent().orElseThrow().createdBy()).isNull();
     }
 
     // ---- formatWindow() ----
@@ -155,7 +189,7 @@ class FinancialParametersServiceTest {
                 new Money(new BigDecimal("5000")),
                 new Percentage(new BigDecimal("10")),
                 new Percentage(new BigDecimal("15")),
-                null, Instant.now()));
+                null, FIXED_INSTANT));
     }
 
     private static FinancialParametersCommand sampleCommand() {

@@ -20,6 +20,12 @@ class MoneyTest {
     }
 
     @Test
+    void roundsExcessPrecisionHalfUpTo4Decimals() {
+        assertThat(new Money(new BigDecimal("350000.12345")).amount())
+                .isEqualByComparingTo(new BigDecimal("350000.1235"));
+    }
+
+    @Test
     void addsSubtractsAndMultipliesKeepingScale4() {
         Money rate = new Money(new BigDecimal("350000.00"));
         Money insurance = new Money(new BigDecimal("15000.00"));

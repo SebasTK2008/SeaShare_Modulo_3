@@ -7,10 +7,12 @@ import com.seashare.seasharem3.domain.exception.BaseRateException;
 import com.seashare.seasharem3.domain.exception.DomainException;
 import com.seashare.seasharem3.domain.exception.ChargeIntentNotFoundException;
 import com.seashare.seasharem3.domain.exception.FinancialParametersNotConfiguredException;
+import com.seashare.seasharem3.domain.exception.FinancialParametersValidationException;
 import com.seashare.seasharem3.domain.exception.InvalidPageException;
 import com.seashare.seasharem3.domain.exception.InvalidPaymentTokenException;
 import com.seashare.seasharem3.domain.exception.ReservationInfoIncompleteException;
 import com.seashare.seasharem3.domain.exception.ReservationInfoNotFoundException;
+import com.seashare.seasharem3.infrastructure.adapter.in.web.CorrelationIdFilter;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,11 +33,16 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.exc.InvalidFormatException;
+import tools.jackson.databind.exc.MismatchedInputException;
 
 import java.time.temporal.TemporalAccessor;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Traduce las excepciones de la aplicación y del framework a Problem Details del catálogo
@@ -56,13 +63,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ContractException.class)
     public ProblemDetail handleContract(ContractException exception) {
+        if (exception.code().httpStatus() >= 500) {
+            log.error("Contract error {} (correlationId={})", exception.code(),
+                    MDC.get(CorrelationIdFilter.MDC_KEY), exception);
+        }
         return problems.create(exception.code(), exception.getMessage(), exception.errors());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleBodyValidation(MethodArgumentNotValidException exception) {
         List<ApiFieldError> errors = exception.getBindingResult().getFieldErrors().stream()
-                .map(error -> new ApiFieldError(error.getField(), error.getDefaultMessage()))
+                .map(error -> new ApiFieldError(
+                        FinancialParametersFieldNames.toJson(error.getField()), error.getDefaultMessage()))
                 .toList();
         return problems.create(ErrorCode.VALIDATION_ERROR, "The request body does not comply with the contract.", errors);
     }
@@ -119,8 +131,58 @@ public class GlobalExceptionHandler {
             return problems.create(ErrorCode.INVALID_DATE_RANGE,
                     "start_date and end_date must be ISO-8601 dates (yyyy-MM-dd).");
         }
+        Optional<ApiFieldError> fieldError = fieldError(exception);
+        if (fieldError.isPresent()) {
+            ApiFieldError error = fieldError.get();
+            return problems.create(ErrorCode.VALIDATION_ERROR, error.message(), List.of(error));
+        }
         return problems.create(ErrorCode.VALIDATION_ERROR,
                 "The request body is not valid JSON or does not match the contract.");
+    }
+
+    /**
+     * Extrae el campo y el mensaje accionable de un fallo de deserialización de Jackson 3.
+     * El path vive en {@link JacksonException#getPath()}; el mensaje se toma de la causa raíz
+     * (por ejemplo, el {@code DomainException} del VO o un {@code NumberFormatException}).
+     * Si no hay path (JSON mal formado), no se inventan campos.
+     */
+    private static Optional<ApiFieldError> fieldError(HttpMessageNotReadableException exception) {
+        JacksonException jackson = findCause(exception, JacksonException.class);
+        if (jackson == null) {
+            return Optional.empty();
+        }
+        String field = jackson.getPath().stream()
+                .map(reference -> reference.getPropertyName())
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining("."));
+        if (field.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new ApiFieldError(field, messageFor(exception.getMostSpecificCause())));
+    }
+
+    private static String messageFor(Throwable cause) {
+        if (cause instanceof NumberFormatException) {
+            return "must be a decimal string";
+        }
+        if (cause instanceof MismatchedInputException mismatchedInput) {
+            return mismatchedInput.getOriginalMessage();
+        }
+        if (cause instanceof DomainException domainException) {
+            return domainException.getMessage();
+        }
+        return "is not valid";
+    }
+
+    private static <T extends Throwable> T findCause(Throwable throwable, Class<T> type) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (type.isInstance(current)) {
+                return type.cast(current);
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return null;
     }
 
     /**
@@ -202,6 +264,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidPaymentTokenException.class)
     public ProblemDetail handleInvalidPaymentToken(InvalidPaymentTokenException exception) {
         return problems.create(ErrorCode.VALIDATION_ERROR, exception.getMessage());
+    }
+
+    @ExceptionHandler(FinancialParametersValidationException.class)
+    public ProblemDetail handleFinancialParametersValidation(FinancialParametersValidationException exception) {
+        String field = FinancialParametersFieldNames.toJson(exception.field());
+        return problems.create(ErrorCode.VALIDATION_ERROR, exception.getMessage(),
+                List.of(new ApiFieldError(field, exception.getMessage())));
     }
 
     @ExceptionHandler(DomainException.class)

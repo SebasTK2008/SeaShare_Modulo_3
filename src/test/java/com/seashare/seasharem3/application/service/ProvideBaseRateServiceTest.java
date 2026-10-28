@@ -116,6 +116,21 @@ class ProvideBaseRateServiceTest {
     }
 
     @Test
+    void usesProvidedSnapshotAndDoesNotReadRepository() {
+        FinancialParameters snapshot = parameters();
+        BaseRate adjusted = new BaseRate(new Money(new BigDecimal("385000.0000")));
+        when(dynamicRatePolicy.requiresAdjustment(WEEKEND_DATE)).thenReturn(true);
+        when(fleetRatePort.findBaseRates(anySet())).thenReturn(Map.of(BOAT_A, BASE_RATE));
+        when(dynamicRatePolicy.apply(BASE_RATE, WEEKEND_DATE, snapshot)).thenReturn(adjusted);
+
+        List<BaseRateResult> result = service.provideBaseRates(
+                new ProvideBaseRateCommand(List.of(BOAT_A), WEEKEND_DATE, snapshot));
+
+        assertThat(result).containsExactly(new BaseRateResult(BOAT_A, adjusted, snapshot.id()));
+        verifyNoInteractions(financialParametersRepository);
+    }
+
+    @Test
     void keepsBoatsWithRatesWhenAnotherBoatHasNoRate() {
         when(dynamicRatePolicy.requiresAdjustment(REGULAR_DATE)).thenReturn(false);
         when(fleetRatePort.findBaseRates(anySet())).thenReturn(Map.of(BOAT_A, BASE_RATE));

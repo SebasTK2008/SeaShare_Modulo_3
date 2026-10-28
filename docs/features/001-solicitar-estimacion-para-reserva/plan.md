@@ -40,7 +40,7 @@ El tratamiento de una embarcación ausente del resultado de UC02 queda definido 
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [SPEC general-plan]
-**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Para UC01: Spring Web MVC, Validation, Jackson, MapStruct, ArchUnit y WireMock/Resilience4j cuando correspondan. Las dependencias compartidas se coordinan fuera de este plan; no se modifica `pom.xml` aquí.
+**Primary Dependencies**: Spring Boot 4.1.2 (parent del `pom.xml`). Para UC01: Spring Web MVC, Validation, Jackson, MapStruct, ArchUnit y WireMock/Resilience4j cuando correspondan. Las dependencias compartidas se coordinan fuera de este plan; no se modifica `pom.xml` aquí.
 **Storage**: PostgreSQL 16+; UC01 **no tiene tablas propias** y no define migraciones (migración inicial única, general-plan D-31). Solo **lee la versión vigente** de `financial_parameters` (tabla versionada de UC11) para la tarifa de seguro por pasajero [SPEC general-plan §4]
 **Testing**: JUnit 5, AssertJ, Mockito, MockMvc, WireMock, ArchUnit, Testcontainers (para el contexto Spring de integración) [CONV]
 **Target Platform**: Contenedores Docker (Linux) [SPEC general-plan]
@@ -136,7 +136,7 @@ src/test/java/com/seashare/seasharem3/
     └── EstimateResilienceIntegrationTest.java      # T018, T020 (CE-004), T022 (HU3)
 ```
 
-**Firmas referenciadas**: UC01 no expone puertos a otros casos de uso. Consume por nombre `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId` y `FinancialParametersRepository` del catálogo común; no redeclara VOs ni redefine puertos del núcleo compartido (general-plan §3.6).
+**Firmas referenciadas**: UC01 no expone puertos a otros casos de uso. Consume por nombre `ProvideBaseRateUseCase`, `ClockPort`, `Money`, `BoatId` y `FinancialParametersRepository` del catálogo común; no redeclara VOs ni redefine puertos del núcleo compartido (general-plan §3.6). En la invocación a UC02 envía la instantánea de `FinancialParameters` que ya leyó, para que la estimación use una única versión (D-UC01-10).
 
 **Structure Decision**: servicio único hexagonal bajo `com.seashare.seasharem3`; `domain` sin Spring/JPA/Jackson; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; controllers no acceden a repositorios ni servicios concretos; DTOs HTTP viven en infraestructura y application trabaja con commands/results. Identificadores y enums siguen los nombres vigentes del `general-plan.md`.
 
@@ -264,7 +264,7 @@ Los tests web usan `@WebMvcTest` con el `JacksonConfig` real de producción (no 
 
 **Pruebas de aceptación (CE-001…CE-005)** — nóminal `ce00X_<descripcion>`:
 
-- **`ce001_estimatedTotalIsBaseRateTimesDaysPlusInsuranceTimesPassengers`** (CE-001, T019): prueba parametrizada con **643 casos** que cruzan fechas (regular, fin de semana, temporada alta y coincidencia FE+TA), días inclusivos y pasajeros; valida el total exacto con `BigDecimal` a escala 4 y que el lote usa la tarifa de hoy con 1 día y 1 pasajero. Un test adicional comprueba que el `MethodSource` genera **≥ 100 casos**.
+- **`ce001_estimatedTotalIsBaseRateTimesDaysPlusInsuranceTimesPassengers`** (CE-001, T019): prueba parametrizada con **639 casos** que cruzan fechas (regular, fin de semana, temporada alta y coincidencia FE+TA), días inclusivos y pasajeros; valida el total exacto con `BigDecimal` a escala 4 y que el lote usa la tarifa de hoy con 1 día y 1 pasajero. Un test adicional comprueba que el `MethodSource` genera **≥ 100 casos**.
 - **`Uc01ArchitectureTest`** (CE-002, T023): UC01 no depende de `DynamicRatePolicy`/`HighSeasonCalendar` (la tarifa dinámica solo vive en UC02); los servicios de UC01 no usan `BigDecimal` directamente (delegan en `Money`/`PricingCalculator`); el `EstimateController` solo invoca `application.port.in`. Un test guarda contra reglas vacuas comprobando que las clases objetivo están importadas.
 - **`ce003_individualEstimateAlwaysCarriesTheMandatoryWarning`** (CE-003, T023): toda respuesta individual exitosa incluye exactamente `EstimateWarning.TEXT`. La métrica de negocio (<2 % de tickets de "tarifas inesperadas" en 60 días) **no es automatizable**: se traza aquí y queda como criterio de negocio verificado fuera del sistema [SPEC CE-003].
 - **`ce004_fleetFailureProducesNoPartialEstimate`** (CE-004, T020): con WireMock (timeout, puerto cerrado, cuerpo inválido, `500`) y con parámetros ausentes, UC01 no devuelve estimaciones parciales: propaga `FLEET_UNAVAILABLE` o `FINANCIAL_PARAMETERS_NOT_CONFIGURED` (el adaptador web los mapea a `503`, cubierto en los tests de contrato).
@@ -289,6 +289,7 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 | **D-UC01-07** | El SPEC RNF-002 habla de 4 decimales internos "antes de cualquier redondeo final" sin fijar el redondeo de salida | SPEC 01 RNF-002 vs ejemplos de los contratos (`"365000.00"`) | Cálculo interno a escala 4; `estimated_total` **HALF_UP a 2 decimales** (string) en la respuesta | Decidida |
 | **D-UC01-08** | El `general-plan` §3.3 nombra `PricingCalculator` pero §3.5 no lo asigna a ningún UC | general-plan §3.3 vs §3.5 | UC01 asume `PricingCalculator` (es la única UC con la fórmula de estimación; UC04 usa `ReservationValueCalculator`) | Decidida |
 | **D-UC01-09** | CE-003 (tickets <2 %) es una métrica de negocio no verificable por el sistema | SPEC 01 CE-003 | Se traza al `warning` obligatorio de HU2 y queda como criterio de negocio verificado fuera del sistema | Decidida |
+| **D-UC01-10** | UC01 lee `financial_parameters` para el seguro y UC02 volvía a leerlo para la tarifa dinámica | RNF-003 de UC11 (una única versión coherente) vs diseño de `ProvideBaseRateCommand` | UC01 pasa la instantánea leída en el comando de UC02; así el seguro y los porcentajes de una estimación provienen de la misma versión (M6) | **Aplicada** |
 
 ## Implementation Phases
 
@@ -325,7 +326,7 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 ### Phase 5: Resiliencia y aceptación (RNF-003; CE-001, CE-002, CE-003, CE-004, CE-005; HU3)
 
 - [x] **T018** `EstimateResilienceIntegrationTest` (termina en `Test` para que lo ejecute Surefire; el proyecto no configura Failsafe): timeout, `500`, cuerpo inválido y puerto cerrado → `FLEET_UNAVAILABLE` sin estimaciones parciales; parámetros ausentes → `FINANCIAL_PARAMETERS_NOT_CONFIGURED` sin consultar a Flota. Construye `ProvideBaseRateService` real (WireMock + dobles de parámetros/registro), no un mock de `ProvideBaseRateUseCase`.
-- [x] **T019** · **CE-001**: `EstimateAcceptanceTest.ce001_estimatedTotalIsBaseRateTimesDaysPlusInsuranceTimesPassengers` con 643 casos (fechas regular/FE/TA/coincidencia, días inclusivos y pasajeros) y total exacto; más un test que exige ≥ 100 casos y otro para el lote (1 día, 1 pasajero, fecha de hoy).
+- [x] **T019** · **CE-001**: `EstimateAcceptanceTest.ce001_estimatedTotalIsBaseRateTimesDaysPlusInsuranceTimesPassengers` con 639 casos (fechas regular/FE/TA/coincidencia, días inclusivos y pasajeros) y total exacto; más un test que exige ≥ 100 casos y otro para el lote (1 día, 1 pasajero, fecha de hoy).
 - [x] **T020** · **CE-004**: `ce004_fleetFailureProducesNoPartialEstimate` y `ce004_parametersNotConfiguredFailsWithoutCallingFleet` con `ProvideBaseRateService` real (no un mock del puerto).
 - [x] **T021** · **CE-005**: `ce005_extraAttributesAreRejectedByTheProductionJacksonConfig` con `@WebMvcTest` y el `JacksonConfig` real; `start_date`/`end_date`/`passengers`/desconocidos → `400 VALIDATION_ERROR` sin cálculo.
 - [x] **T022** · HU3: `hu3_fiftyBoatsAreEstimatedWithASingleFleetCallUnderLightLoad` (50 embarcaciones, una única consulta a Flota, totales exactos y < 2 s). El SLA < 500 ms es de Flota.
@@ -375,7 +376,7 @@ T001 ─┬─> T002 ─┬─> T003 ─> T005 ─> T006 ─┬─> T007 ─┐
 - [x] Sin placeholders ni tareas de ejemplo; sin etiquetas "Option 1/2".
 - [x] Fecha de creación `2026-10-09`, actualización `2026-10-25` y enlace a `spec.md`.
 - [x] Toda regla marcada `[SPEC]` o `[CONV]`.
-- [x] Discrepancias `D-UC01-01` a `D-UC01-09` con decisión explícita, sin resolución silenciosa (A4/D-UC01-05 registrada como desviación aprobada).
+- [x] Discrepancias `D-UC01-01` a `D-UC01-10` con decisión explícita, sin resolución silenciosa (A4/D-UC01-05 registrada como desviación aprobada; D-UC01-10 para la instantánea de parámetros).
 - [x] Cada RF/RNF/CE/HU del SPEC 01 trazado a componente, tarea y prueba; pruebas `ce001_…`–`ce005_…` con el nombre real de cada método (CE-003 con nota de no automatizable).
 - [x] Reglas de arquitectura hexagonal (§3.4) y lenguaje ubicuo (§11) aplicadas; `application` sin `@Service` y ensamblado en `infrastructure.config`.
 - [x] UC01 sin tablas ni migraciones propias (migración inicial única, general-plan D-31), sin persistencia; solo lee la versión vigente de `financial_parameters` por nombre.

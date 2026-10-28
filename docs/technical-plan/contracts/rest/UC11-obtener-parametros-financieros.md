@@ -44,20 +44,20 @@ No aplica.
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
 | `version_number` | integer | Número de la versión vigente consultada (para trazabilidad de los cálculos) | [CONV] — general-plan D-24 |
-| `platform_commission_percentage` | string decimal | Porcentaje de comisión de la plataforma | [SPEC RF-009] |
-| `insurance_fee_per_passenger` | string decimal | Tarifa del seguro náutico por pasajero | [SPEC RF-009] |
-| `weekend_increase_percentage` | string decimal | Porcentaje de incremento por fin de semana | [SPEC RF-009] |
-| `high_season_increase_percentage` | string decimal | Porcentaje de incremento por temporada alta | [SPEC RF-009] |
+| `platform_commission_percentage` | string decimal (4 decimales) | Porcentaje de comisión de la plataforma | [SPEC RF-009] + [CONV] |
+| `insurance_fee_per_passenger` | string decimal (4 decimales) | Tarifa del seguro náutico por pasajero | [SPEC RF-009] + [CONV] |
+| `weekend_increase_percentage` | string decimal (4 decimales) | Porcentaje de incremento por fin de semana | [SPEC RF-009] + [CONV] |
+| `high_season_increase_percentage` | string decimal (4 decimales) | Porcentaje de incremento por temporada alta | [SPEC RF-009] + [CONV] |
 | `guarantee_deposit_rule` | string | Regla del depósito de garantía (solo lectura) | [SPEC RF-012] |
 | `high_season_windows` | array de strings | Ventanas de temporada alta calculadas (solo lectura); formato `MM-dd→MM-dd` para ventanas fijas y `semana-santa` para la ventana móvil | [SPEC RF-012] + [CONV] |
 
 ```json
 {
   "version_number": 7,
-  "platform_commission_percentage": "15.00",
-  "insurance_fee_per_passenger": "15000.00",
-  "weekend_increase_percentage": "10.00",
-  "high_season_increase_percentage": "25.00",
+  "platform_commission_percentage": "15.0000",
+  "insurance_fee_per_passenger": "15000.0000",
+  "weekend_increase_percentage": "10.0000",
+  "high_season_increase_percentage": "25.0000",
   "guarantee_deposit_rule": "10% de la tarifa base diaria",
   "high_season_windows": [
     "11-15→01-15",
@@ -67,6 +67,10 @@ No aplica.
   ]
 }
 ```
+
+Los cuatro parámetros configurables se devuelven con la escala interna de 4 decimales para que el
+valor leído sea exactamente el almacenado y `PUT → GET → PUT` sea idempotente. El resto de salidas
+monetarias del sistema conserva la escala de 2 decimales de `contracts/README.md` §3.1.
 
 ## 5. Respuestas de error
 

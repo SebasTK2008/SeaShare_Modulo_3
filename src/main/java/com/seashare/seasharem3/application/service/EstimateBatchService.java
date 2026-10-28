@@ -93,7 +93,7 @@ public class EstimateBatchService implements EstimateBatchUseCase {
         Money insuranceFee = current.insuranceFeePerPassenger();
 
         List<BaseRateResult> baseRates = baseRateUseCase.provideBaseRates(
-                new ProvideBaseRateCommand(new ArrayList<>(uniqueBoatIds), evaluationDate));
+                new ProvideBaseRateCommand(new ArrayList<>(uniqueBoatIds), evaluationDate, current));
 
         List<BoatEstimate> estimates = new ArrayList<>();
         Set<BoatId> estimatedBoatIds = new LinkedHashSet<>();

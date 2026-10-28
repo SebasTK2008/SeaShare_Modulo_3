@@ -7,7 +7,8 @@ import com.seashare.seasharem3.domain.valueobject.Percentage;
 /**
  * Mapeo entre dominio y entidad JPA de parámetros financieros (UC11 T015).
  * Fuente: UC11 plan T015; general-plan D-04.
- * [CONV] nombre [CONV]; usa mapeo manual (dominio puro vs entidad) conforme al adaptador existente.
+ * [CONV] mapeo manual deliberado (D-UC11-11): el dominio es inmutable y la entidad usa una factoría
+ * estática, por lo que MapStruct exigiría setters o un builder y debilitaría la encapsulación.
  */
 public class FinancialParametersMapper {
 

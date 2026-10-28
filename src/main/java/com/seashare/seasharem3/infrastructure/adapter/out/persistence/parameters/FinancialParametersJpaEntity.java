@@ -4,7 +4,11 @@ import com.seashare.seasharem3.domain.model.FinancialParameters;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import org.springframework.data.domain.Persistable;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -16,11 +20,18 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "financial_parameters")
-public class FinancialParametersJpaEntity {
+public class FinancialParametersJpaEntity implements Persistable<UUID> {
 
     @Id
     @Column(name = "id", nullable = false)
     private UUID id;
+
+    /**
+     * Marca de entidad nueva para que Spring Data use {@code persist} en lugar de {@code merge}.
+     * Se desactiva al cargar o persistir; una versión existente nunca se vuelve a guardar.
+     */
+    @Transient
+    private boolean isNew = true;
 
     @Column(name = "version_number", nullable = false)
     private long versionNumber;
@@ -59,8 +70,20 @@ public class FinancialParametersJpaEntity {
         return entity;
     }
 
-    UUID getId() {
+    @Override
+    public UUID getId() {
         return id;
+    }
+
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
+
+    @PostLoad
+    @PostPersist
+    void markNotNew() {
+        this.isNew = false;
     }
 
     long getVersionNumber() {

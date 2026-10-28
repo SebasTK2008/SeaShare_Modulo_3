@@ -28,7 +28,9 @@ import java.util.stream.Collectors;
  * Orquesta la consulta batch a Flota y aplica la tarifa dinámica de UC02.
  *
  * <p>No tiene anotaciones de Spring: el bean lo construye {@code FleetRateConfiguration}. La fecha
- * evaluada llega en el comando; UC02 no depende de {@code ClockPort}. Fuente: UC02 plan T016.</p>
+ * evaluada llega en el comando; UC02 no depende de {@code ClockPort}. Si el comando trae la
+ * instantánea de parámetros que UC01 ya leyó, se usa esa versión y no se vuelve a consultar el
+ * repositorio (M6); si no, se mantiene la lectura perezosa. Fuente: UC02 plan T016.</p>
  */
 public class ProvideBaseRateService implements ProvideBaseRateUseCase {
 
@@ -64,15 +66,17 @@ public class ProvideBaseRateService implements ProvideBaseRateUseCase {
             return List.of();
         }
 
-        FinancialParameters parameters = null;
+        FinancialParameters parameters = command.parameters();
         if (dynamicRatePolicy.requiresAdjustment(evaluatedDate)) {
-            try {
-                parameters = financialParametersRepository.findCurrent().orElse(null);
-            } catch (RuntimeException exception) {
-                recordFailure(BaseRateFailureReason.PARAMETERS_UNAVAILABLE,
-                        invocationPayload(evaluatedDate, uniqueBoatIds));
-                throw new BaseRateException(BaseRateFailureReason.PARAMETERS_UNAVAILABLE,
-                        "Financial parameters could not be read", exception);
+            if (parameters == null) {
+                try {
+                    parameters = financialParametersRepository.findCurrent().orElse(null);
+                } catch (RuntimeException exception) {
+                    recordFailure(BaseRateFailureReason.PARAMETERS_UNAVAILABLE,
+                            invocationPayload(evaluatedDate, uniqueBoatIds));
+                    throw new BaseRateException(BaseRateFailureReason.PARAMETERS_UNAVAILABLE,
+                            "Financial parameters could not be read", exception);
+                }
             }
             if (parameters == null) {
                 recordFailure(BaseRateFailureReason.DYNAMIC_RATE_NOT_CONFIGURED,

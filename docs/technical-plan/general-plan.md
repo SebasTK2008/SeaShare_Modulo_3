@@ -18,7 +18,7 @@ Este documento define el orden **general** del proyecto: arquitectura, tecnolog�
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`)
   
-**Primary Dependencies**: Spring Boot 4.1.1 (parent del `pom.xml`). Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Actuator, Flyway, MapStruct, Resilience4j, ShedLock (opcional, §5.3), Micrometer (+ Prometheus), ArchUnit
+**Primary Dependencies**: Spring Boot 4.1.2 (parent del `pom.xml`). Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Actuator, Flyway, MapStruct, Resilience4j, ShedLock (opcional, §5.3), Micrometer (+ Prometheus), ArchUnit
   
 **Storage**: PostgreSQL 16+ (`NUMERIC` para dinero, `timestamptz` para instantes)
 **Messaging**: RabbitMQ 3.13+ (colas *quorum*, confirmaciones de publicador, DLQ)
@@ -249,7 +249,7 @@ Una intención que no alcanza éxito confirmado (rechazada, cancelada, expirada,
 
 **Vista de lectura (UC12/UC13)**: `v_financial_records` = `UNION ALL` de las cuatro tablas inmutables con columnas comunes (`record_type`, `reservation_id`, `owner_id`, `boat_id`, `amount`, `created_at`, `external_reference`). Índices por `(owner_id, created_at DESC)`, `(boat_id)` y `(reservation_id)` en cada tabla.
 
-**Inmutabilidad**: además de no exponer *setters* en el dominio, las cuatro tablas `*_record` tienen un trigger que rechaza `UPDATE` y `DELETE`, y el usuario de la aplicación no recibe esos privilegios.
+**Inmutabilidad**: además de no exponer *setters* en el dominio, las cuatro tablas `*_record` y `financial_parameters` tienen triggers que rechazan `UPDATE`, `DELETE` y `TRUNCATE`. Los privilegios por rol son específicos del entorno y no forman parte de la migración.
 
 ### 4.1 Diagrama Entidad-Relación
 
@@ -452,9 +452,10 @@ erDiagram
 
 ### 4.2 Política de migraciones
 
-1. **Migración inicial única**: `V1__initial_schema.sql` (Flyway, en `src/main/resources/db/migration`) contiene **todo** el esquema de §4 y §4.1 en una sola migración: las 15 tablas, sus `CHECK`/`UNIQUE`/FK, índices, la vista `v_financial_records`, los triggers anti-mutación y los privilegios. Su fuente de autoría es §4/§4.1; ningún otro documento define esquema.
+1. **Migración inicial única**: `V1__initial_schema.sql` (Flyway, en `src/main/resources/db/migration`) contiene **todo** el esquema de §4 y §4.1 en una sola migración: las 15 tablas, sus `CHECK`/`UNIQUE`/FK, índices, la vista `v_financial_records` y los triggers anti-mutación (`UPDATE`, `DELETE` y `TRUNCATE`). Los privilegios por rol son específicos del entorno y no forman parte de la migración. Su fuente de autoría es §4/§4.1; ningún otro documento define esquema.
 2. **Sin migraciones por caso de uso**: ningún UC, fase o plan define, posee, numera ni ordena migraciones propias; los planes específicos solo referencian la migración única y las tablas/columnas que consumen.
 3. **Cambios posteriores**: los cambios de esquema que surjan en las implementaciones separadas se añaden como versiones nuevas (`V2__…`, `V3__…`) en orden estrictamente cronológico, *append-only*; una versión ya aplicada no se edita nunca. Una versión puede anotar en su encabezado el origen (p. ej. "implementación UC05"), pero la numeración es global y serial.
+   - **Excepción de desarrollo**: mientras el proyecto no tenga una base desplegada, se puede ajustar `V1` y recrear la base local (`docker compose down -v`); una vez desplegada, `V1` es inmutable y los cambios van en `V2+`.
 4. **Canonicidad**: el historial de migraciones aplicado es la fuente canónica del esquema; §4 es su especificación de autoría. Ningún SPEC, contrato o plan puede contradecir la migración vigente.
 5. **Convención de nombres**: `V<n>__<descripcion_snake_case>.sql` (D-31).
 
@@ -614,7 +615,7 @@ El registro inmutable correspondiente se crea **solo** al pasar a un estado exit
 | D-10 | **Scheduler** solo para jobs internos (conciliación y outbox) | Mensajes diferidos (TTL + DLX) por reserva | El sondeo sobre BD es simple, auditable e idempotente; la ventana de 24 h y la vigencia de la disputa las administra Reservas (SPEC 008 RF-009) | 005, Infra |
 | D-11 | `Money` (VO) sobre `BigDecimal`, `NUMERIC(18,4)` en BD y *string* decimal en JSON | `double`/`float`; número JSON | Evita errores de redondeo (UC01 CE-001, UC04 CE-001) | 001, 004, 005, 009, 010 |
 | D-12 | Fechas de negocio y períodos en una zona horaria única (`America/Bogota`, configurable por `seashare.timezone`); instantes en UTC | UTC para todo | "Fecha actual", "inicio en el pasado" y los períodos de UC13 deben ser inequívocos | 001, 013 |
-| D-13 | Inmutabilidad también en BD (trigger + privilegios) | Solo convención en código | Los registros son base de auditoría e informes | 005, 009, 010 |
+| D-13 | Inmutabilidad también en BD (triggers de `UPDATE`, `DELETE` y `TRUNCATE`) | Solo convención en código | Los registros son base de auditoría e informes | 005, 009, 010, 011 |
 | D-14 | **CQRS ligero** para UC12/UC13: vista `UNION ALL` + SQL de agregación | Pasar por el dominio | Son solo lectura (UC12 RF-010, UC13 RF-013) | 012, 013 |
 | D-15 | **Bloqueo asesor por reserva** + `@Version` en intenciones | Bloqueo global; serializable | Serializa operaciones de dinero de una reserva sin frenar al resto | 007, 008, 009, 010 |
 | D-16 | `deposit_disposition` con *compare-and-set* | Validar solo en cada caso de uso | Un depósito solo puede reembolsarse **o** liquidarse una vez (UC08 CE-005; UC07 RF-009B) | 007, 008, 009, 010 |

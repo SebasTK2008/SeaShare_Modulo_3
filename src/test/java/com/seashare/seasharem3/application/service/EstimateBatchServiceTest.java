@@ -147,8 +147,9 @@ class EstimateBatchServiceTest {
     @Test
     void duplicateBoatIdsProduceOneQueryOneEstimateAndNoUnavailable() {
         BoatId id = boat();
+        FinancialParameters current = parameters();
         when(clock.today()).thenReturn(TODAY);
-        when(paramsRepo.findCurrent()).thenReturn(Optional.of(parameters()));
+        when(paramsRepo.findCurrent()).thenReturn(Optional.of(current));
         when(baseRateUseCase.provideBaseRates(any())).thenReturn(List.of(rate(id)));
 
         BatchEstimateResult result = service.estimate(
@@ -158,6 +159,7 @@ class EstimateBatchServiceTest {
         verify(baseRateUseCase).provideBaseRates(captor.capture());
         assertThat(captor.getValue().boatIds()).containsExactly(id);
         assertThat(captor.getValue().evaluatedDate()).isEqualTo(TODAY);
+        assertThat(captor.getValue().parameters()).isSameAs(current);
         assertThat(result.estimates()).hasSize(1);
         assertThat(result.unavailable()).isEmpty();
     }

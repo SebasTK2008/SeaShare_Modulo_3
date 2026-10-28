@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
@@ -65,8 +66,7 @@ class FinancialParametersPersistenceAdapterIntegrationTest {
         FinancialParameters version = newVersion();
 
         assertThatThrownBy(() -> adapter.saveNewVersion(version))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining(version.id().toString());
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private FinancialParameters newVersion() {

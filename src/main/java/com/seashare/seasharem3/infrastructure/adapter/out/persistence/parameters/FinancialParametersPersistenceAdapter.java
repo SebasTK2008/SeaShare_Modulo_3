@@ -11,7 +11,10 @@ import java.util.UUID;
 /**
  * Adaptador JPA de {@code financial_parameters} (append-only): resuelve la vigente y las versiones
  * referenciadas por {@code frozen_parameters_id} (D-27) e inserta versiones nuevas.
- * Fuente: UC11 plan T002/T012; general-plan §4 y §4.2.
+ * La entidad implementa {@link org.springframework.data.domain.Persistable} para que Spring Data use
+ * {@code persist} sin el {@code merge}/SELECT previo; la PK y {@code UNIQUE(version_number)} protegen
+ * la concurrencia.
+ * Fuente: UC11 plan T002/T012/T016; general-plan §4 y §4.2.
  */
 @Component
 public class FinancialParametersPersistenceAdapter implements FinancialParametersRepository {
@@ -38,10 +41,6 @@ public class FinancialParametersPersistenceAdapter implements FinancialParameter
     @Override
     @Transactional
     public FinancialParameters saveNewVersion(FinancialParameters params) {
-        if (repository.existsById(params.id())) {
-            throw new IllegalStateException(
-                    "financial_parameters is append-only: id already exists " + params.id());
-        }
         return FinancialParametersMapper.toDomain(repository.saveAndFlush(FinancialParametersMapper.toEntity(params)));
     }
 }

@@ -2,6 +2,7 @@ package com.seashare.seasharem3.infrastructure.adapter.in.web;
 
 import com.seashare.seasharem3.application.dto.FinancialParametersCommand;
 import com.seashare.seasharem3.application.dto.FinancialParametersResult;
+import com.seashare.seasharem3.application.dto.SaveFinancialParametersResult;
 import com.seashare.seasharem3.application.port.in.LoadFinancialParametersUseCase;
 import com.seashare.seasharem3.application.port.in.SaveFinancialParametersUseCase;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.FinancialParametersRequest;
@@ -14,6 +15,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * Adaptador de entrada REST de UC11: expone {@code GET} y {@code PUT /api/v1/financial-parameters}.
@@ -74,15 +78,13 @@ public class FinancialParametersController {
     public ResponseEntity<SaveFinancialParametersResponse> saveFinancialParameters(
             @Valid @RequestBody FinancialParametersRequest request) {
 
-        request.insuranceFeePerPassenger().requireNonNegative();
-
         FinancialParametersCommand command = new FinancialParametersCommand(
                 request.platformCommissionPercentage(),
                 request.insuranceFeePerPassenger(),
                 request.weekendIncreasePercentage(),
                 request.highSeasonIncreasePercentage());
 
-        FinancialParametersResult result = saveUseCase.save(command);
+        SaveFinancialParametersResult result = saveUseCase.save(command);
         return ResponseEntity.ok(new SaveFinancialParametersResponse(result.versionNumber()));
     }
 
@@ -91,12 +93,16 @@ public class FinancialParametersController {
     private static FinancialParametersResponse toResponse(FinancialParametersResult result) {
         return new FinancialParametersResponse(
                 result.versionNumber(),
-                result.commissionPct(),
-                result.insuranceFeePerPassenger(),
-                result.weekendIncreasePct(),
-                result.highSeasonIncreasePct(),
+                formatScale4(result.commissionPct().value()),
+                formatScale4(result.insuranceFeePerPassenger().amount()),
+                formatScale4(result.weekendIncreasePct().value()),
+                formatScale4(result.highSeasonIncreasePct().value()),
                 result.guaranteeDepositRule(),
                 result.highSeasonWindows());
+    }
+
+    private static String formatScale4(BigDecimal value) {
+        return value.setScale(4, RoundingMode.HALF_UP).toPlainString();
     }
 }
 

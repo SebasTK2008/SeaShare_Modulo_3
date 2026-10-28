@@ -99,8 +99,11 @@ class UC01BatchEstimateContractTest {
                 .collect(Collectors.joining(",")) + "]}";
     }
 
+    private FinancialParameters currentParameters;
+
     private void givenParametersAndRates(BaseRateResult... rates) {
-        when(paramsRepo.findCurrent()).thenReturn(Optional.of(parameters()));
+        currentParameters = parameters();
+        when(paramsRepo.findCurrent()).thenReturn(Optional.of(currentParameters));
         when(baseRateUseCase.provideBaseRates(any())).thenReturn(List.of(rates));
     }
 
@@ -164,6 +167,7 @@ class UC01BatchEstimateContractTest {
         verify(baseRateUseCase).provideBaseRates(captor.capture());
         assertThat(captor.getValue().boatIds()).containsExactly(new BoatId(BOAT_UUID));
         assertThat(captor.getValue().evaluatedDate()).isEqualTo(TODAY);
+        assertThat(captor.getValue().parameters()).isSameAs(currentParameters);
     }
 
     @Test

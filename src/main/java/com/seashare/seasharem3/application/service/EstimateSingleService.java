@@ -79,7 +79,8 @@ public class EstimateSingleService implements EstimateSingleUseCase {
         List<com.seashare.seasharem3.application.dto.BaseRateResult> baseRates =
                 baseRateUseCase.provideBaseRates(new ProvideBaseRateCommand(
                         Collections.singletonList(command.boatId()),
-                        command.startDate()));
+                        command.startDate(),
+                        current));
 
         if (baseRates.isEmpty()) {
             throw new ContractException(ErrorCode.BASE_RATE_NOT_AVAILABLE,

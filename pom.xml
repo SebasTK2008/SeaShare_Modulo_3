@@ -264,6 +264,7 @@
                                     <element>CLASS</element>
                                     <includes>
                                         <include>com/seashare/seasharem3/domain/service/*</include>
+                                        <include>com/seashare/seasharem3/domain/model/FinancialParameters</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/BaseRate</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/BoatId</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/HighSeasonWindow*</include>
@@ -285,6 +286,7 @@
                                         <include>com/seashare/seasharem3/application/service/ProvideBaseRateService</include>
                                         <include>com/seashare/seasharem3/application/service/EstimateBatchService</include>
                                         <include>com/seashare/seasharem3/application/service/EstimateSingleService</include>
+                                        <include>com/seashare/seasharem3/application/service/FinancialParametersService</include>
                                         <include>com/seashare/seasharem3/application/dto/ProvideBaseRateCommand</include>
                                         <include>com/seashare/seasharem3/application/dto/BaseRateResult</include>
                                     </includes>

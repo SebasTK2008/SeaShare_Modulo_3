@@ -2,6 +2,7 @@ package com.seashare.seasharem3.application.service;
 
 import com.seashare.seasharem3.application.dto.FinancialParametersCommand;
 import com.seashare.seasharem3.application.dto.FinancialParametersResult;
+import com.seashare.seasharem3.application.dto.SaveFinancialParametersResult;
 import com.seashare.seasharem3.application.exception.ContractException;
 import com.seashare.seasharem3.application.exception.ErrorCode;
 import com.seashare.seasharem3.application.port.in.LoadFinancialParametersUseCase;
@@ -12,7 +13,7 @@ import com.seashare.seasharem3.domain.model.FinancialParameters;
 import com.seashare.seasharem3.domain.service.HighSeasonCalendar;
 import com.seashare.seasharem3.domain.valueobject.HighSeasonWindow;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,7 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Servicio de aplicación de UC11: guarda y carga los parámetros financieros globales.
  * Fuente: UC11 plan T017 (save) y T031 (load); SPEC RF-005, RF-007, RF-009, RF-011,
- * RF-013, HU1–HU4, D-UC11-03 (idempotencia), D-UC11-07 (primera configuración).
+ * RF-013, HU1–HU4, D-UC11-03 (idempotencia), D-UC11-07 (primera configuración),
+ * D-UC11-08 (resultado de guardado), D-UC11-10 (diagnóstico de fallos).
  */
 public class FinancialParametersService implements SaveFinancialParametersUseCase, LoadFinancialParametersUseCase {
 
@@ -32,16 +34,22 @@ public class FinancialParametersService implements SaveFinancialParametersUseCas
      */
     static final String GUARANTEE_DEPOSIT_RULE = "10% de la tarifa base diaria";
 
+    private static final String SAVE_FAILURE_DETAIL =
+            "The financial parameters could not be saved. The previous configuration has been preserved.";
+
     private final FinancialParametersRepository repository;
     private final HighSeasonCalendar highSeasonCalendar;
     private final ClockPort clock;
+    private final Clock instantClock;
 
     public FinancialParametersService(FinancialParametersRepository repository,
                                       HighSeasonCalendar highSeasonCalendar,
-                                      ClockPort clock) {
+                                      ClockPort clock,
+                                      Clock instantClock) {
         this.repository = repository;
         this.highSeasonCalendar = highSeasonCalendar;
         this.clock = clock;
+        this.instantClock = instantClock;
     }
 
     /**
@@ -49,16 +57,17 @@ public class FinancialParametersService implements SaveFinancialParametersUseCas
      * Idempotente: si los cuatro valores son idénticos a la versión vigente, devuelve la versión
      * vigente sin crear una versión nueva [SPEC D-UC11-03].
      * La primera configuración crea la versión 1 [SPEC D-UC11-07].
-     * Un fallo de persistencia se convierte en {@link ErrorCode#PARAMETERS_SAVE_FAILED} [SPEC HU4 esc. 3].
+     * Un fallo de persistencia se convierte en {@link ErrorCode#PARAMETERS_SAVE_FAILED} y conserva la
+     * causa para que el adaptador web la registre [SPEC HU4 esc. 3; D-UC11-10].
      */
     @Override
     @Transactional
-    public FinancialParametersResult save(FinancialParametersCommand command) {
+    public SaveFinancialParametersResult save(FinancialParametersCommand command) {
         Optional<FinancialParameters> current = repository.findCurrent();
 
         // Idempotencia: si los cuatro valores son idénticos a la versión vigente, no crear versión nueva (D-UC11-03).
         if (current.isPresent() && isIdentical(current.get(), command)) {
-            return toResult(current.get());
+            return new SaveFinancialParametersResult(current.get().versionNumber());
         }
 
         long nextVersion = current.map(FinancialParameters::versionNumber).orElse(0L) + 1;
@@ -70,14 +79,13 @@ public class FinancialParametersService implements SaveFinancialParametersUseCas
                 command.weekendIncreasePct(),
                 command.highSeasonIncreasePct(),
                 null,
-                Instant.now());
+                instantClock.instant());
 
         try {
             FinancialParameters saved = repository.saveNewVersion(newParams);
-            return toResult(saved);
-        } catch (Exception ex) {
-            throw new ContractException(ErrorCode.PARAMETERS_SAVE_FAILED,
-                    "The financial parameters could not be saved. The previous configuration has been preserved.");
+            return new SaveFinancialParametersResult(saved.versionNumber());
+        } catch (RuntimeException ex) {
+            throw new ContractException(ErrorCode.PARAMETERS_SAVE_FAILED, SAVE_FAILURE_DETAIL, ex);
         }
     }
 

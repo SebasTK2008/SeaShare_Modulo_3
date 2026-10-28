@@ -78,15 +78,28 @@ El Administrador Financiero guarda la configuración financiera global (comisió
   "type": "about:blank",
   "title": "Invalid request",
   "status": 400,
-  "detail": "The commission percentage (150.00) must be between 0 and 100.",
+  "detail": "Percentage out of range 0-100: 150.0000",
   "code": "VALIDATION_ERROR",
-  "retryable": false
+  "retryable": false,
+  "errors": [
+    {
+      "field": "platform_commission_percentage",
+      "message": "Percentage out of range 0-100: 150.0000"
+    }
+  ]
 }
 ```
+
+El campo de `errors[]` usa la clave JSON del cuerpo (`platform_commission_percentage`,
+`insurance_fee_per_passenger`, `weekend_increase_percentage`, `high_season_increase_percentage`).
+Un formato no numérico produce `field` y el mensaje `"must be a decimal string"`. Jackson reporta
+el primer campo inválido; el cliente corrige y reenvía [D-UC11-15].
 
 ## 6. Idempotencia y reintentos
 
 `PUT` es idempotente por naturaleza. Enviar la misma configuración (mismos cuatro valores) **no crea una versión nueva**: el sistema devuelve la versión vigente; un contenido distinto crea una versión nueva. Reintentar fallas del servidor es seguro.
+
+El `GET` devuelve los cuatro parámetros con 4 decimales (la escala interna); reenviar exactamente esos valores no crea una versión nueva. Si el cliente redondea a 2 decimales antes de reenviar, el valor cambia y se crea una versión nueva.
 
 ## 7. Trazabilidad
 

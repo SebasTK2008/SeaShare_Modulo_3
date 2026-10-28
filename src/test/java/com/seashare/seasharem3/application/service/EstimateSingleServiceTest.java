@@ -126,8 +126,9 @@ class EstimateSingleServiceTest {
 
     @Test
     void queriesUc02WithTheStartDate() {
+        FinancialParameters current = parameters();
         when(clock.today()).thenReturn(TODAY);
-        when(paramsRepo.findCurrent()).thenReturn(Optional.of(parameters()));
+        when(paramsRepo.findCurrent()).thenReturn(Optional.of(current));
         when(baseRateUseCase.provideBaseRates(any())).thenReturn(List.of(
                 new BaseRateResult(boatId, new BaseRate(BASE_RATE), null)));
 
@@ -137,6 +138,7 @@ class EstimateSingleServiceTest {
         verify(baseRateUseCase).provideBaseRates(captor.capture());
         assertThat(captor.getValue().boatIds()).containsExactly(boatId);
         assertThat(captor.getValue().evaluatedDate()).isEqualTo(day(5));
+        assertThat(captor.getValue().parameters()).isSameAs(current);
     }
 
     @Test

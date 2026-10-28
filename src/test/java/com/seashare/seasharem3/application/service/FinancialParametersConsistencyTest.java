@@ -2,9 +2,9 @@ package com.seashare.seasharem3.application.service;
 
 import com.seashare.seasharem3.application.dto.FinancialParametersCommand;
 import com.seashare.seasharem3.application.dto.FinancialParametersResult;
+import com.seashare.seasharem3.application.dto.SaveFinancialParametersResult;
 import com.seashare.seasharem3.application.exception.ContractException;
 import com.seashare.seasharem3.application.exception.ErrorCode;
-import com.seashare.seasharem3.domain.exception.DomainException;
 import com.seashare.seasharem3.domain.model.FinancialParameters;
 import com.seashare.seasharem3.domain.service.HighSeasonCalendar;
 import com.seashare.seasharem3.domain.valueobject.Money;
@@ -16,7 +16,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 class FinancialParametersConsistencyTest {
 
     private static final LocalDate FIXED_DATE = LocalDate.of(2026, 10, 24);
+    private static final Clock FIXED_CLOCK = Clock.fixed(
+            Instant.parse("2026-10-24T12:00:00Z"), ZoneOffset.UTC);
 
     private InMemoryFinancialParametersRepository repository;
     private FinancialParametersService service;
@@ -41,7 +46,8 @@ class FinancialParametersConsistencyTest {
         service = new FinancialParametersService(
                 repository,
                 new HighSeasonCalendar(),
-                new FixedClockPort(FIXED_DATE));
+                new FixedClockPort(FIXED_DATE),
+                FIXED_CLOCK);
     }
 
     @Test
@@ -54,7 +60,7 @@ class FinancialParametersConsistencyTest {
                 new Percentage(new BigDecimal("10.00")),
                 new Percentage(new BigDecimal("25.00")));
 
-        FinancialParametersResult saveResult = service.save(command);
+        SaveFinancialParametersResult saveResult = service.save(command);
         assertThat(saveResult.versionNumber()).isEqualTo(1);
 
         FinancialParametersResult loadResult = service.load();
@@ -104,11 +110,8 @@ class FinancialParametersConsistencyTest {
         assertThat(historicalV1.commissionPct().value()).isEqualByComparingTo(new BigDecimal("10.0000"));
         assertThat(historicalV1.insuranceFeePerPassenger().amount()).isEqualByComparingTo(new BigDecimal("5000.0000"));
 
-        // Validación fallida en VOs de dominio no afecta la versión vigente
-        assertThatExceptionOfType(DomainException.class).isThrownBy(() ->
-                new Percentage(new BigDecimal("150.00")));
-
-        // La versión vigente sigue siendo la 2 con sus valores íntegros
+        // La versión vigente sigue siendo la 2 con sus valores íntegros.
+        // El PUT inválido se prueba en UC11FinancialParametersWebIntegrationTest (M3).
         assertThat(service.load().versionNumber()).isEqualTo(2);
         assertThat(service.load().commissionPct().value()).isEqualByComparingTo(new BigDecimal("20.0000"));
     }
@@ -146,7 +149,8 @@ class FinancialParametersConsistencyTest {
         FinancialParametersService serviceWithFailingRepo = new FinancialParametersService(
                 failingRepo,
                 new HighSeasonCalendar(),
-                new FixedClockPort(FIXED_DATE));
+                new FixedClockPort(FIXED_DATE),
+                FIXED_CLOCK);
 
         FinancialParametersCommand v2Candidate = new FinancialParametersCommand(
                 new Percentage(new BigDecimal("22.00")),
@@ -156,7 +160,10 @@ class FinancialParametersConsistencyTest {
 
         assertThatExceptionOfType(ContractException.class)
                 .isThrownBy(() -> serviceWithFailingRepo.save(v2Candidate))
-                .satisfies(ex -> assertThat(ex.code()).isEqualTo(ErrorCode.PARAMETERS_SAVE_FAILED));
+                .satisfies(ex -> {
+                    assertThat(ex.code()).isEqualTo(ErrorCode.PARAMETERS_SAVE_FAILED);
+                    assertThat(ex.getCause()).isInstanceOf(IllegalStateException.class);
+                });
 
         // La configuración previa se conserva intacta
         FinancialParameters current = failingRepo.findCurrent().orElseThrow();

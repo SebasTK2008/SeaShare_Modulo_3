@@ -5,7 +5,6 @@ import com.seashare.seasharem3.application.port.out.FinancialParametersRepositor
 import com.seashare.seasharem3.application.port.out.FleetRatePort;
 import com.seashare.seasharem3.application.service.ProvideBaseRateService;
 import com.seashare.seasharem3.domain.service.DynamicRatePolicy;
-import com.seashare.seasharem3.domain.service.HighSeasonCalendar;
 import com.seashare.seasharem3.infrastructure.adapter.out.fleet.FleetRateMapper;
 import com.seashare.seasharem3.infrastructure.adapter.out.fleet.FleetRateProperties;
 import com.seashare.seasharem3.infrastructure.adapter.out.fleet.FleetRateRestClient;
@@ -34,16 +33,6 @@ public class FleetRateConfiguration {
     @Bean
     public FleetRatePort fleetRatePort(FleetRateProperties properties, FleetRateMapper mapper) {
         return new FleetRateRestClient(properties, mapper);
-    }
-
-    @Bean
-    public HighSeasonCalendar highSeasonCalendar() {
-        return new HighSeasonCalendar();
-    }
-
-    @Bean
-    public DynamicRatePolicy dynamicRatePolicy(HighSeasonCalendar highSeasonCalendar) {
-        return new DynamicRatePolicy(highSeasonCalendar);
     }
 
     @Bean
