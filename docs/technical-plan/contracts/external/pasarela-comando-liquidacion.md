@@ -69,7 +69,7 @@ Mercado Pago confirma la dispersión creada. El resultado final del movimiento p
 
 ## 5. Manejo de Errores
 
-Timeouts o errores HTTP `5xx` reintentan desde el worker con el mismo `X-Idempotency-Key`. Fallos por errores de negocio (ej. `400` porque el `collector_id` no está vinculado, o fondos insuficientes) reportados síncronamente marcan la `IntenciónDeDispersión` en estado fallido para resolución manual o re-vinculación de cuenta [SPEC RNF-003, RF-012].
+Timeouts o errores HTTP `5xx` reintentan desde el worker con el mismo `X-Idempotency-Key`. Un `400` de validación del medio de pago (ej. `collector_id` no vinculado o fondos insuficientes) es fallo **no reintentable**: marca la `IntenciónDeDispersión` en estado fallido para resolución manual o re-vinculación de cuenta. El resto de `4xx` son fallo propio (E8) y se reintentan como un `5xx` [SPEC RNF-003, RF-012; README §4.4].
 
 ## 6. Trazabilidad
 

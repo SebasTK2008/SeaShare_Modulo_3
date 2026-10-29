@@ -26,7 +26,8 @@ public class OperationalFailureMessageRecoverer implements MessageRecoverer {
             AmqpNames.QUEUE_GUARANTEE_DISPUTE, "UC08",
             AmqpNames.QUEUE_CHARGE_COMMAND, "UC05",
             AmqpNames.QUEUE_REFUND_COMMAND, "UC09",
-            AmqpNames.QUEUE_SETTLEMENT_COMMAND, "UC10");
+            AmqpNames.QUEUE_SETTLEMENT_COMMAND, "UC10",
+            AmqpNames.QUEUE_GATEWAY_NOTIFICATION, "UC05");
 
     private static final String RESERVATION_ID_HEADER = "reservation_id";
 

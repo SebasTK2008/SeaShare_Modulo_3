@@ -63,7 +63,7 @@ Mercado Pago retorna el objeto del reembolso creado.
 
 ## 5. Manejo de Errores
 
-Fallas técnicas en la llamada (`Timeout`, `5xx`) reintentan el mensaje en el worker con la misma `X-Idempotency-Key`. Fallos por negocio (`400`, `403` ej. fondos insuficientes o límite de tiempo excedido) detienen los reintentos y marcan la intención en estado de error, requiriendo revisión manual [SPEC RNF-003].
+Fallas técnicas en la llamada (`Timeout`, `5xx`) reintentan el mensaje en el worker con la misma `X-Idempotency-Key`. Un `400` de validación del medio de pago (p. ej. token inválido) es fallo **no reintentable**: detiene los reintentos y marca la intención en estado de error, requiriendo revisión manual. El resto de `4xx` son fallo propio (E8) y se reintentan como un `5xx` [SPEC RNF-003; README §4.4].
 
 ## 6. Trazabilidad
 

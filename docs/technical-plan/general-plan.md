@@ -475,7 +475,7 @@ erDiagram
 | C6 | Reservas → sistema | UC08 | Notificación unidireccional | **RabbitMQ** | **Sí** | [UC08](contracts/events/UC08-disputa-garantia.md) |
 | C7 | Sistema → Flota | UC01/02/03 | Request/response | REST `POST` (consulta por lote) | No | [Flota](contracts/external/flota-consulta-tarifas-base.md) |
 | C8 | Sistema → Pasarela | UC05/09/10 | Comando asíncrono (clave idempotente por intento) | Outbox → **RabbitMQ interna** → worker → cliente de la pasarela | **Sí** | [cobro](contracts/external/pasarela-comando-cobro.md), [reembolso](contracts/external/pasarela-comando-reembolso.md), [liquidación](contracts/external/pasarela-comando-liquidacion.md) |
-| C9 | Pasarela → sistema | UC05/09/10 | Resultado | Webhook REST | No | [webhook](contracts/external/pasarela-webhook-resultados.md) |
+| C9 | Pasarela → sistema | UC05/09/10 | Resultado | Webhook REST (acuse inmediato) → **cola interna** `finance.gateway-notification.v1` → worker que consulta el pago y actualiza la intención | No | [webhook](contracts/external/pasarela-webhook-resultados.md) |
 | C10 | Administrador Financiero → sistema | UC11 | Request/response | REST | No | [obtener](contracts/rest/UC11-obtener-parametros-financieros.md), [guardar](contracts/rest/UC11-guardar-parametros-financieros.md) |
 | C11 | Propietario / Administrador → sistema | UC12, UC13 | Request/response | REST | No | [UC12](contracts/rest/UC12-consultar-registros-financieros.md), [consultar](contracts/rest/UC13-consultar-informe-financiero.md), [exportar](contracts/rest/UC13-exportar-informe-financiero.md) |
 | C12 | Sistema → sistema | UC05 | Eventos por tiempo | Scheduler | No (ver D-10) | §5.2 |
@@ -521,7 +521,8 @@ sequenceDiagram
   F->>F: UC05 nueva IntenciónDeCobro (clave idempotente propia) + outbox
   Note over F: comando publicado a la cola interna (outbox → RabbitMQ) y consumido por el worker
   F->>PG: cobrar (worker, clave idempotente de la intención)
-  PG-->>F: webhook de resultado
+  PG-->>F: webhook de resultado (acuse inmediato; persistido en el outbox)
+  Note over F: paso 2 asíncrono en la cola interna finance.gateway-notification.v1
   F->>F: actualizar intención; con el cobro confirmado, crear RegistroDeCobro con charge_intent_id
   M2->>F: GET payment-confirmation (UC06)
   F-->>M2: estado del cobro

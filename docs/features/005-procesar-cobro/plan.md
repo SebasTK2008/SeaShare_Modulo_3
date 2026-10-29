@@ -176,7 +176,7 @@ public record ProcessChargeCommand(
     String paymentTokenRef,                 // obligatorio con PENDING [SPEC UC07 RF-002A]
     String paymentMethodType,               // nullable [SPEC RF-001]
     Map<String, String> paymentMetadata,    // nullable, solo no sensibles [SPEC RF-001, RF-012]
-    String operationKey                     // identidad de operación de UC07 (RF-009A): derivada de reservationId + statusChangedAt [CONV]
+    String operationKey                     // identidad de operación de UC07 (RF-009A): derivada de reservationId + status + statusChangedAt [CONV]
 ) {}
 ```
 
@@ -202,13 +202,13 @@ Todas provienen del SPEC 5 salvo indicación.
 
 ## Contratos de API
 
-UC05 **no expone endpoints REST propios** (README §2: "UC05 no tiene endpoint público"). Interfaces:
+UC05 **no expone endpoints REST de negocio propios** (README §2: "UC05 no tiene endpoint de negocio"); su único endpoint es el webhook compartido de la pasarela. Interfaces:
 
 | Interfaz | Dirección | Contrato | Resumen |
 |---|---|---|---|
 | `ProcessChargeUseCase` (puerto) | UC07 → UC05 | — | Ver «Puertos expuestos» |
 | Cola interna del comando | Outbox → worker | `finance.charge-command.v1` (DLQ `finance.charge-command.v1.dlq`) | Reintentos del listener: 5 con *backoff* exponencial (base 1 s) y luego DLQ + registro en `operational_failure` [README §3.5/§4.4]. **[ACT-02]** El cuerpo es `{"charge_intent_id": "...", "payer_email": "..."}` (D-UC05-10) |
-| Cola interna de notificaciones **[ACT-02]** | Outbox → worker | `finance.gateway-notification.v1` (DLQ `finance.gateway-notification.v1.dlq`) | Cola **nueva** para el paso 2 del webhook; cuerpo `{"type": "...", "action": "...", "data_id": "..."}` (D-UC05-12). Pendiente de registrar en `contracts/README.md` §3.5 (T031) |
+| Cola interna de notificaciones **[ACT-02]** | Outbox → worker | `finance.gateway-notification.v1` (DLQ `finance.gateway-notification.v1.dlq`) | Cola **nueva** para el paso 2 del webhook; cuerpo `{"type": "...", "action": "...", "data_id": "..."}` (D-UC05-12). Registrada en `contracts/README.md` §3.5 (T031) |
 | `POST /v1/payments` | Worker → Mercado Pago | `pasarela-comando-cobro.md` | `transaction_amount` único; `token`; `X-Idempotency-Key` por intento; `payer_email` ← `payment_metadata` del mensaje de UC07, `payment_method_id` ← `payment_method_type`, `installments` = 1 y `description` la fija el sistema |
 | `POST /api/v1/webhook/gateway` | Mercado Pago → sistema | `pasarela-webhook-resultados.md` | Verifica `x-signature`; valida el payload; persiste la notificación en el *outbox* y acusa recibo; el paso 2 ocurre en el worker de `finance.gateway-notification.v1` (D-UC05-12) |
 
@@ -400,7 +400,11 @@ T017 (pruebas) ─> T018 ─> T019 ─> T020 ─> T021 ─> T023 ─> T024 ─> 
 
 4. **§Implementation Phases**: tareas marcadas `[x]` y con la nota de lo implementado (T003, T004, T007–T009, T012–T016, T017–T030, T031–T033); quedan pendientes T010 y T011.
 
-5. **§Technical Context**: se actualiza el estado del repositorio y se documentan las nuevas propiedades `seashare.gateway.circuit-breaker.*` (tipadas en `GatewayProperties`) y `seashare.gateway.reconciliation-interval` (consumida por el `@Scheduled` del job de conciliación).
+5. **Contratos alineados con la implementación** (T031): `contracts/external/pasarela-comando-cobro.md` (clave idempotente real, `description` y `external_reference` con el `reservation_id`, `transaction_amount` numérico, reglas de datos obligatorios, *timeout* y *circuit breaker*, y tabla completa de clasificación de errores); `contracts/external/pasarela-webhook-resultados.md` (acuse de recibo tras la persistencia durable, paso 2 asíncrono en la cola interna, campos que el sistema exige de verdad, mapeo por `type` sin filtrar por `action`, `404` que no cierra el intento y alcance real del `500`); `contracts/README.md` §3.5 (cuerpo y enrutado de las colas internas de UC05), §2 (UC05 sin endpoint de negocio) y §4.4 (filas del webhook para el paso 2 asíncrono, el `404` y la regla única de `4xx` de la pasarela, replicada en los contratos de reembolso y liquidación); `general-plan.md` §4 (columnas `status_detail`/`requested_amount`) y §5.1 (conexión C9 con el paso 2 asíncrono).
+
+6. **§Technical Context**: se actualiza el estado del repositorio y se documentan las nuevas propiedades `seashare.gateway.circuit-breaker.*` (tipadas en `GatewayProperties`) y `seashare.gateway.reconciliation-interval` (consumida por el `@Scheduled` del job de conciliación).
+
+7. **§Contratos de API y decisiones**: se documenta la cola interna de notificaciones y el paso 2 asíncrono del webhook, con la tabla de transición de estados y la regla de que un `404` no cierra el intento.
 
 **Defectos encontrados por la auditoría y corregidos en esta actualización:**
 - El despacho del webhook no era transaccional y la escritura en el *outbox* es `MANDATORY`: toda notificación devolvía `500`. Ahora `GatewayWebhookDispatcherService.dispatch` es transaccional.
@@ -409,6 +413,9 @@ T017 (pruebas) ─> T018 ─> T019 ─> T020 ─> T021 ─> T023 ─> T024 ─> 
 - El adaptador de la pasarela no tenía *circuit breaker* (T014, general-plan D-20) ni clasificaba los errores de transporte no HTTP: ambos corregidos. Un `400` de token inválido tampoco cuenta como fallo del *circuit breaker*: no es una caída de la pasarela y no debe abrirlo contra tráfico válido.
 - Un resultado repetido sin `status_detail` borraba el detalle técnico ya registrado (y que UC06 publica): ahora el detalle solo se sustituye cuando el nuevo viene informado.
 - El `toString` del VO del medio de pago exponía el token: ahora se enmascara (CE-005).
+- La cola nueva `finance.gateway-notification.v1` no estaba en el mapa «cola → UC dueño» del `MessageRecoverer`: el fallo agotado se registraba con `use_case = "AMQP"`. Ahora la cola se traduce a `UC05` y hay una prueba que lo cubre.
+- Los contratos de reembolso y liquidación clasificaban todo `4xx` como no reintentable, en contradicción con el de cobro y con la tabla E8 del README. Ahora el README §4.4 fija una regla única para la pasarela (`400` de validación → no reintentable; el resto de `4xx` y los `5xx` → reintentables) y los tres contratos la replican.
+- El contrato del webhook exigía `api_version` y `data` en el cuerpo, que el sistema no valida; y sugería un filtrado por `action` que no existe. Ambos puntos están corregidos según la implementación.
 - La validación del `last_four` contra `VARCHAR(4)` se aplicaba también al leer de la base de datos; se mantiene como invariante del VO con un mensaje más preciso.
 
 **Verificado contra el código:**
