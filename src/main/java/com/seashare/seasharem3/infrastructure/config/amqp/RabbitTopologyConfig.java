@@ -62,6 +62,11 @@ public class RabbitTopologyConfig {
     }
 
     @Bean
+    public Queue gatewayNotificationQueue() {
+        return quorum(AmqpNames.QUEUE_GATEWAY_NOTIFICATION);
+    }
+
+    @Bean
     public Queue reservationInfoDlq() {
         return dlq(AmqpNames.QUEUE_RESERVATION_INFO);
     }
@@ -89,6 +94,11 @@ public class RabbitTopologyConfig {
     @Bean
     public Queue settlementCommandDlq() {
         return dlq(AmqpNames.QUEUE_SETTLEMENT_COMMAND);
+    }
+
+    @Bean
+    public Queue gatewayNotificationDlq() {
+        return dlq(AmqpNames.QUEUE_GATEWAY_NOTIFICATION);
     }
 
     @Bean
@@ -125,6 +135,12 @@ public class RabbitTopologyConfig {
     public Binding settlementCommandBinding(@Qualifier("settlementCommandQueue") Queue queue,
             DirectExchange financeCommandsExchange) {
         return BindingBuilder.bind(queue).to(financeCommandsExchange).with(AmqpNames.ROUTING_SETTLEMENT_COMMAND);
+    }
+
+    @Bean
+    public Binding gatewayNotificationBinding(@Qualifier("gatewayNotificationQueue") Queue queue,
+            DirectExchange financeCommandsExchange) {
+        return BindingBuilder.bind(queue).to(financeCommandsExchange).with(AmqpNames.ROUTING_GATEWAY_NOTIFICATION);
     }
 
     /**

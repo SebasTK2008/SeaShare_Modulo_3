@@ -16,6 +16,7 @@ public final class AmqpNames {
     public static final String QUEUE_CHARGE_COMMAND = "finance.charge-command.v1";
     public static final String QUEUE_REFUND_COMMAND = "finance.refund-command.v1";
     public static final String QUEUE_SETTLEMENT_COMMAND = "finance.settlement-command.v1";
+    public static final String QUEUE_GATEWAY_NOTIFICATION = "finance.gateway-notification.v1";
 
     public static final String ROUTING_INFO_PROVIDED = "reservation.info.provided";
     public static final String ROUTING_STATUS_CHANGED = "reservation.status.changed";
@@ -24,6 +25,7 @@ public final class AmqpNames {
     public static final String ROUTING_CHARGE_COMMAND = "charge.command";
     public static final String ROUTING_REFUND_COMMAND = "refund.command";
     public static final String ROUTING_SETTLEMENT_COMMAND = "settlement.command";
+    public static final String ROUTING_GATEWAY_NOTIFICATION = "gateway.notification";
 
     public static final String DLQ_SUFFIX = ".dlq";
 

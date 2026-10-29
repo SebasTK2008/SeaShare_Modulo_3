@@ -31,7 +31,7 @@ class RabbitTopologyIntegrationTest {
     private AmqpAdmin amqpAdmin;
 
     @Test
-    void declaresTheSixWorkQueuesAndTheirDlqsInTheBroker() {
+    void declaresTheWorkQueuesAndTheirDlqsInTheBroker() {
         for (String queue : workQueues()) {
             assertThat(amqpAdmin.getQueueProperties(queue)).as("queue %s", queue).isNotNull();
             assertThat(amqpAdmin.getQueueProperties(AmqpNames.deadLetterQueue(queue)))
@@ -42,6 +42,6 @@ class RabbitTopologyIntegrationTest {
     private static List<String> workQueues() {
         return List.of(AmqpNames.QUEUE_RESERVATION_INFO, AmqpNames.QUEUE_RESERVATION_STATUS,
                 AmqpNames.QUEUE_GUARANTEE_DISPUTE, AmqpNames.QUEUE_CHARGE_COMMAND, AmqpNames.QUEUE_REFUND_COMMAND,
-                AmqpNames.QUEUE_SETTLEMENT_COMMAND);
+                AmqpNames.QUEUE_SETTLEMENT_COMMAND, AmqpNames.QUEUE_GATEWAY_NOTIFICATION);
     }
 }

@@ -94,6 +94,21 @@ class OperationalFailureMessageRecovererTest {
     }
 
     @Test
+    void mapsTheGatewayNotificationQueueToUc05() {
+        MessageProperties properties = new MessageProperties();
+        properties.setConsumerQueue(AmqpNames.QUEUE_GATEWAY_NOTIFICATION);
+        Message message = new Message("{}".getBytes(StandardCharsets.UTF_8), properties);
+
+        assertThatThrownBy(() -> recoverer.recover(message, new RuntimeException("gateway down")))
+                .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+
+        assertThat(recorder.failures()).singleElement().satisfies(recorded -> {
+            assertThat(recorded.useCase()).isEqualTo("UC05");
+            assertThat(recorded.payloadRef()).isEqualTo("queue=" + AmqpNames.QUEUE_GATEWAY_NOTIFICATION);
+        });
+    }
+
+    @Test
     void unknownQueueAndMalformedBodyStillRejectAndRecordWithoutReservationId() {
         MessageProperties properties = new MessageProperties();
         properties.setConsumerQueue("finance.unknown.v1");

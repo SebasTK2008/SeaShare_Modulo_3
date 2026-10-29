@@ -23,14 +23,15 @@ public final class ChargeIntent {
 
     /**
      * Transiciones permitidas [CONV] (los planes no publican tabla literal; se derivan de UC05 §Reglas 5-8):
-     * PENDING_SEND → IN_PROCESS | REJECTED (400 no reintentable) | COMMUNICATION_ERROR;
+     * PENDING_SEND → cualquier estado no terminal (el worker ya envió el cobro y la pasarela responde);
      * IN_PROCESS → CAPTURED | REJECTED | CANCELLED | EXPIRED | COMMUNICATION_ERROR;
      * COMMUNICATION_ERROR → IN_PROCESS | CAPTURED | REJECTED | CANCELLED | EXPIRED (resultado de conciliación);
      * CAPTURED, REJECTED, CANCELLED y EXPIRED son terminales. Repetir el mismo estado es idempotente.
      */
     private static final Map<ChargeIntentStatus, Set<ChargeIntentStatus>> ALLOWED_TRANSITIONS = Map.of(
             ChargeIntentStatus.PENDING_SEND,
-            EnumSet.of(ChargeIntentStatus.IN_PROCESS, ChargeIntentStatus.REJECTED,
+            EnumSet.of(ChargeIntentStatus.IN_PROCESS, ChargeIntentStatus.CAPTURED, ChargeIntentStatus.REJECTED,
+                    ChargeIntentStatus.CANCELLED, ChargeIntentStatus.EXPIRED,
                     ChargeIntentStatus.COMMUNICATION_ERROR),
             ChargeIntentStatus.IN_PROCESS,
             EnumSet.of(ChargeIntentStatus.CAPTURED, ChargeIntentStatus.REJECTED, ChargeIntentStatus.CANCELLED,
@@ -76,6 +77,18 @@ public final class ChargeIntent {
             Money amount, PaymentMethodReference paymentMethod, Instant createdAt) {
         return new ChargeIntent(id, reservationId, idempotencyKey, ChargeIntentStatus.PENDING_SEND, amount,
                 paymentMethod, null, null, createdAt);
+    }
+
+    /**
+     * Rehidrata una intención ya persistida con su estado actual. No valida transiciones: el estado
+     * almacenado proviene de la base de datos, que es la fuente de verdad.
+     * Fuente: UC05 plan T009 (persistencia).
+     */
+    public static ChargeIntent restore(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
+            ChargeIntentStatus status, Money amount, PaymentMethodReference paymentMethod, String externalReference,
+            String statusDetail, Instant createdAt) {
+        return new ChargeIntent(id, reservationId, idempotencyKey, status, amount, paymentMethod, externalReference,
+                statusDetail, createdAt);
     }
 
     /**

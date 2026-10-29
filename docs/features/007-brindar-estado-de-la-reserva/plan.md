@@ -48,7 +48,7 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Brin
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [general-plan]
 **Primary Dependencies**: Spring Boot 4.1.1. Para UC07: Spring AMQP, Spring Data JPA, Flyway, MapStruct, ArchUnit y pruebas RabbitMQ. Se registran en el setup común sin referencias a tareas externas.
 **Storage**: PostgreSQL 16+; `reservation_status_log` propia (general-plan §4); lee `reservation_information` por su puerto publicado [general-plan §3.5]. `operational_failure.reservation_id` es nullable y sin FK; `payload_ref` referencia el mensaje o JSON almacenado.
-**Messaging**: RabbitMQ 3.13+, colas *quorum*; entrante `finance.reservation-status.v1`; internas `finance.charge-command.v1`, `finance.refund-command.v1` y `finance.settlement-command.v1`; DLQ `<cola>.dlq` [general-plan]
+**Messaging**: RabbitMQ 3.13+, colas *quorum*; entrante `finance.reservation-status.v1`; internas `finance.charge-command.v1`, `finance.refund-command.v1`, `finance.settlement-command.v1` y `finance.gateway-notification.v1` (esta última, añadida por UC05 para el paso 2 del webhook de la pasarela; README §3.5); DLQ `<cola>.dlq` [general-plan]
 **Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), Awaitility, ArchUnit [general-plan]
 **Target Platform**: Contenedores Docker (Linux) [general-plan]
 **Project Type**: Servicio backend único (hexagonal) [general-plan]
@@ -231,7 +231,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 | **D-UC07-06** | El SPEC 7 no menciona la apertura del seguimiento del depósito; general-plan §3.5 la asigna a UC07 (`OpenDepositTrackingUseCase`) | SPEC 7 RF-006/RF-007 vs general-plan §3.5 | Se mantiene, sin operación monetaria (RF-007) | Aplicada |
 | **D-UC07-07** | Propiedad de `ReservationLockPort` (bloqueo asesor por reserva, D-15), que también necesitan UC08, UC09 y UC10 | general-plan §3.6 | `ReservationLockPort` pertenece al núcleo compartido (fundacional) y lo consumen UC07/UC08/UC09/UC10; UC07 no lo redeclara | Aplicada |
 | **D-UC07-08** | Firmas publicadas de los puertos que UC07 consume de UC10 y UC08 | general-plan §3.5/§3.6 | `RequestSettlementUseCase.request(SettlementCommand)` (dueño UC10) y `OpenDepositTrackingUseCase.open(OpenDepositTrackingCommand)` (dueño UC08) | Aplicada |
-| **D-UC07-09** | Nombres y topología de colas y DLQ | contrato §2; README §3.5 | Entrante `finance.reservation-status.v1`; internas `finance.charge-command.v1`, `finance.refund-command.v1` y `finance.settlement-command.v1`; DLQ `<cola>.dlq` | Aplicada |
+| **D-UC07-09** | Nombres y topología de colas y DLQ | contrato §2; README §3.5 | Entrante `finance.reservation-status.v1`; internas `finance.charge-command.v1`, `finance.refund-command.v1`, `finance.settlement-command.v1` y `finance.gateway-notification.v1` (añadida por UC05; la fuente canónica es el README §3.5); DLQ `<cola>.dlq` | Aplicada |
 | **D-UC07-10** | Alcance de `deposit_disposition` respecto de los depósitos reembolsados por cancelación | SPEC 7 RF-009B; general-plan D-34 | `deposit_disposition` (propiedad de UC08) registra todos los desenlaces del depósito (reembolso por cancelación, `REJECTED` = reembolso y `COMPLETED` = liquidación) con un único *compare-and-set*; UC07 lo invoca por `OpenDepositTrackingUseCase` | Aplicada |
 
 ## Implementation Phases
