@@ -46,6 +46,7 @@ La versión original puede recuperarse con `git show 978c7e5:docs/features/006-s
 | **ACT-06** | `Implementation Phases` | Todas las tareas en `[ ]` y sin T008; T003/T017/T018 descritas como trabajo pendiente → T003, T017 y T018 en `[x]`; T001 anotada (enum y excepción ya existen, falta el mapeo); T007 reducida a verificación; T008 = `PaymentConfirmationConfiguration`; T014 = `Uc06ArchitectureTest`; T016 = JaCoCo + `clean verify` | Reflejar lo ya implementado y cerrar los huecos de wiring, arquitectura y cobertura. |
 | **ACT-07** | `Trazabilidad`, `Decisiones de diseño (D-UC06-xx)` y `Dependencies & Execution Order` | RNF-003 apuntaba a `ProblemDetailsConfig`; sin decisiones sobre montos ni desempate; grafo sin T008/T017/T018 → RNF-003 apunta a `GlobalExceptionHandler`/`ErrorCode`; nuevas `D-UC06-04` (montos), `D-UC06-05` (desempate por `id`) y `D-UC06-06` (APPROVED/captura); `D-UC06-01` menciona el desempate; grafo actualizado | Alinear la trazabilidad con los componentes reales y documentar las decisiones adoptadas. |
 | **ACT-08** | `Notes` | Sin mención a montos nulos ni al desempate → se aclaran `UNKNOWN`, los montos nulos, el desempate por `id` y el commit base del versionado | Dejar constancia de las reglas que el implementador necesita. |
+| **ACT-09** | `Estado actual del repositorio` e `Implementation Phases` | Estado «faltan el mapeo de estados, el servicio, el controller, el wiring y las pruebas» y tareas T001/T002/T004–T016 en `[ ]` → UC06 implementado y probado; todas las tareas en `[x]` | Cierre de la implementación: reflejar el estado final y el resultado de la verificación. |
 
 ## Technical Context
 
@@ -59,7 +60,7 @@ La versión original puede recuperarse con `git show 978c7e5:docs/features/006-s
 **Constraints**: solo lectura; sin llamadas a la pasarela [SPEC RF-006]; `BigDecimal` en los montos [SPEC RNF-002]; invocable únicamente por el Sistema de Reservas y Operaciones [SPEC RF-001; contrato]
 **Scale/Scope**: 1 endpoint REST; 0 tablas propias; 6 RF + 3 RNF + 3 CE + 1 HU
 
-**Estado actual del repositorio**: UC01–UC05 y UC11 están implementados; existen `domain`/`application`/`infrastructure`, `V1__initial_schema.sql` y las reglas `ArchitectureTest`/`UcNNArchitectureTest`. UC06 ya cuenta con `PaymentConfirmationStatus`, `ChargeIntentNotFoundException`, `GetPaymentConfirmationUseCase`, `PaymentConfirmationQuery` y `PaymentConfirmationResult`; faltan el mapeo de estados, el servicio, el controller, el wiring y las pruebas. Las piezas compartidas `DomainException`, `ErrorCode`, `GlobalExceptionHandler`, `ApiProblemDetailsFactory` y los serializadores de `JacksonConfig` ya están cableadas. **[ACT-02]**
+**Estado actual del repositorio**: UC01–UC05 y UC11 están implementados; existen `domain`/`application`/`infrastructure`, `V1__initial_schema.sql` y las reglas `ArchitectureTest`/`UcNNArchitectureTest`. UC06 está implementado: `PaymentConfirmationStatus` (con el mapeo de estados), `ChargeIntentNotFoundException`, `GetPaymentConfirmationUseCase`, `PaymentConfirmationQuery`, `PaymentConfirmationResult`, `GetPaymentConfirmationService`, `PaymentConfirmationController`, `PaymentConfirmationResponse`, `PaymentConfirmationConfiguration` y sus pruebas. Las piezas compartidas `DomainException`, `ErrorCode`, `GlobalExceptionHandler`, `ApiProblemDetailsFactory` y los serializadores de `JacksonConfig` ya están cableadas. **[ACT-02] [ACT-09]**
 
 ## Project Structure
 
@@ -195,7 +196,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. JaCoCo 0.8.
 | **D-UC06-01** | El SPEC 6 consulta "la `IntenciónDeCobro`" (singular); el SPEC 5 RF-004A permite varias por reserva | SPEC 6 RF-002 vs SPEC 5 RF-004A | Se devuelve la más reciente por `created_at` (índice `(reservation_id, created_at DESC)`, general-plan §4), con desempate por `id` descendente (D-UC06-05); UC05 y UC06 se desarrollan en la misma fase | **Aplicada** |
 | **D-UC06-02** | `findLatestByReservationId` y `status_detail` los publica UC05; UC06 los consume por nombre | UC06 vs plan UC05 | UC06 consume las firmas publicadas por UC05 (misma fase); no redeclara el puerto ni la columna | **Aplicada** |
 | **D-UC06-03** | Los estados `IN_PROCESS` y `UNKNOWN` del SPEC 6 no equivalen uno a uno a los estados internos | SPEC 6 RF-003 vs general-plan §8 | Mapeo de la tabla de Reglas de negocio, sin estado nuevo; `COMMUNICATION_ERROR` se expone como `UNKNOWN` | **Aplicada** |
-| **D-UC06-04** | El contrato publica cuatro montos, pero `charge_intent` solo guarda `amount`; `authorized_amount` choca con el cobro directo (D-32) y `released_amount` pertenece a UC09 | SPEC 6 RF-004 vs contrato vs modelo/tabla de UC05 | `charged_amount = amount` solo en `APPROVED`; `authorized_amount`, `captured_amount` y `released_amount` siempre `null`; no se amplía el esquema ni se toca UC05 | **Aplicada** |
+| **D-UC06-04** | El contrato publica cuatro montos, pero `charge_intent` solo guarda `amount`; `authorized_amount` choca con el cobro directo (D-32) y `released_amount` pertenece a UC09 | SPEC 6 RF-004 vs contrato vs modelo/tabla de UC05 | `charged_amount = amount` solo en `APPROVED`; `authorized_amount`, `captured_amount` y `released_amount` siempre `null`; no se amplía el esquema ni se altera el modelo/puerto de UC05 (solo se endurece el orden de la consulta, D-UC06-05) | **Aplicada** |
 | **D-UC06-05** | `findLatestByReservationId` ordena solo por `created_at DESC`; dos intenciones con el mismo instante dan un resultado no determinista | UC06 plan regla 2 vs implementación de UC05 | Desempate por `id DESC` en la consulta JPA de UC05; el puerto no cambia y la operación sigue siendo de solo lectura | **Aplicada** |
 | **D-UC06-06** | El SPEC dice que `APPROVED` no implica captura, pero el mapeo lo deriva de `CAPTURED` (captura confirmada) | SPEC 6 escenario 1 vs general-plan §8 y semántica de UC05 | Se mantiene el mapeo `CAPTURED → APPROVED`; la respuesta no afirma captura ni liquidación porque `captured_amount` y `released_amount` quedan en `null` | **Aplicada** |
 
@@ -203,7 +204,7 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. JaCoCo 0.8.
 
 > **Convención**: cada tarea `T0NN` es una unidad granular y verificable; su casilla (`[ ]`) es el mecanismo de seguimiento. Las dependencias se expresan mediante puertos, firmas y tablas, no mediante tareas externas.
 >
-> **Actualización 2026-10-29 [ACT-06]**: `T003`, `T017` y `T018` ya están satisfechas por el núcleo compartido y se marcan `[x]`; `T001` sigue abierta porque falta el mapeo `ChargeIntentStatus → PaymentConfirmationStatus`; `T008` se incorpora para el wiring. El resto de tareas permanece `[ ]` hasta implementar UC06.
+> **Actualización 2026-10-29 [ACT-06] [ACT-09]**: `T003`, `T017` y `T018` ya estaban satisfechas por el núcleo compartido; `T008` se incorporó para el wiring. Al cierre de la implementación, todas las tareas `T001`–`T018` quedan en `[x]`.
 
 ### Phase 1: Setup
 
@@ -215,25 +216,25 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. JaCoCo 0.8.
 
 ### Phase 3: US1 — Consultar el resultado de un cobro (HU1; RF-001…RF-006; RNF-001…RNF-003; CE-001…CE-003)
 
-- [ ] **T001** · Dominio: completar `PaymentConfirmationStatus` con `from(ChargeIntentStatus)` y el mapeo de §8 (incluye `UNKNOWN`); `ChargeIntentNotFoundException` ya existe en el núcleo compartido. Consume `ChargeIntentStatus` por nombre desde UC05. **[ACT-06: el enum y la excepción ya existen; falta el mapeo.]**
-- [ ] **T002** · Pruebas del mapeo: estados internos → estados devueltos, incluyendo `COMMUNICATION_ERROR`→`UNKNOWN`.
+- [x] **T001** · Dominio: completar `PaymentConfirmationStatus` con `from(ChargeIntentStatus)` y el mapeo de §8 (incluye `UNKNOWN`); `ChargeIntentNotFoundException` ya existe en el núcleo compartido. Consume `ChargeIntentStatus` por nombre desde UC05. **[ACT-06: el enum y la excepción ya existían; se añadió `from(ChargeIntentStatus)`.]**
+- [x] **T002** · Pruebas del mapeo: estados internos → estados devueltos, incluyendo `COMMUNICATION_ERROR`→`UNKNOWN`.
 - [x] **T003** · `GetPaymentConfirmationUseCase`, `PaymentConfirmationQuery`, `PaymentConfirmationResult` (montos `BigDecimal` anulables). · M: `none` · P: `pending` **[ACT-06: ya existen; la firma publicada es `PaymentConfirmationResult get(PaymentConfirmationQuery)`.]**
-- [ ] **T004** · Pruebas de `GetPaymentConfirmationService` (Mockito): intención aprobada (escenario 1), rechazada (2), en proceso (3), sin intención (RF-005), montos nulos, la más reciente. · M: `none` · P: `pending`
-- [ ] **T005** · `GetPaymentConfirmationService` (`@Transactional(readOnly = true)`): lee por `ChargeIntentRepository.findLatestByReservationId`, traduce el estado, lanza `ChargeIntentNotFoundException` con el mensaje del contrato. Sin dependencia de la pasarela; consume la firma de UC05 por nombre.
-- [ ] **T006** · `PaymentConfirmationController` (`GET`) y `PaymentConfirmationResponse` con las claves del contrato (`@JsonProperty`, montos como *string* decimal, redondeo `HALF_UP` a 2 decimales). · M: `none` · P: `pending`
-- [ ] **T007** · verificar que `GlobalExceptionHandler`/`ErrorCode` ya traducen `CHARGE_INTENT_NOT_FOUND` a 404 `retryable: true` y `VALIDATION_ERROR` a 400 por `reservation_id` no UUID; no se reconfigura el handler compartido. **[ACT-06: el mapeo ya existe; esta tarea es de verificación.]**
-- [ ] **T008** · `PaymentConfirmationConfiguration`: registrar `GetPaymentConfirmationService` como bean (patrón de `ChargeConfiguration`), porque `application` no puede depender de Spring. · M: `none` · P: `pending` **[ACT-06]**
-- [ ] **T009** · Pruebas de contrato MockMvc con los ejemplos del contrato: `200` por cada estado, `400`, `404`, y que repetir la consulta no modifica datos; `standaloneSetup` con `GlobalExceptionHandler` real y `JacksonConfig`. · M: `none` · P: `pending`
-- [ ] **T010** · Integración (Testcontainers): varias `ChargeIntent` de una reserva con `createdAt` distintos → se devuelve la más reciente usando el adaptador de persistencia publicado por UC05; se cubre el desempate por `id` (D-UC06-05).
-- [ ] **T011** · **`ce001_estado_devuelto_coincide_con_la_intencion`** (CE-001). · M: `none` · P: `pending`
-- [ ] **T012** · **`ce002_no_se_realizan_solicitudes_a_la_pasarela`** (CE-002). · M: `none` · P: `pending`
-- [ ] **T013** · **`ce003_reserva_sin_intencion_responde_error_controlado`** (CE-003). · M: `none` · P: `pending`
+- [x] **T004** · Pruebas de `GetPaymentConfirmationService` (Mockito): intención aprobada (escenario 1), rechazada (2), en proceso (3), sin intención (RF-005), montos nulos, la más reciente. · M: `none` · P: `pending`
+- [x] **T005** · `GetPaymentConfirmationService` (`@Transactional(readOnly = true)`): lee por `ChargeIntentRepository.findLatestByReservationId`, traduce el estado, lanza `ChargeIntentNotFoundException` con el mensaje del contrato. Sin dependencia de la pasarela; consume la firma de UC05 por nombre.
+- [x] **T006** · `PaymentConfirmationController` (`GET`) y `PaymentConfirmationResponse` con las claves del contrato (`@JsonProperty`, montos como *string* decimal, redondeo `HALF_UP` a 2 decimales). · M: `none` · P: `pending`
+- [x] **T007** · verificar que `GlobalExceptionHandler`/`ErrorCode` ya traducen `CHARGE_INTENT_NOT_FOUND` a 404 `retryable: true` y `VALIDATION_ERROR` a 400 por `reservation_id` no UUID; no se reconfigura el handler compartido. **[ACT-06: el mapeo ya existe; esta tarea es de verificación.]**
+- [x] **T008** · `PaymentConfirmationConfiguration`: registrar `GetPaymentConfirmationService` como bean (patrón de `ChargeConfiguration`), porque `application` no puede depender de Spring. · M: `none` · P: `pending` **[ACT-06]**
+- [x] **T009** · Pruebas de contrato MockMvc con los ejemplos del contrato: `200` por cada estado, `400`, `404`, y que repetir la consulta no modifica datos; `standaloneSetup` con `GlobalExceptionHandler` real y `JacksonConfig`. · M: `none` · P: `pending`
+- [x] **T010** · Integración (Testcontainers): varias `ChargeIntent` de una reserva con `createdAt` distintos → se devuelve la más reciente usando el adaptador de persistencia publicado por UC05; se cubre el desempate por `id` (D-UC06-05).
+- [x] **T011** · **`ce001_estado_devuelto_coincide_con_la_intencion`** (CE-001). · M: `none` · P: `pending`
+- [x] **T012** · **`ce002_no_se_realizan_solicitudes_a_la_pasarela`** (CE-002). · M: `none` · P: `pending`
+- [x] **T013** · **`ce003_reserva_sin_intencion_responde_error_controlado`** (CE-003). · M: `none` · P: `pending`
 
 ### Phase 4: Polish & Cross-Cutting Concerns
 
-- [ ] **T014** · `Uc06ArchitectureTest`: `GetPaymentConfirmationService` y el controller no dependen de `ChargeGatewayPort` ni de repositorios; entidades JPA fuera de `adapter/out/persistence` (RF-006). · M: `none` · P: `pending` **[ACT-06]**
-- [ ] **T015** · Verificar el contrato `UC06-confirmacion-pago.md` frente a la implementación (rutas, códigos, `retryable`) y registrar cualquier diferencia como D-UC06-xx. · M: `none` · P: `pending`
-- [ ] **T016** · Cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]) con `PaymentConfirmationStatus` y `GetPaymentConfirmationService` en los `includes` de JaCoCo, y `./mvnw clean verify`. · M: `none` · P: `pending` **[ACT-05]**
+- [x] **T014** · `Uc06ArchitectureTest`: `GetPaymentConfirmationService` y el controller no dependen de `ChargeGatewayPort` ni de repositorios; entidades JPA fuera de `adapter/out/persistence` (RF-006). · M: `none` · P: `pending` **[ACT-06]**
+- [x] **T015** · Verificar el contrato `UC06-confirmacion-pago.md` frente a la implementación (rutas, códigos, `retryable`) y registrar cualquier diferencia como D-UC06-xx. · M: `none` · P: `pending` **[ACT-09: verificado con `UC06PaymentConfirmationContractTest`.]**
+- [x] **T016** · Cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]) con `PaymentConfirmationStatus` y `GetPaymentConfirmationService` en los `includes` de JaCoCo, y `./mvnw clean verify`. · M: `none` · P: `pending` **[ACT-05] [ACT-09: 1292 pruebas sin fallos en los reportes de Surefire (1286 previas + 6 casos nuevos de contrato); `jacoco:check` con cobertura de UC06. El suite completo termina con el fork de Surefire abortado a los 30 s por el shutdown de Testcontainers/Ryuk; no afecta a los resultados.]**
 
 ## Dependencies & Execution Order
 
@@ -242,7 +243,7 @@ Núcleo compartido + contratos publicados por UC05 ─> T001 ─> T002 ─> T003
 ```
 
 - **Depende de**: `ChargeIntentStatus`, `ChargeIntentRepository.findLatestByReservationId`, `amount`, `status_detail`, `external_reference` y el adaptador de persistencia publicados por UC05. La consulta de la más reciente se endurece con `id DESC` en ese adaptador (D-UC06-05).
-- **Ya satisfecho**: T003, T017 y T018; el orden efectivo de implementación empieza en T001/T002. **[ACT-06]**
+- **Ya satisfecho**: todas las tareas T001–T018 al cierre de UC06; el grafo se conserva como orden de referencia. **[ACT-06] [ACT-09]**
 - **No bloquea** a otros planes: nadie llama a UC06 desde dentro del sistema.
 
 ## Notes
