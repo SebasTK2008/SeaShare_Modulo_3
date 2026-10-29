@@ -166,7 +166,8 @@ Los contratos de `events/` y las colas internas de comando comparten:
 | Colas consumidoras | `finance.reservation-info.v1` (UC03), `finance.reservation-status.v1` (UC07), `finance.guarantee-dispute.v1` (UC08); DLQ `<cola>.dlq` | [CONV] |
 | Exchange de comandos | `seashare.finance.commands` (`direct`, durable) | [CONV] |
 | Colas internas de comando (UC05/09/10) | `finance.charge-command.v1`, `finance.refund-command.v1`, `finance.settlement-command.v1`; DLQ `<cola>.dlq` | [CONV] |
-| Tipo de cola | *quorum* durable (las seis colas de trabajo) | [CONV] |
+| Cola interna de notificaciones de la pasarela (UC05/09/10) | `finance.gateway-notification.v1`; DLQ `<cola>.dlq`; cuerpo `{"type": "...", "action": "...", "data_id": "..."}`; enrutado `gateway.notification` | [CONV] UC05 (paso 2 del webhook de resultados, D-UC05-12) |
+| Tipo de cola | *quorum* durable (las siete colas de trabajo) | [CONV] |
 | `content_type` | `application/json` | [CONV] |
 | `delivery_mode` | `2` (persistente) | [CONV] |
 | Respuesta al productor | **Ninguna** (unidireccional) | [SPEC UC03 RF-006, UC07 RF-009, UC08 RF-009] |
@@ -231,7 +232,7 @@ Los canales sin respuesta al productor no pueden usar HTTP. Se aplican las misma
 | Webhook | Falla interna: BD no disponible (E8) | `500 INTERNAL_ERROR`, para que la Pasarela reintente | [CONV] |
 | Webhook | Resultado sin `IntenciónDe…` asociada (ningún `external_reference` coincide con el `data.id`) | `200 OK` y registro en `operational_failure` (evita reintentos infinitos de la Pasarela; el SPEC UC05 exige registrar el evento sin crear un registro de cobro) | [SPEC UC05 casos extremos] + [CONV] |
 
-**Política compartida del núcleo** [CONV núcleo compartido]: las seis colas de trabajo son *quorum* con DLQ `<cola>.dlq`. `spring.rabbitmq.listener.simple.retry.max-retries=4` fija el contrato de **5 intentos**: Boot 4 / Spring Framework 7 cuentan los reintentos **después** del intento inicial (1 + 4 = 5), con *backoff* exponencial base 1 s (×2, máx. 16 s). Un único `MessageRecoverer` (`OperationalFailureMessageRecoverer`) traduce la cola al UC dueño, registra la causa raíz con transacción independiente (`REQUIRES_NEW`) y rechaza el mensaje a la DLQ. Para los errores lógicos, `AmqpListenerFailurePolicy.recordAndAcknowledge` registra y confirma. Ningún UC redefine esta política ni declara recoverers propios.
+**Política compartida del núcleo** [CONV núcleo compartido]: las siete colas de trabajo son *quorum* con DLQ `<cola>.dlq`. `spring.rabbitmq.listener.simple.retry.max-retries=4` fija el contrato de **5 intentos**: Boot 4 / Spring Framework 7 cuentan los reintentos **después** del intento inicial (1 + 4 = 5), con *backoff* exponencial base 1 s (×2, máx. 16 s). Un único `MessageRecoverer` (`OperationalFailureMessageRecoverer`) traduce la cola al UC dueño, registra la causa raíz con transacción independiente (`REQUIRES_NEW`) y rechaza el mensaje a la DLQ. Para los errores lógicos, `AmqpListenerFailurePolicy.recordAndAcknowledge` registra y confirma. Ningún UC redefine esta política ni declara recoverers propios.
 
 ### 4.5 Lista de verificación para cada contrato
 

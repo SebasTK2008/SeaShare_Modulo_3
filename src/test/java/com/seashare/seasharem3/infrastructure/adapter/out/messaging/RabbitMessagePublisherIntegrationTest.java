@@ -30,7 +30,9 @@ import static org.awaitility.Awaitility.await;
  */
 @SpringBootTest(properties = {IntegrationTestProperties.OUTBOX_RELAY_INTERVAL,
         IntegrationTestProperties.RETRY_INITIAL_INTERVAL, IntegrationTestProperties.RETRY_MULTIPLIER,
-        IntegrationTestProperties.RETRY_MAX_INTERVAL})
+        IntegrationTestProperties.RETRY_MAX_INTERVAL,
+        // Los listeners no arrancan: el mensaje publicado debe quedar en la cola para poder leerlo.
+        "spring.rabbitmq.listener.simple.auto-startup=false"})
 @Import({TestcontainersConfiguration.class, RetryProbeConfiguration.class})
 @Testcontainers(disabledWithoutDocker = true)
 class RabbitMessagePublisherIntegrationTest {

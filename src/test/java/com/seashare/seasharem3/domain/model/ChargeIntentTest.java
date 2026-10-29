@@ -68,17 +68,50 @@ class ChargeIntentTest {
     }
 
     @Test
-    void rejectsInvalidTransitions() {
+    void allowsDirectCaptureFromPendingSendAndRejectsTransitionsFromTerminalStates() {
         ChargeIntent pending = create();
 
-        assertThatExceptionOfType(DomainException.class)
-                .isThrownBy(() -> pending.transitionTo(ChargeIntentStatus.CAPTURED));
-        ChargeIntent captured = pending.transitionTo(ChargeIntentStatus.IN_PROCESS)
-                .transitionTo(ChargeIntentStatus.CAPTURED);
+        ChargeIntent captured = pending.transitionTo(ChargeIntentStatus.CAPTURED);
+        assertThat(captured.status()).isEqualTo(ChargeIntentStatus.CAPTURED);
         assertThatExceptionOfType(DomainException.class)
                 .isThrownBy(() -> captured.transitionTo(ChargeIntentStatus.REJECTED));
         assertThat(captured.canTransitionTo(ChargeIntentStatus.CAPTURED)).isTrue();
         assertThat(captured.canTransitionTo(ChargeIntentStatus.REJECTED)).isFalse();
+        assertThat(captured.canTransitionTo(ChargeIntentStatus.IN_PROCESS)).isFalse();
+    }
+
+    @Test
+    void reachesAnyNonTerminalStateFromPendingSend() {
+        ChargeIntent pending = create();
+
+        assertThat(pending.canTransitionTo(ChargeIntentStatus.IN_PROCESS)).isTrue();
+        assertThat(pending.canTransitionTo(ChargeIntentStatus.CAPTURED)).isTrue();
+        assertThat(pending.canTransitionTo(ChargeIntentStatus.REJECTED)).isTrue();
+        assertThat(pending.canTransitionTo(ChargeIntentStatus.CANCELLED)).isTrue();
+        assertThat(pending.canTransitionTo(ChargeIntentStatus.EXPIRED)).isTrue();
+        assertThat(pending.canTransitionTo(ChargeIntentStatus.COMMUNICATION_ERROR)).isTrue();
+    }
+
+    @Test
+    void comparesByValueAndKeepsItsIdentity() {
+        ChargeIntent intent = create();
+        ChargeIntent same = ChargeIntent.create(intent.id(), intent.reservationId(), intent.idempotencyKey(),
+                intent.amount(), intent.paymentMethod(), intent.createdAt());
+
+        assertThat(intent).isEqualTo(same).hasSameHashCodeAs(same);
+        assertThat(intent).isNotEqualTo(intent.withStatusDetail("other"));
+        assertThat(intent.toString()).contains(intent.id().toString());
+    }
+
+    @Test
+    void restoresAnIntentAlreadyPersisted() {
+        ChargeIntent intent = create().transitionTo(ChargeIntentStatus.IN_PROCESS).withExternalReference("1234567890");
+
+        ChargeIntent restored = ChargeIntent.restore(intent.id(), intent.reservationId(), intent.idempotencyKey(),
+                intent.status(), intent.amount(), intent.paymentMethod(), intent.externalReference(),
+                intent.statusDetail(), intent.createdAt());
+
+        assertThat(restored).isEqualTo(intent);
     }
 
     @Test

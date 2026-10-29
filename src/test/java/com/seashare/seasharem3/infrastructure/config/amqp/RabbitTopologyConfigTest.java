@@ -40,7 +40,7 @@ class RabbitTopologyConfigTest {
     void declaresQuorumWorkQueuesWithDeadLetterArgumentsAndTheirDlqs() {
         List<Queue> workQueues = workQueues();
 
-        assertThat(workQueues).hasSize(6);
+        assertThat(workQueues).hasSize(7);
         for (Queue queue : workQueues) {
             assertThat(queue.isDurable()).as(queue.getName()).isTrue();
             assertThat(queue.isExclusive()).as(queue.getName()).isFalse();
@@ -53,7 +53,7 @@ class RabbitTopologyConfigTest {
         }
 
         List<Queue> dlqs = dlqs();
-        assertThat(dlqs).hasSize(6);
+        assertThat(dlqs).hasSize(7);
         for (Queue dlq : dlqs) {
             assertThat(dlq.isDurable()).as(dlq.getName()).isTrue();
             assertThat(dlq.getArguments()).as(dlq.getName()).doesNotContainKey("x-queue-type");
@@ -79,6 +79,10 @@ class RabbitTopologyConfigTest {
                 AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_REFUND_COMMAND, AmqpNames.QUEUE_REFUND_COMMAND);
         assertBinding(config.settlementCommandBinding(config.settlementCommandQueue(), config.financeCommandsExchange()),
                 AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_SETTLEMENT_COMMAND, AmqpNames.QUEUE_SETTLEMENT_COMMAND);
+        assertBinding(
+                config.gatewayNotificationBinding(config.gatewayNotificationQueue(), config.financeCommandsExchange()),
+                AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_GATEWAY_NOTIFICATION,
+                AmqpNames.QUEUE_GATEWAY_NOTIFICATION);
     }
 
     @Test
@@ -119,12 +123,13 @@ class RabbitTopologyConfigTest {
     private List<Queue> workQueues() {
         return List.of(config.reservationInfoQueue(), config.reservationStatusQueue(),
                 config.guaranteeDisputeQueue(), config.chargeCommandQueue(), config.refundCommandQueue(),
-                config.settlementCommandQueue());
+                config.settlementCommandQueue(), config.gatewayNotificationQueue());
     }
 
     private List<Queue> dlqs() {
         return List.of(config.reservationInfoDlq(), config.reservationStatusDlq(), config.guaranteeDisputeDlq(),
-                config.chargeCommandDlq(), config.refundCommandDlq(), config.settlementCommandDlq());
+                config.chargeCommandDlq(), config.refundCommandDlq(), config.settlementCommandDlq(),
+                config.gatewayNotificationDlq());
     }
 
     private static void assertBinding(Binding binding, String exchange, String routingKey, String queue) {
