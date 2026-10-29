@@ -3,6 +3,7 @@ package com.seashare.seasharem3.infrastructure.adapter.out.persistence.charge;
 import com.seashare.seasharem3.TestcontainersConfiguration;
 import com.seashare.seasharem3.domain.model.ChargeIntent;
 import com.seashare.seasharem3.domain.model.ChargeRecord;
+import com.seashare.seasharem3.domain.model.FinancialParameters;
 import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.valueobject.BaseRate;
 import com.seashare.seasharem3.domain.valueobject.BoatId;
@@ -11,8 +12,10 @@ import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.OwnerId;
 import com.seashare.seasharem3.domain.valueobject.PaymentMethodReference;
+import com.seashare.seasharem3.domain.valueobject.Percentage;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.domain.valueobject.ReservationValue;
+import com.seashare.seasharem3.infrastructure.adapter.out.persistence.parameters.FinancialParametersPersistenceAdapter;
 import com.seashare.seasharem3.infrastructure.adapter.out.persistence.reservation.ReservationInformationPersistenceAdapter;
 import com.seashare.seasharem3.support.IntegrationTestProperties;
 import com.seashare.seasharem3.support.RetryProbeConfiguration;
@@ -58,6 +61,9 @@ class ChargePersistenceAdapterIntegrationTest {
     private ReservationInformationPersistenceAdapter reservationAdapter;
 
     @Autowired
+    private FinancialParametersPersistenceAdapter parametersAdapter;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     private UUID registerReservation() {
@@ -74,7 +80,16 @@ class ChargePersistenceAdapterIntegrationTest {
         return reservationAdapter.saveCalculatedAmounts(information.withCalculated(
                 new ReservationValue(new Money(new BigDecimal("900000.00")), new Money(new BigDecimal("60000.00")),
                         new Money(new BigDecimal("30000.00")), TOTAL),
-                UUID.randomUUID(), CREATED_AT));
+                newParametersVersion(), CREATED_AT));
+    }
+
+    /** Version real de {@code financial_parameters}: {@code frozen_parameters_id} es una FK. */
+    private UUID newParametersVersion() {
+        long nextVersion = parametersAdapter.findCurrent().map(FinancialParameters::versionNumber).orElse(0L) + 1;
+        return parametersAdapter.saveNewVersion(FinancialParameters.create(UUID.randomUUID(), nextVersion,
+                new Percentage(new BigDecimal("20.00")), new Money(new BigDecimal("15000.00")),
+                Percentage.ZERO, Percentage.ZERO, "integration-test",
+                Instant.parse("2026-10-01T12:00:00Z"))).id();
     }
 
     private ReservationInformation reservationOf(UUID reservationId) {
