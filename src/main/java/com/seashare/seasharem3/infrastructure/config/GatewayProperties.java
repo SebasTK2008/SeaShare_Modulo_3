@@ -24,6 +24,9 @@ public class GatewayProperties {
 
     private String webhookSecret = "";
 
+    /** Cuenta de Mercado Pago del Propietario usada como collector_id en las dispersiones (UC10). */
+    private long collectorId;
+
     private Duration connectTimeout = Duration.ofSeconds(10);
 
     private Duration readTimeout = Duration.ofSeconds(10);
@@ -52,6 +55,14 @@ public class GatewayProperties {
 
     public void setWebhookSecret(String webhookSecret) {
         this.webhookSecret = webhookSecret;
+    }
+
+    public long getCollectorId() {
+        return collectorId;
+    }
+
+    public void setCollectorId(long collectorId) {
+        this.collectorId = collectorId;
     }
 
     public Duration getConnectTimeout() {

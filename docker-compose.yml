@@ -50,6 +50,7 @@ services:
       GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-https://api.mercadopago.com}
       GATEWAY_ACCESS_TOKEN: ${GATEWAY_ACCESS_TOKEN:-}
       GATEWAY_WEBHOOK_SECRET: ${GATEWAY_WEBHOOK_SECRET:-}
+      GATEWAY_COLLECTOR_ID: ${GATEWAY_COLLECTOR_ID:-0}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75
     depends_on:
       postgres:

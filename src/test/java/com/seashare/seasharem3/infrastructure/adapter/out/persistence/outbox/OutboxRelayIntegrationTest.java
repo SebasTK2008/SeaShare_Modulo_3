@@ -54,8 +54,8 @@ class OutboxRelayIntegrationTest {
     @Test
     void publishIsTransactionalAndRelayConfirmsTheMessageInTheBroker() {
         String payload = "{\"reservation_id\":\"" + UUID.randomUUID() + "\"}";
-        transactionTemplate.executeWithoutResult(status -> outboxPort.publish(AmqpNames.EXCHANGE_COMMANDS,
-                AmqpNames.ROUTING_REFUND_COMMAND, payload));
+        transactionTemplate.executeWithoutResult(status -> outboxPort.publish(AmqpNames.EXCHANGE_EVENTS,
+                AmqpNames.ROUTING_STATUS_CHANGED, payload));
         UUID id = jdbcTemplate.queryForObject("SELECT id FROM outbox_message WHERE payload = ?", UUID.class, payload);
 
         int published = relayOutboxUseCase.relay();
@@ -64,13 +64,13 @@ class OutboxRelayIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM outbox_message WHERE id = ? AND published_at IS NOT NULL", Long.class, id))
                 .isEqualTo(1L);
-        Message received = receiveWithPayload(AmqpNames.QUEUE_REFUND_COMMAND, payload);
+        Message received = receiveWithPayload(AmqpNames.QUEUE_RESERVATION_STATUS, payload);
         assertThat(new String(received.getBody(), StandardCharsets.UTF_8)).isEqualTo(payload);
     }
 
     @Test
     void publishOutsideATransactionFailsBecauseItMustJoinTheCallerTransaction() {
-        assertThatThrownBy(() -> outboxPort.publish(AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_REFUND_COMMAND,
+        assertThatThrownBy(() -> outboxPort.publish(AmqpNames.EXCHANGE_EVENTS, AmqpNames.ROUTING_STATUS_CHANGED,
                 "{\"probe\":true}"))
                 .isInstanceOf(IllegalTransactionStateException.class);
     }

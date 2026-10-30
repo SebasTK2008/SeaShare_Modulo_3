@@ -4,6 +4,7 @@ import com.seashare.seasharem3.application.dto.PaymentConfirmationQuery;
 import com.seashare.seasharem3.application.dto.PaymentConfirmationResult;
 import com.seashare.seasharem3.application.port.in.GetPaymentConfirmationUseCase;
 import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
+import com.seashare.seasharem3.application.port.out.RefundRecordQueryPort;
 import com.seashare.seasharem3.domain.exception.ChargeIntentNotFoundException;
 import com.seashare.seasharem3.domain.model.ChargeIntent;
 import com.seashare.seasharem3.domain.valueobject.PaymentConfirmationStatus;
@@ -14,24 +15,19 @@ import java.math.BigDecimal;
 import java.util.Objects;
 
 /**
- * Consulta de solo lectura del estado vigente del cobro de una reserva.
- *
- * <p>Lee la intención más reciente creada por UC05 y la traduce al vocabulario de UC06. No contacta
- * a la pasarela ni escribe montos o estados: esas responsabilidades pertenecen a UC05, UC09 y UC10
- * [SPEC RF-002, RF-006; general-plan §3.4].</p>
- *
- * <p>El único monto disponible en {@code charge_intent} es {@code amount}; se informa como
- * {@code charged_amount} únicamente cuando el estado es {@code APPROVED}. Los montos autorizado,
- * capturado y liberado no existen en la intención y se devuelven como {@code null} [D-UC06-04].</p>
- *
- * <p>Fuente: UC06 plan T005, reglas 2–7; contrato {@code rest/UC06-confirmacion-pago.md} §§3–5.</p>
+ * Consulta de solo lectura del estado vigente del cobro de una reserva. Lee la intencion mas
+ * reciente de UC05 y agrega el monto neto liberado confirmado por UC09; no contacta la pasarela.
+ * Fuente: UC06 plan T005 y D-UC06-04.
  */
 public class GetPaymentConfirmationService implements GetPaymentConfirmationUseCase {
 
     private final ChargeIntentRepository chargeIntentRepository;
+    private final RefundRecordQueryPort refundRecordQueryPort;
 
-    public GetPaymentConfirmationService(ChargeIntentRepository chargeIntentRepository) {
+    public GetPaymentConfirmationService(ChargeIntentRepository chargeIntentRepository,
+            RefundRecordQueryPort refundRecordQueryPort) {
         this.chargeIntentRepository = Objects.requireNonNull(chargeIntentRepository, "chargeIntentRepository");
+        this.refundRecordQueryPort = Objects.requireNonNull(refundRecordQueryPort, "refundRecordQueryPort");
     }
 
     @Override
@@ -48,8 +44,11 @@ public class GetPaymentConfirmationService implements GetPaymentConfirmationUseC
         BigDecimal chargedAmount = status == PaymentConfirmationStatus.APPROVED
                 ? intent.amount().toOutputAmount()
                 : null;
+        BigDecimal releasedAmount = refundRecordQueryPort.releasedAmountByReservationId(reservationId)
+                .map(money -> money.toOutputAmount())
+                .orElse(null);
 
-        return new PaymentConfirmationResult(reservationId, status, intent.statusDetail(), null, null, null,
-                chargedAmount, intent.externalReference());
+        return new PaymentConfirmationResult(reservationId, status, intent.statusDetail(), null, null,
+                releasedAmount, chargedAmount, intent.externalReference());
     }
 }

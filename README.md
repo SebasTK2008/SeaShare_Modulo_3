@@ -6,7 +6,7 @@ Módulo de gestión financiera del sistema SeaShare: estimaciones de alquiler, t
 
 | # | Documento | Contenido |
 |---|---|---|
-| 1 | [`docs/technical-plan/general-plan.md`](docs/technical-plan/general-plan.md) | Plan técnico maestro: arquitectura, modelo de datos, mensajería, decisiones D‑01…D‑34, fases |
+| 1 | [`docs/technical-plan/general-plan.md`](docs/technical-plan/general-plan.md) | Plan técnico maestro: arquitectura, modelo de datos, mensajería, decisiones D‑01…D‑36, fases |
 | 2 | [`docs/technical-plan/contracts/README.md`](docs/technical-plan/contracts/README.md) | Catálogo de errores, forma de escalares, idempotencia y convenciones AMQP |
 | 3 | [`docs/features/`](docs/features) (`spec.md` y `plan.md` por caso de uso) | Comportamiento y plan de cada caso de uso |
 | 4 | [`docs/technical-plan/contracts/`](docs/technical-plan/contracts) | Formato de cable (`rest/`, `events/`, `external/`) |
@@ -62,6 +62,7 @@ Los tests de integración usan Testcontainers: sin Docker se omiten automáticam
 | `FLEET_BASE_URL` | Sistema de Gestión de Flota | `http://localhost:8081` |
 | `GATEWAY_BASE_URL` | Pasarela de pago | `https://api.mercadopago.com` |
 | `GATEWAY_ACCESS_TOKEN` / `GATEWAY_WEBHOOK_SECRET` | Pasarela (secretos) | vacío en dev; obligatorio en prod |
+| `GATEWAY_COLLECTOR_ID` | Cuenta de Mercado Pago del Propietario para las dispersiones (UC10) | `0` (sin dispersiones); obligatorio en prod |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Credenciales del contenedor PostgreSQL | `seashare` |
 | `APP_PORT` | Puerto publicado de la aplicación | `8080` |
 

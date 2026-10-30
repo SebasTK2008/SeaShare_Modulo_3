@@ -6,9 +6,9 @@ import com.seashare.seasharem3.application.dto.GatewaySettlementResult;
 import java.util.Optional;
 
 /**
- * ACL de la pasarela de liquidación (UC10).
+ * ACL de la pasarela de liquidacion (UC10).
  * Fuente: UC10 plan T006 y contrato external/pasarela-comando-liquidacion.md.
- * GAP: métodos no publicados; se derivan envío y consulta del detalle (webhook).
+ * Firma publicada en el plan de UC10: envio y consulta del detalle para el webhook.
  */
 public interface SettlementGatewayPort {
 

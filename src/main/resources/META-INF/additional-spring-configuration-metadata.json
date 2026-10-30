@@ -122,6 +122,12 @@
       "name": "seashare.gateway.webhook-secret",
       "type": "java.lang.String",
       "description": "Secreto de la firma x-signature del webhook de la pasarela; se aporta por entorno."
+    },
+    {
+      "name": "seashare.gateway.collector-id",
+      "type": "java.lang.Long",
+      "description": "Cuenta de Mercado Pago del Propietario usada como collector_id en las dispersiones de UC10.",
+      "defaultValue": 0
     }
   ]
 }

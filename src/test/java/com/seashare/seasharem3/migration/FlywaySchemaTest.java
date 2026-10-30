@@ -78,12 +78,12 @@ class FlywaySchemaTest {
 				.isInstanceOf(SQLException.class);
 
 		Fixture refund = new Fixture();
-		execute("INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount)"
-				+ " VALUES (?, ?, ?, ?, ?, 50)",
+		execute("INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount, released_amount)"
+				+ " VALUES (?, ?, ?, ?, ?, 50, 50)",
 				UUID.randomUUID(), refund.refundIntentId, refund.reservationId, UUID.randomUUID(), UUID.randomUUID());
 		assertThatThrownBy(() -> execute(
-				"INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount)"
-						+ " VALUES (?, ?, ?, ?, ?, 50)",
+				"INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount, released_amount)"
+						+ " VALUES (?, ?, ?, ?, ?, 50, 50)",
 				UUID.randomUUID(), refund.refundIntentId, refund.reservationId, UUID.randomUUID(), UUID.randomUUID()))
 				.isInstanceOf(SQLException.class);
 
@@ -112,8 +112,8 @@ class FlywaySchemaTest {
 
 		Fixture refund = new Fixture();
 		UUID refundRecordId = UUID.randomUUID();
-		execute("INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount)"
-				+ " VALUES (?, ?, ?, ?, ?, 50)",
+		execute("INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount, released_amount)"
+				+ " VALUES (?, ?, ?, ?, ?, 50, 50)",
 				refundRecordId, refund.refundIntentId, refund.reservationId, UUID.randomUUID(), UUID.randomUUID());
 
 		Fixture settlement = new Fixture();
@@ -245,8 +245,8 @@ class FlywaySchemaTest {
 				+ " rental_amount, insurance_amount, deposit_amount)"
 				+ " VALUES (?, ?, ?, ?, ?, 100, 60, 20, 20)",
 				UUID.randomUUID(), fixture.chargeIntentId, fixture.reservationId, UUID.randomUUID(), UUID.randomUUID());
-		execute("INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount)"
-				+ " VALUES (?, ?, ?, ?, ?, 50)",
+		execute("INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount, released_amount)"
+				+ " VALUES (?, ?, ?, ?, ?, 50, 50)",
 				UUID.randomUUID(), fixture.refundIntentId, fixture.reservationId, UUID.randomUUID(), UUID.randomUUID());
 		UUID settlementRecordId = UUID.randomUUID();
 		execute("INSERT INTO settlement_record (id, settlement_intent_id, reservation_id, owner_id, boat_id,"

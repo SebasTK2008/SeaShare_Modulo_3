@@ -37,7 +37,8 @@ class Uc06AcceptanceTest {
     private static final ReservationId RESERVATION_ID = RESERVATION.reservationId();
 
     private final InMemoryChargeIntentRepository intents = new InMemoryChargeIntentRepository();
-    private final GetPaymentConfirmationUseCase service = new GetPaymentConfirmationService(intents);
+    private final GetPaymentConfirmationUseCase service = new GetPaymentConfirmationService(intents,
+            reservationId -> java.util.Optional.empty());
 
     @ParameterizedTest
     @CsvSource({
@@ -81,7 +82,8 @@ class Uc06AcceptanceTest {
                 .noneMatch(field -> ChargeGatewayPort.class.isAssignableFrom(field.getType()));
 
         for (Constructor<?> constructor : GetPaymentConfirmationService.class.getDeclaredConstructors()) {
-            assertThat(constructor.getParameterTypes()).containsExactly(ChargeIntentRepository.class);
+            assertThat(constructor.getParameterTypes()).containsExactly(ChargeIntentRepository.class,
+                    com.seashare.seasharem3.application.port.out.RefundRecordQueryPort.class);
         }
         for (Constructor<?> constructor : PaymentConfirmationController.class.getDeclaredConstructors()) {
             assertThat(constructor.getParameterTypes()).containsExactly(GetPaymentConfirmationUseCase.class);
