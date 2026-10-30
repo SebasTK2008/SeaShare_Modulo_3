@@ -1,10 +1,10 @@
 # Implementation Plan: UC10 - Liquidar fondos de alquiler
 
 **Date**: 2026-10-09 (plan original)
-**Updated**: 2026-10-29 (ver [Actualizaciones del plan](#actualizaciones-del-plan))
+**Updated**: 2026-10-30 (ver [Actualizaciones del plan](#actualizaciones-del-plan))
 **Spec**: [spec.md](spec.md)
 
-> **Actualización del plan — 2026-10-29.** Este documento parte del plan original del **2026-10-09**, conservado en el historial de Git (commit `b26bcbb`). Las secciones modificadas durante la revisión previa a la implementación de UC10 están marcadas con `[ACT-xx]` y se detallan en [Actualizaciones del plan](#actualizaciones-del-plan). Salvo las líneas de versión y la sección «Actualizaciones del plan», el contenido sin marcador pertenece al plan original.
+> **Actualización del plan — 2026-10-30.** Este documento parte del plan original del **2026-10-09**, conservado en el historial de Git (commit `b26bcbb`). La revisión previa a la implementación (2026-10-29) se conserva en `[ACT-01]`…`[ACT-08]`; el cierre oficial posterior a la implementación se registra en `[ACT-09]`. Las secciones afectadas están marcadas con `[ACT-xx]` y se detallan en [Actualizaciones del plan](#actualizaciones-del-plan). Salvo las líneas de versión y la sección «Actualizaciones del plan», el contenido sin marcador pertenece al plan original.
 
 ## Summary
 
@@ -30,6 +30,16 @@ La versión original puede recuperarse con `git show b26bcbb:docs/features/010-l
 | **ACT-06** | Regla 5, T015 y depósito | UC10 aplicaba el CAS del depósito sin UC08 implementado y el comando no expresaba la disposición → UC08 es dueño del CAS; UC10 invoca `OpenDepositTrackingUseCase` con `SETTLEMENT_REQUESTED` solo en `DISPUTE_COMPLETED` | Resolver la exclusión mutua del depósito. |
 | **ACT-07** | Reglas 2-5, T010, T011 y contrato de liquidación | Importes desde `reservation_information`; sin persistir `external_reference` de la respuesta; webhook sin definir `{id}` ni consulta de detalle → `charge_record` con respaldo en `reservation_information`; persistir la referencia externa; `type=merchant_order` y `GET /v1/advanced_payments/{id}` | Cerrar la trazabilidad y la conciliación. |
 | **ACT-08** | `Implementation Phases`, T021, `Notes` y checklist | Tareas y nombres desactualizados; cobertura/ArchUnit sin test propio → T001/T002/T005a/T012a marcadas como hechas y T005 como parcial; T010/T011/T012/T021 reescritas; `Uc10ArchitectureTest`; no se editan contratos ni planes externos desde UC10 | Dejar el plan ejecutable y evitar dependencias entre planes. |
+
+### Actualización de cierre — 2026-10-30
+
+Registro del cierre oficial posterior a la implementación. La revisión previa del 2026-10-29 se conserva en `[ACT-01]`…`[ACT-08]`; esta actualización no reescribe ese historial. La versión anterior del plan puede recuperarse con `git show b26bcbb:docs/features/010-liquidar-fondos-alquiler/plan.md`.
+
+| ID | Sección(es) | Original (2026-10-29) → vigente (2026-10-30) | Motivo |
+|---|---|---|---|
+| **ACT-09** | `Estado actual del repositorio`, `Implementation Phases`, `Estrategia de testing`, `Notes` y checklist | El estado describía los modelos como stubs y no reconocía servicios, adaptadores ni pruebas; las tareas seguían pendientes → UC10 implementado y verificado; tareas marcadas según evidencia; pendientes de aceptación CE, listener y cobertura específica documentados; se registran las columnas `version` de bloqueo optimista, el uso de `ReservationLockPort` en UC08, `GATEWAY_COLLECTOR_ID`, el payload de dispersión con la referencia de la reserva y las pruebas adicionales | Cerrar el plan como documentación de cierre sin declarar hechas las pruebas que no existen con el nombre del plan. |
+
+Desviaciones de implementación registradas en este cierre: `refund_intent.version` y `settlement_intent.version` (bloqueo optimista), `ReservationLockPort` en el UC08 mínimo, `GATEWAY_COLLECTOR_ID` en README/`docker-compose.yml`, payload de dispersión con la referencia de la reserva y pruebas adicionales de handlers, conciliación y persistencia. Las pruebas de aceptación `ce00X_…` de UC10 no existen con ese nombre; su cobertura funcional equivalente está en las pruebas unitarias e integración citadas en la estrategia de testing.
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -72,7 +82,7 @@ La versión original puede recuperarse con `git show b26bcbb:docs/features/010-l
 **Constraints**: `BigDecimal` a 4 decimales; la comisión aplicada proviene de la **versión de parámetros referenciada** por la reserva (`frozen_parameters_id`) y se conserva en la intención; cancelaciones y depósito no crean comisión; registros financieros inmutables; solo confirmación exitosa crea `SettlementRecord`; sin datos asumidos ni registros exitosos parciales; sin datos sensibles de pago [SPEC RNF-002/003; general-plan §2].  
 **Scale/Scope**: cuatro puertos de entrada internos (`RequestSettlementUseCase`, `SendSettlementToGatewayUseCase`, `RegisterSettlementResultUseCase`, `ReconcileSettlementIntentsUseCase`), un adaptador de pasarela, webhook compartido, tres tablas propietarias, 16 RF + 3 RNF + 6 CE + 5 HU [SPEC 10]. **[ACT-01]**
 
-**Estado actual del repositorio**: existen las capas `domain`/`application`/`infrastructure`, la migración inicial única `V1__initial_schema.sql` y las reglas `ArchitectureTest`/`UcNNArchitectureTest`. UC05 y UC06 están implementados. El andamiaje de UC10 ya incluye `SettlementScope`, `SettlementStatus`, `SettlementTrigger`, los cuatro puertos de entrada, `SettlementIntentRepository`, `SettlementRecordRepository`, `CommissionRecordRepository`, `SettlementGatewayPort`, `SettlementCommand`, `SettlementRequestResult`, `GatewaySettlementRequest` y `GatewaySettlementResult`; `SettlementIntent`, `SettlementRecord` y `CommissionRecord` son stubs vacíos y no existen `SettlementCalculator`, servicios, adaptadores, listeners, jobs ni pruebas de UC10. La infraestructura compartida (outbox, AMQP, DLQ, `FailureRecorderPort`, `ReservationLockPort`, webhook y conciliación) ya está disponible. **[ACT-01] [ACT-02]**
+**Estado actual del repositorio**: existen las capas `domain`/`application`/`infrastructure`, la migración inicial única `V1__initial_schema.sql`, las reglas `ArchitectureTest`/`UcNNArchitectureTest` y los casos de uso UC05/UC06. UC10 está implementado: `SettlementIntent`, `SettlementRecord`, `CommissionRecord`, `SettlementCalculator` y `SettlementCalculation`; los cuatro puertos de entrada y los puertos de salida (`SettlementIntentRepository`, `SettlementRecordRepository`, `CommissionRecordRepository`, `SettlementGatewayPort`, `SettlementCommandPublisher`); `RequestSettlementService`, `SendSettlementToGatewayService`, `RegisterSettlementResultService`, `ReconcileSettlementIntentsService` y `SettlementWebhookHandler`; persistencia JPA con bloqueo optimista y `findByIdForUpdate`; `MercadoPagoSettlementAdapter`, `SettlementCommandOutboxAdapter`, `SettlementCommandListener` y `SettlementConfiguration`. `V1__initial_schema.sql` contiene `version` en `settlement_intent` y las tablas de registro/comisión. Las pruebas incluyen calculadora, solicitud, envío, registro, conciliación, handler webhook, ACL WireMock, persistencia Testcontainers, UC08 mínimo y `Uc10ArchitectureTest`; `.\mvnw.cmd verify` terminó en verde. Quedan pendientes las pruebas de aceptación `ce00X_…` con esos nombres, `SettlementCommandListenerTest`, las pruebas de concurrencia/duplicados y una puerta JaCoCo específica de UC10. **[ACT-01] [ACT-02] [ACT-09]**
 
 ## Project Structure
 
@@ -237,12 +247,14 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 
 | Nivel | Cobertura | Ubicación |
 |---|---|---|
-| Unitario dominio | porcentajes, alcances, comisión, seguro, depósito, escala 4; modelos inmutables | `domain/service/SettlementCalculatorTest`, `domain/model/*Test` |
-| Unitario aplicación | intención, faltantes, idempotencia, puertos, envío y estados externos | `application/service/{RequestSettlementServiceTest,SendSettlementToGatewayServiceTest,RegisterSettlementResultServiceTest,ReconcileSettlementIntentsServiceTest}` |
-| Contrato | payload de pasarela, idempotency key, webhook y firma | `contract/SettlementGatewayContractTest` |
-| Integración | PostgreSQL, outbox, webhook, duplicados y transacción atómica | `integration/SettlementProcessingIT` |
-| Resiliencia | timeout, 5xx, retry, DLQ y conciliación | `MercadoPagoSettlementAdapterTest`, `SettlementProcessingIT` |
+| Unitario dominio | porcentajes, alcances, comisión, seguro, depósito, escala 4 | `domain/service/SettlementCalculatorTest` |
+| Unitario aplicación | intención, faltantes, idempotencia, puertos, envío, estados externos y handler webhook | `application/service/{RequestSettlementServiceTest,SendSettlementToGatewayServiceTest,RegisterSettlementResultServiceTest,ReconcileSettlementIntentsServiceTest,SettlementWebhookHandlerTest}` |
+| Contrato | payload de pasarela, idempotency key y consulta de detalle | `MercadoPagoSettlementAdapterTest` |
+| Integración | PostgreSQL, persistencia, comisión y CAS del depósito | `RefundSettlementPersistenceIntegrationTest`, `FlywaySchemaTest`; `SettlementProcessingIT` **pendiente** |
+| Resiliencia | timeout, 5xx, retry y conciliación | `MercadoPagoSettlementAdapterTest`, `ReconcileSettlementIntentsServiceTest` |
 | Arquitectura | reglas §3.4 e inmutabilidad; UC10 no depende de `RefundIntent`/`RefundRecord` | `arch/Uc10ArchitectureTest` **[ACT-08]** |
+
+**Estado de las pruebas**: implementadas las pruebas unitarias, WireMock, persistencia, handler, UC08 mínimo y Arquitectura. Pendientes: `SettlementCommandListenerTest`, `SettlementProcessingIT`, pruebas explícitas de duplicados/concurrencia/estados fuera de orden y las pruebas de aceptación con los nombres `ce00X_…`. **[ACT-09]**
 
 - **`ce001_precision_financiera_100_casos`**: ≥100 casos para cancelaciones, estándar y depósito; exactitud `BigDecimal` y escala 4.
 - **`ce002_comision_por_alcance`**: cero comisión en cancelación/depósito; estándar usa la comisión de la versión referenciada por la reserva.
@@ -250,6 +262,8 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 - **`ce004_fallas_de_pasarela_sin_estado_indefinido`**: timeout, 5xx, respuesta pendiente y webhook fallido dejan intención conciliable, nunca éxito falso.
 - **`ce005_fallo_no_es_exito`**: rejected/cancelled/expired/pending no crean `SettlementRecord`.
 - **`ce006_una_comision_atomica`**: estándar confirmado crea exactamente un `SettlementRecord` y un `CommissionRecord` relacionados.
+
+Ninguna de estas seis pruebas de aceptación existe con ese nombre en el repositorio; su cobertura funcional equivalente está en `SettlementCalculatorTest`, `RequestSettlementServiceTest`, `SendSettlementToGatewayServiceTest`, `RegisterSettlementResultServiceTest`, `ReconcileSettlementIntentsServiceTest`, `MercadoPagoSettlementAdapterTest` y `RefundSettlementPersistenceIntegrationTest`. **[ACT-09]**
 
 ## Decisiones de diseño (D-UC10-xx)
 
@@ -281,37 +295,37 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 
 - [x] **T001** Consumir JPA, AMQP, errores, outbox, observabilidad y transacciones del núcleo compartido. **[ACT-01: ya disponible.]**
 - [x] **T002** Publicar la firma de `RequestSettlementUseCase` y documentar consumidores UC07/UC08, sin editar sus planes. **[ACT-01: firma ya publicada.]**
-- [ ] **T003** Configurar ACL, `SettlementCommandPublisher`/`SettlementCommandOutboxAdapter`, listener y el manejador UC10 del webhook propiedad de UC05. **No** se configura la recepción/verificación del webhook (es de UC05). **[ACT-01]**
+- [x] **T003** Configurar ACL, `SettlementCommandPublisher`/`SettlementCommandOutboxAdapter`, listener y el manejador UC10 del webhook propiedad de UC05. **No** se configura la recepción/verificación del webhook (es de UC05). Implementado. **[ACT-01] [ACT-09]**
 
 ### Phase 2: Foundational
 
-- [ ] **T004** Crear `SettlementScope`, `SettlementTrigger`, estados y `SettlementCalculator`; `SettlementScope`, `SettlementStatus` y `SettlementTrigger` ya existen; se añade `SettlementStatus.FAILED` para el resultado de una solicitud no registrada. `Money`, `ReservationId`, `OwnerId`, `IdempotencyKey` y el bean `Clock` se consumen del núcleo compartido y no se redeclaran. **[ACT-01] [ACT-05]**
-- [ ] **T005** Crear puertos, `SettlementCommand`/results y adaptadores de consulta para reserva/cobro; el command incluye `trigger`, `scope`, `dispute_id` cuando aplica y `operationKey: String`. Consume piezas de UC03/UC05 por nombre. Ya existen los puertos base y los DTOs; faltan `SettlementCommandPublisher`, `findByIdForUpdate` y las firmas ampliadas. **[ACT-02]**
+- [x] **T004** Crear `SettlementScope`, `SettlementTrigger`, estados y `SettlementCalculator`; `SettlementScope`, `SettlementStatus` y `SettlementTrigger` ya existen; se añade `SettlementStatus.FAILED` para el resultado de una solicitud no registrada. `Money`, `ReservationId`, `OwnerId`, `IdempotencyKey` y el bean `Clock` se consumen del núcleo compartido y no se redeclaran. Implementado. **[ACT-01] [ACT-05] [ACT-09]**
+- [x] **T005** Crear puertos, `SettlementCommand`/results y adaptadores de consulta para reserva/cobro; el command incluye `trigger`, `scope`, `dispute_id` cuando aplica y `operationKey: String`. Consume piezas de UC03/UC05 por nombre. Implementado, incluyendo `SettlementCommandPublisher` y `findByIdForUpdate`. **[ACT-02] [ACT-09]**
 - [x] **T005a** Congelar la firma pública `SettlementRequestResult request(SettlementCommand)`; `SettlementRequestResult(UUID settlementIntentId, SettlementStatus status)` [CONV núcleo] y `scope` usa el valor vigente del catálogo: `DEPOSIT` cuando existe `dispute_id`, nunca `DEPOSIT_DISPUTE`. No se usa `void` ni se inventa otro valor. **[ACT-04]**
-- [ ] **T006** Crear `SettlementGatewayPort`, DTOs del comando/resultado y mapper ACL de Mercado Pago; `SettlementGatewayPort` y los DTOs existen, faltan el adaptador y el mapper. **[ACT-02]**
-- [ ] **T007** Crear modelos de intención/registro/comisión y repositorios; definir restricciones de idempotencia e inmutabilidad. Los repositorios y los tres modelos existen como stubs; faltan los modelos reales. **[ACT-01]**
-- [ ] **T008** Implementar persistencia de intención antes del envío y consulta de intención para webhook/worker, con `findByIdForUpdate`. **[ACT-02]**
+- [x] **T006** Crear `SettlementGatewayPort`, DTOs del comando/resultado y mapper ACL de Mercado Pago; implementado en `MercadoPagoSettlementAdapter` con mapper manual. **[ACT-02] [ACT-09]**
+- [x] **T007** Crear modelos de intención/registro/comisión y repositorios; definir restricciones de idempotencia e inmutabilidad. Implementado. **[ACT-01] [ACT-09]**
+- [x] **T008** Implementar persistencia de intención antes del envío y consulta de intención para webhook/worker, con `findByIdForUpdate` y `@Version`. **[ACT-02] [ACT-09]**
 
 ### Phase 3: User Stories
 
-- [ ] **T009** [US1/US2/US3] Implementar cálculo por cancelación, estándar y depósito con validación de datos internos (la comisión estándar usa el % de la **versión de parámetros referenciada** por la reserva y el seguro se descuenta), sin montos externos. **[ACT-03]**
-- [ ] **T010** [US1/US2/US3] Implementar `RequestSettlementService`, outbox y `SettlementCommandListener`; el envío a la pasarela y los reintentos viven en `SendSettlementToGatewayService`. Persistir `external_reference` con el `id` de la respuesta antes de registrar el resultado. **[ACT-07]**
-- [ ] **T011** [US4] Registrar el handler `type=merchant_order` en el despachador de UC05, consultar el detalle y conectar `RegisterSettlementResultUseCase`; UC10 no implementa receptor ni verificador de firma. **[ACT-07]**
-- [ ] **T012** [US4/US5] Implementar transacción de confirmación: actualizar intención; en éxito crear `SettlementRecord`; la comisión solo se crea en la liquidación estándar con el % de la versión de parámetros referenciada por la reserva, incluso si el porcentaje es 0. **[ACT-04]**
+- [x] **T009** [US1/US2/US3] Implementar cálculo por cancelación, estándar y depósito con validación de datos internos (la comisión estándar usa el % de la **versión de parámetros referenciada** por la reserva y el seguro se descuenta), sin montos externos. Implementado. **[ACT-03] [ACT-09]**
+- [x] **T010** [US1/US2/US3] Implementar `RequestSettlementService`, outbox y `SettlementCommandListener`; el envío a la pasarela y los reintentos viven en `SendSettlementToGatewayService`. Persistir `external_reference` con el `id` de la respuesta antes de registrar el resultado. Implementado. **[ACT-07] [ACT-09]**
+- [x] **T011** [US4] Registrar el handler `type=merchant_order` en el despachador de UC05, consultar el detalle y conectar `RegisterSettlementResultUseCase`; UC10 no implementa receptor ni verificador de firma. Implementado en `SettlementWebhookHandler`. **[ACT-07] [ACT-09]**
+- [x] **T012** [US4/US5] Implementar transacción de confirmación: actualizar intención; en éxito crear `SettlementRecord`; la comisión solo se crea en la liquidación estándar con el % de la versión de parámetros referenciada por la reserva, incluso si el porcentaje es 0. Implementado. **[ACT-04] [ACT-09]**
 - [x] **T012a** Verificar `settlement_intent`, `settlement_record` y `commission_record` contra la migración inicial única `V1__initial_schema.sql`, incluyendo claves idempotentes, FKs, `dispute_id`, estados y restricciones de inmutabilidad (general-plan §4.2, D-31). **[ACT-04: verificado; `commission_amount` es NOT NULL y se guarda 0 en cancelación/depósito.]**
-- [ ] **T013** `ce001_precision_financiera_100_casos`.
-- [ ] **T014** `ce002_comision_por_alcance`.
-- [ ] **T015** Prueba de depósito total y trazabilidad con disputa UC08; usa `DEPOSIT` y `OpenDepositTrackingUseCase` con `SETTLEMENT_REQUESTED`. **[ACT-04] [ACT-06]**
-- [ ] **T016** `ce003_intencion_a_registro`.
-- [ ] **T017** `ce005_fallo_no_es_exito` y `ce006_una_comision_atomica`.
-- [ ] **T017a** **`rf013_informacion_interna_incompleta_registra_fallo_sin_llamada`**: cubre RF-013 cuando falta alquiler, seguro o depósito y verifica `FailureRecorderPort` sin cálculo parcial ni llamada a pasarela, devolviendo `SettlementRequestResult(null, FAILED)`. **[ACT-05]**
+- [ ] **T013** `ce001_precision_financiera_100_casos`. `SettlementCalculatorTest` cubre los casos principales, pero no existen 100 casos parametrizados con ese nombre. **[ACT-09]**
+- [ ] **T014** `ce002_comision_por_alcance`. No existe una prueba con ese nombre; `SettlementCalculatorTest` y `RegisterSettlementResultServiceTest` cubren la comisión por alcance. **[ACT-09]**
+- [ ] **T015** Prueba de depósito total y trazabilidad con disputa UC08; usa `DEPOSIT` y `OpenDepositTrackingUseCase` con `SETTLEMENT_REQUESTED`. `RequestSettlementServiceTest` cubre el trigger de disputa; no existe una prueba de aceptación con ese nombre. **[ACT-04] [ACT-06] [ACT-09]**
+- [ ] **T016** `ce003_intencion_a_registro`. No existe una prueba con ese nombre; la trazabilidad se cubre en `RefundSettlementPersistenceIntegrationTest` y `RegisterSettlementResultServiceTest`. **[ACT-09]**
+- [ ] **T017** `ce005_fallo_no_es_exito` y `ce006_una_comision_atomica`. No existen pruebas con esos nombres; `RegisterSettlementResultServiceTest` cubre ambos comportamientos. **[ACT-09]**
+- [ ] **T017a** **`rf013_informacion_interna_incompleta_registra_fallo_sin_llamada`**: cubre RF-013 cuando falta alquiler, seguro o depósito y verifica `FailureRecorderPort` sin cálculo parcial ni llamada a pasarela, devolviendo `SettlementRequestResult(null, FAILED)`. No existe una prueba con ese nombre; `RequestSettlementServiceTest` cubre el fallo sin cobro aprobado. **[ACT-05] [ACT-09]**
 
 ### Phase 4: Resiliencia y Polish
 
-- [ ] **T018** Integración con PostgreSQL/RabbitMQ y disponibilidad para UC12/UC13 mediante la vista financiera.
-- [ ] **T019** Pruebas de duplicados de webhook, estados fuera de orden, concurrencia y registros inmutables.
-- [ ] **T020** `ce004_fallas_de_pasarela_sin_estado_indefinido` con WireMock, timeout, 5xx, DLQ y conciliación.
-- [ ] **T021** `Uc10ArchitectureTest`, cobertura y revisión de contratos; no modificar contratos ni planes externos desde la implementación (la alineación documental se hizo en la Fase 0). **[ACT-08]**
+- [ ] **T018** Integración con PostgreSQL/RabbitMQ y disponibilidad para UC12/UC13 mediante la vista financiera. `RefundSettlementPersistenceIntegrationTest` cubre la persistencia; **falta** una verificación específica de la vista financiera. **[ACT-09]**
+- [ ] **T019** Pruebas de duplicados de webhook, estados fuera de orden, concurrencia y registros inmutables. La inmutabilidad se cubre en `FlywaySchemaTest`; **faltan** duplicados, estados fuera de orden y concurrencia. **[ACT-09]**
+- [ ] **T020** `ce004_fallas_de_pasarela_sin_estado_indefinido` con WireMock, timeout, 5xx, DLQ y conciliación. `MercadoPagoSettlementAdapterTest` y `ReconcileSettlementIntentsServiceTest` cubren parte; no existe la prueba CE con ese nombre. **[ACT-09]**
+- [x] **T021** `Uc10ArchitectureTest`, cobertura y revisión de contratos; no modificar contratos ni planes externos desde la implementación (la alineación documental se hizo en la Fase 0). `Uc10ArchitectureTest` existe y `.\mvnw.cmd verify` cumple las puertas globales; no hay puerta JaCoCo específica de UC10. **[ACT-08] [ACT-09]**
 
 ## Dependencies & Execution Order
 
@@ -323,10 +337,12 @@ UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettleme
 
 No modificar `pom.xml`, SPEC ni planes de UC03/UC05/UC07/UC08/UC09/UC11/UC12/UC13. La alineación documental de la Fase 0 ya actualizó `general-plan` y los contratos de liquidación/webhook. No implementar transferencias fuera del ACL, estados de éxito para timeouts, comisiones en penalidades/depósitos ni registros mutables. **[ACT-08]**
 
+- **Estado de cierre (2026-10-30)**: UC10 implementado y verificado con `.\mvnw.cmd verify` (1353 tests, 0 fallos, cobertura global OK). Pendientes documentados: pruebas de aceptación `ce00X_…` con esos nombres, `SettlementCommandListenerTest`, pruebas de concurrencia/duplicados y puerta JaCoCo específica de UC10. **[ACT-09]**
+
 ## Checklist de auto-revisión
 
 - [x] Alineado con SPEC 10, contratos de liquidación/webhook y `contracts/README.md`. **[ACT-03] [ACT-04]**
-- [ ] Cada RF/RNF/CE/HU tiene componente, tarea y prueba.
-- [ ] Intención, registro, comisión, idempotencia e inmutabilidad están trazados.
-- [ ] Solo éxitos externos crean registros financieros.
+- [ ] Cada RF/RNF/CE/HU tiene componente, tarea y prueba. La trazabilidad existe, pero varias pruebas de aceptación `ce00X_…` no están implementadas con ese nombre. **[ACT-09]**
+- [x] Intención, registro, comisión, idempotencia e inmutabilidad están trazados. **[ACT-09]**
+- [x] Solo éxitos externos crean registros financieros. **[ACT-09]**
 - [x] Requisitos de esquema de UC10 verificados contra la migración inicial única (general-plan §4.2, D-31). **[ACT-04]**
