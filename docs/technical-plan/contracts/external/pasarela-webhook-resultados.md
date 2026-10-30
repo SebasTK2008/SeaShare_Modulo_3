@@ -12,7 +12,7 @@ Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-La Pasarela de Pago (Mercado Pago) notifica de forma asíncrona el resultado de las operaciones (cobros, reembolsos, dispersiones). El sistema asocia el resultado a la intención original mediante la clave idempotente o la referencia del cobro y actualiza sus registros, generando los registros inmutables de auditoría si la operación fue exitosa.
+La Pasarela de Pago (Mercado Pago) notifica de forma asíncrona el resultado de las operaciones (cobros, reembolsos, dispersiones). El sistema asocia el resultado a la intención original mediante la **referencia externa** (`external_reference`) que guardó al crear la operación y actualiza sus registros, generando los registros inmutables de auditoría si la operación fue exitosa.
 
 1. **Notificación entrante**: MP hace `POST` al endpoint del sistema con un payload mínimo y query params identificadores. El sistema responde `200 OK` inmediatamente para acusar recibo.
 2. **Consulta activa a la API de MP**: El sistema usa el `data.id` recibido —que es el `external_reference` con el que la intención quedó asociada— para consultar la API de Mercado Pago y obtener el estado y detalle completo de la operación, y actualiza sus registros internos.
@@ -94,8 +94,8 @@ Los campos que el sistema **exige** son `action` (cuerpo), `data.id` y `type` (q
 4. **Mapeo de tipo de evento a operación interna** (el estado se toma de la **consulta a la pasarela**, no del cuerpo de la notificación):
    - `type=payment` → operación de cobro (UC05) → actualiza `IntenciónDeCobro` y, con el estado `approved`, genera `RegistroDeCobro` inmutable [SPEC 5 RF-006]. Se atiende cualquier `action` del tipo (`payment.created`, `payment.updated`…); el `action` no discrimina el resultado.
    - `type=payment` con estado `rejected` / `expired` → cobro fallido / expirado [SPEC 5 RF-014].
-   - `type=refund` → operación de reembolso (UC09) → actualiza `IntenciónDeReembolso`, genera `RegistroDeReembolso` inmutable [SPEC 9 RF-007].
-   - `type=merchant_order` → liquidación (UC10) → genera `RegistroDeDispersión` y `RegistroDeComisión` atómicamente [SPEC 10 RF-010].
+   - `type=refund` → operación de reembolso (UC09) → `data.id` es el id del reembolso; se asocia con `refund_intent.external_reference`, se consulta `GET /v1/payments/{charge_reference}/refunds/{data.id}` y se actualiza `IntenciónDeReembolso`; con estado exitoso se genera `RegistroDeReembolso` inmutable [SPEC 9 RF-007].
+   - `type=merchant_order` → liquidación (UC10) → `data.id` es la referencia externa de la dispersión; se asocia con `settlement_intent.external_reference`, se consulta `GET /v1/advanced_payments/{data.id}` y, con estado exitoso, se generan `RegistroDeDispersión` y `RegistroDeComisión` atómicamente [SPEC 10 RF-010].
 
 5. **Deduplicación**: La notificación se asocia a la intención interna por el `external_reference` de la intención —el `data.id` del recurso que la pasarela devolvió al crear la operación y que el sistema guardó—, de modo que dos notificaciones de la misma operación no se procesan dos veces.
 
