@@ -31,6 +31,7 @@ La versión anterior puede recuperarse con `git show b92b0da:docs/features/008-b
 | **ACT-07** | `Implementation Phases` y `D-UC08-01..05` | Todas las tareas en `[ ]`; D-UC08-02 «Decidida», D-UC08-03 «Aplicada» → T001-T003, T007 y T008a hechas; T004-T006 parciales; T008-T018 pendientes; estados corregidos | Registrar el avance real sin declarar cerrada la implementación. |
 | **ACT-08** | `Estrategia de testing`, `Notes` y `Checklist de auto-revisión` | Nombres de pruebas que no existen y cobertura ≥90/80 sin puerta → pruebas existentes y pendientes; ausencia de puerta JaCoCo de UC08; checklist documental revisado | Cerrar la revisión documental. |
 | **ACT-09** | `Estado actual`, `Firmas referenciadas`, regla 8, trazabilidad, `D-UC08-06`, T008/T009/T016 y `ce005` | `dispute_status` pendiente de decidir → no se pobla; `dispute_event_log` es la fuente única; `deposit_disposition` conserva `dispute_id`; guarda de disposición y lock antes de delegar | Cerrar la decisión de T008/T009 y dejar definida la idempotencia del desenlace. |
+| **ACT-10** | `Estado actual`, `Project Structure`, `Estrategia de testing`, `D-UC08-01/03/06`, `Implementation Phases`, `Notes` y `Checklist de auto-revisión` | Ingesta pendiente y pruebas planificadas → ingesta implementada y probada; T004-T018 cerradas; nombres reales de pruebas; suite completa con 1395 tests, 0 fallos y 0 errores | Cerrar el plan tras la implementación de UC08. |
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea **[ACT-06] [ACT-09]**
 
@@ -67,7 +68,7 @@ La versión anterior puede recuperarse con `git show b92b0da:docs/features/008-b
 **Constraints**: `BigDecimal` a 4 decimales; importes solo desde registros internos; `PENDING` no mueve dinero; finales son tratamientos del 100 %; un depósito tiene un solo desenlace; sin respuesta al productor; sin sub-resultados parciales ni cron de 24 horas [SPEC RF-004..RF-010].  
 **Scale/Scope**: un consumidor AMQP, dos tablas propietarias, dos puertos consumidos de UC09/UC10, 10 RF + RF-009A + 3 RNF + 6 CE + 1 HU [SPEC 08]. **[ACT-02]**
 
-**Estado actual de UC08**: el desenlace del depósito está implementado y en uso: `OpenDepositTrackingService` (bajo `ReservationLockPort`, creación idempotente en `HELD` y *compare-and-set* a `REFUND_REQUESTED`/`SETTLEMENT_REQUESTED`), `DepositDisposition`, su persistencia JPA en `infrastructure/adapter/out/persistence/deposit/` y el wiring `DepositConfiguration`. UC09 invoca el puerto para cualquier reembolso y UC10 solo para `DISPUTE_COMPLETED`; UC07 aún no lo invoca. Las tablas `deposit_disposition` y `dispute_event_log`, la cola `finance.guarantee-dispute.v1` con su DLQ y la política compartida de ack/nack/reintentos ya existen. La ingesta de disputas sigue pendiente: `DisputeEvent` es un stub, `DisputeEventLogRepository` no tiene adaptador, no existe `DisputeInformationService`, no hay listener AMQP ni DTO/mapper de mensaje, y faltan las pruebas de contrato, las de integración de la ingesta y las de aceptación de UC08. La columna `deposit_disposition.dispute_status` queda nullable y reservada: no se pobla desde el evento; el estado canónico se lee de `dispute_event_log` (D-UC08-06). **[ACT-03] [ACT-09]**
+**Estado actual de UC08**: UC08 está implementado y verificado. El desenlace del depósito está en uso: `OpenDepositTrackingService` (bajo `ReservationLockPort`, creación idempotente en `HELD` y *compare-and-set* a `REFUND_REQUESTED`/`SETTLEMENT_REQUESTED`), `DepositDisposition`, su persistencia JPA en `infrastructure/adapter/out/persistence/deposit/` y el wiring `DepositConfiguration`. UC09 invoca el puerto para cualquier reembolso y UC10 solo para `DISPUTE_COMPLETED`; UC07 aún no lo invoca. Las tablas `deposit_disposition` y `dispute_event_log`, la cola `finance.guarantee-dispute.v1` con su DLQ y la política compartida de ack/nack/reintentos existen. La ingesta de disputas está implementada: `DisputeEvent` con reglas canónicas; `DisputeInformationService` con inserción idempotente en `dispute_event_log`, `processed_at`, guarda de `deposit_disposition` bajo `ReservationLockPort` y delegación en UC09/UC10; `DisputeNotificationListener` con DTO/mapper; persistencia JPA de `dispute_event_log`; y pruebas de dominio, servicio, contrato, integración, aceptación y arquitectura. `.\mvnw.cmd verify` ejecutó 1395 tests con 0 fallos y 0 errores; la puerta JaCoCo pasó. La columna `deposit_disposition.dispute_status` permanece nullable y reservada: no se pobla desde el evento; el estado canónico se lee de `dispute_event_log` (D-UC08-06). **[ACT-03] [ACT-09] [ACT-10]**
 
 ## Project Structure
 
@@ -80,7 +81,7 @@ docs/features/008-brindar-informacion-de-disputa-de-garantia/
 docs/technical-plan/contracts/events/UC08-disputa-garantia.md
 ```
 
-### Source Code (repository root) **[ACT-04]**
+### Source Code (repository root) **[ACT-04] [ACT-10]**
 
 ```text
 src/main/java/com/seashare/seasharem3/
@@ -88,21 +89,23 @@ src/main/java/com/seashare/seasharem3/
 ├── domain/
 │   ├── model/
 │   │   ├── DepositDisposition.java                  # existe
-│   │   └── DisputeEvent.java                        # stub; completar en T004
+│   │   └── DisputeEvent.java                        # existe
 │   ├── valueobject/
 │   │   ├── DisputeId.java                           # existe
 │   │   ├── DisputeStatus.java                       # existe (valueobject, no model)
 │   │   ├── DepositDispositionStatus.java            # existe
 │   │   ├── IdempotencyKey.java                      # existe (núcleo compartido)
 │   │   └── ReservationId.java                       # existe (núcleo compartido)
-│   └── exception/DomainException.java               # existe (núcleo compartido)
+│   └── exception/
+│       ├── DomainException.java                     # existe (núcleo compartido)
+│       └── DisputeNotificationValidationException.java # existe
 ├── application/
 │   ├── port/in/
-│   │   ├── HandleDisputeNotificationUseCase.java    # existe; sin implementación
+│   │   ├── HandleDisputeNotificationUseCase.java    # existe; implementado
 │   │   └── OpenDepositTrackingUseCase.java          # existe; implementado
 │   ├── port/out/
 │   │   ├── DepositDispositionRepository.java        # existe; implementado
-│   │   ├── DisputeEventLogRepository.java           # existe; sin adaptador
+│   │   ├── DisputeEventLogRepository.java           # existe; implementado
 │   │   ├── ReservationInformationRepository.java    # dueño UC03, solo referencia
 │   │   ├── ChargeRecordQueryPort.java               # dueño UC05, solo referencia
 │   │   ├── FailureRecorderPort.java                 # puerto compartido
@@ -110,25 +113,25 @@ src/main/java/com/seashare/seasharem3/
 │   │   └── OutboxPort.java                          # puerto compartido
 │   ├── service/
 │   │   ├── OpenDepositTrackingService.java          # existe; UC08 mínimo
-│   │   └── DisputeInformationService.java           # pendiente (T008)
+│   │   └── DisputeInformationService.java           # existe; ingesta de disputas
 │   └── dto/
 │       ├── DisputeNotificationCommand.java          # existe
 │       ├── DepositTrackingResult.java               # existe
 │       └── OpenDepositTrackingCommand.java          # existe
 └── infrastructure/
     ├── adapter/in/messaging/
-    │   ├── DisputeNotificationListener.java         # pendiente (T010)
+    │   ├── DisputeNotificationListener.java         # existe
     │   └── dto/
-    │       ├── DisputeNotificationMessage.java      # pendiente (T006)
-    │       └── DisputeNotificationMessageMapper.java # pendiente (T006)
+    │       ├── DisputeNotificationMessage.java      # existe
+    │       └── DisputeNotificationMessageMapper.java # existe
     ├── adapter/out/persistence/deposit/
     │   ├── DepositDispositionJpaEntity.java          # existe
     │   ├── DepositDispositionJpaRepository.java      # existe
     │   └── DepositDispositionPersistenceAdapter.java # existe
     ├── adapter/out/persistence/dispute/
-    │   ├── DisputeEventLogJpaEntity.java             # pendiente (T008)
-    │   ├── DisputeEventLogJpaRepository.java         # pendiente (T008)
-    │   └── DisputeEventLogPersistenceAdapter.java    # pendiente (T008)
+    │   ├── DisputeEventLogJpaEntity.java             # existe
+    │   ├── DisputeEventLogJpaRepository.java         # existe
+    │   └── DisputeEventLogPersistenceAdapter.java    # existe
     └── config/
         ├── DepositConfiguration.java                 # existe
         └── amqp/{AmqpNames,RabbitTopologyConfig,AmqpListenerFailurePolicy,OperationalFailureMessageRecoverer}.java # núcleo compartido
@@ -137,20 +140,23 @@ src/main/resources/db/migration/
 └── V1__initial_schema.sql # migración inicial única; contiene deposit_disposition y dispute_event_log (general-plan §4.2, D-31)
 
 src/test/java/com/seashare/seasharem3/
+├── acceptance/Uc08AcceptanceTest.java                # existe (ce001-ce006)
 ├── arch/ArchitectureTest.java                        # existe (reglas §3.4)
+├── arch/Uc08ArchitectureTest.java                    # existe (reglas UC08)
 ├── application/service/OpenDepositTrackingServiceTest.java  # existe (UC08 mínimo)
+├── application/service/DisputeInformationServiceTest.java   # existe (T008/T009)
 ├── application/service/RequestRefundServiceTest.java        # existe (UC09 → UC08)
 ├── application/service/RequestSettlementServiceTest.java    # existe (UC10 → UC08)
-├── integration/RefundSettlementPersistenceIntegrationTest.java # existe (CAS de deposit_disposition)
+├── domain/model/DisputeEventTest.java                # existe (T004)
+├── infrastructure/adapter/in/messaging/DisputeNotificationListenerContractTest.java # existe (T011)
+├── infrastructure/adapter/in/messaging/DisputeNotificationListenerIntegrationTest.java # existe (T018)
+├── infrastructure/adapter/out/persistence/dispute/DisputeEventLogPersistenceAdapterIntegrationTest.java # existe (T018)
 ├── infrastructure/config/amqp/RabbitTopologyConfigTest.java   # existe (cola/DLQ/binding)
 ├── infrastructure/config/amqp/RabbitTopologyIntegrationTest.java # existe
+├── integration/RefundSettlementPersistenceIntegrationTest.java # existe (CAS de deposit_disposition)
 ├── migration/FlywaySchemaTest.java                   # existe (tablas)
-├── domain/model/DisputeInformationTest.java          # pendiente (T012)
-├── application/service/DisputeInformationServiceTest.java # pendiente (T012-T017)
-├── contract/UC08DisputeNotificationContractTest.java # pendiente (T011)
-├── infrastructure/adapter/in/messaging/DisputeNotificationListenerTest.java # pendiente (T011)
-├── integration/UC08DisputeProcessingIT.java          # pendiente (T018)
-└── arch/Uc08ArchitectureTest.java                    # pendiente (T018)
+├── support/InMemoryDepositDispositionRepository.java # existe (fake)
+└── support/InMemoryDisputeEventLogRepository.java    # existe (fake)
 ```
 
 **Structure Decision**: sigue `general-plan.md` §3.2–§3.4: `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`; ningún listener accede directamente a repositorios; DTOs AMQP viven en infraestructura y aplicación trabaja con commands/results.
@@ -204,22 +210,23 @@ Respuesta: ninguna; ack para errores no reintentables, nack/DLQ para fallas tran
 }
 ```
 
-## Estrategia de testing **[ACT-08]**
+## Estrategia de testing **[ACT-08] [ACT-10]**
 
-Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %. La puerta JaCoCo del `pom.xml` (0.8.15) todavía no incluye clases de UC08; hasta que se añadan, la cobertura de UC08 no se exige automáticamente.
+Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %. La puerta JaCoCo del `pom.xml` (0.8.15) todavía no incluye clases de UC08; hasta que se añadan, la cobertura de UC08 no se exige automáticamente. La suite completa ejecutó 1395 tests con 0 fallos y 0 errores; la puerta JaCoCo pasó.
 
 | Nivel | Cobertura | Ubicación | Estado |
 |---|---|---|---|
 | Unitario aplicación (UC08 mínimo) | apertura, idempotencia, transición y conflicto de desenlace | `application/service/OpenDepositTrackingServiceTest` | Existe |
-| Integración persistencia | CAS real de `deposit_disposition` | `integration/RefundSettlementPersistenceIntegrationTest` | Existe |
+| Integración persistencia (depósito) | CAS real de `deposit_disposition` | `integration/RefundSettlementPersistenceIntegrationTest` | Existe |
 | Integración UC09/UC10 | UC09 no reembolsa si el depósito ya fue liquidado; UC10 marca `SETTLEMENT_REQUESTED` en `DISPUTE_COMPLETED` | `application/service/RequestRefundServiceTest`, `RequestSettlementServiceTest` | Existe |
 | Topología AMQP | cola, DLQ y binding de disputa | `infrastructure/config/amqp/RabbitTopologyConfigTest`, `RabbitTopologyIntegrationTest` | Existe |
 | Migración | existencia de `deposit_disposition` y `dispute_event_log` | `migration/FlywaySchemaTest` | Existe |
-| Unitario dominio | estados, 100 %, exclusión mutua, clave | `domain/model/DisputeInformationTest` | Pendiente |
-| Unitario aplicación | ramas, datos faltantes, duplicados, puertos | `application/service/DisputeInformationServiceTest` | Pendiente |
-| Contrato AMQP | headers, routing key, payload mínimo, ack | `contract/UC08DisputeNotificationContractTest` | Pendiente |
-| Integración | RabbitMQ ack/nack/DLQ, PostgreSQL y concurrencia | `integration/UC08DisputeProcessingIT` | Pendiente |
-| Arquitectura | reglas §3.4 y ausencia de jobs | `arch/Uc08ArchitectureTest` | Pendiente |
+| Unitario dominio | estados, validaciones, `samePayload` y `processedAt` | `domain/model/DisputeEventTest` | Existe |
+| Unitario aplicación | PENDING, finales, guarda, duplicados, conflictos y transitorios | `application/service/DisputeInformationServiceTest` | Existe |
+| Contrato y listener | headers, payload mínimo, estados, ack/nack y errores permanentes/transitorios | `infrastructure/adapter/in/messaging/DisputeNotificationListenerContractTest` | Existe |
+| Integración AMQP/PostgreSQL | cola, DLQ, rollback, reserva no registrada, deduplicación y concurrencia | `infrastructure/adapter/in/messaging/DisputeNotificationListenerIntegrationTest`, `infrastructure/adapter/out/persistence/dispute/DisputeEventLogPersistenceAdapterIntegrationTest` | Existe |
+| Aceptación | `ce001`…`ce006` | `acceptance/Uc08AcceptanceTest` | Existe |
+| Arquitectura | reglas §3.4, inmutabilidad y ausencia de jobs/endpoints | `arch/Uc08ArchitectureTest` | Existe |
 
 - **`ce001_solo_estados_canónicos`**: estados válidos aceptados; desconocidos no mueven dinero.
 - **`ce002_pendiente_no_mueve_dinero`**: múltiples pendientes producen cero solicitudes financieras.
@@ -228,57 +235,59 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %. La puerta JaCoC
 - **`ce005_concurrencia_idempotente`**: el mismo `event_key` no repite (y un payload distinto para la misma clave registra conflicto); un `event_key` distinto para el mismo desenlace no duplica reembolso/liquidación; finales opuestos no se aplican dos veces; un `PENDING` tardío no revierte el desenlace. **[ACT-09]**
 - **`ce006_sin_subresultados_parciales`**: reembolso o liquidación parcial no se procesa.
 
-Las pruebas de aceptación con los nombres `ce00X_…` todavía no existen; se añadirán al implementar T012–T017. **[ACT-08]**
+Las pruebas de aceptación están implementadas en `Uc08AcceptanceTest` con los nombres `ce001_…`…`ce006_…` y se ejecutan en la suite completa. **[ACT-08] [ACT-10]**
 
-## Decisiones de diseño (D-UC08-xx) **[ACT-07] [ACT-09]**
+## Decisiones de diseño (D-UC08-xx) **[ACT-07] [ACT-09] [ACT-10]**
 
 Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC08` son decisiones del plan general (§9).
 
 | ID | Descripción | Decisión | Estado |
 |---|---|---|---|
-| **D-UC08-01** | UC08 es dueño de `deposit_disposition` y `dispute_event_log`; UC09/UC10 publican sus firmas | El esquema de ambas tablas se crea en la migración inicial única (general-plan §4.2, D-31); UC08 consume los `port.in` de UC09/UC10 y no redefine sus firmas | Aplicada (esquema y CAS; consumo en T009) |
+| **D-UC08-01** | UC08 es dueño de `deposit_disposition` y `dispute_event_log`; UC09/UC10 publican sus firmas | El esquema de ambas tablas se crea en la migración inicial única (general-plan §4.2, D-31); UC08 consume los `port.in` de UC09/UC10 y no redefine sus firmas | Aplicada |
 | **D-UC08-02** | Migraciones de UC08 | Migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31); UC08 no define ni ordena migraciones propias | Aplicada |
-| **D-UC08-03** | Tratamiento de errores en cola | `ack` + fallo para lógica; `nack`/DLQ para transitorios | Parcial: política compartida aplicada; listener de UC08 pendiente (T010) |
+| **D-UC08-03** | Tratamiento de errores en cola | `ack` + fallo para lógica; `nack`/DLQ para transitorios | Aplicada |
 | **D-UC08-04** | Carrera entre creación de seguimiento y actualización de depósito | Reintento acotado o creación idempotente de la fila bajo `ReservationLockPort` (general-plan D-15) | Aplicada |
 | **D-UC08-05** | Seguridad transversal para AMQP | Seguridad fuera de alcance: sin autenticación ni autorización para AMQP y sin `SecurityConfig` propio o compartido (general-plan §7.1; D-21) | Aplicada |
-| **D-UC08-06** | ¿Se puebla `deposit_disposition.dispute_status` desde el evento? | No. `dispute_event_log` es la fuente única del estado; `deposit_disposition` conserva `dispute_id` como vínculo causal y `dispute_status` queda nullable/reservada (ningún llamador la envía). Se evita duplicar estado, regresiones por eventos fuera de orden y una segunda escritura sobre la disposición | Decidida |
+| **D-UC08-06** | ¿Se puebla `deposit_disposition.dispute_status` desde el evento? | No. `dispute_event_log` es la fuente única del estado; `deposit_disposition` conserva `dispute_id` como vínculo causal y `dispute_status` queda nullable/reservada (ningún llamador la envía). Se evita duplicar estado, regresiones por eventos fuera de orden y una segunda escritura sobre la disposición | Aplicada |
 
-## Implementation Phases **[ACT-07] [ACT-09]**
+## Implementation Phases **[ACT-07] [ACT-09] [ACT-10]**
 
 > **Actualización 2026-10-30 [ACT-07]**: se marcan como hechas T001, T002, T003, T007 y T008a; T004, T005 y T006 quedan parciales; T008–T018 siguen pendientes. T009 se reescribe para reflejar que UC09/UC10 consultan los registros internos y aplican el CAS.
 
 > **Actualización 2026-10-30 [ACT-09]**: T008/T009 incorporan `dispute_event_log` como fuente única, `processed_at`, la guarda de `deposit_disposition` y el lock por reserva; T016/`ce005` cubren la idempotencia del desenlace.
 
+> **Actualización 2026-10-30 [ACT-10]**: implementación cerrada; T004–T018 completadas y verificadas con `.\mvnw.cmd verify` (1395 tests, 0 fallos, 0 errores; JaCoCo correcto).
+
 ### Phase 1: Setup — Compartido
 
 - [x] **T001** Consumir la configuración AMQP común, Problem Details, `FailureRecorderPort`, `ReservationLockPort`, `OutboxPort` y observabilidad compartida; los fallos se registran con `REQUIRES_NEW`, `reservation_id` nullable, `payload_ref` referencial y procedimiento de reproceso. Núcleo compartido disponible; `OpenDepositTrackingService` consume `FailureRecorderPort` y `ReservationLockPort`; `OutboxPort` no aplica porque UC08 no publica. **[ACT-07]**
 - [x] **T002** Configurar exchange, binding, cola quorum y DLQ `<cola>.dlq` según contrato. Declarado en `RabbitTopologyConfig` y verificado por `RabbitTopologyConfigTest`/`RabbitTopologyIntegrationTest`. **[ACT-07]**
-- [x] **T003** Definir ack/nack, backoff y correlación; sin cron/scheduler propio. Definido en `AmqpListenerFailurePolicy` y `application.properties`; `OperationalFailureMessageRecoverer` mapea la cola a UC08. La aplicación al listener llega en T010. **[ACT-07]**
+- [x] **T003** Definir ack/nack, backoff y correlación; sin cron/scheduler propio. Definido en `AmqpListenerFailurePolicy` y `application.properties`; `OperationalFailureMessageRecoverer` mapea la cola a UC08 y `DisputeNotificationListener` aplica la política. **[ACT-07] [ACT-10]**
 
 ### Phase 2: Foundational
 
-- [ ] **T004** Crear `DisputeStatus`, value objects, `DisputeEvent` y reglas canónicas. Parcial: `DisputeStatus`, `DisputeId`, `IdempotencyKey` y `DepositDisposition` existen; `DisputeEvent` sigue siendo un stub. **[ACT-07]**
-- [ ] **T005** Consumir por nombre puertos de UC09/UC10, repositorios de reserva/cobro, `FailureRecorderPort`, `ReservationLockPort` y `OutboxPort`; no implementarlos. Parcial: los puertos existen; UC08 todavía no consume los de UC09/UC10 (T009). **[ACT-07]**
-- [ ] **T006** Crear DTO AMQP estricto y mapearlo a `DisputeNotificationCommand`. Parcial: `DisputeNotificationCommand` existe; faltan el DTO del mensaje y el mapper. **[ACT-07]**
-- [x] **T007** Crear `HandleDisputeNotificationUseCase`, `OpenDepositTrackingUseCase` y el result interno `DepositTrackingResult(ReservationId reservationId, DepositDispositionStatus status, boolean created)` [CONV núcleo, congelado]. `OpenDepositTrackingCommand` incluye `target`, `disputeId`, `disputeStatus` y `completedAt`; UC07 lo usa con `HELD`, UC09 con `REFUND_REQUESTED` y UC10 con `SETTLEMENT_REQUESTED`. **[ACT-2026-10-29]** Implementado `OpenDepositTrackingUseCase`/`DepositTrackingResult`; `HandleDisputeNotificationUseCase` existe como interfaz, pendiente de implementación en T008. **[ACT-07]**
+- [x] **T004** Crear `DisputeStatus`, value objects, `DisputeEvent` y reglas canónicas. Implementado: `DisputeStatus`, `DisputeId`, `IdempotencyKey`, `DepositDisposition` y `DisputeEvent` con validaciones y `markProcessed`. **[ACT-07] [ACT-10]**
+- [x] **T005** Consumir por nombre los puertos de UC09/UC10, `FailureRecorderPort`, `ReservationLockPort`, `DepositDispositionRepository` y `DisputeEventLogRepository`; no implementarlos. Implementado: `DisputeInformationService` consume `RequestRefundUseCase`, `RequestSettlementUseCase`, `DepositDispositionRepository`, `DisputeEventLogRepository`, `FailureRecorderPort` y `ReservationLockPort`; UC09/UC10 consultan reserva/cobro. **[ACT-07] [ACT-10]**
+- [x] **T006** Crear DTO AMQP estricto y mapearlo a `DisputeNotificationCommand`. Implementado: `DisputeNotificationMessage`, `DisputeNotificationMessageMapper` y `DisputeNotificationCommand` con `DisputeStatus`. **[ACT-07] [ACT-10]**
+- [x] **T007** Crear `HandleDisputeNotificationUseCase`, `OpenDepositTrackingUseCase` y el result interno `DepositTrackingResult(ReservationId reservationId, DepositDispositionStatus status, boolean created)` [CONV núcleo, congelado]. `OpenDepositTrackingCommand` incluye `target`, `disputeId`, `disputeStatus` y `completedAt`; UC07 lo usa con `HELD`, UC09 con `REFUND_REQUESTED` y UC10 con `SETTLEMENT_REQUESTED`. **[ACT-2026-10-29]** Implementado `OpenDepositTrackingUseCase`/`DepositTrackingResult`; `HandleDisputeNotificationUseCase` está implementado por `DisputeInformationService`. **[ACT-07] [ACT-10]**
 
 ### Phase 3: US1 — Recibir y procesar disputa (P1)
 
-- [ ] **T008** Implementar `DisputeInformationService`: validar el mensaje, insertar el evento en `dispute_event_log` con `processed_at = null`, deduplicar por `(reservation_id, dispute_id, event_key)`, reanudar eventos incompletos y marcar `processed_at` al terminar; `PENDING` no toca `deposit_disposition`. Todo en una transacción; un `event_key` repetido con `processed_at` no nulo se confirma sin repetir la operación, y si el repetido trae `status` o `status_changed_at` distintos se registra el conflicto y se confirma [D-UC08-06]. **[ACT-09]**
+- [x] **T008** Implementar `DisputeInformationService`: validar el mensaje, insertar el evento en `dispute_event_log` con `processed_at = null`, deduplicar por `(reservation_id, dispute_id, event_key)`, reanudar eventos incompletos y marcar `processed_at` al terminar; `PENDING` no toca `deposit_disposition`. Todo en una transacción; un `event_key` repetido con `processed_at` no nulo se confirma sin repetir la operación, y si el repetido trae `status` o `status_changed_at` distintos se registra el conflicto y se confirma [D-UC08-06]. Implementado y cubierto por `DisputeInformationServiceTest`. **[ACT-09] [ACT-10]**
 - [x] **T008a** Persistir `deposit_disposition` con CAS explícito: estados finales, rechazo del reembolso cuando corresponda y transición única bajo `ReservationLockPort`. Implementado en `OpenDepositTrackingService` y `DepositDispositionPersistenceAdapter`; cubierto por `OpenDepositTrackingServiceTest` y `RefundSettlementPersistenceIntegrationTest`. **[ACT-07]**
-- [ ] **T009** Invocar exactamente una vez a UC09/UC10 en los estados finales con el trigger, `scope`, `disputeId` y `operationKey = event_key`; no consultar ni enviar montos. Bajo `ReservationLockPort`, leer `deposit_disposition`: si ya tiene el desenlace solicitado, confirmar sin repetir la llamada; si tiene el opuesto, registrar la inconsistencia y confirmar; si está `HELD` o ausente, delegar. UC09/UC10 recuperan los registros internos y aplican el CAS. **[ACT-06] [ACT-09]**
-- [ ] **T010** Implementar listener con ack para errores no reintentables y nack/DLQ para transitorios.
-- [ ] **T011** Tests de contrato AMQP, listener y ausencia de respuesta.
+- [x] **T009** Invocar exactamente una vez a UC09/UC10 en los estados finales con el trigger, `scope`, `disputeId` y `operationKey = event_key`; no consultar ni enviar montos. Bajo `ReservationLockPort`, leer `deposit_disposition`: si ya tiene el desenlace solicitado, confirmar sin repetir la llamada; si tiene el opuesto, registrar la inconsistencia y confirmar; si está `HELD` o ausente, delegar. UC09/UC10 recuperan los registros internos y aplican el CAS. Implementado en `DisputeInformationService` y cubierto por `Uc08AcceptanceTest`. **[ACT-06] [ACT-09] [ACT-10]**
+- [x] **T010** Implementar listener con ack para errores no reintentables y nack/DLQ para transitorios. Implementado en `DisputeNotificationListener`; la violación de la FK de reserva desconocida se confirma y registra. **[ACT-10]**
+- [x] **T011** Tests de contrato AMQP, listener y ausencia de respuesta. Implementado en `DisputeNotificationListenerContractTest` y `DisputeNotificationListenerIntegrationTest`. **[ACT-10]**
 
 ### Phase 4: Aceptación y robustez
 
-- [ ] **T012** `ce001_solo_estados_canónicos`.
-- [ ] **T013** `ce002_pendiente_no_mueve_dinero`.
-- [ ] **T014** `ce003_finales_generan_una_sola_consecuencia_total`.
-- [ ] **T015** `ce004_montos_solo_desde_registros_internos`.
-- [ ] **T016** `ce005_concurrencia_idempotente`: mismo `event_key`, `event_key` distinto para el mismo desenlace, finales opuestos y `PENDING` tardío. **[ACT-09]**
-- [ ] **T017** `ce006_sin_subresultados_parciales`.
-- [ ] **T018** ArchUnit e integración PostgreSQL/RabbitMQ; verificar que UC08 no introduce jobs ni endpoints.
+- [x] **T012** `ce001_solo_estados_canónicos`. Implementado en `Uc08AcceptanceTest`. **[ACT-10]**
+- [x] **T013** `ce002_pendiente_no_mueve_dinero`. Implementado en `Uc08AcceptanceTest`. **[ACT-10]**
+- [x] **T014** `ce003_finales_generan_una_sola_consecuencia_total`. Implementado en `Uc08AcceptanceTest`. **[ACT-10]**
+- [x] **T015** `ce004_montos_solo_desde_registros_internos`. Implementado en `Uc08AcceptanceTest`. **[ACT-10]**
+- [x] **T016** `ce005_concurrencia_idempotente`: mismo `event_key`, `event_key` distinto para el mismo desenlace, finales opuestos y `PENDING` tardío. Implementado en `Uc08AcceptanceTest` y en la prueba concurrente de `DisputeEventLogPersistenceAdapterIntegrationTest`. **[ACT-09] [ACT-10]**
+- [x] **T017** `ce006_sin_subresultados_parciales`. Implementado en `Uc08AcceptanceTest`. **[ACT-10]**
+- [x] **T018** ArchUnit e integración PostgreSQL/RabbitMQ; verificar que UC08 no introduce jobs ni endpoints. Implementado en `Uc08ArchitectureTest`, `DisputeEventLogPersistenceAdapterIntegrationTest` y `DisputeNotificationListenerIntegrationTest`. **[ACT-10]**
 
 ## Dependencies & Execution Order
 
@@ -286,15 +295,16 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC08
 
 UC08 consume las firmas publicadas por UC09/UC10 y publica `OpenDepositTrackingUseCase` para UC07, UC09 y UC10. UC09 y UC10 ya están implementados e invocan ese puerto; UC07 aún no. Cualquier cambio a esos planes queda fuera y solo se documenta. `deposit_disposition` y `dispute_event_log` forman parte de la migración inicial única `V1__initial_schema.sql` (general-plan §4.2, D-31); UC08 no define ni ordena migraciones propias. **[ACT-05]**
 
-## Notes **[ACT-08]**
+## Notes **[ACT-08] [ACT-10]**
 
-No modificar `pom.xml`, `general-plan.md`, SPEC, contratos ni planes de UC07/UC09/UC10/UC11. No implementar montos desde Reservas, operaciones parciales, cron de 24 horas ni respuesta de negocio al productor. La actualización del 2026-10-30 se registra en [Actualizaciones del plan](#actualizaciones-del-plan); el plan original del 2026-10-09 y la revisión del 2026-10-29 permanecen en el historial de Git (commits `e2b3970` y `b92b0da`). **[ACT-08]**
+No modificar `pom.xml`, `general-plan.md`, SPEC, contratos ni planes de UC07/UC09/UC10/UC11. No implementar montos desde Reservas, operaciones parciales, cron de 24 horas ni respuesta de negocio al productor. La actualización del 2026-10-30 se registra en [Actualizaciones del plan](#actualizaciones-del-plan); el plan original del 2026-10-09 y la revisión del 2026-10-29 permanecen en el historial de Git (commits `e2b3970` y `b92b0da`). La implementación se cerró el 2026-10-30 con 1395 tests, 0 fallos y 0 errores. **[ACT-08] [ACT-10]**
 
-## Checklist de auto-revisión **[ACT-08]**
+## Checklist de auto-revisión **[ACT-08] [ACT-10]**
 
-> Revisión documental del 2026-10-30; no implica que la implementación esté cerrada.
+> Revisión documental y cierre de implementación del 2026-10-30.
 
 - [x] Alineado con `general-plan.md`, contrato UC08 y `contracts/README.md`.
 - [x] Cada RF/RNF/CE/HU tiene componente, tarea y prueba.
 - [x] Ack/nack, DLQ, idempotencia y exclusión mutua documentados.
 - [x] Sin REST, jobs, montos externos ni migraciones propias (migración inicial única, general-plan D-31).
+- [x] Implementación cerrada con 1395 tests, 0 fallos y 0 errores (ver ACT-10).
