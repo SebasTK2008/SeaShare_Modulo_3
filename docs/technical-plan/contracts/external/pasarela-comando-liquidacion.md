@@ -22,6 +22,8 @@ La dispersión se instrumenta con la sub-API de **Advanced Payments** de Mercado
 
 `POST /v1/advanced_payments/{id}/disbursements`
 
+`{id}` es la **referencia externa del cobro original** (`charge_intent.external_reference`); el contrato original no definía su origen y esta es la interpretación `[CONV]` del ACL. Si la integración configurada no soporta este recurso, el ACL puede usar el endpoint equivalente documentado en su implementación, conservando el mismo payload y la misma clave idempotente.
+
 ### Headers
 
 | Header | Obligatorio | Valor |
@@ -54,7 +56,7 @@ El adaptador convierte la `SolicitudDispersiónPasarela` a la estructura del spl
 
 ## 3. Reglas de procesamiento
 
-1. **Independencia de comisiones**: El sistema asume que cobró inicialmente a una cuenta master (la de la plataforma) y ahora transfiere el neto al propietario. El monto remanente tras la dispersión se queda en la cuenta de la plataforma como recaudación propia (comisión + seguro de averías) [SPEC RF-005].
+1. **Independencia de comisiones**: El sistema asume que cobró inicialmente a una cuenta master (la de la plataforma) y ahora transfiere el neto al propietario. La liquidación estándar se calcula como **alquiler bruto − comisión − seguro náutico** (D-35); las cancelaciones y el depósito no aplican comisión ni seguro. El monto remanente tras la dispersión se queda en la cuenta de la plataforma [SPEC RF-005, RF-007].
 2. **Cuenta destino vinculada**: El `collector_id` del propietario debe estar previamente autorizado y vinculado a la aplicación de Marketplace del sistema en Mercado Pago; llega como **dato plano** de la configuración de la integración y el sistema lo envía tal cual, sin validar identidad [CONV].
 3. **Componente de depósito**: Si parte de la liquidación al propietario incluye dinero que venía del depósito de garantía retenido al cliente, el sistema unifica esto en el `amount` enviado a MP (para simplificar la transferencia) y maneja el detalle del concepto de forma interna [SPEC RF-016].
 
@@ -65,7 +67,20 @@ Mercado Pago confirma la dispersión creada. El resultado final del movimiento p
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
 | `status` | string | Estado inmediato (ej. `approved`, `pending`) | [SPEC RF-010] |
-| `id` | integer | Identificador único de la transferencia/dispersión en MP | [SPEC RF-010] |
+| `status_detail` | string | Detalle del estado externo; el ACL lo mapea a `GatewaySettlementResult.statusDetail` y a `settlement_intent.status_detail`. Opcional | [SPEC RF-010] |
+| `id` | integer | Identificador único de la transferencia/dispersión en MP; se persiste como `settlement_intent.external_reference` | [SPEC RF-010] |
+| `amount` | decimal | Monto confirmado por la pasarela; el ACL lo mapea a `GatewaySettlementResult.amount`. Si no viene, el registro usa el monto de la intención | [SPEC RF-010; RF-016] |
+
+### Consulta de detalle
+
+Para conciliación y para el webhook `type=merchant_order`, el ACL consulta la dispersión por su referencia externa:
+
+```text
+GET /v1/advanced_payments/{id}
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+`{id}` es el `data.id` del webhook, que el sistema guardó como `settlement_intent.external_reference` al recibir la respuesta síncrona. La respuesta se mapea al mismo `GatewaySettlementResult`; un `404` no es un veredicto financiero y no cierra la intención.
 
 ## 5. Manejo de Errores
 

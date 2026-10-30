@@ -56,10 +56,24 @@ Mercado Pago retorna el objeto del reembolso creado.
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
 | `status` | string | Estado del reembolso (ej. `approved`) | [SPEC RF-007] |
-| `id` | integer | Identificador único del reembolso en Mercado Pago | [SPEC RF-007] |
+| `status_detail` | string | Detalle del estado externo; el ACL lo mapea a `RefundGatewayResult.statusDetail` y a `refund_intent.status_detail`. Opcional | [SPEC RF-007] |
+| `id` | integer | Identificador único del reembolso en Mercado Pago; se persiste como `refund_intent.external_reference` | [SPEC RF-007] |
 | `amount` | decimal | Monto que fue reembolsado | [SPEC] |
+| `fee_details` / costo | decimal | Costo transaccional reportado por Mercado Pago, cuando lo informe. El ACL lo mapea a `RefundGatewayResult.transactionCost`; si no viene, queda `null` | [SPEC RF-011] |
+| `released_amount` | decimal | Monto neto liberado = `amount − transaction_cost` (o `amount` si no hay costo); se persiste en `refund_record.released_amount` | [SPEC RF-011; UC09 D-UC09-07] |
 
 *(Nota: Aunque el reembolso puede responder `approved` síncronamente, también se emitirá un webhook asíncrono con `type=refund` que el sistema usará para asentar la contabilidad definitiva)*.
+
+### Consulta de detalle
+
+Para conciliación y para el webhook `type=refund`, el ACL consulta el reembolso dentro del pago original:
+
+```text
+GET /v1/payments/{payment_id}/refunds/{refund_id}
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+`payment_id` es la referencia externa del `charge_intent` original y `refund_id` es el `data.id` del webhook. La respuesta se mapea al mismo `RefundGatewayResult`; un `404` no es un veredicto financiero y no cierra la intención.
 
 ## 5. Manejo de Errores
 

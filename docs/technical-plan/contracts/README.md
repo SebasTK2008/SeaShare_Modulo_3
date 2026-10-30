@@ -73,7 +73,7 @@ Casos de uso **sin contrato propio**:
 | Dinero | **String decimal** (`"350000.00"`), nunca número JSON; el sistema usa `BigDecimal` | [SPEC RNF-002] + [CONV] |
 | Porcentajes | String decimal de 0 a 100 (`"15.00"` = 15 %), coherente con `tarifa × (1 + % / 100)` | [SPEC UC02 RF-002] + [CONV] |
 | Períodos de informe (`period`) | `YYYY-MM-H1`/`YYYY-MM-H2` (quincenal), `YYYY-MM` (mensual), `YYYY-Q1`…`YYYY-Q4` (trimestral) | [CONV] UC13 |
-| Escala y precisión | `NUMERIC(18,4)` en BD; `BigDecimal` con 4 decimales internos; toda salida monetaria (REST, comandos a la pasarela y registros) redondea `HALF_UP` a 2 decimales | [SPEC RNF-002] + [CONV] |
+| Escala y precisión | `NUMERIC(18,4)` en BD; `BigDecimal` con 4 decimales internos; toda salida monetaria (REST, comandos a la pasarela, registros e informes) redondea `HALF_UP` a 2 decimales en la serialización; la BD conserva la escala 4 | [SPEC RNF-002] + [CONV] |
 
 **Nota — UC11 conserva 4 decimales**: los cuatro parámetros configurables de
 `GET /api/v1/financial-parameters` se serializan con 4 decimales para que el valor leído sea

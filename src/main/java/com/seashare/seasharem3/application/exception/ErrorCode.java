@@ -18,6 +18,8 @@ public enum ErrorCode {
     UNAUTHENTICATED(401, false, "Invalid webhook signature"),
     RESERVATION_INFO_NOT_FOUND(404, true, "Reservation information not found"),
     CHARGE_INTENT_NOT_FOUND(404, true, "Charge intent not found"),
+    REFUND_INTENT_NOT_FOUND(404, true, "Refund intent not found"),
+    SETTLEMENT_INTENT_NOT_FOUND(404, true, "Settlement intent not found"),
     PARAMETERS_NOT_CONFIGURED(404, true, "Financial parameters not configured"),
     PAGE_OUT_OF_RANGE(404, false, "Page out of range"),
     METHOD_NOT_ALLOWED(405, false, "Method not allowed"),

@@ -233,6 +233,7 @@ CREATE TABLE refund_intent (
     dispute_id         UUID,         -- [D-UC09-02] nullable (solo trigger DISPUTE_REJECTED)
     external_reference TEXT,
     created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitido en general-plan §4
+    version            INTEGER       NOT NULL DEFAULT 0,     -- [CONV] bloqueo optimista para webhook/worker
     CONSTRAINT uq_refund_intent_idempotency_key UNIQUE (idempotency_key),
     CONSTRAINT fk_refund_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id)
 );
@@ -255,6 +256,7 @@ CREATE TABLE refund_record (
     boat_id            UUID          NOT NULL,
     dispute_id         UUID,
     amount             NUMERIC(18,4) NOT NULL,
+    released_amount    NUMERIC(18,4) NOT NULL, -- [D-UC09-07] monto neto liberado = amount - transaction_cost (o amount)
     detail             TEXT,
     transaction_cost   NUMERIC(18,4),
     external_reference TEXT,
@@ -296,6 +298,7 @@ CREATE TABLE settlement_intent (
     external_reference TEXT,        -- [CONV] referencia externa de la pasarela (UC10 plan T012a); omitida en general-plan §4
     dispute_id        UUID,         -- [CONV] traza de la disputa adjudicada (UC10 plan T012a; scope DEPOSIT); omitida en general-plan §4
     created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitida en general-plan §4
+    version           INTEGER       NOT NULL DEFAULT 0,     -- [CONV] bloqueo optimista para webhook/worker
     CONSTRAINT uq_settlement_intent_idempotency_key UNIQUE (idempotency_key),
     CONSTRAINT fk_settlement_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id)
 );

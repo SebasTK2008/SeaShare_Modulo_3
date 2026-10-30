@@ -2,12 +2,13 @@ package com.seashare.seasharem3.application.dto;
 
 import com.seashare.seasharem3.domain.valueobject.Money;
 
+import java.util.UUID;
+
 /**
- * Comando de dispersión a la pasarela.
- * Fuente: UC10 plan T006 y contrato external/pasarela-comando-liquidacion.md (disbursements[]: amount, collector_id, external_reference).
- * {@code collectorId} es el identificador numérico de la cuenta de Mercado Pago del Propietario (contrato: integer).
- * GAP: composición exacta del record no publicada; campos derivados del contrato externo.
+ * Comando de dispersion a la pasarela.
+ * Fuente: UC10 plan T006 y contrato external/pasarela-comando-liquidacion.md.
+ * {@code collectorId} es el identificador numerico de la cuenta de Mercado Pago del Propietario.
  */
-public record GatewaySettlementRequest(long collectorId, Money amount, String externalReference,
-                                       String operationKey) {
+public record GatewaySettlementRequest(long collectorId, UUID reservationId, Money amount,
+                                       String externalReference, String operationKey) {
 }

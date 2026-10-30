@@ -42,7 +42,7 @@ class GetPaymentConfirmationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new GetPaymentConfirmationService(chargeIntentRepository);
+        service = new GetPaymentConfirmationService(chargeIntentRepository, reservationId -> Optional.empty());
     }
 
     @Test
@@ -56,6 +56,20 @@ class GetPaymentConfirmationServiceTest {
         assertThat(result).isEqualTo(new PaymentConfirmationResult(RESERVATION_ID,
                 PaymentConfirmationStatus.APPROVED, "accredited", null, null, null,
                 new BigDecimal("990000.00"), "pg-8841"));
+    }
+
+    @Test
+    void returnsTheReleasedAmountWhenRefundsWereConfirmed() {
+        ChargeIntent intent = ChargeFixtures.intentWithStatus(RESERVATION, ChargeIntentStatus.CAPTURED,
+                "pg-8841", "accredited", ChargeFixtures.CREATED_AT);
+        when(chargeIntentRepository.findLatestByReservationId(RESERVATION_ID)).thenReturn(Optional.of(intent));
+        service = new GetPaymentConfirmationService(chargeIntentRepository,
+                reservationId -> Optional.of(new com.seashare.seasharem3.domain.valueobject.Money(
+                        new BigDecimal("29000.00"))));
+
+        PaymentConfirmationResult result = service.get(new PaymentConfirmationQuery(RESERVATION_ID));
+
+        assertThat(result.releasedAmount()).isEqualByComparingTo("29000.00");
     }
 
     @Test

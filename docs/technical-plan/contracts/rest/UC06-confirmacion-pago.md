@@ -53,7 +53,7 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
 | `detail` | string o `null` | Detalle del estado cuando esté disponible | [SPEC RF-003] |
 | `authorized_amount` | string decimal o `null` | Monto autorizado | [SPEC RF-004] |
 | `captured_amount` | string decimal o `null` | Monto capturado | [SPEC RF-004] |
-| `released_amount` | string decimal o `null` | Monto liberado | [SPEC RF-004] |
+| `released_amount` | string decimal o `null` | Monto neto liberado: suma de `refund_record.released_amount` confirmados por UC09; `null` si no hay reembolsos confirmados | [SPEC RF-004; UC09 RF-011] |
 | `charged_amount` | string decimal o `null` | Monto cobrado | [SPEC RF-004, RNF-002] |
 | `external_reference` | string o `null` | Referencia externa asignada por la pasarela | [SPEC escenario 1, RF-004] |
 
@@ -78,6 +78,8 @@ Reservas consulta el estado vigente del cobro de una reserva para decidir si ava
   "external_reference": "pg-8841"
 }
 ```
+
+`released_amount` se informa cuando UC09 ya confirmó al menos un reembolso; en el ejemplo no hay reembolsos, por eso viaja `null`. Los montos se serializan como string decimal de 2 cifras `HALF_UP`.
 
 ## 5. Respuestas de error
 
