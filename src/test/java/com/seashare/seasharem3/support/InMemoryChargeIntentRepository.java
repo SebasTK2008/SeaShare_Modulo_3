@@ -35,7 +35,7 @@ public class InMemoryChargeIntentRepository implements ChargeIntentRepository {
     public Optional<ChargeIntent> findLatestByReservationId(ReservationId reservationId) {
         return intents.values().stream()
                 .filter(intent -> intent.reservationId().equals(reservationId))
-                .max(Comparator.comparing(ChargeIntent::createdAt));
+                .max(Comparator.comparing(ChargeIntent::createdAt).thenComparing(ChargeIntent::id));
     }
 
     @Override

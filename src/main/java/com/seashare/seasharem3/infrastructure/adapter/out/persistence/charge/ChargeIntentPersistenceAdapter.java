@@ -36,7 +36,7 @@ public class ChargeIntentPersistenceAdapter implements ChargeIntentRepository {
     @Override
     @Transactional(readOnly = true)
     public Optional<ChargeIntent> findLatestByReservationId(ReservationId reservationId) {
-        return repository.findFirstByReservationIdOrderByCreatedAtDesc(reservationId.value())
+        return repository.findFirstByReservationIdOrderByCreatedAtDescIdDesc(reservationId.value())
                 .map(ChargePersistenceMapper::toDomain);
     }
 

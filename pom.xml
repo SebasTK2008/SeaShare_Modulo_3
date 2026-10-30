@@ -269,6 +269,7 @@
                                         <include>com/seashare/seasharem3/domain/valueobject/BoatId</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/HighSeasonWindow*</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/Money</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/PaymentConfirmationStatus</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/Percentage</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/ReservationValue</include>
                                         <include>com/seashare/seasharem3/domain/exception/BaseRateException*</include>
@@ -289,6 +290,7 @@
                                         <include>com/seashare/seasharem3/application/service/EstimateSingleService</include>
                                         <include>com/seashare/seasharem3/application/service/FinancialParametersService</include>
                                         <include>com/seashare/seasharem3/application/service/CalculateReservationValueService</include>
+                                        <include>com/seashare/seasharem3/application/service/GetPaymentConfirmationService</include>
                                         <include>com/seashare/seasharem3/application/dto/ProvideBaseRateCommand</include>
                                         <include>com/seashare/seasharem3/application/dto/BaseRateResult</include>
                                     </includes>

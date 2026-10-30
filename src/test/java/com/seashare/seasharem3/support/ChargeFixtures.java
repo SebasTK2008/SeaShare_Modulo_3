@@ -65,4 +65,17 @@ public final class ChargeFixtures {
                 .transitionTo(ChargeIntentStatus.CAPTURED)
                 .withExternalReference(externalReference);
     }
+
+    /**
+     * Intencion de cobro en cualquier estado interno, con detalle y referencia externa opcionales.
+     * Se usa en las pruebas de consulta de UC06, que necesitan todos los estados sin recorrer las
+     * transiciones de UC05.
+     */
+    public static ChargeIntent intentWithStatus(ReservationInformation reservation, ChargeIntentStatus status,
+            String externalReference, String statusDetail, Instant createdAt) {
+        return ChargeIntent.restore(UUID.randomUUID(), reservation.reservationId(),
+                new IdempotencyKey("intent|" + status + "|" + createdAt), status, TOTAL,
+                new PaymentMethodReference("token-123", "CREDIT_CARD", "4242"), externalReference, statusDetail,
+                createdAt);
+    }
 }
