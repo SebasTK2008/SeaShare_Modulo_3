@@ -7,7 +7,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-seashare}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seashare}
     ports:
-      - "5432:5432"
+      # Puerto publicado en el host. Por defecto 5433 porque el PostgreSQL nativo de Windows
+      # (servicio postgresql-x64-18) ya ocupa el 5432 y no puede detenerse sin elevación.
+      # Dentro de la red de Docker la app sigue conectando a postgres:5432.
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -31,6 +34,15 @@ services:
       timeout: 10s
       retries: 10
 
+  fleet-stub:
+    image: wiremock/wiremock:3.13.2
+    container_name: seashare-fleet-stub
+    command: ["--verbose"]
+    ports:
+      - "${FLEET_STUB_PORT:-8081}:8080"
+    volumes:
+      - ./wiremock:/home/wiremock:ro
+
   app:
     build: .
     container_name: seashare-app
@@ -47,6 +59,9 @@ services:
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-seashare}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-seashare}
       SEASHARE_TIMEZONE: ${SEASHARE_TIMEZONE:-America/Bogota}
+      # URL de Flota vista desde la app: nombre del servicio y puerto INTERNO del contenedor
+      # (el puerto publicado en el host, FLEET_STUB_PORT, no aplica dentro de la red de Docker).
+      FLEET_BASE_URL: ${FLEET_BASE_URL:-http://fleet-stub:8080}
       GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-https://api.mercadopago.com}
       GATEWAY_ACCESS_TOKEN: ${GATEWAY_ACCESS_TOKEN:-}
       GATEWAY_WEBHOOK_SECRET: ${GATEWAY_WEBHOOK_SECRET:-}
