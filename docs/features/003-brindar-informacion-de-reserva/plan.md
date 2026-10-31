@@ -1,7 +1,7 @@
 # Implementation Plan: UC03 - Brindar Información de Reserva
 
 **Date**: 2026-10-09
-**Updated**: 2026-10-24 (criterio de integración real con UC02)
+**Updated**: 2026-10-30 (2026-10-24: criterio de integración real con UC02; cierre de T026 con la cobertura medida y `clean verify`)
 **Spec**: [spec.md](spec.md)
 
 ## Summary
@@ -338,7 +338,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 ### Phase 6: Polish — **parcialmente compartido con la Fase general**
 
 - [x] **T025** · Documentación y referencias: publicar la firma de `ReservationInformationRepository`, documentar el esquema de `reservation_information` frente a la migración inicial única (general-plan §4.2, D-31) y dejar constancia de la topología AMQP vigente (cola `finance.reservation-info.v1`, DLQ `finance.reservation-info.v1.dlq`; reproceso manual fuera del alcance). No se edita ningún contrato ni SPEC sin acuerdo.
-- [ ] **T026** · revisar cobertura (dominio ≥ 90 %, aplicación ≥ 80 % **[CONV]**) y `./mvnw clean verify` final con las pruebas de aceptación CE-001…CE-004.
+- [x] **T026** · revisar cobertura (dominio ≥ 90 %, aplicación ≥ 80 % **[CONV]**) y `./mvnw clean verify` final con las pruebas de aceptación CE-001…CE-004. Verificado el 2026-10-30: `ReservationInformation` 92,11 % y `RegisterReservationInformationService` 96,49 % de línea; `clean verify` en verde con 1470 tests y las puertas de JaCoCo cumplidas.
 
 ## Dependencies & Execution Order
 
