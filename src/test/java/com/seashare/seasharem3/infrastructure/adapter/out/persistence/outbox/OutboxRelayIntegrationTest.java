@@ -7,7 +7,11 @@ import com.seashare.seasharem3.infrastructure.config.amqp.AmqpNames;
 import com.seashare.seasharem3.support.IntegrationTestProperties;
 import com.seashare.seasharem3.support.RetryProbeConfiguration;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.core.AmqpAdmin;
+import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -49,10 +53,16 @@ class OutboxRelayIntegrationTest {
     private RabbitTemplate rabbitTemplate;
 
     @Autowired
+    private AmqpAdmin amqpAdmin;
+
+    @Autowired
     private TransactionTemplate transactionTemplate;
 
     @Test
     void publishIsTransactionalAndRelayConfirmsTheMessageInTheBroker() {
+        // La cola de UC07 ya tiene consumidor: se observa una copia en una cola de sonda propia,
+        // enlazada a la misma routing key del exchange de eventos.
+        String probeQueue = declareProbeQueue();
         String payload = "{\"reservation_id\":\"" + UUID.randomUUID() + "\"}";
         transactionTemplate.executeWithoutResult(status -> outboxPort.publish(AmqpNames.EXCHANGE_EVENTS,
                 AmqpNames.ROUTING_STATUS_CHANGED, payload));
@@ -64,7 +74,7 @@ class OutboxRelayIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM outbox_message WHERE id = ? AND published_at IS NOT NULL", Long.class, id))
                 .isEqualTo(1L);
-        Message received = receiveWithPayload(AmqpNames.QUEUE_RESERVATION_STATUS, payload);
+        Message received = receiveWithPayload(probeQueue, payload);
         assertThat(new String(received.getBody(), StandardCharsets.UTF_8)).isEqualTo(payload);
     }
 
@@ -84,5 +94,15 @@ class OutboxRelayIntegrationTest {
             }
         }
         throw new AssertionError("No message with the expected payload arrived to queue " + queue);
+    }
+
+    /** Cola temporal y auto-eliminable enlazada a la routing key de estado de reserva. */
+    private String declareProbeQueue() {
+        Queue queue = new Queue("test.outbox.probe." + UUID.randomUUID(), false, false, true);
+        amqpAdmin.declareQueue(queue);
+        amqpAdmin.declareBinding(BindingBuilder.bind(queue)
+                .to(new TopicExchange(AmqpNames.EXCHANGE_EVENTS, true, false))
+                .with(AmqpNames.ROUTING_STATUS_CHANGED));
+        return queue.getName();
     }
 }
