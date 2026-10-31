@@ -71,7 +71,7 @@ El Sistema de Reservas y Operaciones notifica el estado vigente de una reserva. 
 
    Antes de delegar, UC07 reclama una fila de `reservation_status_log` con `INSERT … ON CONFLICT DO NOTHING`; si la identidad ya existe, el mensaje se confirma (`ack`) sin operación adicional [SPEC casos extremos]. `status_changed_at` se interpreta como un instante ISO-8601 en UTC, de modo que un reenvío de la misma transición produce exactamente la misma clave. `operation_type` toma los valores `CHARGE`, `REFUND` o `SETTLEMENT` y `outcome` es un texto corto sin catálogo fijado; `processed_at` nulo indica una operación reclamada que no llegó a confirmarse y que queda para reproceso manual, ya que la reentrega con la misma identidad no la repite.
 
-8. **Delegación no concluyente**: si la liquidación delegada devuelve `FAILED`, UC07 revierte la transacción completa del mensaje y confirma (`ack`) registrando el fallo en `operational_failure`; no queda una ejecución parcial de una cancelación con dos operaciones. Si el depósito ya tenía otro desenlace, se conserva el existente y se registra la inconsistencia (RF-009B).
+8. **Delegación no concluyente**: si el reembolso o la liquidación delegados devuelven `FAILED`, UC07 revierte la transacción completa del mensaje y confirma (`ack`) registrando el fallo en `operational_failure`; no queda una ejecución parcial de una cancelación con dos operaciones. Si el depósito ya tenía otro desenlace, se conserva el existente y se registra la inconsistencia (RF-009B).
 
 ## 4. Respuesta exitosa
 

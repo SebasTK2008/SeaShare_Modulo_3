@@ -4,6 +4,7 @@ import com.seashare.seasharem3.application.dto.DepositTrackingResult;
 import com.seashare.seasharem3.application.dto.OpenDepositTrackingCommand;
 import com.seashare.seasharem3.application.dto.ProcessChargeCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestCommand;
+import com.seashare.seasharem3.application.dto.RefundRequestResult;
 import com.seashare.seasharem3.application.dto.ReservationStatusCommand;
 import com.seashare.seasharem3.application.dto.SettlementCommand;
 import com.seashare.seasharem3.application.dto.SettlementRequestResult;
@@ -15,6 +16,7 @@ import com.seashare.seasharem3.application.service.HandleReservationStatusServic
 import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.service.ReservationStatusPolicy;
 import com.seashare.seasharem3.domain.valueobject.DepositDispositionStatus;
+import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.domain.valueobject.ReservationStatus;
 import com.seashare.seasharem3.domain.valueobject.SettlementScope;
@@ -289,10 +291,16 @@ class Uc07AcceptanceTest {
     private static final class RecordingRefund implements RequestRefundUseCase {
 
         private final List<RefundRequestCommand> commands = new ArrayList<>();
+        private RefundIntentStatus resulting = RefundIntentStatus.PENDING_SEND;
 
         @Override
-        public void request(RefundRequestCommand command) {
+        public RefundRequestResult request(RefundRequestCommand command) {
             commands.add(command);
+            return new RefundRequestResult(UUID.randomUUID(), resulting);
+        }
+
+        void resolveAs(RefundIntentStatus status) {
+            this.resulting = status;
         }
 
         List<RefundRequestCommand> commands() {

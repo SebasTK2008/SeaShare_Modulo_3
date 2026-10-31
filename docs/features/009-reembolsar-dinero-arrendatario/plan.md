@@ -4,7 +4,7 @@
 **Updated**: 2026-10-30 (ver [Actualizaciones del plan](#actualizaciones-del-plan))
 **Spec**: [spec.md](spec.md)
 
-> **Actualización del plan — 2026-10-30.** Este documento parte del plan original del **2026-10-09**, conservado en el historial de Git (commit `4e2377c`). La revisión previa a la implementación (2026-10-29) se conserva en `[ACT-01]`…`[ACT-07]`; el cierre oficial posterior a la implementación se registra en `[ACT-08]`. Las secciones afectadas están marcadas con `[ACT-xx]` y se detallan en [Actualizaciones del plan](#actualizaciones-del-plan). Salvo las líneas de versión y la sección «Actualizaciones del plan», el contenido sin marcador pertenece al plan original.
+> **Actualización del plan — 2026-10-30.** Este documento parte del plan original del **2026-10-09**, conservado en el historial de Git (commit `4e2377c`). La revisión previa a la implementación (2026-10-29) se conserva en `[ACT-01]`…`[ACT-07]`; el cierre oficial posterior a la implementación se registra en `[ACT-08]` y la revisión de firma posterior a UC07, en `[ACT-09]`. Las secciones afectadas están marcadas con `[ACT-xx]` y se detallan en [Actualizaciones del plan](#actualizaciones-del-plan). Salvo las líneas de versión y la sección «Actualizaciones del plan», el contenido sin marcador pertenece al plan original.
 
 ## Summary
 
@@ -39,6 +39,14 @@ Registro del cierre oficial posterior a la implementación. La revisión previa 
 | **ACT-08** | `Estado actual del repositorio`, `Implementation Phases`, `Estrategia de testing` y `Notes` | El estado describía `RefundIntent`/`RefundRecord` como stubs y no reconocía servicios, adaptadores ni pruebas; las tareas seguían pendientes → UC09 implementado y verificado; tareas marcadas según evidencia; pendientes de aceptación CE, listener y cobertura específica documentados; se registran las columnas `version` de bloqueo optimista, el uso de `ReservationLockPort` en UC08 y las pruebas adicionales | Cerrar el plan como documentación de cierre sin declarar hechas las pruebas que no existen con el nombre del plan. |
 
 Desviaciones de implementación registradas en este cierre: `refund_intent.version` y `settlement_intent.version` (bloqueo optimista), `ReservationLockPort` en el UC08 mínimo, `GATEWAY_COLLECTOR_ID` en README/`docker-compose.yml`, payload de dispersión con la referencia de la reserva y pruebas adicionales de handlers, conciliación y persistencia. Las pruebas de aceptación `ce00X_…` de UC09 no existen con ese nombre; su cobertura funcional equivalente está en las pruebas unitarias e integración citadas en la estrategia de testing.
+
+### Actualización de firma — 2026-10-30
+
+Registro del cambio de firma acordado al cerrar UC07: el puerto de entrada deja de ser `void` para que su llamador pueda detectar una solicitud no registrada. La revisión previa se conserva en `[ACT-01]`…`[ACT-08]`.
+
+| ID | Sección(es) | Original (2026-10-30) → vigente (2026-10-30) | Motivo |
+|---|---|---|---|
+| **ACT-09** | `Puertos expuestos` y `RefundIntentStatus` | `void request(RefundRequestCommand command)` → `RefundRequestResult request(RefundRequestCommand command)`, con `refundIntentId` y estado (`FAILED` cuando la solicitud no se registra) | UC07 necesita distinguir el fallo interno de UC09 para revertir la transacción del mensaje y no dejar una cancelación moderada ejecutada a medias (RF-009, CE-004 de UC07). UC08 consume el puerto e ignora el resultado. `FAILED` no se persiste en `refund_intent.status`: solo describe el resultado de la solicitud, igual que `SettlementStatus.FAILED` en UC10. |
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -177,8 +185,9 @@ src/test/java/com/seashare/seasharem3/
 
 ```java
 public interface RequestRefundUseCase {
-    void request(RefundRequestCommand command);
+    RefundRequestResult request(RefundRequestCommand command);
 }
+public record RefundRequestResult(UUID refundIntentId, RefundIntentStatus status) {}
 public record RefundRequestCommand(
     UUID reservationId,
     RefundTrigger trigger,   // CANCELLED_FLEXIBLE | CANCELLED_MODERATE | CANCELLED_STRICT
@@ -188,7 +197,7 @@ public record RefundRequestCommand(
 ) {}
 ```
 
-Sin monto ni atributo de origen financiero [SPEC RF-001, RF-007 UC08]. Ante datos faltantes (RF-010) UC09 **registra el fallo en `operational_failure` y retorna sin solicitar nada**; los errores técnicos (BD) se propagan para que el *listener* aplique `nack` (README §4.4). Una `operationKey` repetida es idempotente: la clave persistida se deriva como `refund:<trigger>:<operationKey>` y los reintentos técnicos reutilizan la misma clave **[ACT-03]**. UC09 publica además el puerto de lectura que consume UC06:
+Sin monto ni atributo de origen financiero [SPEC RF-001, RF-007 UC08]. El resultado devuelve la intención registrada y su estado, o `FAILED` cuando la solicitud no pudo registrarse: UC07 lo usa para revertir la transacción del mensaje y UC08 puede ignorarlo **[ACT-09]**. Ante datos faltantes (RF-010) UC09 **registra el fallo en `operational_failure`** y responde `FAILED`; los errores técnicos (BD) se propagan para que el *listener* aplique `nack` (README §4.4). Una `operationKey` repetida es idempotente: la clave persistida se deriva como `refund:<trigger>:<operationKey>` y los reintentos técnicos reutilizan la misma clave **[ACT-03]**. UC09 publica además el puerto de lectura que consume UC06:
 
 ```java
 public interface RefundRecordQueryPort {

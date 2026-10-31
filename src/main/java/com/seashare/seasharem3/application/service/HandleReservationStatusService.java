@@ -4,6 +4,7 @@ import com.seashare.seasharem3.application.dto.DepositTrackingResult;
 import com.seashare.seasharem3.application.dto.OpenDepositTrackingCommand;
 import com.seashare.seasharem3.application.dto.ProcessChargeCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestCommand;
+import com.seashare.seasharem3.application.dto.RefundRequestResult;
 import com.seashare.seasharem3.application.dto.ReservationStatusCommand;
 import com.seashare.seasharem3.application.dto.SettlementCommand;
 import com.seashare.seasharem3.application.dto.SettlementRequestResult;
@@ -24,6 +25,7 @@ import com.seashare.seasharem3.domain.valueobject.DepositDispositionStatus;
 import com.seashare.seasharem3.domain.valueobject.FinancialOperationType;
 import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.PlannedOperation;
+import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
 import com.seashare.seasharem3.domain.valueobject.RefundTrigger;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.domain.valueobject.ReservationStatus;
@@ -144,9 +146,23 @@ public class HandleReservationStatusService implements HandleReservationStatusUs
         switch (operation.operationType()) {
             case CHARGE -> processCharge.process(new ProcessChargeCommand(command.reservationId(),
                     command.paymentTokenRef(), command.paymentMethodType(), command.paymentMetadata(), operationKey));
-            case REFUND -> requestRefund.request(new RefundRequestCommand(command.reservationId(),
-                    RefundTrigger.valueOf(triggerOf(operation)), null, operationKey));
+            case REFUND -> requestRefund(command, operation, operationKey);
             case SETTLEMENT -> requestSettlement(reservationId, operation, operationKey);
+        }
+    }
+
+    /**
+     * Solicita el reembolso a UC09. Un resultado {@code FAILED} es un fallo permanente del mensaje:
+     * se propaga para revertir la transacción completa, igual que en la liquidación.
+     */
+    private void requestRefund(ReservationStatusCommand command, PlannedOperation operation,
+            String operationKey) {
+        RefundTrigger trigger = RefundTrigger.valueOf(triggerOf(operation));
+        RefundRequestResult result = requestRefund.request(new RefundRequestCommand(command.reservationId(), trigger,
+                null, operationKey));
+        if (result.status() == RefundIntentStatus.FAILED) {
+            throw new DomainException(
+                    "refund returned FAILED;trigger=" + trigger + ";operationKey=" + operationKey);
         }
     }
 

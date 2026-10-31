@@ -3,6 +3,7 @@ package com.seashare.seasharem3.application.service;
 import com.seashare.seasharem3.application.dto.DepositTrackingResult;
 import com.seashare.seasharem3.application.dto.OpenDepositTrackingCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestCommand;
+import com.seashare.seasharem3.application.dto.RefundRequestResult;
 import com.seashare.seasharem3.application.port.in.OpenDepositTrackingUseCase;
 import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
 import com.seashare.seasharem3.application.port.out.ChargeRecordQueryPort;
@@ -16,6 +17,7 @@ import com.seashare.seasharem3.domain.model.RefundIntent;
 import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.service.RefundCalculator;
 import com.seashare.seasharem3.domain.valueobject.DepositDispositionStatus;
+import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
 import com.seashare.seasharem3.domain.valueobject.RefundScope;
 import com.seashare.seasharem3.domain.valueobject.RefundTrigger;
 import com.seashare.seasharem3.support.ChargeFixtures;
@@ -73,8 +75,10 @@ class RequestRefundServiceTest {
 
     @Test
     void createsAPendingIntentAndPublishesTheCommand() {
-        service.request(command(RefundTrigger.CANCELLED_MODERATE, "op-1"));
+        RefundRequestResult result = service.request(command(RefundTrigger.CANCELLED_MODERATE, "op-1"));
 
+        assertThat(result.refundIntentId()).isNotNull();
+        assertThat(result.status()).isEqualTo(RefundIntentStatus.PENDING_SEND);
         verify(refundIntentRepository).save(any(RefundIntent.class));
         verify(refundCommandPublisher).publish(any(UUID.class));
         var saved = org.mockito.ArgumentCaptor.forClass(RefundIntent.class);
@@ -99,8 +103,10 @@ class RequestRefundServiceTest {
         when(chargeIntentRepository.findApprovedByReservationId(RESERVATION.reservationId()))
                 .thenReturn(Optional.empty());
 
-        service.request(command(RefundTrigger.CANCELLED_FLEXIBLE, "op-2"));
+        RefundRequestResult result = service.request(command(RefundTrigger.CANCELLED_FLEXIBLE, "op-2"));
 
+        assertThat(result.status()).isEqualTo(RefundIntentStatus.FAILED);
+        assertThat(result.refundIntentId()).isNull();
         verify(refundIntentRepository, never()).save(any());
         assertThat(failureRecorder.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::reason)
                 .containsExactly("CHARGE_INTENT_NOT_FOUND");

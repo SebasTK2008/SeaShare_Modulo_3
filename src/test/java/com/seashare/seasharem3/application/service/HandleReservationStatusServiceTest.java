@@ -4,6 +4,7 @@ import com.seashare.seasharem3.application.dto.DepositTrackingResult;
 import com.seashare.seasharem3.application.dto.OpenDepositTrackingCommand;
 import com.seashare.seasharem3.application.dto.ProcessChargeCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestCommand;
+import com.seashare.seasharem3.application.dto.RefundRequestResult;
 import com.seashare.seasharem3.application.dto.ReservationStatusCommand;
 import com.seashare.seasharem3.application.dto.SettlementCommand;
 import com.seashare.seasharem3.application.dto.SettlementRequestResult;
@@ -19,6 +20,7 @@ import com.seashare.seasharem3.domain.service.ReservationStatusPolicy;
 import com.seashare.seasharem3.domain.valueobject.DepositDispositionStatus;
 import com.seashare.seasharem3.domain.valueobject.FinancialOperationType;
 import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
+import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
 import com.seashare.seasharem3.domain.valueobject.RefundTrigger;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.domain.valueobject.ReservationStatus;
@@ -85,6 +87,8 @@ class HandleReservationStatusServiceTest {
 
         when(statusLog.insertIfAbsent(any(), any(), any(), any(), any(), any())).thenReturn(true);
         when(reservationInformation.findByReservationId(reservationId)).thenReturn(Optional.of(calculatedReservation));
+        when(requestRefund.request(any())).thenReturn(
+                new RefundRequestResult(UUID.randomUUID(), RefundIntentStatus.PENDING_SEND));
         when(requestSettlement.request(any())).thenReturn(
                 new SettlementRequestResult(UUID.randomUUID(), SettlementStatus.PENDING_SEND));
         when(openDepositTracking.open(any())).thenReturn(
@@ -233,6 +237,17 @@ class HandleReservationStatusServiceTest {
         // La reversión la aporta @Transactional; aquí solo se comprueba que la excepción propaga.
         verify(requestRefund).request(any(RefundRequestCommand.class));
         verifyNoInteractions(openDepositTracking);
+    }
+
+    @Test
+    void flexibleCancellationFailsTheMessageWhenTheRefundReturnsFailed() {
+        when(requestRefund.request(any())).thenReturn(new RefundRequestResult(null, RefundIntentStatus.FAILED));
+
+        assertThatThrownBy(() -> service.handle(command(ReservationStatus.CANCELLED_FLEXIBLE)))
+                .isInstanceOf(DomainException.class)
+                .hasMessageContaining("refund returned FAILED");
+
+        verify(statusLog, never()).markProcessed(any(), any(), any());
     }
 
     @Test

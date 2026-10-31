@@ -596,7 +596,7 @@ Perfiles de Spring: `dev` (por defecto; defaults locales alineados con `docker-c
 | Intención | Estados internos | Mapeo hacia UC06 (solo cobro) |
 |---|---|---|
 | `ChargeIntent` | `PENDING_SEND`, `IN_PROCESS`, `CAPTURED`, `REJECTED`, `CANCELLED`, `EXPIRED`, `COMMUNICATION_ERROR` | `PENDING_SEND`/`IN_PROCESS` → `IN_PROCESS`; `CAPTURED` → `APPROVED`; `REJECTED` → `REJECTED`; `CANCELLED` → `CANCELLED`; `EXPIRED` → `EXPIRED`; `COMMUNICATION_ERROR` → `UNKNOWN` |
-| `RefundIntent`, `SettlementIntent` | `PENDING_SEND`, `IN_PROCESS`, `COMPLETED`, `REJECTED`, `CANCELLED`, `EXPIRED`, `COMMUNICATION_ERROR` | No se exponen |
+| `RefundIntent`, `SettlementIntent` | `PENDING_SEND`, `IN_PROCESS`, `COMPLETED`, `REJECTED`, `CANCELLED`, `EXPIRED`, `COMMUNICATION_ERROR` (`FAILED` solo como resultado de una solicitud no registrada; no se persiste) | No se exponen |
 
 El registro inmutable correspondiente se crea **solo** al pasar a un estado exitoso confirmado externamente (UC05 RF-006/RF-008, UC09 RF-007/RF-009, UC10 RF-010/RF-012) y siempre referencia a la intención que lo originó; los demás estados únicamente actualizan la intención. Una reserva puede acumular varias `ChargeIntent` (por ejemplo, una `REJECTED` seguida de un nuevo intento); solo la que alcanza el cobro confirmado origina un `ChargeRecord`.
 

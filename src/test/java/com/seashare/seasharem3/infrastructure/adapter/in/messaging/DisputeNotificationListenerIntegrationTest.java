@@ -2,6 +2,7 @@ package com.seashare.seasharem3.infrastructure.adapter.in.messaging;
 
 import com.seashare.seasharem3.TestcontainersConfiguration;
 import com.seashare.seasharem3.application.dto.RefundRequestCommand;
+import com.seashare.seasharem3.application.dto.RefundRequestResult;
 import com.seashare.seasharem3.application.dto.SettlementCommand;
 import com.seashare.seasharem3.application.dto.SettlementRequestResult;
 import com.seashare.seasharem3.application.port.in.RequestRefundUseCase;
@@ -10,6 +11,7 @@ import com.seashare.seasharem3.domain.model.FinancialParameters;
 import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.Percentage;
+import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
 import com.seashare.seasharem3.domain.valueobject.RefundTrigger;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.domain.valueobject.SettlementScope;
@@ -247,12 +249,13 @@ class DisputeNotificationListenerIntegrationTest {
         private volatile boolean failTransiently;
 
         @Override
-        public void request(RefundRequestCommand command) {
+        public RefundRequestResult request(RefundRequestCommand command) {
             invocations.incrementAndGet();
             if (failTransiently) {
                 throw new DataAccessResourceFailureException("transient refund failure");
             }
             commands.add(command);
+            return new RefundRequestResult(UUID.randomUUID(), RefundIntentStatus.PENDING_SEND);
         }
 
         List<RefundRequestCommand> commands() {
