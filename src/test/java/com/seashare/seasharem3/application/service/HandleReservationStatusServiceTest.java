@@ -230,8 +230,9 @@ class HandleReservationStatusServiceTest {
         assertThatThrownBy(() -> service.handle(command(ReservationStatus.CANCELLED_MODERATE)))
                 .isInstanceOf(DomainException.class);
 
+        // La reversión la aporta @Transactional; aquí solo se comprueba que la excepción propaga.
         verify(requestRefund).request(any(RefundRequestCommand.class));
-        verify(statusLog, never()).markProcessed(any(), any(), any());
+        verifyNoInteractions(openDepositTracking);
     }
 
     @Test
