@@ -1,0 +1,10 @@
+{
+  "properties": {
+    "content_type": "application/json",
+    "delivery_mode": 2,
+    "message_id": "msg-uc07-001"
+  },
+  "routing_key": "reservation.status.changed",
+  "payload": "{\"reservation_id\":\"b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10\",\"status\":\"PENDING\",\"status_changed_at\":\"2026-10-30T14:30:00Z\",\"payment_token_ref\":\"tok_12345abcdef\",\"payment_method_type\":\"CREDIT_CARD\",\"payment_metadata\":{\"last_four\":\"4242\",\"payer_email\":\"arrendatario@example.com\"}}",
+  "payload_encoding": "string"
+}
