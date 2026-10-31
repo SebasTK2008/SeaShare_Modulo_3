@@ -232,7 +232,7 @@ Convenciones: `NUMERIC(18,4)` para dinero y porcentajes, con precisión interna 
 | `commission_record` | **Inmutable** | `id`, `settlement_record_id`, `settlement_intent_id`, `reservation_id`, `owner_id`, `boat_id`, `amount`, `created_at` | `settlement_record_id` y `settlement_intent_id` `NOT NULL` con `FOREIGN KEY`; `UNIQUE(settlement_record_id)` (una comisión por liquidación estándar, UC10 CE-006); creación atómica con su `settlement_record` |
 | `deposit_disposition` | Entidad (UC08) | `reservation_id` PK, `completed_at` (de `fechaHoraEstado` de `COMPLETED`), `dispute_id`, `dispute_status`, `disposition` (`HELD`, `REFUND_REQUESTED`, `SETTLEMENT_REQUESTED`) | Cambio de `disposition` por *compare-and-set* |
 | `dispute_event_log` | Técnica (UC08) | `reservation_id`, `dispute_id`, `event_key`, `status`, `status_changed_at`, `processed_at` | `UNIQUE(reservation_id, dispute_id, event_key)` (UC08 RF-008) |
-| `reservation_status_log` | Técnica (UC07) | `reservation_id`, `status`, `operation_type`, `idempotency_key`, `status_changed_at`, `processed_at`, `outcome` | `UNIQUE(reservation_id, status, operation_type, idempotency_key)` para los estados que disparan operaciones monetarias (`PENDING`, cancelaciones y `COMPLETED`), conforme a la identidad de operación de UC07 RF-009A |
+| `reservation_status_log` | Técnica (UC07) | `reservation_id`, `status`, `operation_type`, `idempotency_key`, `status_changed_at`, `processed_at`, `outcome` | `UNIQUE(reservation_id, status, operation_type, idempotency_key)` para los estados que disparan operaciones monetarias (`PENDING`, cancelaciones y `COMPLETED`), conforme a la identidad de operación de UC07 RF-009A; `operation_type` ∈ {`CHARGE`, `REFUND`, `SETTLEMENT`} y `outcome` es un texto corto sin catálogo fijado [CONV, D-UC07-11] |
 | `operational_failure` | Técnica | `use_case`, `reservation_id`, `reason`, `payload_ref`, `created_at`, `resolved` | Destino de todo "registra el fallo internamente" |
 | `outbox_message` | Técnica | `id`, `exchange`, `routing_key`, `payload`, `created_at`, `published_at` | Índice parcial `published_at IS NULL` |
 | `shedlock` | Técnica (opcional) | Bloqueo de jobs programados | — |
@@ -596,7 +596,7 @@ Perfiles de Spring: `dev` (por defecto; defaults locales alineados con `docker-c
 | Intención | Estados internos | Mapeo hacia UC06 (solo cobro) |
 |---|---|---|
 | `ChargeIntent` | `PENDING_SEND`, `IN_PROCESS`, `CAPTURED`, `REJECTED`, `CANCELLED`, `EXPIRED`, `COMMUNICATION_ERROR` | `PENDING_SEND`/`IN_PROCESS` → `IN_PROCESS`; `CAPTURED` → `APPROVED`; `REJECTED` → `REJECTED`; `CANCELLED` → `CANCELLED`; `EXPIRED` → `EXPIRED`; `COMMUNICATION_ERROR` → `UNKNOWN` |
-| `RefundIntent`, `SettlementIntent` | `PENDING_SEND`, `IN_PROCESS`, `COMPLETED`, `REJECTED`, `CANCELLED`, `EXPIRED`, `COMMUNICATION_ERROR` | No se exponen |
+| `RefundIntent`, `SettlementIntent` | `PENDING_SEND`, `IN_PROCESS`, `COMPLETED`, `REJECTED`, `CANCELLED`, `EXPIRED`, `COMMUNICATION_ERROR` (`FAILED` solo como resultado de una solicitud no registrada; no se persiste) | No se exponen |
 
 El registro inmutable correspondiente se crea **solo** al pasar a un estado exitoso confirmado externamente (UC05 RF-006/RF-008, UC09 RF-007/RF-009, UC10 RF-010/RF-012) y siempre referencia a la intención que lo originó; los demás estados únicamente actualizan la intención. Una reserva puede acumular varias `ChargeIntent` (por ejemplo, una `REJECTED` seguida de un nuevo intento); solo la que alcanza el cobro confirmado origina un `ChargeRecord`.
 

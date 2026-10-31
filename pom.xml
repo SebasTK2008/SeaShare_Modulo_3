@@ -291,8 +291,10 @@
                                         <include>com/seashare/seasharem3/application/service/FinancialParametersService</include>
                                         <include>com/seashare/seasharem3/application/service/CalculateReservationValueService</include>
                                         <include>com/seashare/seasharem3/application/service/GetPaymentConfirmationService</include>
+                                        <include>com/seashare/seasharem3/application/service/HandleReservationStatusService</include>
                                         <include>com/seashare/seasharem3/application/dto/ProvideBaseRateCommand</include>
                                         <include>com/seashare/seasharem3/application/dto/BaseRateResult</include>
+                                        <include>com/seashare/seasharem3/application/dto/ReservationStatusCommand</include>
                                     </includes>
                                     <limits>
                                         <limit>

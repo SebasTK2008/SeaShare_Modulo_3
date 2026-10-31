@@ -2,6 +2,7 @@ package com.seashare.seasharem3.acceptance;
 
 import com.seashare.seasharem3.application.dto.DisputeNotificationCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestCommand;
+import com.seashare.seasharem3.application.dto.RefundRequestResult;
 import com.seashare.seasharem3.application.dto.SettlementCommand;
 import com.seashare.seasharem3.application.dto.SettlementRequestResult;
 import com.seashare.seasharem3.application.port.in.RequestRefundUseCase;
@@ -12,6 +13,7 @@ import com.seashare.seasharem3.domain.model.DepositDisposition;
 import com.seashare.seasharem3.domain.valueobject.DepositDispositionStatus;
 import com.seashare.seasharem3.domain.valueobject.DisputeId;
 import com.seashare.seasharem3.domain.valueobject.DisputeStatus;
+import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
 import com.seashare.seasharem3.domain.valueobject.RefundTrigger;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.domain.valueobject.SettlementScope;
@@ -177,10 +179,11 @@ class Uc08AcceptanceTest {
         }
 
         @Override
-        public void request(RefundRequestCommand command) {
+        public RefundRequestResult request(RefundRequestCommand command) {
             commands.add(command);
             applyDisposition(new ReservationId(command.reservationId()), command.disputeId(),
                     DepositDispositionStatus.REFUND_REQUESTED);
+            return new RefundRequestResult(UUID.randomUUID(), RefundIntentStatus.PENDING_SEND);
         }
 
         List<RefundRequestCommand> commands() {

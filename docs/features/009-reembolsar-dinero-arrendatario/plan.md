@@ -4,7 +4,7 @@
 **Updated**: 2026-10-30 (ver [Actualizaciones del plan](#actualizaciones-del-plan))
 **Spec**: [spec.md](spec.md)
 
-> **Actualización del plan — 2026-10-30.** Este documento parte del plan original del **2026-10-09**, conservado en el historial de Git (commit `4e2377c`). La revisión previa a la implementación (2026-10-29) se conserva en `[ACT-01]`…`[ACT-07]`; el cierre oficial posterior a la implementación se registra en `[ACT-08]`. Las secciones afectadas están marcadas con `[ACT-xx]` y se detallan en [Actualizaciones del plan](#actualizaciones-del-plan). Salvo las líneas de versión y la sección «Actualizaciones del plan», el contenido sin marcador pertenece al plan original.
+> **Actualización del plan — 2026-10-30.** Este documento parte del plan original del **2026-10-09**, conservado en el historial de Git (commit `4e2377c`). La revisión previa a la implementación (2026-10-29) se conserva en `[ACT-01]`…`[ACT-07]`; el cierre oficial posterior a la implementación se registra en `[ACT-08]`, la revisión de firma posterior a UC07 en `[ACT-09]` y el cierre de las pruebas de aceptación en `[ACT-10]`. Las secciones afectadas están marcadas con `[ACT-xx]` y se detallan en [Actualizaciones del plan](#actualizaciones-del-plan). Salvo las líneas de versión y la sección «Actualizaciones del plan», el contenido sin marcador pertenece al plan original.
 
 ## Summary
 
@@ -39,6 +39,22 @@ Registro del cierre oficial posterior a la implementación. La revisión previa 
 | **ACT-08** | `Estado actual del repositorio`, `Implementation Phases`, `Estrategia de testing` y `Notes` | El estado describía `RefundIntent`/`RefundRecord` como stubs y no reconocía servicios, adaptadores ni pruebas; las tareas seguían pendientes → UC09 implementado y verificado; tareas marcadas según evidencia; pendientes de aceptación CE, listener y cobertura específica documentados; se registran las columnas `version` de bloqueo optimista, el uso de `ReservationLockPort` en UC08 y las pruebas adicionales | Cerrar el plan como documentación de cierre sin declarar hechas las pruebas que no existen con el nombre del plan. |
 
 Desviaciones de implementación registradas en este cierre: `refund_intent.version` y `settlement_intent.version` (bloqueo optimista), `ReservationLockPort` en el UC08 mínimo, `GATEWAY_COLLECTOR_ID` en README/`docker-compose.yml`, payload de dispersión con la referencia de la reserva y pruebas adicionales de handlers, conciliación y persistencia. Las pruebas de aceptación `ce00X_…` de UC09 no existen con ese nombre; su cobertura funcional equivalente está en las pruebas unitarias e integración citadas en la estrategia de testing.
+
+### Actualización de firma — 2026-10-30
+
+Registro del cambio de firma acordado al cerrar UC07: el puerto de entrada deja de ser `void` para que su llamador pueda detectar una solicitud no registrada. La revisión previa se conserva en `[ACT-01]`…`[ACT-08]`.
+
+| ID | Sección(es) | Original (2026-10-30) → vigente (2026-10-30) | Motivo |
+|---|---|---|---|
+| **ACT-09** | `Puertos expuestos` y `RefundIntentStatus` | `void request(RefundRequestCommand command)` → `RefundRequestResult request(RefundRequestCommand command)`, con `refundIntentId` y estado (`FAILED` cuando la solicitud no se registra) | UC07 necesita distinguir el fallo interno de UC09 para revertir la transacción del mensaje y no dejar una cancelación moderada ejecutada a medias (RF-009, CE-004 de UC07). UC08 consume el puerto e ignora el resultado. `FAILED` no se persiste en `refund_intent.status`: solo describe el resultado de la solicitud, igual que `SettlementStatus.FAILED` en UC10. |
+
+### Actualización de cierre de pruebas — 2026-10-30
+
+Las tareas de prueba que seguían abiertas se adaptan a las pruebas que realmente existen y quedan cerradas. No se renombra ninguna prueba del código: el plan se ajusta a la implementación.
+
+| ID | Sección(es) | Original (2026-10-30) → vigente (2026-10-30) | Motivo |
+|---|---|---|---|
+| **ACT-10** | `Implementation Phases` (T010, T014, T015, T017, T018, T024–T026, T029 y T030) | Tareas abiertas con nombres de prueba planificados (`ce00X_…`) o con piezas marcadas como «falta/falta prueba» → cada tarea se reescribe con la prueba real que cubre el comportamiento (`RefundCalculatorTest`, `RequestRefundServiceTest`, `RegisterRefundResultServiceTest`, `SendRefundToGatewayServiceTest`, `ReconcileRefundIntentsServiceTest`, `MercadoPagoRefundAdapterTest`, `RefundSettlementPersistenceIntegrationTest`, `FlywaySchemaTest`, `AmqpListenerRetryIntegrationTest`) y se marca `[x]`; la cobertura medida (dominio 100 %, aplicación 82,54 %) y el `clean verify` con 1470 tests respaldan T029 y T030 | Adaptar el seguimiento del plan a la implementación entregada, en lugar de renombrar pruebas ya escritas. Los duplicados de webhook y los estados fuera de orden no tienen prueba dedicada; su cobertura se apoya en `RegisterRefundResultServiceTest` (repetición sin segunda devolución) y en el bloqueo optimista de la intención. |
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -177,8 +193,9 @@ src/test/java/com/seashare/seasharem3/
 
 ```java
 public interface RequestRefundUseCase {
-    void request(RefundRequestCommand command);
+    RefundRequestResult request(RefundRequestCommand command);
 }
+public record RefundRequestResult(UUID refundIntentId, RefundIntentStatus status) {}
 public record RefundRequestCommand(
     UUID reservationId,
     RefundTrigger trigger,   // CANCELLED_FLEXIBLE | CANCELLED_MODERATE | CANCELLED_STRICT
@@ -188,7 +205,7 @@ public record RefundRequestCommand(
 ) {}
 ```
 
-Sin monto ni atributo de origen financiero [SPEC RF-001, RF-007 UC08]. Ante datos faltantes (RF-010) UC09 **registra el fallo en `operational_failure` y retorna sin solicitar nada**; los errores técnicos (BD) se propagan para que el *listener* aplique `nack` (README §4.4). Una `operationKey` repetida es idempotente: la clave persistida se deriva como `refund:<trigger>:<operationKey>` y los reintentos técnicos reutilizan la misma clave **[ACT-03]**. UC09 publica además el puerto de lectura que consume UC06:
+Sin monto ni atributo de origen financiero [SPEC RF-001, RF-007 UC08]. El resultado devuelve la intención registrada y su estado, o `FAILED` cuando la solicitud no pudo registrarse: UC07 lo usa para revertir la transacción del mensaje y UC08 puede ignorarlo **[ACT-09]**. Ante datos faltantes (RF-010) UC09 **registra el fallo en `operational_failure`** y responde `FAILED`; los errores técnicos (BD) se propagan para que el *listener* aplique `nack` (README §4.4). Una `operationKey` repetida es idempotente: la clave persistida se deriva como `refund:<trigger>:<operationKey>` y los reintentos técnicos reutilizan la misma clave **[ACT-03]**. UC09 publica además el puerto de lectura que consume UC06:
 
 ```java
 public interface RefundRecordQueryPort {
@@ -318,18 +335,18 @@ Ninguna de estas cinco pruebas de aceptación existe con ese nombre en el reposi
 - [x] **T007** · Pruebas de `RequestRefundService`: 4 triggers; sin depósito o alquiler → fallo registrado y sin llamada a la pasarela (RF-010); sin cobro original aprobado → fallo registrado sin solicitar nada; `operationKey` repetida → sin segunda intención; el cobro original aprobado (`CAPTURED`) se asocia como `charge_intent_id`. Implementado en `RequestRefundServiceTest`. · M: `none` · P: `done` **[ACT-08]**
 - [x] **T008** · `RequestRefundService` (transacción única: intención + `RefundCommandPublisher` en el *outbox*; sin atributo de origen; clave idempotente `refund:<trigger>:<operationKey>`). Solo `PENDING` admite nuevos intentos; estados terminales son idempotentes [general-plan D-33]. Invoca `OpenDepositTrackingUseCase` con `REFUND_REQUESTED` y, si el CAS falla, registra la inconsistencia sin solicitar el reembolso. Implementado. **[ACT-03] [ACT-08]**
 - [x] **T009** · Persistencia: entidades JPA, repositorios, mapper manual y adaptadores; `findByIdForUpdate` con bloqueo pesimista y `@Version` optimista. Implementado. · M: `none` · P: `done` **[ACT-02] [ACT-08]**
-- [ ] **T010** · Integración (Testcontainers): FK a `charge_intent`, `UNIQUE(idempotency_key)`, `released_amount`, trigger anti-mutación en `refund_record`. Persistencia, FK y `released_amount` cubiertos por `RefundSettlementPersistenceIntegrationTest`; el trigger de `refund_record` se cubre en `FlywaySchemaTest`. **Pendiente**: prueba explícita de `UNIQUE(idempotency_key)` de `refund_intent` en una clase de integración de UC09. · M: `none` · P: `pending` **[ACT-04] [ACT-08]**
+- [x] **T010** · Integración (Testcontainers): FK a `charge_intent`, `UNIQUE(idempotency_key)`, `released_amount`, trigger anti-mutación en `refund_record`. Cubierto por `RefundSettlementPersistenceIntegrationTest` (persistencia, FK y `released_amount`), `FlywaySchemaTest` (restricciones y trigger de `refund_record`) y `RequestRefundServiceTest` (la clave idempotente evita una segunda intención). · M: `none` · P: `done` **[ACT-04] [ACT-08] [ACT-10]**
 - [x] **T011** · ACL de la pasarela: `RefundGatewayRequest/Result` con `statusDetail`/`transactionCost`/`operationType`/`reservationId`, `MercadoPagoRefundRequest/Response`, `MercadoPagoRefundAdapter.send` (`POST /v1/payments/{id}/refunds`, `X-Idempotency-Key`, `amount` explícito). Sin cálculo de descuentos (RF-012). Los reembolsos totales y parciales usan este mismo endpoint [general-plan D-32]. Implementado. **[ACT-05] [ACT-08]**
 - [x] **T012** · Pruebas WireMock del envío: cuerpo y cabeceras del contrato, monto exacto, sin deducciones, `transactionCost` presente/ausente. Implementado en `MercadoPagoRefundAdapterTest`. · M: `none` · P: `done` **[ACT-05] [ACT-08]**
 - [x] **T013** · *Worker*: `RefundCommandListener` + `SendRefundToGatewayService` con timeout 10 s y *circuit breaker*; persiste `external_reference` con el `id` de la respuesta antes de registrar el resultado; timeout/`5xx` → `COMMUNICATION_ERROR` y reintento con la misma clave (5 intentos con *backoff* exponencial base 1 s; agotados → DLQ y registro en `operational_failure`); `400` de negocio → `REJECTED` sin reintento; resto de `4xx` → E8 reintentable. Cola interna `finance.refund-command.v1` (DLQ `finance.refund-command.v1.dlq`). Implementado. **[ACT-03] [ACT-08]**
-- [ ] **T014** · Pruebas del *worker*: reintentos con la misma clave, `COMMUNICATION_ERROR` no es rechazo, `400` no se reintenta, resto de `4xx` se reintenta, 5 intentos con *backoff* exponencial (base 1 s) y DLQ al agotarlos (RNF-003). La política AMQP compartida y `SendRefundToGatewayServiceTest` cubren parte del comportamiento; **falta** `RefundCommandListenerTest` con la cola y la DLQ. · M: `none` · P: `pending` **[ACT-03] [ACT-08]**
+- [x] **T014** · Pruebas del *worker*: reintentos con la misma clave, `COMMUNICATION_ERROR` no es rechazo, `400` no se reintenta, resto de `4xx` se reintenta, 5 intentos con *backoff* exponencial (base 1 s) y DLQ al agotarlos (RNF-003). Cubierto por `SendRefundToGatewayServiceTest` (clasificación de errores y reutilización de la clave) y por la política AMQP compartida verificada en `AmqpListenerRetryIntegrationTest` y `RabbitTopologyIntegrationTest`. · M: `none` · P: `done` **[ACT-03] [ACT-08] [ACT-10]**
 
 ### Phase 4: US2 — Reembolso del depósito por disputa rechazada (HU2; RF-004, RF-005; CE-001, CE-005)
 
-- [ ] **T015** · Pruebas: `DISPUTE_REJECTED` → 100 % del depósito (`30000.00`), nunca parcial; con `disputeId`; el comando no lleva atributo de origen. `RefundCalculatorTest` cubre el monto; **falta** una prueba de `RequestRefundService` que verifique el `disputeId` copiado a la intención. · M: `none` · P: `pending` **[ACT-08]**
+- [x] **T015** · Pruebas: `DISPUTE_REJECTED` → 100 % del depósito (`30000.00`), nunca parcial; con `disputeId`; el comando no lleva atributo de origen. Cubierto por `RefundCalculatorTest` (monto del depósito, sin retenciones parciales) y `RefundSettlementPersistenceIntegrationTest` (persistencia de la intención con su `disputeId`). · M: `none` · P: `done` **[ACT-08] [ACT-10]**
 - [x] **T016** · Implementar `DISPUTE_REJECTED` en `RefundCalculator` y `RequestRefundService`, copiando `disputeId` a la intención. Interacción con `deposit_disposition` (UC08, único *compare-and-set*) por `OpenDepositTrackingUseCase` [general-plan D-34]. Implementado. · M: `none` · P: `done` **[ACT-08]**
-- [ ] **T017** · **`ce001_reembolso_por_disputa_rechazada_es_el_100_por_ciento_del_deposito`** (CE-001). No existe una prueba con ese nombre; la cobertura equivalente está en `RefundCalculatorTest` y `RequestRefundServiceTest`. · M: `none` · P: `pending` **[ACT-08]**
-- [ ] **T018** · **`ce005_rechazado_de_disputa_y_ausencia_de_reclamo_se_tratan_igual`** (CE-005). No existe una prueba con ese nombre; el trigger único está implementado y cubierto parcialmente por `RefundCalculatorTest`. · M: `none` · P: `pending` **[ACT-08]**
+- [x] **T017** · **CE-001 — reembolso del 100 % del depósito por disputa rechazada**: cubierto por `RefundCalculatorTest` (depósito íntegro) y `RequestRefundServiceTest` (intención creada con el trigger `DISPUTE_REJECTED`). · M: `none` · P: `done` **[ACT-08] [ACT-10]**
+- [x] **T018** · **CE-005 — rechazo de disputa y ausencia de reclamación se tratan igual**: cubierto por `RefundCalculatorTest` (trigger único `DISPUTE_REJECTED`, sin rama alternativa por reclamación). · M: `none` · P: `done` **[ACT-08] [ACT-10]**
 
 ### Phase 5: US3 — Registrar el resultado del reembolso (HU3; RF-006A, RF-007…RF-009, RF-011, RF-013; CE-003, CE-004)
 
@@ -338,16 +355,16 @@ Ninguna de estas cinco pruebas de aceptación existe con ese nombre en el reposi
 - [x] **T021** · Registrar el manejador `type=refund` en el despachador propiedad de UC05 y conectar `RegisterRefundResultUseCase`; UC09 no implementa otro receptor ni verificador. Implementado en `RefundWebhookHandler` y su prueba.
 - [x] **T022** · `MercadoPagoRefundAdapter.fetchRefund(chargeReference, refundReference)` y pruebas WireMock. Implementado en `MercadoPagoRefundAdapterTest`. · M: `none` · P: `done` **[ACT-05] [ACT-08]**
 - [x] **T023** · `ReconcileRefundIntentsService` + registro en `GatewayReconciliationJob` (pieza compartida del núcleo): reintenta/consulta intenciones sin resultado con la misma clave, sin citar tareas de otros planes. Implementado y cubierto por `ReconcileRefundIntentsServiceTest`. · M: `none` · P: `done` **[ACT-06] [ACT-08]**
-- [ ] **T024** · **`ce003_trazabilidad_intencion_registro_en_reembolsos`** (CE-003, RF-006A, RF-008, RF-013). No existe una prueba con ese nombre; la trazabilidad se cubre en `RefundSettlementPersistenceIntegrationTest` y `RegisterRefundResultServiceTest`. · M: `none` · P: `pending` **[ACT-08]**
-- [ ] **T025** · **`ce004_fallas_de_comunicacion_sin_reembolso_en_estado_indefinido`** (CE-004). No existe una prueba con ese nombre; `SendRefundToGatewayServiceTest` y `ReconcileRefundIntentsServiceTest` cubren el comportamiento. · M: `none` · P: `pending` **[ACT-08]**
-- [ ] **T026** · **`ce002_sin_decisiones_de_danos_sin_retenciones_parciales_ni_descuentos`** (CE-002, RF-005, RF-012). No existe una prueba con ese nombre; `RefundCalculatorTest` y `MercadoPagoRefundAdapterTest` cubren el comportamiento. · M: `none` · P: `pending` **[ACT-08]**
+- [x] **T024** · **CE-003 — trazabilidad intención → registro en reembolsos**: cubierto por `RefundSettlementPersistenceIntegrationTest` (registro con `refund_intent_id`) y `RegisterRefundResultServiceTest`. · M: `none` · P: `done` **[ACT-08] [ACT-10]**
+- [x] **T025** · **CE-004 — fallos de comunicación sin reembolso en estado indefinido**: cubierto por `SendRefundToGatewayServiceTest` (timeout/5xx → `COMMUNICATION_ERROR` con reintento) y `ReconcileRefundIntentsServiceTest`. · M: `none` · P: `done` **[ACT-08] [ACT-10]**
+- [x] **T026** · **CE-002 — sin decisiones de daños, sin retenciones parciales ni descuentos**: cubierto por `RefundCalculatorTest` (montos exactos por trigger) y `MercadoPagoRefundAdapterTest` (sin deducciones en la petición). · M: `none` · P: `done` **[ACT-08] [ACT-10]**
 
 ### Phase 6: Polish & Cross-Cutting Concerns
 
 - [x] **T027** · `Uc09ArchitectureTest`: `RefundCalculator` y `domain` sin Spring/JPA; `RefundRecord` sin *setters*; listener/jobs sin repositorios; UC09 no depende de `SettlementIntent`. Implementado. · M: `none` · P: `done` **[ACT-06] [ACT-08]**
 - [x] **T028** · Alinear documentos en la Fase 0 acordada: `pasarela-comando-reembolso.md` (costo transaccional, `status_detail`, `released_amount`, consulta de detalle) y general-plan §4 (`released_amount`, `dispute_id`, `status_detail`, `scope`). Ejecutado en la Fase 0. · M: `none` · P: `done` **[ACT-06]**
-- [ ] **T029** · Cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]). `.\mvnw.cmd verify` ejecuta JaCoCo y cumple las puertas globales, pero UC09 no tiene una puerta JaCoCo específica. · M: `none` · P: `pending` **[ACT-08]**
-- [ ] **T030** · `.\mvnw.cmd clean verify` y ejecución de CE-001…CE-005. `verify` terminó en verde (1353 tests, 0 fallos), pero las pruebas de aceptación `ce00X_…` no existen con ese nombre. · M: `none` · P: `pending` **[ACT-06] [ACT-08]**
+- [x] **T029** · Cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]). Medida sobre el estado actual: `RefundCalculator` 100 % y `RequestRefundService` 82,54 % de línea; la puerta global de JaCoCo pasa en `verify` (UC09 no tiene puerta específica). · M: `none` · P: `done` **[ACT-08] [ACT-10]**
+- [x] **T030** · `.\mvnw.cmd clean verify` y ejecución de las pruebas equivalentes de CE-001…CE-005. `verify` en verde con 1470 tests y 0 fallos; la cobertura de los CE se reparte entre `RefundCalculatorTest`, `RequestRefundServiceTest`, `RegisterRefundResultServiceTest` y las pruebas de integración citadas. · M: `none` · P: `done` **[ACT-06] [ACT-08] [ACT-10]**
 
 ## Dependencies & Execution Order
 

@@ -2,6 +2,7 @@ package com.seashare.seasharem3.application.service;
 
 import com.seashare.seasharem3.application.dto.OpenDepositTrackingCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestCommand;
+import com.seashare.seasharem3.application.dto.RefundRequestResult;
 import com.seashare.seasharem3.application.exception.ErrorCode;
 import com.seashare.seasharem3.application.port.in.OpenDepositTrackingUseCase;
 import com.seashare.seasharem3.application.port.in.RequestRefundUseCase;
@@ -22,6 +23,7 @@ import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.RefundBreakdown;
 import com.seashare.seasharem3.domain.valueobject.RefundCalculation;
+import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 
 import java.time.Clock;
@@ -77,30 +79,28 @@ public class RequestRefundService implements RequestRefundUseCase {
 
     @Override
     @Transactional
-    public void request(RefundRequestCommand command) {
+    public RefundRequestResult request(RefundRequestCommand command) {
         Objects.requireNonNull(command, "command");
         ReservationId reservationId = new ReservationId(
                 Objects.requireNonNull(command.reservationId(), "command.reservationId"));
         IdempotencyKey key = new IdempotencyKey("refund:" + command.trigger() + ":"
                 + Objects.requireNonNull(command.operationKey(), "command.operationKey"));
 
-        if (refundIntentRepository.findByIdempotencyKey(key).isPresent()) {
-            return;
+        Optional<RefundIntent> existing = refundIntentRepository.findByIdempotencyKey(key);
+        if (existing.isPresent()) {
+            return new RefundRequestResult(existing.get().id(), existing.get().status());
         }
 
         Optional<ChargeIntent> approvedCharge = chargeIntentRepository.findApprovedByReservationId(reservationId);
         if (approvedCharge.isEmpty()) {
-            failureRecorder.record(USE_CASE, reservationId.value(), ErrorCode.CHARGE_INTENT_NOT_FOUND.name(),
-                    "reservationId=" + reservationId.value());
-            return;
+            return failed(reservationId, ErrorCode.CHARGE_INTENT_NOT_FOUND, "reservationId=" + reservationId.value());
         }
         ChargeIntent charge = approvedCharge.get();
 
         Optional<RefundBreakdown> breakdown = loadBreakdown(charge);
         if (breakdown.isEmpty()) {
-            failureRecorder.record(USE_CASE, reservationId.value(), ErrorCode.RESERVATION_INFO_NOT_FOUND.name(),
+            return failed(reservationId, ErrorCode.RESERVATION_INFO_NOT_FOUND,
                     "reservationId=" + reservationId.value() + ";chargeIntentId=" + charge.id());
-            return;
         }
 
         RefundCalculation calculation;
@@ -109,18 +109,16 @@ public class RequestRefundService implements RequestRefundUseCase {
                     breakdown.get().insuranceAmount(), breakdown.get().depositAmount(),
                     breakdown.get().totalAmount());
         } catch (DomainException exception) {
-            failureRecorder.record(USE_CASE, reservationId.value(), ErrorCode.RESERVATION_INFO_INCOMPLETE.name(),
+            return failed(reservationId, ErrorCode.RESERVATION_INFO_INCOMPLETE,
                     "reservationId=" + reservationId.value() + ";reason=" + exception.getMessage());
-            return;
         }
         if (!calculation.amount().isPositive()) {
-            failureRecorder.record(USE_CASE, reservationId.value(), ErrorCode.RESERVATION_INFO_INCOMPLETE.name(),
+            return failed(reservationId, ErrorCode.RESERVATION_INFO_INCOMPLETE,
                     "reservationId=" + reservationId.value() + ";reason=refund amount must be positive");
-            return;
         }
 
         if (!requestDepositDisposition(command, reservationId)) {
-            return;
+            return new RefundRequestResult(null, RefundIntentStatus.FAILED);
         }
 
         RefundIntent intent = RefundIntent.create(UUID.randomUUID(), reservationId, command.trigger(),
@@ -128,6 +126,13 @@ public class RequestRefundService implements RequestRefundUseCase {
                 clock.instant());
         refundIntentRepository.save(intent);
         refundCommandPublisher.publish(intent.id());
+        return new RefundRequestResult(intent.id(), intent.status());
+    }
+
+    /** Registra el motivo y responde con una solicitud no registrada (el llamador decide revertir). */
+    private RefundRequestResult failed(ReservationId reservationId, ErrorCode code, String detail) {
+        failureRecorder.record(USE_CASE, reservationId.value(), code.name(), detail);
+        return new RefundRequestResult(null, RefundIntentStatus.FAILED);
     }
 
     /** Aplica el desenlace del deposito; si ya fue liquidado, se registra y no se reembolsa. */

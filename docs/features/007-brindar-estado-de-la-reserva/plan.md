@@ -1,15 +1,18 @@
 # Implementation Plan: UC07 - Brindar el Estado de la Reserva
 
-**Date**: 2026-10-09
+**Date**: 2026-10-09 (plan original)
+**Updated**: 2026-10-30 (ver [Actualizaciones del plan](#actualizaciones-del-plan))
 **Spec**: [spec.md](spec.md)
+
+> **Actualización del plan — 2026-10-30.** Este documento parte del plan original del **2026-10-09** (commit `54eea0a`) y de su última versión en el historial de Git (commit `b92b0da`, 2026-10-29). Las secciones modificadas están marcadas con `[ACT-xx]` y se detallan en [Actualizaciones del plan](#actualizaciones-del-plan): `[ACT-01]` registra la revisión de firmas del **2026-10-29**, que hasta ahora solo tenía un marcador en el texto, y `[ACT-02]`…`[ACT-09]` recogen esta revisión previa a la implementación de UC07. Salvo las líneas de versión y la sección «Actualizaciones del plan», el contenido sin marcador pertenece al plan original.
 
 ## Summary
 
 El Sistema de Reservas y Operaciones notifica por RabbitMQ el estado vigente de una reserva (uno de **10 estados**) y UC07 decide la operación financiera que corresponde: ninguna (`AVAILABLE`, `INITIATED`, `RESERVED`, `IN_NAVIGATION`), **cobro** (`PENDING`, con el token de pago), **reembolso y/o liquidación** (las cuatro cancelaciones) o **liquidación estándar del alquiler con el depósito retenido** (`COMPLETED`). UC07 es el orquestador: **no calcula montos ni habla con la pasarela**; invoca por `port.in` a UC05, UC09, UC10 y UC08 [SPEC HU1, HU2, HU3, RF-001…RF-010]. Es **unidireccional**: no devuelve nada a Reservas y los fallos se registran en `operational_failure` [SPEC RF-009, RF-010, RNF-003].
 
-Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. Un *listener* AMQP (`finance.reservation-status.v1`, routing key `reservation.status.changed`, exchange `seashare.reservations`) deserializa el mensaje y llama a `HandleReservationStatusUseCase`. La decisión *estado → operaciones* es una política de dominio pura; el servicio usa el `ReservationLockPort` único compartido (núcleo compartido, general-plan §3.6), valida prerrequisitos y aplica la identidad única de operación (reserva + estado + tipo de operación + clave idempotente), todo en una transacción. La clave idempotente es `reservation_id` + `status` + `status_changed_at`; los estados terminales deduplican por (reserva, estado, tipo de operación) y solo `PENDING` admite nuevos intentos [D-33]. Errores de lógica: `ack` + `operational_failure`; errores transitorios: 5 intentos con *backoff* exponencial (base 1 s), y al agotarlos DLQ `<cola>.dlq` y `operational_failure` [README §4.4; general-plan §7.2]. `reservation_status_log` es propiedad de UC07; `RequestSettlementUseCase` y `OpenDepositTrackingUseCase` se referencian por sus puertos publicados.
+Enfoque técnico: arquitectura hexagonal de tres capas bajo `com.seashare.seasharem3` [general-plan §3.2–§3.4]. Un *listener* AMQP (`finance.reservation-status.v1`, routing key `reservation.status.changed`, exchange `seashare.reservations`) deserializa el mensaje y llama a `HandleReservationStatusUseCase`. La decisión *estado → operaciones* es una política de dominio pura; el servicio usa el `ReservationLockPort` único compartido (núcleo compartido, general-plan §3.6), valida prerrequisitos y aplica la identidad única de operación (reserva + estado + tipo de operación + clave idempotente), todo en una transacción. La clave idempotente es por intento en `PENDING` (`reservation_id` + `status` + `status_changed_at`) y estable en los estados terminales (`reservation_id` + `status`) [D-UC07-11]; los estados terminales deduplican por (reserva, estado, tipo de operación) y solo `PENDING` admite nuevos intentos [D-33]. Errores de lógica: `ack` + `operational_failure`; errores transitorios: 5 intentos con *backoff* exponencial (base 1 s), y al agotarlos DLQ `<cola>.dlq` y `operational_failure` [README §4.4; general-plan §7.2]. `reservation_status_log` es propiedad de UC07; `RequestSettlementUseCase` y `OpenDepositTrackingUseCase` se referencian por sus puertos publicados.
 
-El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Brindar el estado de la reserva" únicamente con el *Sistema de Reservas y Operaciones*, sin `<<include>>`/`<<extend>>`; las operaciones que dispara provienen de los SPEC 5, 9 y 10 y de general-plan §3.5.
+El diagrama de casos de uso (`docs/diagrams/Sea-Share module3-UC-diagram.xml`) asocia "Brindar el estado de la reserva" únicamente con el *Sistema de Reservas y Operaciones*, sin `<<include>>`/`<<extend>>`; las operaciones que dispara provienen de los SPEC 5, 9 y 10 y de general-plan §3.5. **[ACT-04]**
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -43,20 +46,46 @@ El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Brin
 | **HU2** cancelaciones (P1) | Fase 4 | T012–T016 | T012–T016 |
 | **HU3** completada y espera de disputa (P1) | Fase 5 | T017–T021 | T017–T021 |
 
+## Actualizaciones del plan
+
+Registro de los cambios introducidos el **2026-10-30** respecto al plan original del **2026-10-09** (commit `54eea0a`) y a su última versión previa (commit `b92b0da`, 2026-10-29), que permanecen en el historial de Git. No se presenta el contenido actualizado como si hubiera formado parte del plan original: cada sección afectada lleva su marcador `[ACT-xx]` y aquí se documenta el valor anterior y el vigente.
+
+La versión original puede recuperarse con `git show 54eea0a:docs/features/007-brindar-estado-de-la-reserva/plan.md`; la versión inmediatamente anterior a esta revisión, con `git show b92b0da:docs/features/007-brindar-estado-de-la-reserva/plan.md`. Las diferencias de esta actualización se consultan con `git diff b92b0da -- docs/features/007-brindar-estado-de-la-reserva/plan.md`.
+
+| ID | Sección(es) | Original (2026-10-09) → vigente (2026-10-30) | Motivo |
+|---|---|---|---|
+| **ACT-01** | Reglas de negocio, punto 5 | `D-30`; «alquiler bruto − comisión; el seguro no interviene»; `completed_at = statusChangedAt` → `D-35`; «alquiler bruto − comisión − seguro náutico»; se explicita el comando `OpenDepositTrackingCommand(reservationId, operationKey, target = HELD, disputeId = null, disputeStatus = null, completedAt = statusChangedAt)` | Revisión de firmas del **2026-10-29** (commit `b92b0da`), alineada con `OpenDepositTrackingCommand` y `DepositDispositionStatus.HELD` publicados por UC08. Hasta esta actualización el cambio solo tenía el marcador `[ACT-2026-10-29]` en el texto, sin sección que lo documentara; ese marcador se sustituye por `[ACT-01]`. |
+| **ACT-02** | Technical Context: `Primary Dependencies`, `Testing` | `Spring Boot 4.1.1`; «Testcontainers (PostgreSQL + RabbitMQ), Awaitility, ArchUnit» → `Spring Boot 4.1.2`; JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), Awaitility (transitiva vía `spring-boot-starter-test`), WireMock, ArchUnit 1.5.1 y JaCoCo 0.8.15 | Alinear el plan con el `pom.xml` real, igual que las actualizaciones de UC02, UC08 y UC09. |
+| **ACT-03** | `Estado actual del repositorio` | «existen `SeashareM3Application`, `application.properties`, `TestcontainersConfiguration`, `SeashareM3ApplicationTests` y `TestSeashareM3Application`. No existen `domain`/`application`/`infrastructure`, migraciones ni reglas ArchUnit» → inventario real: las tres capas, la migración única `V1__initial_schema.sql` y las reglas ArchUnit existen; UC07 ya aporta `ReservationStatus`, `FinancialOperationType`, `PlannedOperation`, `HandleReservationStatusUseCase`, `ReservationStatusCommand`, `ReservationStatusLogRepository`, la tabla `reservation_status_log` y la topología de su cola; faltan `ReservationStatusPolicy`, `HandleReservationStatusService`, la persistencia del log, el listener y todas las pruebas | La afirmación describía el repositorio del 2026-10-09; UC01–UC06 y UC08–UC11 ya están implementados y UC07 tiene trabajo previo reutilizable. |
+| **ACT-04** | Summary, párrafo del diagrama | `docs/diagrams/module3-v2.drawio.xml` → `docs/diagrams/Sea-Share module3-UC-diagram.xml` | El archivo referenciado ya no existe; el diagrama vigente del módulo es `Sea-Share module3-UC-diagram.xml` (misma corrección aplicada en UC09). |
+| **ACT-05** | Project Structure: adaptador de bloqueo | `infrastructure/adapter/out/persistence/PostgresAdvisoryReservationLockAdapter.java` → `infrastructure/adapter/out/persistence/lock/PostgresReservationLockAdapter.java` | El adaptador real tiene otro nombre y otro subpaquete, ya está implementado y probado, y pertenece al núcleo compartido (D-UC07-07): UC07 lo consume, no lo implementa. |
+| **ACT-06** | Puertos consumidos, `D-UC07-08` y Estrategia de testing | Referencias a tareas de otros planes («Definida en `UC05·T006`», «`UC09·T006`») y firmas sin tipo de retorno (`request(SettlementCommand)`, `open(OpenDepositTrackingCommand)`) → firmas publicadas reales: `void process(ProcessChargeCommand)`, `void request(RefundRequestCommand)` (sustituido en **[ACT-11]**), `SettlementRequestResult request(SettlementCommand)`, `DepositTrackingResult open(OpenDepositTrackingCommand)`, citadas sin numeración de tareas ajenas | D-UC07-01 prohíbe coordinarse mediante tareas de otro plan; las firmas ya están implementadas y deben citarse tal cual, incluido su retorno. |
+| **ACT-07** | Project Structure (mensajería de UC07) y T008 | `ReservationStatusMessagingConfig` declarando cola, *binding*, reintentos y DLQ → la cola `finance.reservation-status.v1`, su *binding* con `reservation.status.changed` y su DLQ `<cola>.dlq` ya viven en la topología compartida, y los 5 intentos con *backoff* exponencial (base 1 s) están en `application.properties`; T008 se limita a `ReservationStatusListener`, `ReservationStatusMessage` y `ReservationStatusMessageMapper`, usando `AmqpNames` y `AmqpListenerFailurePolicy` | Evitar duplicar una topología ya declarada y mantener la coherencia con T026/T027 (consumo por contrato, sin redefinir piezas compartidas). |
+| **ACT-08** | `Implementation Phases` | T026, T027, T001 y T004 en `[ ]` → `[x]` con su evidencia; T002, T008 y T022 anotadas como parciales, con lo que falta de cada una | Dejar el seguimiento alineado con el trabajo ya presente en el repositorio antes de implementar UC07. |
+| **ACT-09** | Estrategia de testing (tabla de niveles y cierre), T024 y Notes | Sin `Uc07AcceptanceTest` ni `Uc07ArchitectureTest`; la puerta JaCoCo no incluye clases de UC07 → se añaden ambos niveles con la convención del repositorio y T024 exige incorporar las clases de UC07 a las reglas `check`; Notes registra que la cola está declarada sin consumidor | La convención real del repositorio es `acceptance/Uc0XAcceptanceTest` + `arch/UcNNArchitectureTest`, y la cobertura de UC07 hoy no se mide. |
+| **ACT-10** | `Implementation Phases`, `Decisiones de diseño (D-UC07-xx)` y ruta de la persistencia del log | T002–T025 en `[ ]` → `[x]` con su evidencia; nueva decisión `D-UC07-11`; la persistencia del log se implementa en `infrastructure/adapter/out/persistence/status/` sin mapper MapStruct (no hay modelo intermedio entre la fila y el puerto) | Cierre de la implementación de UC07 y registro de la decisión que resuelve la ambigüedad de idempotencia y la firma del puerto del log. |
+| **ACT-11** | Puertos consumidos, §Reglas 9 y contrato §3.8 | `RequestRefundUseCase` devolvía `void`, así que UC07 no podía detectar un fallo interno de UC09 → el puerto devuelve `RefundRequestResult` y un `FAILED` revierte la transacción completa, igual que la liquidación; UC08 lo consume e ignora el resultado | Cerrar la limitación conocida: una cancelación con dos operaciones no puede quedar ejecutada a medias (RF-009, CE-004). El cambio de firma se registra en el plan de UC09 como `ACT-09`. |
+
+**Ambigüedades detectadas al auditar (resueltas el 2026-10-30).** Los tres puntos siguientes se registraron como pendientes en la revisión previa a la implementación y quedaron cerrados al implementar UC07: el 1 y el 2 con **D-UC07-11**, el 3 con T023. Se conservan como registro de la decisión:
+
+1. **Idempotencia de estados terminales vs. `UNIQUE` del log.** La regla 7 afirma que los estados terminales deduplican por (reserva, estado, tipo de operación), pero el `UNIQUE` que el propio plan exige —y que existe en `V1__initial_schema.sql`— es de cuatro columnas e incluye `idempotency_key`, derivada de `statusChangedAt`: un reenvío terminal con otra marca de tiempo generaría clave distinta y, por tanto, una segunda fila.
+2. **Firma de `ReservationStatusLogRepository`.** La firma ya presente en el repositorio es `boolean insertIfAbsent(ReservationId, String status, FinancialOperationType, IdempotencyKey, Instant statusChangedAt)` y no cubre `processed_at` ni `outcome`, que el DDL y la regla 8 sí contemplan; además recibe el estado como `String` cuando el comando usa el enum. Hay que decidir si se amplía la firma (código) o se ajusta la regla 8 (plan).
+3. **Documentación de la clave idempotente y de `operation_type`/`outcome`.** T023 quedó cerrada: el contrato `UC07-estado-reserva.md` §3.7 documenta la derivación de la clave y `general-plan.md` §4 el catálogo de `operation_type` y la naturaleza libre de `outcome`.
+
 ## Technical Context
 
 **Language/Version**: Java 25 (`java.version` del `pom.xml`) [general-plan]
-**Primary Dependencies**: Spring Boot 4.1.1. Para UC07: Spring AMQP, Spring Data JPA, Flyway, MapStruct, ArchUnit y pruebas RabbitMQ. Se registran en el setup común sin referencias a tareas externas.
+**Primary Dependencies**: Spring Boot 4.1.2 (parent del `pom.xml`). Para UC07: Spring AMQP, Spring Data JPA, Flyway, MapStruct, ArchUnit y pruebas RabbitMQ. Se registran en el setup común sin referencias a tareas externas. **[ACT-02]**
 **Storage**: PostgreSQL 16+; `reservation_status_log` propia (general-plan §4); lee `reservation_information` por su puerto publicado [general-plan §3.5]. `operational_failure.reservation_id` es nullable y sin FK; `payload_ref` referencia el mensaje o JSON almacenado.
 **Messaging**: RabbitMQ 3.13+, colas *quorum*; entrante `finance.reservation-status.v1`; internas `finance.charge-command.v1`, `finance.refund-command.v1`, `finance.settlement-command.v1` y `finance.gateway-notification.v1` (esta última, añadida por UC05 para el paso 2 del webhook de la pasarela; README §3.5); DLQ `<cola>.dlq` [general-plan]
-**Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), Awaitility, ArchUnit [general-plan]
+**Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), Awaitility (disponible de forma transitiva vía `spring-boot-starter-test`), WireMock, ArchUnit 1.5.1 y JaCoCo 0.8.15 [general-plan] **[ACT-02]**
 **Target Platform**: Contenedores Docker (Linux) [general-plan]
 **Project Type**: Servicio backend único (hexagonal) [general-plan]
 **Performance Goals**: Sin meta propia: el SPEC 07 no define metas de rendimiento [CONV].
 **Constraints**: unidireccional [SPEC RF-009]; no persiste el estado operativo de la reserva [SPEC Entidades Clave]; identidad única de operación [SPEC RF-009A]; sin cálculos parciales ante información ausente [SPEC RNF-003]; UC07 no administra TTL ni disputas [general-plan §2.6]
 **Scale/Scope**: 1 cola consumida; 1 tabla propia; 0 endpoints REST; 10 estados; 10 RF (+ RF-002A, RF-005A, RF-009A, RF-009B) + 3 RNF + 7 CE + 3 HU
 
-**Estado actual del repositorio**: existen `SeashareM3Application`, `application.properties`, `TestcontainersConfiguration`, `SeashareM3ApplicationTests` y `TestSeashareM3Application`. No existen `domain`/`application`/`infrastructure`, migraciones ni reglas ArchUnit.
+**Estado actual de UC07** (actualizado al cierre del 2026-10-30): las tres capas hexagonales, la migración única `V1__initial_schema.sql` y las reglas ArchUnit (`arch/ArchitectureTest` y `Uc01`–`Uc11` salvo `Uc07`, que ya existe) están en el repositorio, con UC01–UC06 y UC08–UC11 implementados. UC07 cuenta con los tipos de dominio `ReservationStatus` (10 estados), `FinancialOperationType`, `PlannedOperation` y `ReservationStatusPolicy`; el puerto de entrada `HandleReservationStatusUseCase` y su `ReservationStatusCommand`; el servicio `HandleReservationStatusService`; el puerto `ReservationStatusLogRepository` con su adaptador JPA en `persistence/status/`; la tabla `reservation_status_log` con su `UNIQUE` y su FK; el consumidor `ReservationStatusListener` con su DTO y mapper sobre la topología compartida de `finance.reservation-status.v1`; el bloqueo por reserva (`ReservationLockPort` + `PostgresReservationLockAdapter`); y las pruebas de §Estrategia de testing. **[ACT-03] [ACT-10]**
 
 ## Project Structure
 
@@ -104,13 +133,13 @@ src/main/java/com/seashare/seasharem3/
     │   ├── ReservationStatusListener.java       # T008
     │   ├── ReservationStatusMessageMapper.java  # T008  texto del contrato → ReservationStatus; desconocido = fallo lógico
     │   └── dto/ReservationStatusMessage.java    # T008  campos del contrato [SPEC RNF-001]
-    ├── adapter/out/persistence/
+    ├── adapter/out/persistence/status/
     │   ├── ReservationStatusLogJpaEntity.java / ReservationStatusLogJpaRepository.java   # T007
-    │   ├── ReservationStatusLogMapper.java      # T007  (MapStruct)
-    │   ├── ReservationStatusLogPersistenceAdapter.java  # T007
-    │   └── PostgresAdvisoryReservationLockAdapter.java  # T007
+    │   └── ReservationStatusLogPersistenceAdapter.java  # T007  (sin mapper: no hay modelo intermedio) **[ACT-10]**
+    ├── adapter/out/persistence/lock/
+    │   └── PostgresReservationLockAdapter.java  # ya existe en el núcleo compartido; UC07 lo consume, no lo implementa **[ACT-05]**
     └── config/
-        └── ReservationStatusMessagingConfig.java  # T008  cola `finance.reservation-status.v1`, *binding*, 5 intentos con *backoff* (base 1 s), DLQ `<cola>.dlq` [CONV]
+        └── ReservationStatusConfiguration.java  # T006  ensambla política + servicio; sin mensajería propia **[ACT-07] [ACT-10]**
 
 src/main/resources/db/migration/
 └── V1__initial_schema.sql                    # T001  migración inicial única; contiene reservation_status_log (general-plan §4.2, D-31)
@@ -118,20 +147,22 @@ src/main/resources/db/migration/
 src/test/java/com/seashare/seasharem3/
 ├── domain/service/ReservationStatusPolicyTest.java                      # T003
 ├── application/service/HandleReservationStatusServiceTest.java          # T005, T012, T017
-├── infrastructure/adapter/in/messaging/ReservationStatusMessageMapperTest.java  # T008
+├── infrastructure/adapter/in/messaging/dto/ReservationStatusMessageMapperTest.java  # T008
 ├── infrastructure/adapter/in/messaging/ReservationStatusListenerTest.java  # T009
-├── infrastructure/adapter/out/persistence/ReservationStatusLogPersistenceAdapterTest.java  # T007
-└── acceptance/Uc07AcceptanceTest.java                                   # T010, T011, T014–T016, T019–T021
+├── infrastructure/adapter/out/persistence/status/ReservationStatusLogPersistenceAdapterIntegrationTest.java  # T007
+├── arch/Uc07ArchitectureTest.java                                       # T022  (convención del repositorio) **[ACT-09]**
+├── acceptance/Uc07AcceptanceTest.java                                   # T010, T011, T014–T016, T019–T021 **[ACT-09]**
+└── integration/ReservationStatusEndToEndIntegrationTest.java             # T025  (UC07 + UC10 + UC08 reales) **[ACT-10]**
 ```
 
-**Puertos consumidos** — UC07 llama solo por `port.in`:
+**Puertos consumidos** — UC07 llama solo por `port.in` **[ACT-06]**:
 
 | Puerto | Dueño | Estado de la firma |
 |---|---|---|
-| `ProcessChargeUseCase.process(ProcessChargeCommand)` | UC05 | Definida en `UC05·T006` |
-| `RequestRefundUseCase.request(RefundRequestCommand)` | UC09 | Definida en `UC09·T006` |
-| `RequestSettlementUseCase.request(SettlementCommand)` | UC10 | Firma publicada por UC10 |
-| `OpenDepositTrackingUseCase.open(OpenDepositTrackingCommand)` | UC08 | Firma publicada por UC08; UC07 no implementa el puerto |
+| `void process(ProcessChargeCommand)` — `ProcessChargeUseCase` | UC05 | Implementada y publicada por UC05; `ProcessChargeCommand(reservationId, paymentTokenRef, paymentMethodType, paymentMetadata, operationKey)` |
+| `RefundRequestResult request(RefundRequestCommand)` — `RequestRefundUseCase` | UC09 | Implementada y publicada por UC09; `RefundRequestResult(refundIntentId, status)`; un estado `FAILED` revierte el mensaje de UC07; `RefundRequestCommand(reservationId, trigger, disputeId, operationKey)` |
+| `SettlementRequestResult request(SettlementCommand)` — `RequestSettlementUseCase` | UC10 | Implementada y publicada por UC10; UC07 puede ignorar el resultado; `SettlementCommand(reservationId, trigger, scope, disputeId, operationKey)` |
+| `DepositTrackingResult open(OpenDepositTrackingCommand)` — `OpenDepositTrackingUseCase` | UC08 | Implementada y publicada por UC08; UC07 no implementa el puerto; `created` indica si el desenlace del depósito ya existía |
 
 **Puertos expuestos**: ninguno hacia otros casos de uso. `HandleReservationStatusUseCase` solo lo invoca el *listener* de UC07. Firma [CONV]:
 
@@ -172,9 +203,9 @@ Todas provienen del SPEC 7 y del contrato `UC07-estado-reserva.md` salvo indicac
 | `CANCELLED_BY_HOST` | Reembolso del 100 % del valor pagado; sin liquidación |
 
    UC07 solo elige la operación; los montos los calculan UC09 y UC10 desde registros internos.
-5. **`COMPLETED`** [SPEC RF-006, RF-007; general-plan §3.5, D-35, D-34]: liquidación estándar del alquiler (**alquiler bruto − comisión − seguro náutico**; a cargo de UC10) manteniendo el depósito asociado, y apertura del seguimiento del depósito en `OpenDepositTrackingUseCase` (UC08). UC07 envía `OpenDepositTrackingCommand(reservationId, operationKey, target = HELD, disputeId = null, disputeStatus = null, completedAt = statusChangedAt)`. `deposit_disposition` —propiedad de UC08— registra todos los desenlaces del depósito (reembolso por cancelación, `REJECTED` = reembolso y `COMPLETED` = liquidación) mediante un único *compare-and-set*; UC07 lo invoca por `OpenDepositTrackingUseCase`. **Ninguna operación monetaria sobre el depósito**: espera el estado de la disputa (UC08). **[ACT-2026-10-29]**
+5. **`COMPLETED`** [SPEC RF-006, RF-007; general-plan §3.5, D-35, D-34]: liquidación estándar del alquiler (**alquiler bruto − comisión − seguro náutico**; a cargo de UC10) manteniendo el depósito asociado, y apertura del seguimiento del depósito en `OpenDepositTrackingUseCase` (UC08). UC07 envía `OpenDepositTrackingCommand(reservationId, operationKey, target = HELD, disputeId = null, disputeStatus = null, completedAt = statusChangedAt)`. `deposit_disposition` —propiedad de UC08— registra todos los desenlaces del depósito (reembolso por cancelación, `REJECTED` = reembolso y `COMPLETED` = liquidación) mediante un único *compare-and-set*; UC07 lo invoca por `OpenDepositTrackingUseCase`. **Ninguna operación monetaria sobre el depósito**: la apertura en `HELD` es solo seguimiento y espera el estado de la disputa (UC08), por lo que CE-003 se cumple sin contradicción. **[ACT-01]**
 6. **Prerrequisitos** [SPEC RNF-003, casos extremos]: se exige `reservation_information` registrada y con los montos calculados por UC04 (alquiler, seguro, depósito y total; se escriben juntos, general-plan §4). Si faltan, no se ejecuta nada parcial: `operational_failure` y `ack`. El `PENDING` exige además el valor total (lo valida UC05, RF-009).
-7. **Identidad única de operación** [SPEC RF-009A; general-plan §3.5, D-33]: reserva + estado notificado + tipo de operación + clave idempotente. La clave idempotente por intento es `reservationId` + `status` + `statusChangedAt` **[CONV]**: es igual en un reenvío de la misma transición y distinta en una nueva transición. Los estados terminales deduplican por (reserva, estado, tipo de operación) y solo `PENDING` admite intentos nuevos (un `statusChangedAt` nuevo tras un rechazo de pago habilita un nuevo intento de cobro, UC05 RF-004A); no se usa `Message-Id` (general-plan D-07). Antes de cada operación se inserta una fila en `reservation_status_log` con `INSERT … ON CONFLICT DO NOTHING` **[CONV]**; si ya existía, la operación no se repite. Las notificaciones repetidas no duplican cobros (UC05 RNF-003), reembolsos ni liquidaciones. Una notificación con dos operaciones (moderada, tardía) crea **dos filas**. La misma clave se entrega como `operationKey` a UC05, UC09 y UC10.
+7. **Identidad única de operación** [SPEC RF-009A; general-plan §3.5, D-33, D-UC07-11]: reserva + estado notificado + tipo de operación + clave idempotente. La clave es `reservationId` + `status` + `statusChangedAt` en `PENDING` y `reservationId` + `status` en los estados terminales **[CONV]**: es igual en un reenvío de la misma transición y distinta solo cuando una transición nueva habilita un intento de cobro. Los estados terminales deduplican por (reserva, estado, tipo de operación) y solo `PENDING` admite intentos nuevos (un `statusChangedAt` nuevo tras un rechazo de pago habilita un nuevo intento de cobro, UC05 RF-004A); no se usa `Message-Id` (general-plan D-07). Antes de cada operación se inserta una fila en `reservation_status_log` con `INSERT … ON CONFLICT DO NOTHING` **[CONV]**; si ya existía, la operación no se repite. Las notificaciones repetidas no duplican cobros (UC05 RNF-003), reembolsos ni liquidaciones. Una notificación con dos operaciones (moderada, tardía) crea **dos filas**. La misma clave se entrega como `operationKey` a UC05, UC09 y UC10.
 8. **Persistencia** [SPEC Entidades Clave; general-plan D-25]: el estado operativo de la reserva **no** se persiste; `reservation_status_log` solo guarda lo necesario para idempotencia, y solo para los estados que disparan operaciones monetarias (`PENDING`, las cancelaciones y `COMPLETED`) **[CONV]**. `operation_type` toma los valores `CHARGE`, `REFUND` y `SETTLEMENT`; `outcome` es un texto corto sin valores fijados **[CONV]**.
 9. **Concurrencia** [general-plan D-15, §3.6]: bloqueo asesor por reserva —`ReservationLockPort` del núcleo compartido, consumido por UC07/UC08/UC09/UC10— y **una sola transacción** por mensaje (log + delegaciones), de modo que las dos operaciones de una cancelación moderada/tardía se confirman o se revierten juntas.
 10. **Unidireccional y errores** [SPEC RF-009, RF-010; README §4.4]: nunca se responde a Reservas. Mensaje inválido, estado desconocido (detectado por el mapper del listener), reserva sin información o sin cálculo → `ack` + `operational_failure`. Falla transitoria (BD, broker) → `nack` con 5 intentos y *backoff* exponencial (base 1 s) y, al agotarlos, DLQ `<cola>.dlq` y registro en `operational_failure` **[general-plan §7.2]**. Mensaje repetido (misma identidad) → `ack` sin operación adicional.
@@ -196,16 +227,18 @@ UC07 **no expone endpoints REST**. Contrato: `contracts/events/UC07-estado-reser
 
 ## Estrategia de testing
 
-Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. `RequestSettlementUseCase` (UC10) y `OpenDepositTrackingUseCase` (UC08) se sustituyen por dobles en las pruebas unitarias; sus firmas publicadas son `request(SettlementCommand)` y `open(OpenDepositTrackingCommand)`.
+Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. `RequestSettlementUseCase` (UC10) y `OpenDepositTrackingUseCase` (UC08) se sustituyen por dobles en las pruebas unitarias; sus firmas publicadas son `SettlementRequestResult request(SettlementCommand)` y `DepositTrackingResult open(OpenDepositTrackingCommand)` **[ACT-06]**.
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
 | Unitario (`domain`) | 10 estados → plan de operaciones; el depósito nunca se opera | `ReservationStatusPolicyTest` |
 | Unitario (`application`) | prerrequisitos, identidad/duplicados, delegación por estado (solo estados conocidos) | `HandleReservationStatusServiceTest` (Mockito sobre los `port.in`) |
 | Unitario (`infrastructure`) | mapeo texto → enum; valor desconocido → fallo lógico | `ReservationStatusMessageMapperTest` |
-| Integración (Testcontainers PostgreSQL) | `UNIQUE` del log, bloqueo asesor, transacción única | `ReservationStatusLogPersistenceAdapterTest` |
+| Integración (Testcontainers PostgreSQL) | `UNIQUE` del log, `ON CONFLICT DO NOTHING` y `markProcessed`; el bloqueo asesor se prueba en el núcleo (`PostgresReservationLockAdapterIntegrationTest`) | `persistence/status/ReservationStatusLogPersistenceAdapterIntegrationTest` |
+| Integración extremo a extremo (T025) | mensaje `COMPLETED` por la cola con UC07, UC10 y UC08 reales: liquidación estándar, depósito `HELD` y log procesado | `integration/ReservationStatusEndToEndIntegrationTest` **[ACT-10]** |
 | Integración (Testcontainers RabbitMQ) | `ack`/`nack`, reintentos, DLQ, mensaje inválido y estado desconocido | `ReservationStatusListenerTest` |
-| Arquitectura | reglas §3.4 | `ArchitectureTest` (base y ampliación T022) |
+| Aceptación | `ce001_…` (CE-001) … `ce007_…` (CE-007), sin mocks de los puertos de UC05/UC09/UC10/UC08 donde el servicio lo permita | `acceptance/Uc07AcceptanceTest` **[ACT-09]** |
+| Arquitectura | reglas §3.4 y las específicas de UC07 | `arch/ArchitectureTest` (base, ya existe) + `arch/Uc07ArchitectureTest` (T022) **[ACT-09]** |
 
 **Pruebas de aceptación (CE-001…CE-007)**:
 
@@ -230,58 +263,63 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 | **D-UC07-05** | `COMPLETED` (UC07) y `COMPLETED` (UC08) son valores distintos de dominios distintos | contratos UC07 y UC08 | Enumeraciones separadas: `ReservationStatus` (UC07) y `DisputeStatus` (UC08) | Aplicada |
 | **D-UC07-06** | El SPEC 7 no menciona la apertura del seguimiento del depósito; general-plan §3.5 la asigna a UC07 (`OpenDepositTrackingUseCase`) | SPEC 7 RF-006/RF-007 vs general-plan §3.5 | Se mantiene, sin operación monetaria (RF-007) | Aplicada |
 | **D-UC07-07** | Propiedad de `ReservationLockPort` (bloqueo asesor por reserva, D-15), que también necesitan UC08, UC09 y UC10 | general-plan §3.6 | `ReservationLockPort` pertenece al núcleo compartido (fundacional) y lo consumen UC07/UC08/UC09/UC10; UC07 no lo redeclara | Aplicada |
-| **D-UC07-08** | Firmas publicadas de los puertos que UC07 consume de UC10 y UC08 | general-plan §3.5/§3.6 | `RequestSettlementUseCase.request(SettlementCommand)` (dueño UC10) y `OpenDepositTrackingUseCase.open(OpenDepositTrackingCommand)` (dueño UC08) | Aplicada |
+| **D-UC07-08** | Firmas publicadas de los puertos que UC07 consume de UC10 y UC08 | general-plan §3.5/§3.6 | `SettlementRequestResult request(SettlementCommand)` (dueño UC10) y `DepositTrackingResult open(OpenDepositTrackingCommand)` (dueño UC08); UC07 puede ignorar ambos retornos | Aplicada **[ACT-06]** |
 | **D-UC07-09** | Nombres y topología de colas y DLQ | contrato §2; README §3.5 | Entrante `finance.reservation-status.v1`; internas `finance.charge-command.v1`, `finance.refund-command.v1`, `finance.settlement-command.v1` y `finance.gateway-notification.v1` (añadida por UC05; la fuente canónica es el README §3.5); DLQ `<cola>.dlq` | Aplicada |
 | **D-UC07-10** | Alcance de `deposit_disposition` respecto de los depósitos reembolsados por cancelación | SPEC 7 RF-009B; general-plan D-34 | `deposit_disposition` (propiedad de UC08) registra todos los desenlaces del depósito (reembolso por cancelación, `REJECTED` = reembolso y `COMPLETED` = liquidación) con un único *compare-and-set*; UC07 lo invoca por `OpenDepositTrackingUseCase` | Aplicada |
+| **D-UC07-11** | La clave idempotente de RF-009A no puede incluir `statusChangedAt` en los estados terminales sin romper su deduplicación, porque el `UNIQUE` de `reservation_status_log` es de cuatro columnas | SPEC 7 RF-009A; §Reglas 7 frente a `V1__initial_schema.sql` | Clave **por intento** en `PENDING` (`reserva:estado:statusChangedAt`) y clave **estable** en los estados terminales (`reserva:estado`); la misma clave viaja como `operationKey` a UC05/UC09/UC10. `operation_type` ∈ {`CHARGE`, `REFUND`, `SETTLEMENT`} y `outcome` es texto libre. La firma del puerto del log pasa a `insertIfAbsent(UUID, ReservationId, ReservationStatus, FinancialOperationType, IdempotencyKey, Instant)` + `markProcessed(UUID, Instant, String)` | Aplicada (2026-10-30) |
 
 ## Implementation Phases
 
 > **Convención**: cada tarea `T0NN` es una unidad granular y verificable; su casilla (`[ ]`) es el mecanismo de seguimiento. Las dependencias se expresan mediante puertos, firmas y tablas, no mediante tareas externas.
+>
+> **Actualización 2026-10-30 [ACT-08]**: se marcan `[x]` las tareas cuyo resultado ya existe en el repositorio antes de implementar UC07 (T026, T027, T001 y T004). T002, T008 y T022 quedan abiertas con la anotación de lo que ya está hecho y lo que falta, para que la implementación arranque exactamente desde ahí.
+>
+> **Implementación cerrada 2026-10-30 [ACT-10]**: T002–T025 quedan en `[x]` con su evidencia, `./mvnw clean verify` pasa en verde y la prueba extremo a extremo de T025 recorre la cola con UC07, UC10 y UC08 reales.
 
 ### Phase 1: Setup
 
-- [ ] **T026** · registrar dependencias AMQP y base de `ArchitectureTest`, con DLQ `<cola>.dlq`.
+- [x] **T026** · registrar dependencias AMQP y base de `ArchitectureTest`, con DLQ `<cola>.dlq`. · Hecho: `spring-boot-starter-amqp`, `testcontainers-rabbitmq` y `archunit-junit5` en el `pom.xml`; `arch/ArchitectureTest` y las reglas comunes en vigor; las 7 colas y sus DLQ declaradas en la topología compartida.
 
 ### Phase 2: Foundational
 
-- [ ] **T027** · consumir `DomainException`, `FailureRecorderPort`, `ReservationLockPort` y configuración compartida por sus contratos; registro de fallos con `REQUIRES_NEW` y procedimiento de reproceso.
+- [x] **T027** · consumir `DomainException`, `FailureRecorderPort`, `ReservationLockPort` y configuración compartida por sus contratos; registro de fallos con `REQUIRES_NEW` y procedimiento de reproceso. · Hecho: `DomainException`, `FailureRecorderPort` (`record`), `ReservationLockPort` (`lock`) y `PostgresReservationLockAdapter` existen y están probados; `OperationalFailurePersistenceAdapter` registra con `REQUIRES_NEW` y `BestEffortFailureRecorder` lo envuelve en *best-effort*.
 
 ### Phase 3: US1 — Estados operativos, `INITIATED` y `PENDING` (HU1; RF-001, RF-002, RF-002A, RF-008, RF-009, RF-010; RNF-001, RNF-003; CE-001, CE-004, CE-007)
 
-- [ ] **T001** · Verificar `reservation_status_log` contra la migración inicial única: `reservation_id`, `status`, `operation_type`, `idempotency_key`, `status_changed_at`, `processed_at`, `outcome`, unicidad por `(reservation_id, status, operation_type, idempotency_key)` (general-plan §4); UC07 no define migraciones propias (general-plan §4.2, D-31).
-- [ ] **T002** · Dominio: `ReservationStatus` (10 valores), `FinancialOperationType`, `PlannedOperation` y `ReservationStatusPolicy` (estado → operaciones: ninguna / cobro / reembolso y/o liquidación / liquidación estándar). Nunca incluye una operación sobre el depósito por `COMPLETED`. · M: `none` · P: `pending`
-- [ ] **T003** · Pruebas de `ReservationStatusPolicy`: los 10 estados con su plan exacto (cancelaciones de la tabla de §Reglas, punto 4); valor desconocido → sin plan. · M: `none` · P: `pending`
-- [ ] **T004** · Puertos: `HandleReservationStatusUseCase` + `ReservationStatusCommand` (`status: ReservationStatus`), `ReservationStatusLogRepository` y consumo del único `ReservationLockPort` compartido.
-- [ ] **T005** · Pruebas de `HandleReservationStatusService`: estados operativos sin delegación; `PENDING` → `ProcessChargeUseCase` con token; reserva sin información o sin cálculo → fallo sin delegar; `INITIATED` repetida sin efectos; montos leídos como `BigDecimal` (RNF-002). El servicio solo recibe estados conocidos; el desconocido se prueba en T008/T009.
-- [ ] **T006** · `HandleReservationStatusService` (reconocimiento, prerrequisitos, `PENDING`, registro de fallos con `FailureRecorderPort`; deriva identidad de `(reservationId, status, operationType)`). Consume los puertos de UC05, UC09, UC10 y UC08 por nombre.
-- [ ] **T007** · Persistencia: entidad, repositorio, mapper y adaptador de `reservation_status_log` (`INSERT … ON CONFLICT DO NOTHING`) y bloqueo asesor de PostgreSQL por `reservation_id`; prueba de integración (Testcontainers) del `UNIQUE` y del bloqueo. · M: `none` · P: `pending`
-- [ ] **T008** · `ReservationStatusListener` + `ReservationStatusMessage` + `ReservationStatusMessageMapper` + `ReservationStatusMessagingConfig`: cola `finance.reservation-status.v1` y *binding* del contrato; el mapper convierte `status` al enum y lanza un fallo lógico si es desconocido; mensaje inválido/estado desconocido/`PENDING` sin token → `ack` + fallo, fallas transitorias → `nack` con 5 intentos y *backoff* exponencial (base 1 s) y DLQ `<cola>.dlq`, sin respuesta a Reservas (RF-009). · M: `none` · P: `pending`
-- [ ] **T009** · Pruebas del *listener* (Testcontainers RabbitMQ): `ack` en errores lógicos, estado desconocido → `ack` + `operational_failure`, `nack` y DLQ en transitorios, ninguna respuesta publicada. · M: `none` · P: `pending`
-- [ ] **T010** · **`ce001_decision_financiera_correcta_por_estado`** (CE-001). · M: `none` · P: `pending`
-- [ ] **T011** · **`ce007_iniciada_pendiente_sin_reinicio_ttl_identidad_y_exclusion_mutua`** (CE-007). · M: `none` · P: `pending`
+- [x] **T001** · Verificar `reservation_status_log` contra la migración inicial única: `reservation_id`, `status`, `operation_type`, `idempotency_key`, `status_changed_at`, `processed_at`, `outcome`, unicidad por `(reservation_id, status, operation_type, idempotency_key)` (general-plan §4); UC07 no define migraciones propias (general-plan §4.2, D-31). · Hecho: las ocho columnas, el `UNIQUE` `uq_reservation_status_log` y la FK a `reservation_information` existen en `V1__initial_schema.sql`; `FlywaySchemaTest` verifica la versión de esquema y la tabla. El contenido de `processed_at`/`outcome` depende de la firma del puerto del log (ver «Pendiente de confirmar» en §Actualizaciones del plan).
+- [x] **T002** · Dominio: `ReservationStatus` (10 valores), `FinancialOperationType`, `PlannedOperation` y `ReservationStatusPolicy` (estado → operaciones: ninguna / cobro / reembolso y/o liquidación / liquidación estándar). Nunca incluye una operación sobre el depósito por `COMPLETED`. · Hecho: `ReservationStatusPolicy.planFor` cubre los 10 estados; `PlannedOperation` documenta el invariante del disparador. · M: `none` · P: `pending`
+- [x] **T003** · Pruebas de `ReservationStatusPolicy`: los 10 estados con su plan exacto (cancelaciones de la tabla de §Reglas, punto 4); el rechazo de estados desconocidos se prueba en el mapper (T008), porque el enum hace imposible un valor fuera de catálogo. · Hecho: 13 pruebas en `ReservationStatusPolicyTest`. · M: `none` · P: `pending`
+- [x] **T004** · Puertos: `HandleReservationStatusUseCase` + `ReservationStatusCommand` (`status: ReservationStatus`), `ReservationStatusLogRepository` y consumo del único `ReservationLockPort` compartido. · Hecho: los tres tipos existen con la firma del plan; `ReservationLockPort` se consume del núcleo compartido y su adaptador ya está implementado y probado. La firma del log quedó según D-UC07-11 (`insertIfAbsent(...)` + `markProcessed(...)`).
+- [x] **T005** · Pruebas de `HandleReservationStatusService`: estados operativos sin delegación; `PENDING` → `ProcessChargeUseCase` con token; reserva sin información o sin cálculo → fallo sin delegar; `INITIATED` repetida sin efectos. El servicio solo recibe estados conocidos y no lee montos: los leen UC05/UC09/UC10 desde los registros internos (RNF-002 se prueba en sus planes). · Hecho: 15 pruebas en `HandleReservationStatusServiceTest`.
+- [x] **T006** · `HandleReservationStatusService` (reconocimiento, prerrequisitos, `PENDING`, registro de fallos con `FailureRecorderPort`; deriva identidad de `(reservationId, status, operationType)`). Consume los puertos de UC05, UC09, UC10 y UC08 por nombre. · Hecho: servicio `@Transactional` con bloqueo por reserva, prerrequisitos y clave de D-UC07-11.
+- [x] **T007** · Persistencia: entidad, repositorio, mapper y adaptador de `reservation_status_log` (`INSERT … ON CONFLICT DO NOTHING`) y bloqueo asesor de PostgreSQL por `reservation_id`; prueba de integración (Testcontainers) del `UNIQUE` y del bloqueo. · Hecho: `infrastructure/adapter/out/persistence/status/` (entidad, repositorio y adaptador; sin mapper MapStruct porque no hay modelo intermedio) y `ReservationStatusLogPersistenceAdapterIntegrationTest`; el bloqueo asesor lo aporta `PostgresReservationLockAdapter` del núcleo, consumido por el servicio.
+- [x] **T008** · `ReservationStatusListener` + `ReservationStatusMessage` + `ReservationStatusMessageMapper`: consumir la cola ya declarada `finance.reservation-status.v1` y su *binding* del contrato mediante `AmqpNames`; el mapper convierte `status` al enum y lanza un fallo lógico si es desconocido; mensaje inválido/estado desconocido/`PENDING` sin token → `ack` + fallo, fallas transitorias → `nack` con 5 intentos y *backoff* exponencial (base 1 s) y DLQ `<cola>.dlq`, sin respuesta a Reservas (RF-009). · Hecho: los tres tipos consumen la topología compartida; no se requiere configuración de mensajería propia de UC07 **[ACT-07]**. · M: `none` · P: `pending`
+- [x] **T009** · Pruebas del *listener* (Testcontainers RabbitMQ): `ack` en errores lógicos, estado desconocido → `ack` + `operational_failure`, `nack` y DLQ en transitorios; la unidireccionalidad se verifica por diseño y por `Uc07ArchitectureTest` (el listener no tiene publicador). · Hecho: 4 pruebas en `ReservationStatusListenerTest`. · M: `none` · P: `pending`
+- [x] **T010** · **`ce001_decision_financiera_correcta_por_estado`** (CE-001). · Hecho en `Uc07AcceptanceTest`. · M: `none` · P: `pending`
+- [x] **T011** · **`ce007_iniciada_pendiente_sin_reinicio_ttl_identidad_y_exclusion_mutua`** (CE-007). · Hecho en `Uc07AcceptanceTest`. · M: `none` · P: `pending`
 
 ### Phase 4: US2 — Cancelaciones (HU2; RF-003…RF-005A, RF-009A, RF-010; CE-002, CE-004)
 
-- [ ] **T012** · Pruebas con dobles de UC09 y UC10: las 4 cancelaciones disparan exactamente las operaciones de §Reglas, punto 4 (moderada y tardía con dos operaciones); sin valor total calculado → fallo y sin delegar. · M: `none` · P: `pending`
-- [ ] **T013** · Implementar la delegación de cancelaciones: `RequestRefundUseCase` y `RequestSettlementUseCase.request(SettlementCommand)`, en una sola transacción con el `ReservationLockPort` del núcleo compartido.
-- [ ] **T014** · Identidad única de operación: una fila por (estado, tipo de operación) antes de delegar; reenvío con la misma identidad → `ack` sin operación; pruebas de duplicados, de dos operaciones por notificación, de un segundo `PENDING` legítimo con distinto `statusChangedAt` y de la exclusión mutua del depósito (RF-009A, RF-009B). · M: `none` · P: `pending`
-- [ ] **T015** · **`ce002_cancelaciones_disparan_exactamente_las_operaciones_esperadas`** (CE-002). · M: `none` · P: `pending`
-- [ ] **T016** · **`ce004_fallos_por_informacion_ausente_se_registran_sin_ejecuciones_parciales`** (CE-004). · M: `none` · P: `pending`
+- [x] **T012** · Pruebas con dobles de UC09 y UC10: las 4 cancelaciones disparan exactamente las operaciones de §Reglas, punto 4 (moderada y tardía con dos operaciones); sin valor total calculado → fallo y sin delegar. · Hecho en `Uc07AcceptanceTest` (`ce002`) y `HandleReservationStatusServiceTest`. · M: `none` · P: `pending`
+- [x] **T013** · Implementar la delegación de cancelaciones: `RequestRefundUseCase` y `RequestSettlementUseCase.request(SettlementCommand)`, en una sola transacción con el `ReservationLockPort` del núcleo compartido. · Hecho en `HandleReservationStatusService`.
+- [x] **T014** · Identidad única de operación: una fila por (estado, tipo de operación) antes de delegar; reenvío con la misma identidad → `ack` sin operación; pruebas de duplicados, de dos operaciones por notificación, de un segundo `PENDING` legítimo con distinto `statusChangedAt` y de la exclusión mutua del depósito (RF-009A, RF-009B). · Hecho: clave de D-UC07-11, `INSERT … ON CONFLICT DO NOTHING` y casos cubiertos en las pruebas del servicio y de aceptación. · M: `none` · P: `pending`
+- [x] **T015** · **`ce002_cancelaciones_disparan_exactamente_las_operaciones_esperadas`** (CE-002). · Hecho en `Uc07AcceptanceTest`. · M: `none` · P: `pending`
+- [x] **T016** · **`ce004_fallos_por_informacion_ausente_se_registran_sin_ejecuciones_parciales`** (CE-004). · Hecho en `Uc07AcceptanceTest`. · M: `none` · P: `pending`
 
 ### Phase 5: US3 — Completada y espera de la disputa (HU3; RF-006, RF-007, RF-009B; CE-003, CE-005, CE-006)
 
-- [ ] **T017** · Pruebas: `COMPLETED` → liquidación estándar + apertura del seguimiento del depósito; ninguna operación monetaria sobre el depósito; sin monto de alquiler o seguro → fallo sin liquidaciones parciales; repetida → no se vuelve a liquidar. · M: `none` · P: `pending`
-- [ ] **T018** · Implementar `COMPLETED`: `RequestSettlementUseCase.request(SettlementCommand)` + `OpenDepositTrackingUseCase.open(OpenDepositTrackingCommand)`; UC08 es dueño de `deposit_disposition` y `dispute_event_log` y registra el desenlace con un único *compare-and-set* [D-34].
-- [ ] **T019** · **`ce003_cero_operaciones_sobre_el_deposito_por_completada_o_estados_operativos`** (CE-003). · M: `none` · P: `pending`
-- [ ] **T020** · **`ce005_completada_liquida_estandar_y_conserva_el_deposito`** (CE-005). · M: `none` · P: `pending`
-- [ ] **T021** · **`ce006_cero_decisiones_sobre_danos_o_destino_del_deposito`** (CE-006). · M: `none` · P: `pending`
+- [x] **T017** · Pruebas: `COMPLETED` → liquidación estándar + apertura del seguimiento del depósito; ninguna operación monetaria sobre el depósito; sin monto de alquiler o seguro → fallo sin liquidaciones parciales; repetida → no se vuelve a liquidar. · Hecho en `Uc07AcceptanceTest` (`ce005`) y `HandleReservationStatusServiceTest`. · M: `none` · P: `pending`
+- [x] **T018** · Implementar `COMPLETED`: `RequestSettlementUseCase.request(SettlementCommand)` + `OpenDepositTrackingUseCase.open(OpenDepositTrackingCommand)`; UC08 es dueño de `deposit_disposition` y `dispute_event_log` y registra el desenlace con un único *compare-and-set* [D-34]. · Hecho: liquidación `STANDARD` y apertura en `HELD` solo si la liquidación no devuelve `FAILED`.
+- [x] **T019** · **`ce003_cero_operaciones_sobre_el_deposito_por_completada_o_estados_operativos`** (CE-003). · Hecho en `Uc07AcceptanceTest`. · M: `none` · P: `pending`
+- [x] **T020** · **`ce005_completada_liquida_estandar_y_conserva_el_deposito`** (CE-005). · Hecho en `Uc07AcceptanceTest`. · M: `none` · P: `pending`
+- [x] **T021** · **`ce006_cero_decisiones_sobre_danos_o_destino_del_deposito`** (CE-006). · Hecho en `Uc07AcceptanceTest`. · M: `none` · P: `pending`
 
 ### Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] **T022** · ArchUnit: UC07 invoca a UC05/UC08/UC09/UC10 solo por `port.in`; el *listener* no usa repositorios; `domain` sin Spring/JPA. · M: `none` · P: `pending`
-- [ ] **T023** · Alinear documentos: derivación de la clave idempotente en `UC07-estado-reserva.md` (D-UC07-02) y valores de `operation_type`/`outcome` en general-plan §4. · M: `none` · P: `pending`
-- [ ] **T024** · Cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]). · M: `none` · P: `pending`
-- [ ] **T025** · Prueba de integración extremo a extremo con los puertos reales de UC05/UC09/UC10/UC08 cuando sus adaptadores estén disponibles, y `./mvnw clean verify` con CE-001…CE-007. · M: `none` · P: `pending`
+- [x] **T022** · ArchUnit: UC07 invoca a UC05/UC08/UC09/UC10 solo por `port.in`; el *listener* no usa repositorios; `domain` sin Spring/JPA. · Hecho: `arch/Uc07ArchitectureTest` (8 pruebas, 5 de ellas reglas ArchUnit) además de la base `arch/ArchitectureTest`. **[ACT-09]** · M: `none` · P: `pending`
+- [x] **T023** · Alinear documentos: derivación de la clave idempotente en `UC07-estado-reserva.md` (D-UC07-02) y valores de `operation_type`/`outcome` en general-plan §4. · Hecho: contrato §3 regla 7 y `general-plan` §4 actualizados; decisión registrada como D-UC07-11. · M: `none` · P: `pending`
+- [x] **T024** · Cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]). Incorporar las clases de UC07 (`ReservationStatusPolicy`, `HandleReservationStatusService` y los DTOs) a las reglas `check` de JaCoCo en el `pom.xml`, que hoy no las incluyen. · Hecho: `HandleReservationStatusService`, `ReservationStatusCommand` y `domain/service/*` dentro de las reglas `check`. **[ACT-09]** · M: `none` · P: `pending`
+- [x] **T025** · Prueba de integración extremo a extremo con los puertos reales de UC05/UC09/UC10/UC08 cuando sus adaptadores estén disponibles, y `./mvnw clean verify` con CE-001…CE-007. · Hecho: `integration/ReservationStatusEndToEndIntegrationTest` (mensaje `COMPLETED` por la cola con UC07 + UC10 + UC08 reales) y `./mvnw clean verify` verde. · M: `none` · P: `pending`
 
 ## Dependencies & Execution Order
 
@@ -296,8 +334,11 @@ T012 ─> T013 ─> T014 ─> T015 ─> T016 ─> T017 ─> T018 ─> T019 ─> 
 
 ## Notes
 
-- El SPEC 7 no define metas de rendimiento; la clave idempotente de RF-009A se deriva de `reservationId` + `status` + `statusChangedAt` (general-plan D-33).
-- Las sucesiones imposibles de estados pertenecen a Reservas y no se validan aquí [SPEC casos extremos]. Los estados terminales son idempotentes por `(reserva, estado, tipo de operación)`; solo `PENDING` admite nuevos intentos [D-33].
+- El SPEC 7 no define metas de rendimiento; la clave idempotente de RF-009A se deriva de `reservationId` + `status` y, solo en `PENDING`, de `statusChangedAt` (general-plan D-33, D-UC07-11).
+- Las sucesiones imposibles de estados pertenecen a Reservas y no se validan aquí [SPEC casos extremos]. Los estados terminales son idempotentes por `(reserva, estado, tipo de operación)`; solo `PENDING` admite nuevos intentos [D-33]. La convivencia de esta regla con el `UNIQUE` de cuatro columnas del log se resolvió con la clave estable de D-UC07-11.
+- La cola `finance.reservation-status.v1` está declarada —con su *binding*, su DLQ y la política de reintentos— y ya tiene consumidor: `ReservationStatusListener` (T008). `OperationalFailureMessageRecoverer` la mapea al caso de uso `UC07`. **[ACT-09] [ACT-10]**
+- **Reproceso de una operación reclamada sin `processed_at`.** UC07 no reintenta automáticamente esas filas: la reentrega del mensaje con la misma identidad no las repite. El reproceso es manual sobre la reserva afectada (revisar `operational_failure` con `use_case = 'UC07'` y reenviar el evento con una marca de tiempo nueva o resolver la causa y repetir la operación por el puerto correspondiente). **[ACT-10]**
+- Esta revisión del **2026-10-30** se registra en [Actualizaciones del plan](#actualizaciones-del-plan); el plan original del 2026-10-09 (commit `54eea0a`) y la versión previa del 2026-10-29 (commit `b92b0da`) permanecen en el historial de Git. **[ACT-09]**
 - Etiquetas: `[SPEC]`, `[CONV]`.
 - Los valores numéricos de los ejemplos son ilustrativos.
 

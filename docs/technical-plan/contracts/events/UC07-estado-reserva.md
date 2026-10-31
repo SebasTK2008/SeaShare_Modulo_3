@@ -63,9 +63,15 @@ El Sistema de Reservas y Operaciones notifica el estado vigente de una reserva. 
    - `CANCELLED_MODERATE`: Reembolso 50% alquiler + 100% depósito; Liquidación 50% alquiler [SPEC RF-004].
    - `CANCELLED_STRICT`: Liquidación 100% alquiler; Reembolso 100% depósito [SPEC RF-005].
    - `CANCELLED_BY_HOST`: Reembolso 100% total [SPEC RF-005A].
-5. **Completada**: Liquidación estándar del alquiler (alquiler bruto - comisión - seguro). Depósito se mantiene pendiente asociado a la reserva para posterior resolución [SPEC RF-006, RF-007].
+5. **Completada**: Liquidación estándar del alquiler (alquiler bruto - comisión - seguro). Depósito se mantiene pendiente asociado a la reserva para posterior resolución [SPEC RF-006, RF-007]. UC07 abre el seguimiento del depósito en `HELD`; esa apertura **no** es una operación monetaria sobre el depósito y no contradice CE-003, que se refiere a reembolsos y liquidaciones del depósito.
 6. **Requisitos previos**: Se valida que existan montos previamente calculados en `InformaciónDeReserva` (UC04). Si no existen o están incompletos, se registra el fallo [SPEC casos extremos, RNF-003].
-7. **Idempotencia**: Si se recibe repetido el mismo estado de cancelación o completado, se ignora [SPEC casos extremos].
+7. **Idempotencia**: la identidad de la operación es `reservation_id` + `status` + `operation_type` + clave idempotente [SPEC RF-009A]. La clave **no viaja en el mensaje**: la deriva UC07 y la entrega a UC05/UC09/UC10 como `operationKey` [CONV, D-UC07-11]:
+   - `PENDING`: `<reservation_id>:PENDING:<status_changed_at>`; una transición nueva (marca de tiempo distinta) habilita un nuevo intento de cobro [SPEC 05 RF-004A].
+   - Estados terminales (las cuatro cancelaciones y `COMPLETED`): `<reservation_id>:<status>`, estable ante reenvíos del mismo estado.
+
+   Antes de delegar, UC07 reclama una fila de `reservation_status_log` con `INSERT … ON CONFLICT DO NOTHING`; si la identidad ya existe, el mensaje se confirma (`ack`) sin operación adicional [SPEC casos extremos]. `status_changed_at` se interpreta como un instante ISO-8601 en UTC, de modo que un reenvío de la misma transición produce exactamente la misma clave. `operation_type` toma los valores `CHARGE`, `REFUND` o `SETTLEMENT` y `outcome` es un texto corto sin catálogo fijado; `processed_at` nulo indica una operación reclamada que no llegó a confirmarse y que queda para reproceso manual, ya que la reentrega con la misma identidad no la repite.
+
+8. **Delegación no concluyente**: si el reembolso o la liquidación delegados devuelven `FAILED`, UC07 revierte la transacción completa del mensaje y confirma (`ack`) registrando el fallo en `operational_failure`; no queda una ejecución parcial de una cancelación con dos operaciones. Si el depósito ya tenía otro desenlace, se conserva el existente y se registra la inconsistencia (RF-009B).
 
 ## 4. Respuesta exitosa
 

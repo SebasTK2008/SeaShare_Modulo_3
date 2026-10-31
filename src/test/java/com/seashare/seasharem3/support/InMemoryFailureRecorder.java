@@ -22,6 +22,10 @@ public class InMemoryFailureRecorder implements FailureRecorderPort {
         return List.copyOf(failures);
     }
 
+    public void clear() {
+        failures.clear();
+    }
+
     public record RecordedFailure(String useCase, UUID reservationId, String reason, String payloadRef) {
     }
 }
