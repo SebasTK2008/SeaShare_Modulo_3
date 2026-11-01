@@ -1,7 +1,9 @@
 package com.seashare.seasharem3.application.port.out;
 
-import com.seashare.seasharem3.application.dto.FinancialReportResult;
 import com.seashare.seasharem3.application.dto.GetFinancialReportCommand;
+import com.seashare.seasharem3.domain.model.FinancialRecord;
+
+import java.util.List;
 
 /**
  * Agregación de solo lectura sobre las 4 tablas inmutables para el informe (UC13).
@@ -10,5 +12,5 @@ import com.seashare.seasharem3.application.dto.GetFinancialReportCommand;
  */
 public interface FinancialReportQueryPort {
 
-    FinancialReportResult query(GetFinancialReportCommand command);
+    List<FinancialRecord> query(GetFinancialReportCommand command);
 }

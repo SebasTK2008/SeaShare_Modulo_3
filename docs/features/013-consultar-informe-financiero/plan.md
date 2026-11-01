@@ -125,23 +125,23 @@ src/test/java/com/seashare/seasharem3/
 
 ### Phase 1: Setup
 
-- [ ] T001 Configurar propiedades de zona horaria, correlación y serialización decimal; consumir infraestructura compartida existente.
-- [ ] T002 Verificar la firma de `FinancialReportQueryPort` y el contrato de `v_financial_records` de UC12: `record_id`, `created_at DESC, record_id DESC`, y `NULL::text AS external_reference` para comisiones.
+- [x] T001 Configurar propiedades de zona horaria, correlación y serialización decimal; consumir infraestructura compartida existente.
+- [x] T002 Verificar la firma de `FinancialReportQueryPort` y el contrato de `v_financial_records` de UC12: `record_id`, `created_at DESC, record_id DESC`, y `NULL::text AS external_reference` para comisiones.
 
 ### Phase 2: Foundational
 
-- [ ] T003 Consumir `ClockPort`, `Money`, `ReservationId` y `OwnerId` del núcleo compartido; no redeclarar VOs.
-- [ ] T004 Implementar `ReportPeriodResolver` con zona horaria explícita y período anterior equivalente.
-- [ ] T005 Implementar consulta/agregación sobre registros confirmados y filtro por alcance declarado (`scope`/`owner_id`, datos planos).
-- [ ] T006 Crear DTOs de aplicación, métricas y comparación.
-- [ ] T007 Implementar validación y Problem Details conforme a contratos.
-- [ ] T008 Implementar `FinancialReportService` como fuente única de cálculo.
+- [x] T003 Consumir `ClockPort`, `Money`, `ReservationId` y `OwnerId` del núcleo compartido; no redeclarar VOs.
+- [x] T004 Implementar `ReportPeriodResolver` con zona horaria explícita y período anterior equivalente.
+- [x] T005 Implementar consulta/agregación sobre registros confirmados y filtro por alcance declarado (`scope`/`owner_id`, datos planos).
+- [x] T006 Crear DTOs de aplicación, métricas y comparación.
+- [x] T007 Implementar validación y Problem Details conforme a contratos.
+- [x] T008 Implementar `FinancialReportService` como fuente única de cálculo.
 
 ### Phase 3: User Stories
 
-- [ ] T009 [US1] Exponer informe de plataforma para el alcance declarado `PLATFORM`.
-- [ ] T010 [US2] Exponer informe propio para el alcance declarado `OWNER` (`owner_id`).
-- [ ] T011 [US3] Exportar CSV desde el resultado común, solo con campos definidos por SPEC; `q` y las métricas extra quedan fuera del contrato y del CSV.
+- [x] T009 [US1] Exponer informe de plataforma para el alcance declarado `PLATFORM`.
+- [x] T010 [US2] Exponer informe propio para el alcance declarado `OWNER` (`owner_id`).
+- [x] T011 [US3] Exportar CSV desde el resultado común, solo con campos definidos por SPEC; `q` y las métricas extra quedan fuera del contrato y del CSV.
 - [ ] T012 `ce001_scope_platform_and_owner`.
 - [ ] T013 `ce002_net_without_double_commission`.
 - [ ] T014 `ce003_fixed_period_boundaries` y `ce004_previous_equivalent_comparison`.
@@ -151,7 +151,7 @@ src/test/java/com/seashare/seasharem3/
 ### Phase 4: Polish
 
 - [ ] T017 Probar período abierto, zona horaria, informe vacío, cero anterior (sin pruebas de seguridad: fuera de alcance, general-plan §7.1).
-- [ ] T018 ArchUnit, cobertura y validación final de que no se consulta Flota ni se mutan registros.
+- [x] T018 ArchUnit, cobertura y validación final de que no se consulta Flota ni se mutan registros.
 
 ## Dependencies & Execution Order
 
