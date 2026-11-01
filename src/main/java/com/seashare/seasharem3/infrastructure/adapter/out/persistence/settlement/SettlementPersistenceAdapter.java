@@ -3,12 +3,14 @@ package com.seashare.seasharem3.infrastructure.adapter.out.persistence.settlemen
 import com.seashare.seasharem3.application.port.out.CommissionRecordRepository;
 import com.seashare.seasharem3.application.port.out.SettlementIntentRepository;
 import com.seashare.seasharem3.application.port.out.SettlementRecordRepository;
+import com.seashare.seasharem3.domain.exception.DuplicateRecordException;
 import com.seashare.seasharem3.domain.model.CommissionRecord;
 import com.seashare.seasharem3.domain.model.SettlementIntent;
 import com.seashare.seasharem3.domain.model.SettlementRecord;
 import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.SettlementStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
@@ -77,8 +79,12 @@ public class SettlementPersistenceAdapter
     @Override
     @Transactional
     public SettlementRecord save(SettlementRecord record) {
-        return SettlementPersistenceMapper.toDomain(
-                recordRepository.saveAndFlush(SettlementPersistenceMapper.toEntity(record)));
+        try {
+            return SettlementPersistenceMapper.toDomain(
+                    recordRepository.saveAndFlush(SettlementPersistenceMapper.toEntity(record)));
+        } catch (DataIntegrityViolationException exception) {
+            throw new DuplicateRecordException("Settlement record already exists", exception);
+        }
     }
 
     @Override
@@ -91,8 +97,12 @@ public class SettlementPersistenceAdapter
     @Override
     @Transactional
     public CommissionRecord save(CommissionRecord record) {
-        return SettlementPersistenceMapper.toDomain(
-                commissionRepository.saveAndFlush(SettlementPersistenceMapper.toEntity(record)));
+        try {
+            return SettlementPersistenceMapper.toDomain(
+                    commissionRepository.saveAndFlush(SettlementPersistenceMapper.toEntity(record)));
+        } catch (DataIntegrityViolationException exception) {
+            throw new DuplicateRecordException("Commission record already exists", exception);
+        }
     }
 
     @Override

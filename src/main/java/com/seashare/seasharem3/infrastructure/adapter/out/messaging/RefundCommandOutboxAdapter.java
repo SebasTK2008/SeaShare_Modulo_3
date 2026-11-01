@@ -1,6 +1,5 @@
 package com.seashare.seasharem3.infrastructure.adapter.out.messaging;
 
-import com.seashare.seasharem3.application.dto.RefundCommandMessage;
 import com.seashare.seasharem3.application.port.out.OutboxPort;
 import com.seashare.seasharem3.application.port.out.RefundCommandPublisher;
 import com.seashare.seasharem3.infrastructure.config.amqp.AmqpNames;
@@ -9,6 +8,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Map;
 
 /** Publica el comando de reembolso en el outbox transaccional (misma transaccion de la intencion). */
 @Component
@@ -25,6 +25,6 @@ public class RefundCommandOutboxAdapter implements RefundCommandPublisher {
     @Override
     public void publish(UUID refundIntentId) {
         outbox.publish(AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_REFUND_COMMAND,
-                jsonMapper.writeValueAsString(new RefundCommandMessage(refundIntentId)));
+                jsonMapper.writeValueAsString(Map.of("refund_intent_id", refundIntentId)));
     }
 }

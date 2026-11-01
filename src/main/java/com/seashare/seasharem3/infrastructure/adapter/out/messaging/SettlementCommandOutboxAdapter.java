@@ -1,6 +1,5 @@
 package com.seashare.seasharem3.infrastructure.adapter.out.messaging;
 
-import com.seashare.seasharem3.application.dto.SettlementCommandMessage;
 import com.seashare.seasharem3.application.port.out.OutboxPort;
 import com.seashare.seasharem3.application.port.out.SettlementCommandPublisher;
 import com.seashare.seasharem3.infrastructure.config.amqp.AmqpNames;
@@ -9,6 +8,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Map;
 
 /** Publica el comando de liquidacion en el outbox transaccional. */
 @Component
@@ -25,6 +25,6 @@ public class SettlementCommandOutboxAdapter implements SettlementCommandPublishe
     @Override
     public void publish(UUID settlementIntentId) {
         outbox.publish(AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_SETTLEMENT_COMMAND,
-                jsonMapper.writeValueAsString(new SettlementCommandMessage(settlementIntentId)));
+                jsonMapper.writeValueAsString(Map.of("settlement_intent_id", settlementIntentId)));
     }
 }

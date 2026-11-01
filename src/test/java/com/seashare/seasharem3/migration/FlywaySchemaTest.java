@@ -360,11 +360,11 @@ class FlywaySchemaTest {
 					chargeIntentId, reservationId, chargeIdempotencyKey);
 			execute("INSERT INTO refund_intent (id, reservation_id, trigger, scope, amount, charge_intent_id,"
 					+ " idempotency_key, status) VALUES (?, ?, 'CANCELLED_MODERATE', 'FULL', 100, ?, ?,"
-					+ " 'CONFIRMED')",
+					+ " 'COMPLETED')",
 					refundIntentId, reservationId, chargeIntentId, UUID.randomUUID().toString());
 			execute("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount,"
 					+ " commission_amount, deposit_amount, charge_intent_id, idempotency_key, status)"
-					+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, ?, 'CONFIRMED')",
+					+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, ?, 'COMPLETED')",
 					settlementIntentId, reservationId, chargeIntentId, UUID.randomUUID().toString());
 		}
 

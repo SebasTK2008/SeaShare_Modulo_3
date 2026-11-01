@@ -1,8 +1,10 @@
 package com.seashare.seasharem3.infrastructure.config.web;
 
 import tools.jackson.core.JsonParser;
+import tools.jackson.core.JsonToken;
 import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.ValueDeserializer;
+import tools.jackson.databind.exc.MismatchedInputException;
 
 import java.util.UUID;
 import java.util.function.Function;
@@ -21,6 +23,16 @@ public class UuidScalarDeserializer<T> extends ValueDeserializer<T> {
 
     @Override
     public T deserialize(JsonParser parser, DeserializationContext ctxt) {
-        return factory.apply(UUID.fromString(parser.getValueAsString()));
+        if (parser.currentToken() != JsonToken.VALUE_STRING) {
+            throw MismatchedInputException.from(parser, UUID.class, "must be a UUID string");
+        }
+        try {
+            return factory.apply(UUID.fromString(parser.getString()));
+        } catch (IllegalArgumentException exception) {
+            MismatchedInputException mismatch = MismatchedInputException.from(
+                    parser, UUID.class, "must be a valid UUID");
+            mismatch.initCause(exception);
+            throw mismatch;
+        }
     }
 }

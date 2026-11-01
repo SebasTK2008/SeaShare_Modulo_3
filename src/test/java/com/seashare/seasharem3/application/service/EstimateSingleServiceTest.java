@@ -34,7 +34,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -145,11 +144,11 @@ class EstimateSingleServiceTest {
     void rejectsStartDateInThePast() {
         when(clock.today()).thenReturn(TODAY);
 
-        ContractException exception = catchThrowableOfType(
-                () -> service.estimate(new EstimateSingleCommand(boatId, day(-1), day(3), 1)),
-                ContractException.class);
-
-        assertThat(exception.code()).isEqualTo(ErrorCode.INVALID_DATE_RANGE);
+        assertThatThrownBy(
+                () -> service.estimate(new EstimateSingleCommand(boatId, day(-1), day(3), 1)))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.INVALID_DATE_RANGE);
         verifyNoInteractions(paramsRepo, baseRateUseCase);
     }
 
@@ -157,21 +156,21 @@ class EstimateSingleServiceTest {
     void rejectsEndDateBeforeStartDate() {
         when(clock.today()).thenReturn(TODAY);
 
-        ContractException exception = catchThrowableOfType(
-                () -> service.estimate(new EstimateSingleCommand(boatId, day(3), day(2), 1)),
-                ContractException.class);
-
-        assertThat(exception.code()).isEqualTo(ErrorCode.INVALID_DATE_RANGE);
+        assertThatThrownBy(
+                () -> service.estimate(new EstimateSingleCommand(boatId, day(3), day(2), 1)))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.INVALID_DATE_RANGE);
         verifyNoInteractions(paramsRepo, baseRateUseCase);
     }
 
     @Test
     void rejectsNonPositivePassengers() {
-        ContractException exception = catchThrowableOfType(
-                () -> service.estimate(new EstimateSingleCommand(boatId, day(1), day(2), 0)),
-                ContractException.class);
-
-        assertThat(exception.code()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+        assertThatThrownBy(
+                () -> service.estimate(new EstimateSingleCommand(boatId, day(1), day(2), 0)))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.VALIDATION_ERROR);
         verifyNoInteractions(paramsRepo, baseRateUseCase);
     }
 
@@ -180,11 +179,11 @@ class EstimateSingleServiceTest {
         when(clock.today()).thenReturn(TODAY);
         when(paramsRepo.findCurrent()).thenReturn(Optional.empty());
 
-        ContractException exception = catchThrowableOfType(
-                () -> service.estimate(new EstimateSingleCommand(boatId, day(1), day(2), 1)),
-                ContractException.class);
-
-        assertThat(exception.code()).isEqualTo(ErrorCode.FINANCIAL_PARAMETERS_NOT_CONFIGURED);
+        assertThatThrownBy(
+                () -> service.estimate(new EstimateSingleCommand(boatId, day(1), day(2), 1)))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.FINANCIAL_PARAMETERS_NOT_CONFIGURED);
         verifyNoInteractions(baseRateUseCase);
     }
 
@@ -194,11 +193,11 @@ class EstimateSingleServiceTest {
         when(paramsRepo.findCurrent()).thenReturn(Optional.of(parameters()));
         when(baseRateUseCase.provideBaseRates(any())).thenReturn(List.of());
 
-        ContractException exception = catchThrowableOfType(
-                () -> service.estimate(new EstimateSingleCommand(boatId, day(1), day(2), 1)),
-                ContractException.class);
-
-        assertThat(exception.code()).isEqualTo(ErrorCode.BASE_RATE_NOT_AVAILABLE);
+        assertThatThrownBy(
+                () -> service.estimate(new EstimateSingleCommand(boatId, day(1), day(2), 1)))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.BASE_RATE_NOT_AVAILABLE);
     }
 
     @Test

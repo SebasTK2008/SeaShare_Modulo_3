@@ -48,6 +48,9 @@ public record Money(BigDecimal amount) implements Comparable<Money> {
     /** Multiplica el importe por un factor decimal (días, pasajeros o factor dinámico). Fuente: general-plan §3.6. */
     public Money multiply(BigDecimal factor) {
         Objects.requireNonNull(factor, "factor");
+        if (factor.signum() < 0) {
+            throw new IllegalArgumentException("factor must not be negative");
+        }
         return new Money(amount.multiply(factor));
     }
 

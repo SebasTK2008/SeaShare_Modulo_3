@@ -19,7 +19,11 @@ public class TestcontainersConfiguration {
 
 	private static final Duration STARTUP_TIMEOUT = Duration.ofMinutes(3);
 
+	// El ciclo de vida de los contenedores lo gestiona Spring: @ServiceConnection los arranca al crear
+	// el contexto y el contexto los detiene al cerrarse. El aviso de "resource leak" del IDE es, por
+	// tanto, un falso positivo para este bean.
 	@Bean
+	@SuppressWarnings("resource")
 	@ServiceConnection
 	PostgreSQLContainer postgresContainer() {
 		return new PostgreSQLContainer(DockerImageName.parse("postgres:16"))
@@ -27,6 +31,7 @@ public class TestcontainersConfiguration {
 	}
 
 	@Bean
+	@SuppressWarnings("resource")
 	@ServiceConnection
 	RabbitMQContainer rabbitContainer() {
 		return new RabbitMQContainer(DockerImageName.parse("rabbitmq:3.13-management"))

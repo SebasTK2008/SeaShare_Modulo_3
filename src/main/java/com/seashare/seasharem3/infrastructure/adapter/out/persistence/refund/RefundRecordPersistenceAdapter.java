@@ -2,7 +2,9 @@ package com.seashare.seasharem3.infrastructure.adapter.out.persistence.refund;
 
 import com.seashare.seasharem3.application.port.out.RefundRecordQueryPort;
 import com.seashare.seasharem3.application.port.out.RefundRecordRepository;
+import com.seashare.seasharem3.domain.exception.DuplicateRecordException;
 import com.seashare.seasharem3.domain.model.RefundRecord;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import org.springframework.stereotype.Component;
@@ -24,8 +26,12 @@ public class RefundRecordPersistenceAdapter implements RefundRecordRepository, R
     @Override
     @Transactional
     public RefundRecord save(RefundRecord refundRecord) {
-        return RefundPersistenceMapper.toDomain(
-                repository.saveAndFlush(RefundPersistenceMapper.toEntity(refundRecord)));
+        try {
+            return RefundPersistenceMapper.toDomain(
+                    repository.saveAndFlush(RefundPersistenceMapper.toEntity(refundRecord)));
+        } catch (DataIntegrityViolationException exception) {
+            throw new DuplicateRecordException("Refund record already exists", exception);
+        }
     }
 
     @Override

@@ -138,7 +138,7 @@ class UC04CalculatedValueContractTest {
                         + " is incomplete: base_rate is required to calculate the value.");
 
         mockMvc.perform(post(ENDPOINT))
-                .andExpect(status().isUnprocessableEntity())
+                .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.title").value("Reservation information incomplete"))
                 .andExpect(jsonPath("$.code").value("RESERVATION_INFO_INCOMPLETE"))
                 .andExpect(jsonPath("$.retryable").value(false));

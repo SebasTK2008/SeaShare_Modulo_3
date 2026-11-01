@@ -11,9 +11,9 @@ import com.seashare.seasharem3.application.port.out.ReservationInformationReposi
 import com.seashare.seasharem3.application.port.out.SettlementIntentRepository;
 import com.seashare.seasharem3.application.port.out.SettlementRecordRepository;
 import com.seashare.seasharem3.domain.exception.DomainException;
+import com.seashare.seasharem3.domain.exception.DuplicateRecordException;
 import com.seashare.seasharem3.domain.model.ChargeRecord;
 import com.seashare.seasharem3.domain.model.CommissionRecord;
-import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.model.SettlementIntent;
 import com.seashare.seasharem3.domain.model.SettlementRecord;
 import com.seashare.seasharem3.domain.valueobject.Money;
@@ -121,6 +121,8 @@ public class RegisterSettlementResultService implements RegisterSettlementResult
                     breakdown.get().rentalAmount(), insurance, intent.depositAmount(), result.externalId(),
                     clock.instant()));
             createCommissionIfNeeded(intent, record);
+        } catch (DuplicateRecordException exception) {
+            return;
         } catch (DomainException exception) {
             failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
                     "settlementIntentId=" + intent.id() + ";reason=" + exception.getMessage());
@@ -132,8 +134,12 @@ public class RegisterSettlementResultService implements RegisterSettlementResult
                 || commissionRecordRepository.findBySettlementRecordId(record.id()).isPresent()) {
             return;
         }
-        commissionRecordRepository.save(CommissionRecord.create(UUID.randomUUID(), record,
-                intent.commissionAmount(), clock.instant()));
+        try {
+            commissionRecordRepository.save(CommissionRecord.create(UUID.randomUUID(), record,
+                    intent.commissionAmount(), clock.instant()));
+        } catch (DuplicateRecordException exception) {
+            // Another webhook or reconciliation worker created the unique commission first.
+        }
     }
 
     private Optional<SettlementBreakdown> resolveBreakdown(SettlementIntent intent) {

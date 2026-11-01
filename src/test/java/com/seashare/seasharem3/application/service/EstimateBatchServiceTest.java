@@ -36,7 +36,6 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -185,11 +184,10 @@ class EstimateBatchServiceTest {
         when(clock.today()).thenReturn(TODAY);
         when(paramsRepo.findCurrent()).thenReturn(Optional.empty());
 
-        ContractException exception = catchThrowableOfType(
-                () -> service.estimate(new EstimateBatchCommand(List.of(id))),
-                ContractException.class);
-
-        assertThat(exception.code()).isEqualTo(ErrorCode.FINANCIAL_PARAMETERS_NOT_CONFIGURED);
+        assertThatThrownBy(() -> service.estimate(new EstimateBatchCommand(List.of(id))))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.FINANCIAL_PARAMETERS_NOT_CONFIGURED);
         verifyNoInteractions(baseRateUseCase);
     }
 
@@ -211,11 +209,10 @@ class EstimateBatchServiceTest {
     void rejectsBatchLargerThanDefaultLimitWithoutCallingDependencies() {
         List<BoatId> boats = IntStream.range(0, 51).mapToObj(i -> boat()).toList();
 
-        ContractException exception = catchThrowableOfType(
-                () -> service.estimate(new EstimateBatchCommand(boats)),
-                ContractException.class);
-
-        assertThat(exception.code()).isEqualTo(ErrorCode.BATCH_SIZE_EXCEEDED);
+        assertThatThrownBy(() -> service.estimate(new EstimateBatchCommand(boats)))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.BATCH_SIZE_EXCEEDED);
         verifyNoInteractions(paramsRepo, baseRateUseCase, clock);
     }
 
@@ -225,10 +222,10 @@ class EstimateBatchServiceTest {
                 baseRateUseCase, paramsRepo, clock, new PricingCalculator(), 2);
         List<BoatId> boats = IntStream.range(0, 3).mapToObj(i -> boat()).toList();
 
-        ContractException exception = catchThrowableOfType(
-                () -> limited.estimate(new EstimateBatchCommand(boats)),
-                ContractException.class);
-        assertThat(exception.code()).isEqualTo(ErrorCode.BATCH_SIZE_EXCEEDED);
+        assertThatThrownBy(() -> limited.estimate(new EstimateBatchCommand(boats)))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.BATCH_SIZE_EXCEEDED);
 
         when(clock.today()).thenReturn(TODAY);
         when(paramsRepo.findCurrent()).thenReturn(Optional.of(parameters()));
@@ -246,11 +243,10 @@ class EstimateBatchServiceTest {
         boats.add(boat());
         boats.add(null);
 
-        ContractException exception = catchThrowableOfType(
-                () -> service.estimate(new EstimateBatchCommand(boats)),
-                ContractException.class);
-
-        assertThat(exception.code()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+        assertThatThrownBy(() -> service.estimate(new EstimateBatchCommand(boats)))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.VALIDATION_ERROR);
         verifyNoInteractions(paramsRepo, baseRateUseCase);
         verify(clock, never()).today();
     }

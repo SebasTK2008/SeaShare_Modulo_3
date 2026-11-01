@@ -299,10 +299,6 @@ class Uc07AcceptanceTest {
             return new RefundRequestResult(UUID.randomUUID(), resulting);
         }
 
-        void resolveAs(RefundIntentStatus status) {
-            this.resulting = status;
-        }
-
         List<RefundRequestCommand> commands() {
             return List.copyOf(commands);
         }

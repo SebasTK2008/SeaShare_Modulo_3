@@ -51,7 +51,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Integración de UC01 con el adaptador real de UC02 ({@link FleetRateRestClient} + WireMock) y
@@ -119,11 +118,11 @@ class EstimateResilienceIntegrationTest {
     void ce004_parametersNotConfiguredFailsWithoutCallingFleet() {
         TestSlice slice = sliceWithoutParameters(wireMock.baseUrl(), Duration.ofMillis(300));
 
-        ContractException exception = catchThrowableOfType(
-                () -> slice.batchService().estimate(new EstimateBatchCommand(List.of(boat(0)))),
-                ContractException.class);
-
-        assertThat(exception.code()).isEqualTo(ErrorCode.FINANCIAL_PARAMETERS_NOT_CONFIGURED);
+        assertThatThrownBy(
+                () -> slice.batchService().estimate(new EstimateBatchCommand(List.of(boat(0)))))
+                .isInstanceOf(ContractException.class)
+                .extracting(e -> ((ContractException) e).code())
+                .isEqualTo(ErrorCode.FINANCIAL_PARAMETERS_NOT_CONFIGURED);
         wireMock.verify(0, postRequestedFor(urlEqualTo(BASE_RATES_PATH)));
     }
 

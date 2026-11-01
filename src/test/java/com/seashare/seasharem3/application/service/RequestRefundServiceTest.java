@@ -1,13 +1,11 @@
 package com.seashare.seasharem3.application.service;
 
 import com.seashare.seasharem3.application.dto.DepositTrackingResult;
-import com.seashare.seasharem3.application.dto.OpenDepositTrackingCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestResult;
 import com.seashare.seasharem3.application.port.in.OpenDepositTrackingUseCase;
 import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
 import com.seashare.seasharem3.application.port.out.ChargeRecordQueryPort;
-import com.seashare.seasharem3.application.port.out.FailureRecorderPort;
 import com.seashare.seasharem3.application.port.out.RefundCommandPublisher;
 import com.seashare.seasharem3.application.port.out.RefundIntentRepository;
 import com.seashare.seasharem3.application.port.out.ReservationInformationRepository;

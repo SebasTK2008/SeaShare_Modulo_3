@@ -19,6 +19,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.core.JacksonException;
 
 import java.util.List;
 import java.util.Objects;
@@ -75,6 +76,8 @@ public class MercadoPagoSettlementAdapter implements SettlementGatewayPort {
                     .retrieve()
                     .body(String.class);
             return toResult(mapper.readValue(response, MercadoPagoSettlementResponse.class));
+        } catch (JacksonException exception) {
+            throw communicationFailure("The payment gateway returned an invalid settlement response", exception);
         } catch (RestClientResponseException exception) {
             if (exception.getStatusCode().value() == BAD_REQUEST) {
                 throw new GatewayBusinessRejectionException(
@@ -108,6 +111,8 @@ public class MercadoPagoSettlementAdapter implements SettlementGatewayPort {
                     .retrieve()
                     .body(String.class);
             return Optional.of(toResult(mapper.readValue(response, MercadoPagoSettlementResponse.class)));
+        } catch (JacksonException exception) {
+            throw communicationFailure("The payment gateway returned an invalid settlement detail", exception);
         } catch (HttpClientErrorException.NotFound exception) {
             return Optional.empty();
         } catch (RestClientResponseException exception) {

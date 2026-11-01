@@ -92,7 +92,9 @@ public class RegisterChargeResultService implements RegisterChargeResultUseCase 
         if (result.statusDetail() != null) {
             updated = updated.withStatusDetail(result.statusDetail());
         }
-        chargeIntentRepository.save(updated);
+        if (!updated.equals(intent)) {
+            chargeIntentRepository.save(updated);
+        }
         if (status == ChargeIntentStatus.CAPTURED) {
             createAuditRecord(updated);
         }

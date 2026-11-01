@@ -1,6 +1,6 @@
 package com.seashare.seasharem3.infrastructure.adapter.in.messaging;
 
-import com.seashare.seasharem3.application.dto.SettlementCommandMessage;
+import com.seashare.seasharem3.infrastructure.adapter.in.messaging.dto.SettlementCommandMessage;
 import com.seashare.seasharem3.application.port.in.SendSettlementToGatewayUseCase;
 import com.seashare.seasharem3.domain.exception.DomainException;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;
