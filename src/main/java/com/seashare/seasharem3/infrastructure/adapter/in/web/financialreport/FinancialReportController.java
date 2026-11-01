@@ -1,6 +1,5 @@
 package com.seashare.seasharem3.infrastructure.adapter.in.web.financialreport;
 
-import com.seashare.seasharem3.application.dto.FinancialReportResult;
 import com.seashare.seasharem3.application.dto.GetFinancialReportCommand;
 import com.seashare.seasharem3.application.exception.ApiFieldError;
 import com.seashare.seasharem3.application.exception.ContractException;
@@ -31,13 +30,16 @@ public class FinancialReportController {
     private final GetFinancialReportUseCase getUseCase;
     private final ExportFinancialReportUseCase exportUseCase;
     private final CsvReportExporter exporter;
+    private final FinancialReportResponseMapper responseMapper;
 
     public FinancialReportController(GetFinancialReportUseCase getUseCase,
                                      ExportFinancialReportUseCase exportUseCase,
-                                     CsvReportExporter exporter) {
+                                     CsvReportExporter exporter,
+                                     FinancialReportResponseMapper responseMapper) {
         this.getUseCase = getUseCase;
         this.exportUseCase = exportUseCase;
         this.exporter = exporter;
+        this.responseMapper = responseMapper;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -45,7 +47,7 @@ public class FinancialReportController {
             @RequestParam String scope, @RequestParam String periodicity,
             @RequestParam(name = "owner_id", required = false) String ownerId,
             @RequestParam(required = false) String period) {
-        return ResponseEntity.ok(toResponse(getUseCase.get(
+        return ResponseEntity.ok(responseMapper.toResponse(getUseCase.get(
                 command(scope, periodicity, ownerId, period))));
     }
 
@@ -64,26 +66,10 @@ public class FinancialReportController {
 
     private static GetFinancialReportCommand command(String scope, String periodicity,
                                                       String ownerId, String period) {
-        Periodicity parsedPeriodicity = parseEnum(periodicity, Periodicity.class, "periodicity");
+        Periodicity parsedPeriodicity = parsePeriodicity(periodicity);
         return new GetFinancialReportCommand(parsedPeriodicity,
                 parseEnum(scope, ReportScope.class, "scope"), parseOwner(ownerId),
                 period == null ? null : new ReportPeriod(parsedPeriodicity, period));
-    }
-
-    private static FinancialReportResponse toResponse(FinancialReportResult result) {
-        var comparison = result.comparison();
-        return new FinancialReportResponse(result.periodicity().name(), result.period().value(),
-                result.isClosed(), result.scope().name(), amount(result.netAmount()),
-                amount(result.totalCollections()), amount(result.totalRefunds()),
-                amount(result.totalSettlements()), amount(result.totalCommissions()), result.counts(),
-                new FinancialReportResponse.Comparison(comparison.previousPeriod().value(),
-                        amount(comparison.absoluteVariation()),
-                        comparison.percentageVariation() == null ? null
-                                : comparison.percentageVariation().setScale(2).toPlainString()));
-    }
-
-    private static String amount(com.seashare.seasharem3.domain.valueobject.Money money) {
-        return money.toOutputAmount().toPlainString();
     }
 
     private static OwnerId parseOwner(String value) {
@@ -100,6 +86,15 @@ public class FinancialReportController {
             return Enum.valueOf(type, value);
         } catch (IllegalArgumentException | NullPointerException exception) {
             throw validation(field, "Unsupported value.");
+        }
+    }
+
+    private static Periodicity parsePeriodicity(String value) {
+        try {
+            return Enum.valueOf(Periodicity.class, value);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new ContractException(ErrorCode.INVALID_PERIOD, "Unsupported periodicity.",
+                    List.of(new ApiFieldError("periodicity", "Unsupported value.")));
         }
     }
 

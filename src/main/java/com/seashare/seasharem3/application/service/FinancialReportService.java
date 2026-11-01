@@ -10,7 +10,6 @@ import com.seashare.seasharem3.application.port.in.ExportFinancialReportUseCase;
 import com.seashare.seasharem3.application.port.in.GetFinancialReportUseCase;
 import com.seashare.seasharem3.application.port.out.ClockPort;
 import com.seashare.seasharem3.application.port.out.FinancialReportQueryPort;
-import com.seashare.seasharem3.domain.model.FinancialRecord;
 import com.seashare.seasharem3.domain.model.PeriodComparison;
 import com.seashare.seasharem3.domain.model.ReportMetrics;
 import com.seashare.seasharem3.domain.service.FinancialAggregator;
@@ -60,8 +59,7 @@ public class FinancialReportService implements GetFinancialReportUseCase, Export
         if (command.period() == null) validation("period", "period is required for export.");
         ReportPeriod period = command.period();
         validatePeriod(command.periodicity(), period);
-        return new FinancialReportExportResult(calculate(command, period), command.scope().name(),
-                Instant.now(instantClock));
+        return new FinancialReportExportResult(calculate(command, period), Instant.now(instantClock));
     }
 
     private FinancialReportResult calculate(GetFinancialReportCommand command, ReportPeriod period) {

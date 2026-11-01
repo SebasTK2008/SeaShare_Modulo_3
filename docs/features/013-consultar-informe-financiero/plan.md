@@ -142,15 +142,16 @@ src/test/java/com/seashare/seasharem3/
 - [x] T009 [US1] Exponer informe de plataforma para el alcance declarado `PLATFORM`.
 - [x] T010 [US2] Exponer informe propio para el alcance declarado `OWNER` (`owner_id`).
 - [x] T011 [US3] Exportar CSV desde el resultado común, solo con campos definidos por SPEC; `q` y las métricas extra quedan fuera del contrato y del CSV.
-- [ ] T012 `ce001_scope_platform_and_owner`.
-- [ ] T013 `ce002_net_without_double_commission`.
-- [ ] T014 `ce003_fixed_period_boundaries` y `ce004_previous_equivalent_comparison`.
-- [ ] T015 `ce006_csv_matches_json_report`.
-- [ ] T016 `ce005_pending_deposits_excluded`.
+- [x] T012 `ce001_scope_platform_and_owner`.
+- [x] T013 `ce002_net_without_double_commission`.
+- [x] T014 `ce003_fixed_period_boundaries` y `ce004_previous_equivalent_comparison`.
+- [x] T015 `ce006_csv_matches_json_report`.
+- [x] T016 `ce005_pending_deposits_excluded`.
 
 ### Phase 4: Polish
 
-- [ ] T017 Probar período abierto, zona horaria, informe vacío, cero anterior (sin pruebas de seguridad: fuera de alcance, general-plan §7.1).
+- [x] T017 Probar período abierto, zona horaria, informe vacío, cero anterior (sin pruebas de seguridad: fuera de alcance, general-plan §7.1).
+
 - [x] T018 ArchUnit, cobertura y validación final de que no se consulta Flota ni se mutan registros.
 
 ## Dependencies & Execution Order

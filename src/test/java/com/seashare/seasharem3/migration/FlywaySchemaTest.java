@@ -263,6 +263,13 @@ class FlywaySchemaTest {
 				"SELECT record_type FROM v_financial_records WHERE reservation_id = ? ORDER BY record_type",
 				fixture.reservationId);
 		assertThat(types).containsExactly("CHARGE", "COMMISSION", "REFUND", "SETTLEMENT");
+
+		execute("INSERT INTO deposit_disposition (reservation_id, completed_at, disposition)"
+				+ " VALUES (?, now(), 'HELD')", fixture.reservationId);
+		assertThat(queryStrings(
+				"SELECT record_type FROM v_financial_records WHERE reservation_id = ?",
+				fixture.reservationId)).containsExactlyInAnyOrder(
+				"CHARGE", "COMMISSION", "REFUND", "SETTLEMENT");
 	}
 
 	@Test
