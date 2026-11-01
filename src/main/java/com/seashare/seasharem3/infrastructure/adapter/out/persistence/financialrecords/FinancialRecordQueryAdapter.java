@@ -14,6 +14,9 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -27,9 +30,11 @@ public class FinancialRecordQueryAdapter implements FinancialRecordQueryPort {
             """;
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final ZoneId businessZoneId;
 
-    public FinancialRecordQueryAdapter(NamedParameterJdbcTemplate jdbc) {
+    public FinancialRecordQueryAdapter(NamedParameterJdbcTemplate jdbc, ZoneId businessZoneId) {
         this.jdbc = jdbc;
+        this.businessZoneId = businessZoneId;
     }
 
     @Override
@@ -40,7 +45,12 @@ public class FinancialRecordQueryAdapter implements FinancialRecordQueryPort {
         long total = jdbc.queryForObject(countSql, parameters, Long.class);
 
         int pageSize = command.size();
-        int offset = (command.page() - 1) * pageSize;
+        long totalPages = total == 0 ? 0 : ((total - 1) / pageSize) + 1;
+        if ((long) command.page() > Math.max(totalPages, 1)) {
+            return new FinancialRecordsPageResult(List.of(), command.page(), pageSize, total,
+                    Math.toIntExact(totalPages));
+        }
+        long offset = ((long) command.page() - 1) * pageSize;
         String dataSql = """
                 SELECT record_type, reservation_id, owner_id, boat_id, amount, created_at, external_reference
                 """ + BASE_QUERY + predicates + """
@@ -57,11 +67,11 @@ public class FinancialRecordQueryAdapter implements FinancialRecordQueryPort {
                         new Money(rs.getBigDecimal("amount")),
                         rs.getTimestamp("created_at").toInstant(),
                         rs.getString("external_reference")));
-        int totalPages = total == 0 ? 0 : (int) ((total + pageSize - 1) / pageSize);
-        return new FinancialRecordsPageResult(content, command.page(), pageSize, total, totalPages);
+        return new FinancialRecordsPageResult(content, command.page(), pageSize, total,
+                Math.toIntExact(totalPages));
     }
 
-    private static String predicates(QueryFinancialRecordsCommand command, MapSqlParameterSource parameters) {
+    private String predicates(QueryFinancialRecordsCommand command, MapSqlParameterSource parameters) {
         List<String> conditions = new ArrayList<>();
         if (command.scope() == ReportScope.OWNER) {
             conditions.add("owner_id = :scopeOwnerId");
@@ -84,12 +94,16 @@ public class FinancialRecordQueryAdapter implements FinancialRecordQueryPort {
         }
         if (command.dateFrom() != null) {
             conditions.add("created_at >= :dateFrom");
-            parameters.addValue("dateFrom", command.dateFrom());
+            parameters.addValue("dateFrom", startOfDay(command.dateFrom()));
         }
         if (command.dateTo() != null) {
-            conditions.add("created_at < (:dateTo + INTERVAL '1 day')");
-            parameters.addValue("dateTo", command.dateTo());
+            conditions.add("created_at < :dateToExclusive");
+            parameters.addValue("dateToExclusive", startOfDay(command.dateTo().plusDays(1)));
         }
         return conditions.isEmpty() ? "" : " AND " + String.join(" AND ", conditions);
+    }
+
+    private Instant startOfDay(LocalDate date) {
+        return date.atStartOfDay(businessZoneId).toInstant();
     }
 }
