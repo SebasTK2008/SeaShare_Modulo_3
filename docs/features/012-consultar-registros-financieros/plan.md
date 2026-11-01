@@ -187,35 +187,35 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC12
 
 ### Phase 1: Setup
 
-- [ ] **T001** Consumir web, validación, errores y observabilidad del núcleo compartido.
-- [ ] **T002** Verificar la vista `v_financial_records` en la migración inicial única con `record_id`, `NULL::text AS external_reference` para comisiones y orden estable; incluir pruebas de esquema.
-- [ ] **T003** Configurar parámetros de paginación y correlación; no agregar exportación ni cliente de Flota.
+- [x] **T001** Consumir web, validación, errores y observabilidad del núcleo compartido.
+- [x] **T002** Verificar la vista `v_financial_records` en la migración inicial única con `record_id`, `NULL::text AS external_reference` para comisiones y orden estable; incluir pruebas de esquema.
+- [x] **T003** Configurar parámetros de paginación y correlación; no agregar exportación ni cliente de Flota.
 
 ### Phase 2: Foundational
 
-- [ ] **T004** Crear modelos, tipos, filtros, query port y adapter read-only sobre la vista.
-- [ ] **T005** Resolver el alcance **declarado** (`scope`/`owner_id` como datos planos) antes de aplicar filtros; sin validar identidad ni rol; no consultar Flota.
-- [ ] **T006** Crear commands/results y DTOs HTTP del contrato.
-- [ ] **T007** Implementar validación, `Problem Details`, `PAGE_OUT_OF_RANGE` y serialización monetaria.
-- [ ] **T008** Implementar paginación estable `(created_at DESC, record_id DESC)` y default 10.
+- [x] **T004** Crear modelos, tipos, filtros, query port y adapter read-only sobre la vista.
+- [x] **T005** Resolver el alcance **declarado** (`scope`/`owner_id` como datos planos) antes de aplicar filtros; sin validar identidad ni rol; no consultar Flota.
+- [x] **T006** Crear commands/results y DTOs HTTP del contrato.
+- [x] **T007** Implementar validación, `Problem Details`, `PAGE_OUT_OF_RANGE` y serialización monetaria.
+- [x] **T008** Implementar paginación estable `(created_at DESC, record_id DESC)` y default 10.
 
 ### Phase 3: User Stories
 
-- [ ] **T009** [US1/P1] Implementar consulta paginada propia, filtros y aislamiento de propietario.
-- [ ] **T010** [US2/P1] Implementar consulta global de Administrador y filtros combinados.
-- [ ] **T011** Exponer `GET /api/v1/financial-records` y mapear respuesta completa sin exponer entidades.
-- [ ] **T012** Tests de contrato: 200, vacío, filtros, validaciones y página fuera de rango.
-- [ ] **T013** `ce001_alcance_propietario`.
-- [ ] **T014** `ce002_cobertura_global_sin_duplicados`.
-- [ ] **T015** `ce003_paginacion_default_y_metadatos`.
-- [ ] **T016** Integración de orden estable y consistencia entre páginas.
-- [ ] **T017** `ce004_detalle_completo_y_comision`.
+- [x] **T009** [US1/P1] Implementar consulta paginada propia, filtros y aislamiento de propietario.
+- [x] **T010** [US2/P1] Implementar consulta global de Administrador y filtros combinados.
+- [x] **T011** Exponer `GET /api/v1/financial-records` y mapear respuesta completa sin exponer entidades.
+- [x] **T012** Tests de contrato: 200, vacío, filtros, validaciones y página fuera de rango.
+- [x] **T013** `ce001_alcance_propietario`.
+- [x] **T014** `ce002_cobertura_global_sin_duplicados`.
+- [x] **T015** `ce003_paginacion_default_y_metadatos`.
+- [x] **T016** Integración de orden estable y consistencia entre páginas.
+- [x] **T017** `ce004_detalle_completo_y_comision`.
 
 ### Phase 4: Polish
 
-- [ ] **T018** Pruebas read-only, ausencia de Flota y ausencia de exportación.
-- [ ] **T019** `ce005_solo_lectura_sin_exportacion` y ArchUnit.
-- [ ] **T020** Revisar cobertura, contratos y `./mvnw clean verify`; sin modificar archivos externos.
+- [x] **T018** Pruebas read-only, ausencia de Flota y ausencia de exportación.
+- [x] **T019** `ce005_solo_lectura_sin_exportacion` y ArchUnit.
+- [x] **T020** Revisar cobertura, contratos y `./mvnw clean verify`; sin modificar archivos externos.
 
 ## Dependencies & Execution Order
 
@@ -229,8 +229,8 @@ No modificar `pom.xml`, `general-plan.md`, SPEC, contrato ni planes de UC05/UC09
 
 ## Checklist de auto-revisión
 
-- [ ] Alineado con SPEC 12, contrato REST UC12 y `contracts/README.md`.
-- [ ] RF/RNF/CE/HU trazados a componente, tarea y prueba.
-- [ ] Alcance, filtros, paginación estable y errores documentados.
-- [ ] Solo lectura, sin Flota y sin exportación.
-- [ ] Requisitos de esquema de `v_financial_records` documentados; la vista se crea en la migración inicial única (general-plan §4.2, D-31).
+- [x] Alineado con SPEC 12, contrato REST UC12 y `contracts/README.md`.
+- [x] RF/RNF/CE/HU trazados a componente, tarea y prueba.
+- [x] Alcance, filtros, paginación estable y errores documentados.
+- [x] Solo lectura, sin Flota y sin exportación.
+- [x] Requisitos de esquema de `v_financial_records` documentados; la vista se crea en la migración inicial única (general-plan §4.2, D-31).
