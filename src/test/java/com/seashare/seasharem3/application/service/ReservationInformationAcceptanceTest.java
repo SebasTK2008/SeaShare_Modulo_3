@@ -9,7 +9,6 @@ import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.valueobject.BaseRate;
 import com.seashare.seasharem3.domain.valueobject.BoatId;
 import com.seashare.seasharem3.domain.valueobject.Money;
-import com.seashare.seasharem3.domain.valueobject.OwnerId;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.infrastructure.adapter.in.messaging.ReservationInfoListener;
 import com.seashare.seasharem3.infrastructure.adapter.in.messaging.dto.ReservationInfoMessage;
@@ -52,7 +51,6 @@ class ReservationInformationAcceptanceTest {
     private static final UUID OWNER_UUID = UUID.fromString("a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d");
     private static final ReservationId RESERVATION_ID = new ReservationId(RESERVATION_UUID);
     private static final BoatId BOAT = new BoatId(BOAT_UUID);
-    private static final OwnerId OWNER = new OwnerId(OWNER_UUID);
     private static final LocalDate START = LocalDate.of(2026, 12, 20);
     private static final LocalDate END = LocalDate.of(2026, 12, 22);
     private static final BaseRate BASE_RATE = new BaseRate(new Money(new BigDecimal("437500.0000")));

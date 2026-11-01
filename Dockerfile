@@ -16,4 +16,6 @@ RUN apt-get update \
 COPY --from=build --chown=seashare:seashare /workspace/target/seashare-m3-0.0.1-SNAPSHOT.jar app.jar
 USER seashare
 EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=5s --start-period=40s --retries=12 \
+    CMD curl -fsS http://localhost:8080/actuator/health/liveness || exit 1
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

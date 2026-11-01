@@ -10,10 +10,10 @@ import com.seashare.seasharem3.application.port.out.RefundIntentRepository;
 import com.seashare.seasharem3.application.port.out.RefundRecordRepository;
 import com.seashare.seasharem3.application.port.out.ReservationInformationRepository;
 import com.seashare.seasharem3.domain.exception.DomainException;
+import com.seashare.seasharem3.domain.exception.DuplicateRecordException;
 import com.seashare.seasharem3.domain.model.ChargeRecord;
 import com.seashare.seasharem3.domain.model.RefundIntent;
 import com.seashare.seasharem3.domain.model.RefundRecord;
-import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.OwnerBoat;
 import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
@@ -106,6 +106,8 @@ public class RegisterRefundResultService implements RegisterRefundResultUseCase 
             refundRecordRepository.save(RefundRecord.create(UUID.randomUUID(), intent,
                     ownerBoat.get().ownerId(), ownerBoat.get().boatId(), confirmed, result.transactionCost(),
                     result.statusDetail(), result.externalId(), clock.instant()));
+        } catch (DuplicateRecordException exception) {
+            return;
         } catch (DomainException exception) {
             failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
                     "refundIntentId=" + intent.id() + ";reason=" + exception.getMessage());

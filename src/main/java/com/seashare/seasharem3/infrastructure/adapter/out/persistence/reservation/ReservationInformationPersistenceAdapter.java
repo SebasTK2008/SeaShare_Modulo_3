@@ -72,7 +72,22 @@ public class ReservationInformationPersistenceAdapter implements ReservationInfo
                 entity.getPassengers(),
                 new OwnerId(entity.getOwnerId()),
                 entity.getMaxCapacity());
-        if (entity.getRentalAmount() != null) {
+        boolean hasCalculatedAmounts = entity.getRentalAmount() != null
+                && entity.getInsuranceAmount() != null
+                && entity.getDepositAmount() != null
+                && entity.getTotalAmount() != null
+                && entity.getFrozenParametersId() != null
+                && entity.getCalculatedAt() != null;
+        boolean hasPartialCalculatedAmounts = entity.getRentalAmount() != null
+                || entity.getInsuranceAmount() != null
+                || entity.getDepositAmount() != null
+                || entity.getTotalAmount() != null
+                || entity.getFrozenParametersId() != null
+                || entity.getCalculatedAt() != null;
+        if (hasPartialCalculatedAmounts && !hasCalculatedAmounts) {
+            throw new IllegalStateException("reservation_information calculated columns must be written together");
+        }
+        if (hasCalculatedAmounts) {
             information = information.withCalculated(
                     new ReservationValue(
                             new Money(entity.getRentalAmount()),

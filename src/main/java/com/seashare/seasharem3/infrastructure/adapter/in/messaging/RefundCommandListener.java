@@ -1,6 +1,6 @@
 package com.seashare.seasharem3.infrastructure.adapter.in.messaging;
 
-import com.seashare.seasharem3.application.dto.RefundCommandMessage;
+import com.seashare.seasharem3.infrastructure.adapter.in.messaging.dto.RefundCommandMessage;
 import com.seashare.seasharem3.application.port.in.SendRefundToGatewayUseCase;
 import com.seashare.seasharem3.domain.exception.DomainException;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;

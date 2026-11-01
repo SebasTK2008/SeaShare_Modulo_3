@@ -18,6 +18,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.core.JacksonException;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -94,6 +95,8 @@ public class MercadoPagoChargeAdapter implements ChargeGatewayPort {
                     .retrieve()
                     .body(String.class);
             return toResult(mapper.readValue(response, MercadoPagoPaymentResponse.class));
+        } catch (JacksonException exception) {
+            throw communicationFailure("The payment gateway returned an invalid charge response", exception);
         } catch (RestClientResponseException exception) {
             if (exception.getStatusCode().value() == BAD_REQUEST) {
                 throw new InvalidPaymentTokenException(
@@ -126,6 +129,8 @@ public class MercadoPagoChargeAdapter implements ChargeGatewayPort {
                     .retrieve()
                     .body(String.class);
             return Optional.of(toResult(mapper.readValue(response, MercadoPagoPaymentResponse.class)));
+        } catch (JacksonException exception) {
+            throw communicationFailure("The payment gateway returned an invalid payment response", exception);
         } catch (HttpClientErrorException.NotFound exception) {
             return Optional.empty();
         } catch (RestClientResponseException exception) {

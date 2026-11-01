@@ -81,6 +81,13 @@ CREATE TABLE reservation_information (
     calculated_at                   TIMESTAMPTZ,
     CONSTRAINT chk_reservation_dates     CHECK (end_date >= start_date),                -- [SPEC RF-005]
     CONSTRAINT chk_reservation_passengers CHECK (passengers BETWEEN 1 AND max_capacity), -- [SPEC RF-005]
+    CONSTRAINT chk_reservation_calculated_atomic CHECK (
+        (rental_amount IS NULL AND insurance_amount IS NULL AND deposit_amount IS NULL
+            AND total_amount IS NULL AND frozen_parameters_id IS NULL AND calculated_at IS NULL)
+        OR
+        (rental_amount IS NOT NULL AND insurance_amount IS NOT NULL AND deposit_amount IS NOT NULL
+            AND total_amount IS NOT NULL AND frozen_parameters_id IS NOT NULL AND calculated_at IS NOT NULL)
+    ),
     CONSTRAINT fk_reservation_base_rate_parameters FOREIGN KEY (base_rate_parameters_id) REFERENCES financial_parameters (id), -- [CONV; D-24]
     CONSTRAINT fk_reservation_frozen_parameters    FOREIGN KEY (frozen_parameters_id)    REFERENCES financial_parameters (id)  -- [CONV; D-27]
 );
@@ -159,7 +166,12 @@ CREATE TABLE charge_intent (
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
     version             INTEGER       NOT NULL DEFAULT 0,
     CONSTRAINT uq_charge_intent_idempotency_key UNIQUE (idempotency_key),
-    CONSTRAINT fk_charge_intent_reservation FOREIGN KEY (reservation_id) REFERENCES reservation_information (reservation_id)
+    CONSTRAINT fk_charge_intent_reservation FOREIGN KEY (reservation_id) REFERENCES reservation_information (reservation_id),
+    CONSTRAINT chk_charge_intent_status CHECK (
+        status IN ('PENDING_SEND', 'IN_PROCESS', 'CAPTURED', 'REJECTED', 'CANCELLED', 'EXPIRED',
+                   'COMMUNICATION_ERROR')),
+    CONSTRAINT chk_charge_intent_amount CHECK (amount >= 0),
+    CONSTRAINT chk_charge_intent_requested_amount CHECK (requested_amount IS NULL OR requested_amount >= 0)
 );
 
 -- Sin UNIQUE(reservation_id): se permiten múltiples intenciones por reserva (UC05 RF-004A).
@@ -187,6 +199,8 @@ CREATE TABLE charge_record (
     external_reference  TEXT,
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
     CONSTRAINT fk_charge_record_intent FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id),
+    CONSTRAINT chk_charge_record_amounts CHECK (
+        amount >= 0 AND rental_amount >= 0 AND insurance_amount >= 0 AND deposit_amount >= 0),
     -- [CONV] general-plan §4.1 declara charge_intent ||--o| charge_record (0..1): una intención
     -- exitosa genera a lo sumo un registro inmutable; evita duplicados por webhook concurrente.
     CONSTRAINT uq_charge_record_charge_intent UNIQUE (charge_intent_id)
@@ -235,7 +249,11 @@ CREATE TABLE refund_intent (
     created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitido en general-plan §4
     version            INTEGER       NOT NULL DEFAULT 0,     -- [CONV] bloqueo optimista para webhook/worker
     CONSTRAINT uq_refund_intent_idempotency_key UNIQUE (idempotency_key),
-    CONSTRAINT fk_refund_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id)
+    CONSTRAINT fk_refund_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id),
+    CONSTRAINT chk_refund_intent_status CHECK (
+        status IN ('PENDING_SEND', 'IN_PROCESS', 'COMPLETED', 'REJECTED', 'CANCELLED', 'EXPIRED',
+                   'COMMUNICATION_ERROR')),
+    CONSTRAINT chk_refund_intent_amount CHECK (amount >= 0)
 );
 
 CREATE INDEX idx_refund_intent_reservation ON refund_intent (reservation_id);
@@ -262,6 +280,9 @@ CREATE TABLE refund_record (
     external_reference TEXT,
     created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
     CONSTRAINT fk_refund_record_intent FOREIGN KEY (refund_intent_id) REFERENCES refund_intent (id),
+    CONSTRAINT chk_refund_record_amounts CHECK (
+        amount >= 0 AND released_amount >= 0
+        AND (transaction_cost IS NULL OR transaction_cost >= 0)),
     -- [CONV] general-plan §4.1 declara refund_intent ||--o| refund_record (0..1).
     CONSTRAINT uq_refund_record_refund_intent UNIQUE (refund_intent_id)
 );
@@ -300,7 +321,15 @@ CREATE TABLE settlement_intent (
     created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitida en general-plan §4
     version           INTEGER       NOT NULL DEFAULT 0,     -- [CONV] bloqueo optimista para webhook/worker
     CONSTRAINT uq_settlement_intent_idempotency_key UNIQUE (idempotency_key),
-    CONSTRAINT fk_settlement_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id)
+    CONSTRAINT fk_settlement_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id),
+    CONSTRAINT chk_settlement_intent_scope CHECK (
+        scope IN ('STANDARD', 'CANCELLATION_COMPENSATION', 'DEPOSIT')),
+    CONSTRAINT chk_settlement_intent_status CHECK (
+        status IN ('PENDING_SEND', 'IN_PROCESS', 'COMPLETED', 'REJECTED', 'CANCELLED', 'EXPIRED',
+                   'COMMUNICATION_ERROR')),
+    CONSTRAINT chk_settlement_intent_amounts CHECK (
+        amount >= 0 AND commission_amount >= 0
+        AND (deposit_amount IS NULL OR deposit_amount >= 0))
 );
 
 -- scope vigente: STANDARD | CANCELLATION_COMPENSATION | DEPOSIT (general-plan §4; sin DEPOSIT_DISPUTE).
@@ -325,6 +354,8 @@ CREATE TABLE settlement_record (
     external_reference   TEXT,
     created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
     CONSTRAINT fk_settlement_record_intent FOREIGN KEY (settlement_intent_id) REFERENCES settlement_intent (id),
+    CONSTRAINT chk_settlement_record_amounts CHECK (
+        amount >= 0 AND rental_gross_amount >= 0 AND insurance_amount >= 0 AND deposit_amount >= 0),
     -- [CONV] general-plan §4.1 declara settlement_intent ||--o| settlement_record (0..1).
     CONSTRAINT uq_settlement_record_settlement_intent UNIQUE (settlement_intent_id)
 );
@@ -352,7 +383,8 @@ CREATE TABLE commission_record (
     created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
     CONSTRAINT uq_commission_record_settlement_record UNIQUE (settlement_record_id),
     CONSTRAINT fk_commission_record_settlement_record FOREIGN KEY (settlement_record_id) REFERENCES settlement_record (id),
-    CONSTRAINT fk_commission_record_settlement_intent FOREIGN KEY (settlement_intent_id) REFERENCES settlement_intent (id)
+    CONSTRAINT fk_commission_record_settlement_intent FOREIGN KEY (settlement_intent_id) REFERENCES settlement_intent (id),
+    CONSTRAINT chk_commission_record_amount CHECK (amount >= 0)
 );
 
 CREATE INDEX idx_commission_record_owner_created ON commission_record (owner_id, created_at DESC);

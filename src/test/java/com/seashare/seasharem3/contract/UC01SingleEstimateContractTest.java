@@ -176,7 +176,7 @@ class UC01SingleEstimateContractTest {
         mockMvc.perform(post(ENDPOINT)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("2026-10-26", "2026-10-28", "1")))
-                .andExpect(status().isUnprocessableEntity())
+                .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("BASE_RATE_NOT_AVAILABLE"));
     }
 

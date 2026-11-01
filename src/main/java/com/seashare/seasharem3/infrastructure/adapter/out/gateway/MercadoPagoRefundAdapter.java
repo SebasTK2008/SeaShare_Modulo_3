@@ -19,6 +19,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.core.JacksonException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -73,6 +74,8 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
                     .retrieve()
                     .body(String.class);
             return toResult(mapper.readValue(response, MercadoPagoRefundResponse.class));
+        } catch (JacksonException exception) {
+            throw communicationFailure("The payment gateway returned an invalid refund response", exception);
         } catch (RestClientResponseException exception) {
             if (exception.getStatusCode().value() == BAD_REQUEST) {
                 throw new GatewayBusinessRejectionException(
@@ -106,6 +109,8 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
                     .retrieve()
                     .body(String.class);
             return Optional.of(toResult(mapper.readValue(response, MercadoPagoRefundResponse.class)));
+        } catch (JacksonException exception) {
+            throw communicationFailure("The payment gateway returned an invalid refund detail", exception);
         } catch (HttpClientErrorException.NotFound exception) {
             return Optional.empty();
         } catch (RestClientResponseException exception) {

@@ -2,6 +2,7 @@ package com.seashare.seasharem3.application.service;
 
 import com.seashare.seasharem3.application.dto.EstimateSingleCommand;
 import com.seashare.seasharem3.application.dto.EstimateWarning;
+import com.seashare.seasharem3.application.dto.BaseRateResult;
 import com.seashare.seasharem3.application.dto.ProvideBaseRateCommand;
 import com.seashare.seasharem3.application.dto.SingleEstimateResult;
 import com.seashare.seasharem3.application.exception.ContractException;
@@ -76,7 +77,7 @@ public class EstimateSingleService implements EstimateSingleUseCase {
 
         int durationDays = (int) ChronoUnit.DAYS.between(command.startDate(), command.endDate()) + 1;
 
-        List<com.seashare.seasharem3.application.dto.BaseRateResult> baseRates =
+        List<BaseRateResult> baseRates =
                 baseRateUseCase.provideBaseRates(new ProvideBaseRateCommand(
                         Collections.singletonList(command.boatId()),
                         command.startDate(),
