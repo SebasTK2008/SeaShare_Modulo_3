@@ -127,8 +127,8 @@ class FinancialRecordQueryAdapterIntegrationTest {
 
     @Test
     void returnsTheFourRecordTypesForTheDeclaredScope() {
-        LocalDate window = LocalDate.of(2026, 10, 1);
-        Instant base = Instant.parse("2026-10-10T10:00:00Z");
+        LocalDate window = LocalDate.of(2030, 1, 1);
+        Instant base = Instant.parse("2030-01-10T10:00:00Z");
         insertChargeRecord(reservationId, ownerId, "1000", base);
         insertRefundRecord(reservationId, ownerId, "100", base.plusSeconds(60));
         insertSettlementRecord(reservationId, ownerId, "800", base.plusSeconds(120));
@@ -144,8 +144,8 @@ class FinancialRecordQueryAdapterIntegrationTest {
 
     @Test
     void filtersByOwnerAndNeverLeaksAnotherOwnersRecords() {
-        LocalDate window = LocalDate.of(2026, 11, 1);
-        Instant base = Instant.parse("2026-11-10T10:00:00Z");
+        LocalDate window = LocalDate.of(2030, 2, 1);
+        Instant base = Instant.parse("2030-02-10T10:00:00Z");
         insertChargeRecord(reservationId, ownerId, "1000", base);
         insertChargeRecord(otherReservationId, otherOwnerId, "2000", base.plusSeconds(60));
 
@@ -158,8 +158,8 @@ class FinancialRecordQueryAdapterIntegrationTest {
 
     @Test
     void paginatesWithAStableOrder() {
-        LocalDate window = LocalDate.of(2026, 12, 1);
-        Instant base = Instant.parse("2026-12-10T10:00:00Z");
+        LocalDate window = LocalDate.of(2030, 3, 1);
+        Instant base = Instant.parse("2030-03-10T10:00:00Z");
         insertChargeRecord(reservationId, ownerId, "100", base);
         insertChargeRecord(reservationId, ownerId, "200", base.plusSeconds(60));
         insertChargeRecord(reservationId, ownerId, "300", base.plusSeconds(120));

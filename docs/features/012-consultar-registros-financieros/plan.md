@@ -96,6 +96,8 @@ src/test/java/com/seashare/seasharem3/
 └── infrastructure/adapter/out/persistence/financialrecords/FinancialRecordQueryAdapterIntegrationTest.java
 ```
 
+**Correcciones de la auditoría (2026-11-01).** La prueba de integración del adaptador destapó dos defectos de producción en `FinancialRecordQueryAdapter`: (1) los parámetros temporales se enviaban como `java.time.Instant`, tipo que el driver de PostgreSQL no sabe inferir, por lo que **toda** consulta lanzaba `PSQLException`; ahora se envían como `OffsetDateTime`; (2) la consulta concatenaba `predicates` con `ORDER BY` sin separador, generando el parámetro inexistente `dateToExclusiveORDER` en cuanto se aplicaba un filtro. Ambos están corregidos y cubiertos por `FinancialRecordQueryAdapterIntegrationTest`.
+
 **Structure Decision**: sigue `general-plan.md` §3.2–§3.4. Los VOs compartidos (`Money`, `ReservationId`, `OwnerId`, `ClockPort`) se consumen del núcleo compartido y no se redeclaran. `domain` no depende de Spring/JPA/Jackson; `application` solo depende de `domain`; controller invoca solo `application.port.in`; query adapter implementa `FinancialRecordQueryPort`; no se expone entidad JPA ni se accede a repositorios desde el controller.
 
 **Firmas referenciadas**: UC12 publica `QueryFinancialRecordsUseCase` para su adaptador REST y define la vista que UC13 consume. Consume `FinancialRecordQueryPort`/registros publicados por UC05, UC09 y UC10; no modifica sus planes. Zona horaria: `ClockPort` con `seashare.timezone` [D-12].

@@ -125,12 +125,12 @@ class FinancialReportQueryAdapterIntegrationTest {
 
     @Test
     void aggregatesThePlatformReportFromTheFourImmutableTables() {
-        Instant base = Instant.parse("2027-01-10T10:00:00Z");
+        Instant base = Instant.parse("2030-05-10T10:00:00Z");
         insertChargeRecord(reservationId, ownerId, "1000", base);
         insertRefundRecord(reservationId, ownerId, "100", base.plusSeconds(60));
         insertSettlementAndCommission(reservationId, ownerId, "800", base.plusSeconds(120));
 
-        ReportMetrics metrics = adapter.aggregate(command(ReportScope.PLATFORM, null, "2027-01"));
+        ReportMetrics metrics = adapter.aggregate(command(ReportScope.PLATFORM, null, "2030-05"));
 
         assertThat(metrics.totalCollections().amount()).isEqualByComparingTo("1000");
         assertThat(metrics.totalRefunds().amount()).isEqualByComparingTo("100");
@@ -142,12 +142,12 @@ class FinancialReportQueryAdapterIntegrationTest {
 
     @Test
     void aggregatesTheOwnerReportOnlyWithTheOwnersRecords() {
-        Instant base = Instant.parse("2027-02-10T10:00:00Z");
+        Instant base = Instant.parse("2030-06-10T10:00:00Z");
         insertSettlementAndCommission(reservationId, ownerId, "700", base);
         insertSettlementAndCommission(otherReservationId, otherOwnerId, "900", base.plusSeconds(60));
 
         ReportMetrics metrics = adapter.aggregate(
-                command(ReportScope.OWNER, new OwnerId(ownerId), "2027-02"));
+                command(ReportScope.OWNER, new OwnerId(ownerId), "2030-06"));
 
         assertThat(metrics.totalSettlements().amount()).isEqualByComparingTo("700");
         assertThat(metrics.netAmount().amount()).isEqualByComparingTo("700");
@@ -155,7 +155,7 @@ class FinancialReportQueryAdapterIntegrationTest {
 
     @Test
     void returnsZeroedMetricsForAPeriodWithoutRecords() {
-        ReportMetrics metrics = adapter.aggregate(command(ReportScope.PLATFORM, null, "2027-03"));
+        ReportMetrics metrics = adapter.aggregate(command(ReportScope.PLATFORM, null, "2030-07"));
 
         assertThat(metrics.netAmount().isZero()).isTrue();
         assertThat(metrics.counts()).containsEntry("CHARGE", 0).containsEntry("REFUND", 0);

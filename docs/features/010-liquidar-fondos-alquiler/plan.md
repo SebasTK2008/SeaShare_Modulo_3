@@ -336,7 +336,7 @@ UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettleme
 
 No modificar `pom.xml`, SPEC ni planes de UC03/UC05/UC07/UC08/UC09/UC11/UC12/UC13. La alineación documental de la Fase 0 ya actualizó `general-plan` y los contratos de liquidación/webhook. No implementar transferencias fuera del ACL, estados de éxito para timeouts, comisiones en penalidades/depósitos ni registros mutables. **[ACT-08]**
 
-- **Estado de cierre (2026-11-01)**: UC10 implementado y verificado con `.\mvnw.cmd verify` (**1600 tests, 0 fallos, 84 omitidos por requerir Docker**). Las pruebas que estaban pendientes ya existen: `SettlementIntentTest`, `SettlementRecordTest`, `CommissionRecordTest`, `SettlementCommandListenerTest` y `Uc10AcceptanceTest` (CE-001…CE-006). La capacidad de la pasarela (RF-009) se persiste en `settlement_intent.gateway_capability`. **[ACT-09]**
+- **Estado de cierre (2026-11-01)**: UC10 implementado y verificado con `.\mvnw.cmd verify` (**1600 tests, 0 fallos; las 84 pruebas que requieren Docker se omiten solo en entornos sin Docker**). Las pruebas que estaban pendientes ya existen: `SettlementIntentTest`, `SettlementRecordTest`, `CommissionRecordTest`, `SettlementCommandListenerTest` y `Uc10AcceptanceTest` (CE-001…CE-006). La capacidad de la pasarela (RF-009) se persiste en `settlement_intent.gateway_capability`. **[ACT-09]**
 
 ## Checklist de auto-revisión
 

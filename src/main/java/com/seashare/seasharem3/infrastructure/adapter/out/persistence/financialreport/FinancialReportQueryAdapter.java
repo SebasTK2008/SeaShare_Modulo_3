@@ -39,8 +39,8 @@ public class FinancialReportQueryAdapter implements FinancialReportQueryPort {
     public ReportMetrics aggregate(GetFinancialReportCommand command) {
         ReportPeriodResolver.PeriodBounds bounds = periodResolver.bounds(command.period());
         MapSqlParameterSource parameters = new MapSqlParameterSource()
-                .addValue("start", bounds.start().atStartOfDay(businessZoneId).toInstant())
-                .addValue("end", bounds.endExclusive().atStartOfDay(businessZoneId).toInstant());
+                .addValue("start", bounds.start().atStartOfDay(businessZoneId).toOffsetDateTime())
+                .addValue("end", bounds.endExclusive().atStartOfDay(businessZoneId).toOffsetDateTime());
         String scope = command.scope() == ReportScope.OWNER ? " AND owner_id = :ownerId" : "";
         if (command.ownerId() != null) {
             parameters.addValue("ownerId", command.ownerId().value());

@@ -14,8 +14,8 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,10 +53,8 @@ public class FinancialRecordQueryAdapter implements FinancialRecordQueryPort {
         long offset = ((long) command.page() - 1) * pageSize;
         String dataSql = """
                 SELECT record_type, reservation_id, owner_id, boat_id, amount, created_at, external_reference
-                """ + BASE_QUERY + predicates + """
-                ORDER BY created_at DESC, record_id DESC
-                LIMIT :limit OFFSET :offset
-                """;
+                """ + BASE_QUERY + predicates + " ORDER BY created_at DESC, record_id DESC"
+                + " LIMIT :limit OFFSET :offset";
         parameters.addValue("limit", pageSize).addValue("offset", offset);
         List<FinancialRecordResult> content = jdbc.query(dataSql, parameters, (rs, rowNum) ->
                 new FinancialRecordResult(
@@ -103,7 +101,7 @@ public class FinancialRecordQueryAdapter implements FinancialRecordQueryPort {
         return conditions.isEmpty() ? "" : " AND " + String.join(" AND ", conditions);
     }
 
-    private Instant startOfDay(LocalDate date) {
-        return date.atStartOfDay(businessZoneId).toInstant();
+    private OffsetDateTime startOfDay(LocalDate date) {
+        return date.atStartOfDay(businessZoneId).toOffsetDateTime();
     }
 }

@@ -388,5 +388,5 @@ T015 ─> T016 ─> T017 ─> T018 ─> T019 ─> T020 ─> T021 ─> T022 ─> 
 - UC09 no decide si hay daños ni retiene parcialmente: solo ejecuta el reembolso total del depósito cuando UC08 informa `REJECTED`.
 - Etiquetas: `[SPEC]`, `[CONV]`.
 - Los valores numéricos de los ejemplos son ilustrativos.
-- **Estado de cierre (2026-11-01)**: UC09 implementado y verificado con `.\mvnw.cmd verify` (**1600 tests, 0 fallos, 84 omitidos por requerir Docker**). Las pruebas que estaban pendientes ya existen: `RefundIntentTest`, `RefundRecordTest`, `RefundCommandListenerTest` y `Uc09AcceptanceTest` (CE-001…CE-006). La puerta JaCoCo de `pom.xml` incluye desde el 2026-11-01 las clases de UC09 (dominio y aplicación). **[ACT-08]**
+- **Estado de cierre (2026-11-01)**: UC09 implementado y verificado con `.\mvnw.cmd verify` (**1600 tests, 0 fallos; las 84 pruebas que requieren Docker se omiten solo en entornos sin Docker**). Las pruebas que estaban pendientes ya existen: `RefundIntentTest`, `RefundRecordTest`, `RefundCommandListenerTest` y `Uc09AcceptanceTest` (CE-001…CE-006). La puerta JaCoCo de `pom.xml` incluye desde el 2026-11-01 las clases de UC09 (dominio y aplicación). **[ACT-08]**
 
