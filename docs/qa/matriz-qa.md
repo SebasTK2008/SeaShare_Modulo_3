@@ -13,10 +13,25 @@ Plan de trazabilidad de QA. Cada fila ancla un Test Case (TC) a **un escenario d
 - **Origen del mapeo**: los specs no contienen una tabla explícita HU→RF; la columna "RF/CE cubierto" se derivó del contenido de los escenarios y de la *Prueba Independiente*. Cuando el TC cubre casos extremos en su `Section 2`, los RF/CE correspondientes también se listan en la fila.
 - **No ejecutar en develop**: los TC se crean en `Draft`; la verificación (Pass/Fail) ocurre únicamente en `release/0.1.0`.
 
+### Datos de prueba (alias → UUID)
+
+`reservation_id` es UUID v4 en el schema y en los contratos. Los TC usan estos alias; en payloads, `reservation_id=` y SQL se debe usar el UUID, nunca el alias.
+
+| Alias | UUID v4 |
+|---|---|
+| `R-100` | `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` |
+| `R-200` | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` |
+| `R-300` | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` |
+| `R-400` | `2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e` |
+| `R-401` | `3c4d5e6f-7a8b-4c9d-8e0f-2a3b4c5d6e7f` |
+| `R-402` | `4d5e6f7a-8b9c-4d0e-9f1a-3b4c5d6e7f8a` |
+
+> Excepción intencional: en UC06 las pruebas de `400 VALIDATION_ERROR` usan `R-100` sin UUID porque validan precisamente el formato.
+
 ## Matriz de trazabilidad
 
 | TC ID | Spec (UC) | HU | Escenario (nº + título) | Pri | RF/CE cubierto | Nombre del TC | Estado | Resultado | Defecto |
-|---|---|---|:---:|:---:|---|:---:|:---:|---|
+|---|---|---|---|:---:|---|---|:---:|:---:|---|
 | TC-UC01-HU1-E1 | UC01 · Estimaciones para reserva | HU1 | E1 Cálculo delegado exitoso de múltiples estimaciones en lote | P1 | RF-001, RF-002, RF-005, RF-006, RF-007, RNF-001, RNF-002, RNF-003 · CE-002, CE-004, CE-005 | [TC-UC01-HU1-E1-calculo-lote.md](test-cases/TC-UC01-HU1-E1-calculo-lote.md) | Draft | — | — |
 | TC-UC01-HU2-E1 | UC01 | HU2 | E1 Estimación delegada para una sola embarcación y aviso legal | P1 | RF-002, RF-003, RF-004, RF-005, RNF-003 · CE-002, CE-004 | [TC-UC01-HU2-E1-estimacion-individual.md](test-cases/TC-UC01-HU2-E1-estimacion-individual.md) | Draft | — | — |
 | TC-UC01-HU3-E1 | UC01 | HU3 | E1 Flota devuelve la tarifa base en tiempo óptimo (<500 ms) | P2 | RF-005, RF-006, RNF-001, RNF-003 · CE-004 | [TC-UC01-HU3-E1-tarifa-base-optima.md](test-cases/TC-UC01-HU3-E1-tarifa-base-optima.md) | Draft | — | — |
@@ -42,7 +57,7 @@ Plan de trazabilidad de QA. Cada fila ancla un Test Case (TC) a **un escenario d
 | TC-UC07-HU2-E4 | UC07 | HU2 | E4 Cancelación por anfitrión | P1 | RF-001, RF-005A, RF-009, RF-009A, RF-010, RNF-003 · CE-004 | [TC-UC07-HU2-E4-cancelacion-anfitrion.md](test-cases/TC-UC07-HU2-E4-cancelacion-anfitrion.md) | Draft | — | — |
 | TC-UC07-HU3-E1 | UC07 | HU3 | E1 Finalización única de la reserva | P1 | RF-001, RF-006, RF-007, RF-009, RF-009A, RF-009B, RNF-002, RNF-003 · CE-003, CE-004, CE-005, CE-006 | [TC-UC07-HU3-E1-finalizacion.md](test-cases/TC-UC07-HU3-E1-finalizacion.md) | Draft | — | — |
 | TC-UC08-HU1-E1 | UC08 · Disputa de garantía | HU1 | E1 Disputa pendiente | P1 | RF-001, RF-002, RF-004, RF-005, RF-006, RF-007, RF-008, RF-009, RF-010, RNF-001, RNF-003 · CE-001, CE-002, CE-004, CE-005, CE-006 | [TC-UC08-HU1-E1-disputa-pendiente.md](test-cases/TC-UC08-HU1-E1-disputa-pendiente.md) | Draft | — | — |
-| TC-UC08-HU1-E2 | UC08 | HU1 | E2 Disputa rechazada y devolución al Arrendatario | P1 | RF-001, RF-003, RF-005, RF-007, RF-008, RF-009, RF-010, RF-012, RNF-003 · CE-001, CE-003, CE-004, CE-005, CE-006 | [TC-UC08-HU1-E2-disputa-rechazada.md](test-cases/TC-UC08-HU1-E2-disputa-rechazada.md) | Draft | — | — |
+| TC-UC08-HU1-E2 | UC08 | HU1 | E2 Disputa rechazada y devolución al Arrendatario | P1 | RF-001, RF-003, RF-005, RF-007, RF-008, RF-009, RF-010, RNF-003 · CE-001, CE-003, CE-004, CE-005, CE-006 | [TC-UC08-HU1-E2-disputa-rechazada.md](test-cases/TC-UC08-HU1-E2-disputa-rechazada.md) | Draft | — | — |
 | TC-UC08-HU1-E3 | UC08 | HU1 | E3 Disputa completada y liquidación al Propietario | P1 | RF-001, RF-002, RF-006, RF-007, RF-008, RF-009, RF-010, RNF-003 · CE-001, CE-003, CE-004, CE-005, CE-006 | [TC-UC08-HU1-E3-disputa-completada.md](test-cases/TC-UC08-HU1-E3-disputa-completada.md) | Draft | — | — |
 | TC-UC08-HU1-E4 | UC08 | HU1 | E4 Ausencia de disputa al vencer la ventana de 24 h | P1 | RF-001, RF-002, RF-003, RF-005, RF-008, RF-009, RF-009A, RF-010, RNF-001 · CE-001, CE-005, CE-006 | [TC-UC08-HU1-E4-disputa-ausente.md](test-cases/TC-UC08-HU1-E4-disputa-ausente.md) | Draft | — | — |
 | TC-UC09-HU1-E1 | UC09 · Reembolsos | HU1 | E1 Reembolso por cancelación flexible (>72 h) | P1 | RF-001, RF-002, RF-006, RF-007, RF-008, RF-009, RF-010, RF-012, RNF-001, RNF-002, RNF-003 · CE-002 | [TC-UC09-HU1-E1-reembolso-flexible.md](test-cases/TC-UC09-HU1-E1-reembolso-flexible.md) | Draft | — | — |
@@ -98,3 +113,4 @@ Detectados al redactar los TC y contrastar spec ↔ plan ↔ contratos. No cambi
 6. **UC10 (dispersiones)**: `GATEWAY_COLLECTOR_ID` debe ser `≠ 0`; con el default dev `0` no hay dispersiones que verificar.
 7. **Montos de ejemplo**: los TC usan cifras ilustrativas distintas (`360.00/200.00/12.00` vs `900000.00/60000.00/30000.00`). Antes de ejecutar, fijar los valores de la versión vigente de parámetros del entorno.
 8. **UC13 (exportación)**: el contrato no declara `406 NOT_ACCEPTABLE`, pero el catálogo E1 lo exige como caso de ejemplo; verificar la respuesta real en release y registrar defecto si difiere.
+9. **UC02-HU1-E3 (festivos)**: el SPEC dice que los puentes/festivos se evalúan como fin de semana; el plan (D-UC02-11) y el código solo tratan sábado y domingo como fin de semana. Los TC siguen el plan; si se valida el texto literal del spec, registrar la divergencia.

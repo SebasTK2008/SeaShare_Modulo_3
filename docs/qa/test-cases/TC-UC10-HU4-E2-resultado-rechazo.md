@@ -37,7 +37,7 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el rechazo 
 * Existe una `settlement_intent` enviada a la Pasarela, con `external_reference` persistida y sin registro confirmado previo.
 
 ##### Preconditions & Default Setup
-* **Initial State** : `settlement_intent` de la reserva `R-200` (alcance `STANDARD`) en estado `IN_PROCESS`, `external_reference = mp_disp_QA_02`. Montos de ejemplo (ajustar a la versión vigente del entorno): alquiler bruto `360.00`, seguro `200.00`, depósito `12.00`, comisión `54.00`, monto solicitado `106.00`.
+* **Initial State** : `settlement_intent` de la reserva `R-200` = `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` (alcance `STANDARD`) en estado `IN_PROCESS`, `external_reference = mp_disp_QA_02`. Montos de ejemplo (ajustar a la versión vigente del entorno): alquiler bruto `360.00`, seguro `200.00`, depósito `12.00`, comisión `54.00`, monto solicitado `106.00`.
 * **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
@@ -48,13 +48,13 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el rechazo 
 ##### Section 1: Registro del rechazo sin marcar la liquidación como completada
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar la solicitud previa | `SELECT` sobre `settlement_intent` | `reservation_id = R-200` | Intención en estado en curso, con monto solicitado y `external_reference`; sin filas en `settlement_record` para esa intención (RF-009). | [ ] | |
+| 1 | Confirmar la solicitud previa | `SELECT` sobre `settlement_intent` | `reservation_id = 0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | Intención en estado en curso, con monto solicitado y `external_reference`; sin filas en `settlement_record` para esa intención (RF-009). | [ ] | |
 | 2 | Simular el rechazo en la Pasarela | Configurar el simulador para responder el detalle en estado rechazado | `status = rejected`, `status_detail = cc_rejected_insufficient_amount` (valor del entorno) | N/A (paso de preparación del simulador). | [ ] | |
 | 3 | Simular la notificación | `POST /api/v1/webhook/gateway?data.id=mp_disp_QA_02&type=merchant_order` con `x-signature` válida y `x-request-id` | Body mínimo del contrato (`action`, `type`) | `200 OK` inmediato; la notificación se persiste de forma durable (contract §3.2). | [ ] | |
 | 4 | Verificar la consulta de detalle | Request journal del simulador (`GET /v1/advanced_payments/{id}`) | `{id} = mp_disp_QA_02` | La consulta se ejecuta en la cola `finance.gateway-notification.v1`; el estado se toma de la consulta (contract §3.4). | [ ] | |
-| 5 | Verificar la intención actualizada | `SELECT` sobre `settlement_intent` | `R-200` | Estado `REJECTED` y `status_detail` con el detalle externo; la intención es la fuente de verdad del resultado (RF-010). | [ ] | |
-| 6 | Verificar que no se creó un registro exitoso | `SELECT count(*)` sobre `settlement_record` y `commission_record` por la intención | `R-200` | **Cero** filas en ambas tablas: un fallo externo nunca se registra como dispersión exitosa (RF-012, CE-005). | [ ] | |
-| 7 | Verificar que no se reporta como liquidado | `GET /api/v1/financial-records?reservation_id=R-200` | `R-200` | La reserva no muestra un registro de dispersión confirmado; el resultado fallido queda disponible internamente para conciliación (RF-012). | [ ] | |
+| 5 | Verificar la intención actualizada | `SELECT` sobre `settlement_intent` | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | Estado `REJECTED` y `status_detail` con el detalle externo; la intención es la fuente de verdad del resultado (RF-010). | [ ] | |
+| 6 | Verificar que no se creó un registro exitoso | `SELECT count(*)` sobre `settlement_record` y `commission_record` por la intención | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | **Cero** filas en ambas tablas: un fallo externo nunca se registra como dispersión exitosa (RF-012, CE-005). | [ ] | |
+| 7 | Verificar que no se reporta como liquidado | `GET /api/v1/financial-records?reservation_id=0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | La reserva no muestra un registro de dispersión confirmado; el resultado fallido queda disponible internamente para conciliación (RF-012). | [ ] | |
 | 8 | Verificar la repetibilidad | Reprocesar la misma notificación (`data.id` idéntico) | misma firma y payload | `200 OK`; no se altera el estado ya registrado ni se crea un segundo resultado (contract §6). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario

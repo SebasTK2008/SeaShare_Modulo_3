@@ -37,7 +37,7 @@ Este caso de prueba verifica que, ante el rechazo reportado por la Pasarela para
 * El simulador permite fijar el estado del pago en `rejected` y su `status_detail`.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva de prueba con valor total registrado (alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`; ajustar a la versión vigente del entorno). Intención en `PENDING_SEND`/`IN_PROCESS` con `external_reference = 1234567890`, `payer_email` y `payment_method_type = CREDIT_CARD`; ninguna fila en `charge_record`. Se usa el UUID v4 real de la reserva de TC-UC05-HU1-E1 (allí etiquetada `R-100`).
+* **Initial State** : reserva de prueba con valor total registrado (alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`; ajustar a la versión vigente del entorno). Intención en `PENDING_SEND`/`IN_PROCESS` con `external_reference = 1234567890`, `payer_email` y `payment_method_type = CREDIT_CARD`; ninguna fila en `charge_record`. La reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10`.
 * **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`, consola RabbitMQ en `http://localhost:15672`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 

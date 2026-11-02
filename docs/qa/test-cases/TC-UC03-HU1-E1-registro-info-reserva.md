@@ -33,7 +33,7 @@ Este caso de prueba verifica que, al recibir por cola los datos de una reserva (
 * Los montos y porcentajes son **ilustrativos**; **ajustar a la versión vigente del entorno**.
 
 ##### Dependencies & Assumptions
-* **TC-UC11-HU4-E1 debe haber pasado**: versión vigente de `financial_parameters` con seguro y porcentajes.
+* **Seed de `financial_parameters`**: versión vigente con seguro y porcentajes (no depende de otro TC).
 * **TC-UC02-HU1-E3** ejecutado: la tarifa de una fecha de temporada alta se ajusta correctamente.
 * RabbitMQ arriba con exchange `seashare.reservations` y cola `finance.reservation-info.v1`.
 

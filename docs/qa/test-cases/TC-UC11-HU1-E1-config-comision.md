@@ -36,7 +36,7 @@ Este caso de prueba verifica que el Administrador Financiero puede definir o aju
 * Al menos una reserva calculada antes del cambio, para comprobar la ausencia de efecto retroactivo.
 
 ##### Preconditions & Default Setup
-* **Initial State** : `GET /api/v1/financial-parameters` devuelve `version_number = 7`, `platform_commission_percentage = "15.0000"`, `insurance_fee_per_passenger = "15000.0000"`, `weekend_increase_percentage = "10.0000"`, `high_season_increase_percentage = "25.0000"` (valores de ejemplo; ajustar a la versión vigente del entorno). Reserva `R-400` calculada con `frozen_parameters_id` de la versión 7.
+* **Initial State** : `GET /api/v1/financial-parameters` devuelve `version_number = 7`, `platform_commission_percentage = "15.0000"`, `insurance_fee_per_passenger = "15000.0000"`, `weekend_increase_percentage = "10.0000"`, `high_season_increase_percentage = "25.0000"` (valores de ejemplo; ajustar a la versión vigente del entorno). Reserva `R-400` = `2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e` calculada con `frozen_parameters_id` de la versión 7.
 * **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`, PostgreSQL accesible para `psql`.
 * **Test Accounts** : N/A (el Administrador Financiero es el usuario esperado, sin validación de identidad).
 
@@ -52,8 +52,8 @@ Este caso de prueba verifica que el Administrador Financiero puede definir o aju
 | 3 | Confirmar la lectura posterior | `GET /api/v1/financial-parameters` | N/A | `version_number = 8` y `platform_commission_percentage = "18.0000"`; el resto de parámetros se conserva (RF-009). | [ ] | |
 | 4 | Verificar el historial inmutable | `SELECT version_number, commission_pct, created_at FROM financial_parameters ORDER BY version_number` | N/A | La fila de la versión 7 permanece intacta y la versión 8 se agrega; no hay `UPDATE` sobre filas previas (RF-005, CE-002). | [ ] | |
 | 5 | Verificar la precisión almacenada | `SELECT commission_pct FROM financial_parameters WHERE version_number = 8` | N/A | Valor `18.0000` en `NUMERIC(18,4)`, coherente con el `GET` (RNF-002). | [ ] | |
-| 6 | Verificar el efecto en cálculos posteriores | `POST /api/v1/reservations/{reservation_id}/calculated-value` para una reserva nueva | `reservation_id = R-401` | El cálculo usa la versión 8 y deja registrada su referencia (`frozen_parameters_id`); la comisión aplicada corresponde al 18 % (RF-006, RF-007). | [ ] | |
-| 7 | Verificar la ausencia de efecto retroactivo | `SELECT` sobre la información de la reserva ya calculada y repetir su valor calculado | `reservation_id = R-400` | La reserva conserva su `frozen_parameters_id = 7` y sus importes; no se recalculan con el 18 % (RF-007). | [ ] | |
+| 6 | Verificar el efecto en cálculos posteriores | `POST /api/v1/reservations/{reservation_id}/calculated-value` para una reserva nueva | `reservation_id = 3c4d5e6f-7a8b-4c9d-8e0f-2a3b4c5d6e7f` | El cálculo usa la versión 8 y deja registrada su referencia (`frozen_parameters_id`); la comisión aplicada corresponde al 18 % (RF-006, RF-007). | [ ] | |
+| 7 | Verificar la ausencia de efecto retroactivo | `SELECT` sobre la información de la reserva ya calculada y repetir su valor calculado | `reservation_id = 2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e` | La reserva conserva su `frozen_parameters_id = 7` y sus importes; no se recalculan con el 18 % (RF-007). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |

@@ -33,7 +33,7 @@ Este caso de prueba verifica que, al recibir **únicamente** la lista de identif
 * Los montos de esta ficha son **ilustrativos** (stub y ejemplos de los contratos); **ajustar a la versión vigente del entorno**.
 
 ##### Dependencies & Assumptions
-* **TC-UC11-HU4-E1 debe haber pasado**: existe versión vigente de `financial_parameters` con tarifa de seguro y el porcentaje que exige la fecha evaluada.
+* **Seed de `financial_parameters`**: existe versión vigente con tarifa de seguro y el porcentaje que exige la fecha evaluada (no depende de otro TC).
 * Flota (stub o real) con tarifa base para las 10 embarcaciones de prueba.
 
 ##### Preconditions & Default Setup

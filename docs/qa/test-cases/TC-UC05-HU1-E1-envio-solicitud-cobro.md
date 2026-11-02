@@ -36,7 +36,7 @@ Este caso de prueba verifica que, ante una reserva con valor total ya calculado 
 * RabbitMQ arriba y *outbox* activo (`finance.charge-command.v1`).
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva `R-100` con valor total registrado, `payment_token_ref = mp_tok_QA_01`, `payer_email = arrendatario@qa.com`, `payment_method_type = CREDIT_CARD`. Montos de ejemplo (ajustar a la versión vigente de parámetros del entorno): alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`.
+* **Initial State** : reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` con valor total registrado, `payment_token_ref = mp_tok_QA_01`, `payer_email = arrendatario@qa.com`, `payment_method_type = CREDIT_CARD`. Montos de ejemplo (ajustar a la versión vigente de parámetros del entorno): alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`.
 * **Environment** : staging local (`docker compose --profile app up --build -d`), health en `http://localhost:8080/actuator/health`, consola RabbitMQ en `http://localhost:15672`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
@@ -47,22 +47,22 @@ Este caso de prueba verifica que, ante una reserva con valor total ya calculado 
 ##### Section 1: Envío exitoso de la solicitud de cobro
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar el valor total registrado | Consultar en BD el valor total de la reserva (salida de TC-UC04-HU1-E1) | `reservation_id = R-100` | Existe un valor total registrado con desglose de alquiler, seguro y depósito (RF-002). | [ ] | |
-| 2 | Iniciar el pago de la reserva | Publicar en RabbitMQ el estado `PENDIENTE` de UC07 con la metadata de pago no sensible | `reservation_id=R-100`, token, `payer_email`, `payment_method_type=CREDIT_CARD` | El mensaje se confirma (ack); el sistema crea una `IntenciónDeCobro` en `PENDING_SEND` sin llamada síncrona a la Pasarela (RF-001). | [ ] | Disparador real: UC07 HU1 E3. |
+| 1 | Confirmar el valor total registrado | Consultar en BD el valor total de la reserva (salida de TC-UC04-HU1-E1) | `reservation_id = b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` | Existe un valor total registrado con desglose de alquiler, seguro y depósito (RF-002). | [ ] | |
+| 2 | Iniciar el pago de la reserva | Publicar en RabbitMQ el estado `PENDING` de UC07 con la metadata de pago no sensible | `reservation_id=b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10`, token, `payer_email`, `payment_method_type=CREDIT_CARD` | El mensaje se confirma (ack); el sistema crea una `IntenciónDeCobro` en `PENDING_SEND` sin llamada síncrona a la Pasarela (RF-001). | [ ] | Disparador real: UC07 HU1 E3. |
 | 3 | Verificar el mensaje de la cola interna | Inspeccionar `finance.charge-command.v1` (consola RabbitMQ o BD de outbox) | N/A | El mensaje lleva `charge_intent_id` y `payer_email`; **no** lleva el token (el worker lo lee de la intención) (RF-011). | [ ] | |
-| 4 | Verificar la llamada a la Pasarela | Revisar el request journal del simulador (`POST /v1/payments`) | N/A | `transaction_amount = 572.00` (monto ÚNICO: alquiler + seguro + depósito), `token` = referencia segura, `description = "Reserva R-100"`, `installments = 1`, `payment_method_id = credit_card`, `payer.email`, `external_reference = R-100` (RF-002, RF-015). | [ ] | |
+| 4 | Verificar la llamada a la Pasarela | Revisar el request journal del simulador (`POST /v1/payments`) | N/A | `transaction_amount = 572.00` (monto ÚNICO: alquiler + seguro + depósito), `token` = referencia segura, `description = "Reserva b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10"`, `installments = 1`, `payment_method_id = credit_card`, `payer.email`, `external_reference = b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (RF-002, RF-015). | [ ] | |
 | 5 | Verificar la clave idempotente | Revisar el header del request | N/A | `X-Idempotency-Key` = `charge_intent.idempotency_key` (derivada de `reservation_id` + `status` + `status_changed_at`) (RNF-003 del UC05). | [ ] | |
 | 6 | Verificar la respuesta técnica | Revisar la `IntenciónDeCobro` en BD | N/A | Estado inicial reportado por la Pasarela (`approved` / `in_process` / `rejected`) y su `id` externo guardados en la intención (RF-012). | [ ] | |
-| 7 | Verificar la intención en curso | `SELECT` sobre `charge_intent` | `R-100` | Fila en estado de operación en curso, con clave idempotente, `payer_email` y referencia externa; aún **no** hay `RegistroDeCobro` (RF-004). | [ ] | |
+| 7 | Verificar la intención en curso | `SELECT` sobre `charge_intent` | `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` | Fila en estado de operación en curso, con clave idempotente, `payer_email` y referencia externa; aún **no** hay `RegistroDeCobro` (RF-004). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Reserva sin valor total calculado | Publicar `PENDIENTE` para una reserva que no pasó por UC04 | reserva sin valor | Error controlado, **sin** solicitud a la Pasarela y sin monto asumido (RF-009). | [ ] | |
+| 1 | Reserva sin valor total calculado | Publicar `PENDING` para una reserva que no pasó por UC04 | reserva sin valor | Error controlado, **sin** solicitud a la Pasarela y sin monto asumido (RF-009). | [ ] | |
 | 2 | Faltan datos obligatorios de pago | Publicar sin `payment_method_type` o sin `payer_email` | payload incompleto | No se envía el cobro: intención `REJECTED` con detalle técnico y sin registro de cobro (contrato de cobro, regla 5). | [ ] | |
 | 3 | La Pasarela rechaza el token con `400` | Simular `400` de validación | token inválido | Intención `REJECTED`, sin reintento, mensaje confirmado y sin marcar la reserva como cobrada (RF-013). | [ ] | |
 | 4 | Caída, `502`/`503` o timeout (10 s) | Simular `503` / timeout | N/A | Intención `COMMUNICATION_ERROR`; no se asume resultado; reintentos 5 con backoff base 1 s y la misma `X-Idempotency-Key` (RNF-003 del UC05). | [ ] | Detalle a fondo en la fase de resiliencia. |
-| 5 | Mensaje de estado repetido | Publicar dos veces el mismo `PENDIENTE` | misma clave | La segunda entrega se confirma sin segunda solicitud monetaria (idempotencia). | [ ] | |
+| 5 | Mensaje de estado repetido | Publicar dos veces el mismo `PENDING` | misma clave | La segunda entrega se confirma sin segunda solicitud monetaria (idempotencia). | [ ] | |
 
 ##### Edge Cases & Boundary Conditions
 * **EC-001** : El monto enviado es uno solo e incluye depósito y seguro; no hay llamadas separadas por concepto (RF-015).

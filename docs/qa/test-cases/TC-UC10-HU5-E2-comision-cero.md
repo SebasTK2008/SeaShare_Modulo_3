@@ -37,7 +37,7 @@ Este caso de prueba verifica que, en una dispersión por penalidad de cancelaci�
 * Existe configuración financiera vigente con porcentaje de comisión mayor que cero.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva `R-300` `completada` con alquiler registrado `360.00`, seguro `200.00` y depósito `12.00`; sin `settlement_intent` para el estado de cancelación. Montos de ejemplo (ajustar a la versión vigente del entorno): compensación del 50 % = `180.00`; del 100 % = `360.00`.
+* **Initial State** : reserva `R-300` = `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` `completada` con alquiler registrado `360.00`, seguro `200.00` y depósito `12.00`; sin `settlement_intent` para el estado de cancelación. Montos de ejemplo (ajustar a la versión vigente del entorno): compensación del 50 % = `180.00`; del 100 % = `360.00`.
 * **Environment** : staging local (`docker compose --profile app`), consola RabbitMQ en `http://localhost:15672`, health en `http://localhost:8080/actuator/health`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
@@ -48,12 +48,12 @@ Este caso de prueba verifica que, en una dispersión por penalidad de cancelaci�
 ##### Section 1: Dispersión por cancelación moderada sin registro de comisión
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Disparar la dispersión por cancelación moderada | Publicar en `seashare.reservations` (`reservation.status.changed` → `finance.reservation-status.v1`) | `{"reservation_id":"R-300","status":"CANCELLED_MODERATE","status_changed_at":"2026-11-02T10:00:00Z"}` | El mensaje se confirma; UC10 registra la `IntenciónDeDispersión` con alcance `CANCELLATION_COMPENSATION` (RF-001, RF-009). | [ ] | |
-| 2 | Verificar el cálculo de la compensación | `SELECT` sobre `settlement_intent` | `R-300` | Monto solicitado = `180.00` (50 % del alquiler registrado); `commission_amount = 0` y seguro no aplicado (RF-002, RF-007, RF-014). | [ ] | |
+| 1 | Disparar la dispersión por cancelación moderada | Publicar en `seashare.reservations` (`reservation.status.changed` → `finance.reservation-status.v1`) | `{"reservation_id":"1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d","status":"CANCELLED_MODERATE","status_changed_at":"2026-11-02T10:00:00Z"}` | El mensaje se confirma; UC10 registra la `IntenciónDeDispersión` con alcance `CANCELLATION_COMPENSATION` (RF-001, RF-009). | [ ] | |
+| 2 | Verificar el cálculo de la compensación | `SELECT` sobre `settlement_intent` | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | Monto solicitado = `180.00` (50 % del alquiler registrado); `commission_amount = 0` y seguro no aplicado (RF-002, RF-007, RF-014). | [ ] | |
 | 3 | Verificar el envío a la Pasarela | Request journal del simulador (`POST /v1/advanced_payments/{id}/disbursements`) | `amount = 180.00`, `collector_id` del propietario | El payload solo lleva `disbursements[].amount`, `collector_id` y `external_reference`, con `X-Idempotency-Key` de la intención (RF-008, contrato de liquidación). | [ ] | |
 | 4 | Simular la confirmación exitosa | `POST /api/v1/webhook/gateway?data.id=<external_reference>&type=merchant_order` con `x-signature` válida | `status = approved` | `200 OK`; la intención pasa a `COMPLETED` y se crea **un** `RegistroDeDispersión` (RF-010). | [ ] | |
-| 5 | Verificar los componentes del registro | `SELECT` sobre `settlement_record` | `R-300` | `rental_gross_amount = 360.00`, `insurance_amount = 0`, `deposit_amount = 12.00`, `settlement_intent_id` y monto confirmado `180.00` (RF-016, RF-009A). | [ ] | |
-| 6 | Verificar la ausencia de registro de comisión | `SELECT` sobre `commission_record` por la intención y la reserva | `R-300` | **Cero** filas: no se genera `RegistroDeComisión` para penalidades de cancelación (RF-007, RF-014, CE-002). | [ ] | |
+| 5 | Verificar los componentes del registro | `SELECT` sobre `settlement_record` | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | `rental_gross_amount = 360.00`, `insurance_amount = 0`, `deposit_amount = 12.00`, `settlement_intent_id` y monto confirmado `180.00` (RF-016, RF-009A). | [ ] | |
+| 6 | Verificar la ausencia de registro de comisión | `SELECT` sobre `commission_record` por la intención y la reserva | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | **Cero** filas: no se genera `RegistroDeComisión` para penalidades de cancelación (RF-007, RF-014, CE-002). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
@@ -63,7 +63,7 @@ Este caso de prueba verifica que, en una dispersión por penalidad de cancelaci�
 | 3 | Reserva sin alquiler registrado | Disparar la cancelación para una reserva sin monto de alquiler interno | reserva sin alquiler | Se registra el fallo interno sin cálculo parcial y **sin** llamada a la Pasarela (RF-013). | [ ] | |
 | 4 | Confirmación repetida | Reprocesar la misma notificación exitosa | mismo `data.id` | No se duplica el `settlement_record` ni aparece un `commission_record` (idempotencia, caso extremo UC10). | [ ] | |
 | 5 | Resultado rechazado | Simular la confirmación con estado rechazado | `status = rejected` | Solo se actualiza la intención a `REJECTED`; sin registros exitosos ni comisión (RF-012). | [ ] | |
-| 6 | Intento de crear comisión desde la operación de penalidad | Buscar cualquier vínculo de comisión generado por la intención | `R-300` | `commission_record` continúa vacío aunque el porcentaje global vigente sea mayor que cero (RF-007, CE-002). | [ ] | |
+| 6 | Intento de crear comisión desde la operación de penalidad | Buscar cualquier vínculo de comisión generado por la intención | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | `commission_record` continúa vacío aunque el porcentaje global vigente sea mayor que cero (RF-007, CE-002). | [ ] | |
 
 ##### Edge Cases & Boundary Conditions
 * **EC-001** : El depósito se conserva asociado en el registro de la penalidad aunque no forme parte del monto dispersado (RF-016).

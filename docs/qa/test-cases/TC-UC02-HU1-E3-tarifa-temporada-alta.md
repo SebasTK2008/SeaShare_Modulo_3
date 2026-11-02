@@ -31,7 +31,7 @@ Este caso de prueba verifica que, cuando la fecha evaluada cae dentro de una de 
 * Los montos y porcentajes son **ilustrativos**; **ajustar a la versión vigente del entorno**. Las fechas de las pruebas de frontera deben corresponder al mismo tipo de día (ventana / fuera de ventana) en el calendario del año de ejecución.
 
 ##### Dependencies & Assumptions
-* **TC-UC11-HU4-E1 debe haber pasado**: versión vigente de `financial_parameters` con ambos porcentajes y seguro.
+* **Seed de `financial_parameters`**: versión vigente con ambos porcentajes y seguro (no depende de otro TC).
 * Flota (stub o real) arriba y cola `finance.reservation-info.v1` operativa.
 
 ##### Preconditions & Default Setup

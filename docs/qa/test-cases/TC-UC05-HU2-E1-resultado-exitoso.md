@@ -37,7 +37,7 @@ Este caso de prueba verifica que, ante una solicitud de cobro previamente enviad
 * RabbitMQ arriba, *outbox* activo y worker de `finance.charge-command.v1` operativo.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva de prueba con valor total registrado (alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`; ajustar a la versión vigente del entorno). Intención en `PENDING_SEND`/`IN_PROCESS`, con `external_reference = 1234567890` (id del pago en el simulador), `payer_email` y `payment_method_type = CREDIT_CARD`. En los comandos se usa el UUID v4 de la reserva creada en TC-UC05-HU1-E1 (allí etiquetada `R-100`); ajustar al valor real.
+* **Initial State** : reserva de prueba con valor total registrado (alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`; ajustar a la versión vigente del entorno). Intención en `PENDING_SEND`/`IN_PROCESS`, con `external_reference = 1234567890` (id del pago en el simulador), `payer_email` y `payment_method_type = CREDIT_CARD`. La reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (UUID v4 que se usa en los comandos).
 * **Environment** : staging local (`docker compose --profile app up --build -d`), health en `http://localhost:8080/actuator/health`, consola RabbitMQ en `http://localhost:15672`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 

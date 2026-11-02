@@ -37,7 +37,7 @@ Este caso de prueba verifica que el Administrador Financiero puede definir o aju
 * Existe información de reserva registrada con un número conocido de pasajeros, para comprobar el efecto de la tarifa.
 
 ##### Preconditions & Default Setup
-* **Initial State** : `GET /api/v1/financial-parameters` devuelve `version_number = 7` con `insurance_fee_per_passenger = "15000.0000"` (valor de ejemplo; ajustar a la versión vigente del entorno). Reserva `R-402` informada con 2 pasajeros.
+* **Initial State** : `GET /api/v1/financial-parameters` devuelve `version_number = 7` con `insurance_fee_per_passenger = "15000.0000"` (valor de ejemplo; ajustar a la versión vigente del entorno). Reserva `R-402` = `4d5e6f7a-8b9c-4d0e-9f1a-3b4c5d6e7f8a` informada con 2 pasajeros.
 * **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`, PostgreSQL accesible para `psql`.
 * **Test Accounts** : N/A (el Administrador Financiero es el usuario esperado, sin validación de identidad).
 
@@ -52,7 +52,7 @@ Este caso de prueba verifica que el Administrador Financiero puede definir o aju
 | 2 | Guardar la nueva tarifa | `PUT /api/v1/financial-parameters` con `Content-Type: application/json` | `{"platform_commission_percentage":"15.0000","insurance_fee_per_passenger":"18000.0000","weekend_increase_percentage":"10.0000","high_season_increase_percentage":"25.0000"}` | `200 OK` con `{"version_number":8}` (RF-002, RF-005). | [ ] | Se envían los cuatro valores: el `PUT` es reemplazo total. |
 | 3 | Confirmar la lectura posterior | `GET /api/v1/financial-parameters` | N/A | `version_number = 8` y `insurance_fee_per_passenger = "18000.0000"`; los demás parámetros sin cambios (RF-009). | [ ] | |
 | 4 | Verificar el historial inmutable | `SELECT version_number, insurance_fee_per_passenger FROM financial_parameters ORDER BY version_number` | N/A | La versión 7 conserva `15000.0000` y la 8 se agrega sin modificar filas previas (RF-005, CE-002). | [ ] | |
-| 5 | Verificar el efecto en el valor de reserva | `POST /api/v1/reservations/{reservation_id}/calculated-value` | `reservation_id = R-402` (2 pasajeros) | El desglose devuelto incluye `insurance_amount = "36000.00"` (2 × `18000.00`), calculado con la versión 8 (RF-006). | [ ] | Verificar que la reserva registra la referencia a la versión empleada. |
+| 5 | Verificar el efecto en el valor de reserva | `POST /api/v1/reservations/{reservation_id}/calculated-value` | `reservation_id = 4d5e6f7a-8b9c-4d0e-9f1a-3b4c5d6e7f8a` (2 pasajeros) | El desglose devuelto incluye `insurance_amount = "36000.00"` (2 × `18000.00`), calculado con la versión 8 (RF-006). | [ ] | Verificar que la reserva registra la referencia a la versión empleada. |
 | 6 | Verificar la ausencia de efecto retroactivo | Repetir la consulta del valor de una reserva calculada antes del cambio | reserva calculada con la versión 7 | Conserva su `insurance_amount` y su `frozen_parameters_id = 7`; no se recalcula (RF-007). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario

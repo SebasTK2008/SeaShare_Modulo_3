@@ -33,8 +33,7 @@ Este caso de prueba verifica que, al guardar valores válidos de comisión, segu
 * La verificación de “sin efecto retroactivo” requiere una reserva ya calculada; si el entorno no la tiene, registrar el paso como bloqueado y anotar la dependencia.
 
 ##### Dependencies & Assumptions
-* **TC-UC11-HU3-E1 debe haber pasado**: el `GET` devuelve la versión vigente y sus derivados.
-* **TC-UC04-HU1-E1 debe haber pasado**: existe una reserva calculada con referencia a la versión de parámetros usada.
+* **Seed de `financial_parameters`**: existe una versión vigente persistida (seed o TC-UC11-HU3-E1); este TC no depende de otro TC.
 * Base de datos accesible (`docker compose exec postgres psql -U seashare -d seashare`).
 
 ##### Preconditions & Default Setup
@@ -55,7 +54,7 @@ Este caso de prueba verifica que, al guardar valores válidos de comisión, segu
 | 4 | Verificar atomicidad de la escritura | `psql`: `SELECT version_number, commission_pct, insurance_fee_per_passenger, weekend_increase_pct, high_season_increase_pct FROM financial_parameters ORDER BY version_number;` | N/A | Una sola fila nueva (`v8`) con los cuatro valores; ninguna fila intermedia ni valores mezclados con `v7` (RF-005, RF-011, RNF-003). | [ ] | |
 | 5 | Verificar el historial inmutable | Comparar `v1…v7` antes y después del guardado | N/A | Todas las versiones anteriores conservan exactamente sus valores y su `created_at`; `count` pasó de 7 a 8 (RF-005, CE-002). | [ ] | |
 | 6 | Verificar la unicidad y secuencia de versión | `psql`: `SELECT version_number, count(*) FROM financial_parameters GROUP BY version_number;` | N/A | `v8` es única y mayor que `v7`; la versión vigente es siempre la de mayor `version_number` (plan D-UC11-03). | [ ] | |
-| 7 | Verificar ausencia de efecto retroactivo | Consultar la reserva calculada en TC-UC04-HU1-E1 | `reservation_id` de la reserva de prueba | La reserva conserva su referencia a la versión usada y sus montos no cambian; los nuevos parámetros solo aplican a cálculos posteriores (RF-007, CE-002). | [ ] | |
+| 7 | Verificar ausencia de efecto retroactivo (opcional) | Consultar una reserva ya calculada (si el entorno tiene una; paso no bloqueante) | `reservation_id` de la reserva de prueba | La reserva conserva su referencia a la versión usada y sus montos no cambian; los nuevos parámetros solo aplican a cálculos posteriores (RF-007, CE-002). | [ ] | |
 | 8 | Verificar que la nueva versión alimenta a los consumidores | Repetir el cálculo/estimación de una reserva nueva según el UC correspondiente | `boat_id` de prueba | El cálculo posterior usa `v8` (comisión 18.50 %, seguro 16500.00) y registra la referencia a esa versión (RF-006). | [ ] | Delegable al TC del UC consumidor. |
 
 ##### Section 2: Errores y casos extremos de este escenario

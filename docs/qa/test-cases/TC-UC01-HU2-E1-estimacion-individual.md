@@ -33,7 +33,7 @@ Este caso de prueba verifica que, al recibir el identificador de una embarcació
 * El aviso legal se valida carácter a carácter contra el texto fijado por el contrato.
 
 ##### Dependencies & Assumptions
-* **TC-UC11-HU4-E1 debe haber pasado**: existe versión vigente de `financial_parameters` con tarifa de seguro y ambos porcentajes de tarifa dinámica.
+* **Seed de `financial_parameters`**: existe versión vigente con tarifa de seguro y ambos porcentajes de tarifa dinámica (no depende de otro TC).
 * Flota (stub o real) con tarifa base para la embarcación de prueba.
 
 ##### Preconditions & Default Setup

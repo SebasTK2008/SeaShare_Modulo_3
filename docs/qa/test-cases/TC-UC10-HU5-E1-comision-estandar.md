@@ -36,7 +36,7 @@ Este caso de prueba verifica que, al confirmarse exitosamente la liquidación es
 * La reserva referencia una versión de parámetros (`frozen_parameters_id`) con porcentaje de comisión configurado.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva `R-200` `completada`; `settlement_intent` de alcance `STANDARD` en `IN_PROCESS` con `commission_amount = 54.00`, `external_reference = mp_disp_QA_03` y desglose interno. Montos de ejemplo (ajustar a la versión vigente del entorno): alquiler bruto `360.00`, seguro `200.00`, depósito `12.00`, monto solicitado `106.00`, comisión `15 %`.
+* **Initial State** : reserva `R-200` = `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` `completada`; `settlement_intent` de alcance `STANDARD` en `IN_PROCESS` con `commission_amount = 54.00`, `external_reference = mp_disp_QA_03` y desglose interno. Montos de ejemplo (ajustar a la versión vigente del entorno): alquiler bruto `360.00`, seguro `200.00`, depósito `12.00`, monto solicitado `106.00`, comisión `15 %`.
 * **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
@@ -47,15 +47,15 @@ Este caso de prueba verifica que, al confirmarse exitosamente la liquidación es
 ##### Section 1: Creación atómica del registro de comisión
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar la comisión calculada en la intención | `SELECT` sobre `settlement_intent` | `reservation_id = R-200` | `commission_amount` conservado como dato operativo no inmutable, resuelto desde `frozen_parameters_id` (RF-004, RF-014). | [ ] | |
-| 2 | Confirmar que aún no existe registro de comisión | `SELECT` sobre `commission_record` por la intención | `R-200` | Cero filas antes de la confirmación externa (RF-014). | [ ] | |
+| 1 | Confirmar la comisión calculada en la intención | `SELECT` sobre `settlement_intent` | `reservation_id = 0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | `commission_amount` conservado como dato operativo no inmutable, resuelto desde `frozen_parameters_id` (RF-004, RF-014). | [ ] | |
+| 2 | Confirmar que aún no existe registro de comisión | `SELECT` sobre `commission_record` por la intención | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | Cero filas antes de la confirmación externa (RF-014). | [ ] | |
 | 3 | Simular la confirmación exitosa de la Pasarela | `POST /api/v1/webhook/gateway?data.id=mp_disp_QA_03&type=merchant_order` con `x-signature` válida, seguido de la consulta de detalle en el simulador | `status = approved` | `200 OK` al webhook y consulta `GET /v1/advanced_payments/{id}` con el estado exitoso (contract §3.4). | [ ] | |
-| 4 | Verificar la intención confirmada | `SELECT` sobre `settlement_intent` | `R-200` | Estado `COMPLETED` con el detalle y la referencia externa (RF-010). | [ ] | |
-| 5 | Verificar el registro de dispersión | `SELECT` sobre `settlement_record` por la intención | `R-200` | Exactamente **una** fila con monto confirmado, `settlement_intent_id`, reserva, propietario, embarcación, alquiler bruto, seguro y depósito (RF-009A, RF-010, RF-015, RF-016). | [ ] | |
-| 6 | Verificar el registro de comisión | `SELECT` sobre `commission_record` por la intención y el registro | `R-200` | Exactamente **una** fila, inmutable, con el monto igual al `commission_amount` de la intención, fecha y hora de creación, reserva, propietario, embarcación, `settlement_intent_id` y vínculo con el `settlement_record` (RF-010, RF-014, CE-006). | [ ] | |
+| 4 | Verificar la intención confirmada | `SELECT` sobre `settlement_intent` | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | Estado `COMPLETED` con el detalle y la referencia externa (RF-010). | [ ] | |
+| 5 | Verificar el registro de dispersión | `SELECT` sobre `settlement_record` por la intención | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | Exactamente **una** fila con monto confirmado, `settlement_intent_id`, reserva, propietario, embarcación, alquiler bruto, seguro y depósito (RF-009A, RF-010, RF-015, RF-016). | [ ] | |
+| 6 | Verificar el registro de comisión | `SELECT` sobre `commission_record` por la intención y el registro | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | Exactamente **una** fila, inmutable, con el monto igual al `commission_amount` de la intención, fecha y hora de creación, reserva, propietario, embarcación, `settlement_intent_id` y vínculo con el `settlement_record` (RF-010, RF-014, CE-006). | [ ] | |
 | 7 | Verificar la atomicidad | Forzar un fallo de persistencia del `commission_record` (restricción temporal en el entorno de prueba) y repetir la confirmación | N/A | No queda ni el `commission_record` ni un `settlement_record` huérfano: ambos se crean o ninguno; la operación se reintenta y no reporta éxito (RF-010, CE-006). | [ ] | |
 | 8 | Verificar la ausencia de recálculo | Crear una nueva versión de parámetros con otro porcentaje de comisión y volver a consultar el registro | nueva versión vigente | El `commission_record` conserva el monto calculado con la versión referenciada por la reserva; no se recalcula ni se altera (RF-014, RF-007 del UC11). | [ ] | |
-| 9 | Verificar la disponibilidad para consulta | `GET /api/v1/financial-records?reservation_id=R-200` | `R-200` | El registro de comisión aparece como métrica financiera independiente del pago al propietario (RF-011). | [ ] | |
+| 9 | Verificar la disponibilidad para consulta | `GET /api/v1/financial-records?reservation_id=0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | El registro de comisión aparece como métrica financiera independiente del pago al propietario (RF-011). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |

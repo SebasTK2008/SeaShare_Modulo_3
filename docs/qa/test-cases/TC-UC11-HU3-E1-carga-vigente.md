@@ -33,7 +33,7 @@ Este caso de prueba verifica que, existiendo una versión vigente de `Parámetro
 * Las ventanas de temporada alta dependen del calendario de UC02 (`HighSeasonCalendar`); este TC no re-prueba el calendario, solo que el `GET` las expone.
 
 ##### Dependencies & Assumptions
-* **TC-UC11-HU4-E1 debe haber pasado**: existe al menos una versión persistida y el guardado crea versiones nuevas.
+* **Seed de `financial_parameters`**: existe al menos una versión persistida (seed o TC-UC11-HU4-E1); no bloquea la ejecución.
 * Base de datos accesible (`docker compose exec postgres psql -U seashare -d seashare`).
 
 ##### Preconditions & Default Setup

@@ -33,7 +33,7 @@ Este caso de prueba verifica que, cuando la fecha evaluada no es fin de semana n
 * Los montos y porcentajes son **ilustrativos**; **ajustar a la versión vigente del entorno**.
 
 ##### Dependencies & Assumptions
-* **TC-UC11-HU4-E1 debe haber pasado**: versión vigente de `financial_parameters` con seguro y porcentajes.
+* **Seed de `financial_parameters`**: versión vigente con seguro y porcentajes (no depende de otro TC).
 * Flota (stub o real) arriba y RabbitMQ con la cola `finance.reservation-info.v1` declarada.
 
 ##### Preconditions & Default Setup

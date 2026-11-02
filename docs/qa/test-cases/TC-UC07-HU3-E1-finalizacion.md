@@ -35,7 +35,7 @@ Este caso de prueba verifica que, ante el estado `COMPLETED`, el sistema solicit
 ##### Dependencies & Assumptions
 * **TC-UC03-HU1-E1** y **TC-UC04-HU1-E1** deben haber pasado (información y valor total calculados, con versión de parámetros referenciada).
 * **TC-UC05-HU2-E1 debe haber pasado**: cobro original en `CAPTURED` con `charge_record` y desglose.
-* **TC-UC11-HU4-E1 debe haber pasado**: existe una versión de parámetros financieros con el porcentaje de comisión vigente.
+* **Seed de `financial_parameters`**: existe una versión con el porcentaje de comisión vigente (no depende de otro TC).
 * RabbitMQ arriba; colas `finance.reservation-status.v1` y `finance.settlement-command.v1` disponibles.
 
 ##### Preconditions & Default Setup
