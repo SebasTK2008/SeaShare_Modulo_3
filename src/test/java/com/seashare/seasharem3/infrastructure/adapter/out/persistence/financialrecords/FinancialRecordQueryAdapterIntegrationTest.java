@@ -47,7 +47,6 @@ class FinancialRecordQueryAdapterIntegrationTest {
     private UUID reservationId;
     private UUID otherReservationId;
     private UUID chargeIntentId;
-    private UUID otherChargeIntentId;
     private UUID ownerId;
     private UUID otherOwnerId;
     private UUID boatId;
@@ -60,7 +59,6 @@ class FinancialRecordQueryAdapterIntegrationTest {
         reservationId = insertReservation(ownerId);
         otherReservationId = insertReservation(otherOwnerId);
         chargeIntentId = insertChargeIntent(reservationId);
-        otherChargeIntentId = insertChargeIntent(otherReservationId);
     }
 
     private UUID insertReservation(UUID owner) {
@@ -80,21 +78,25 @@ class FinancialRecordQueryAdapterIntegrationTest {
         return id;
     }
 
-    private void insertChargeRecord(UUID reservation, UUID intent, UUID owner, String amount, Instant createdAt) {
+    private void insertChargeRecord(UUID reservation, UUID owner, String amount, Instant createdAt) {
+        UUID intent = insertChargeIntent(reservation);
+        BigDecimal numericAmount = new BigDecimal(amount);
         jdbc.update("INSERT INTO charge_record (id, charge_intent_id, reservation_id, owner_id, boat_id, amount,"
                         + " rental_amount, insurance_amount, deposit_amount, created_at)"
                         + " VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)",
-                UUID.randomUUID(), intent, reservation, owner, boatId, amount, amount, Timestamp.from(createdAt));
+                UUID.randomUUID(), intent, reservation, owner, boatId, numericAmount, numericAmount,
+                Timestamp.from(createdAt));
     }
 
     private void insertRefundRecord(UUID reservation, UUID owner, String amount, Instant createdAt) {
         UUID intentId = UUID.randomUUID();
         jdbc.update("INSERT INTO refund_intent (id, reservation_id, trigger, scope, amount, charge_intent_id,"
                         + " idempotency_key, status) VALUES (?, ?, 'CANCELLED_MODERATE', 'FULL', ?, ?, ?, 'COMPLETED')",
-                intentId, reservation, amount, chargeIntentId, UUID.randomUUID().toString());
+                intentId, reservation, new BigDecimal(amount), chargeIntentId, UUID.randomUUID().toString());
+        BigDecimal numericAmount = new BigDecimal(amount);
         jdbc.update("INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount,"
                         + " released_amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                UUID.randomUUID(), intentId, reservation, owner, boatId, amount, amount,
+                UUID.randomUUID(), intentId, reservation, owner, boatId, numericAmount, numericAmount,
                 Timestamp.from(createdAt));
     }
 
@@ -104,12 +106,14 @@ class FinancialRecordQueryAdapterIntegrationTest {
                         + " deposit_amount, charge_intent_id, idempotency_key, status, gateway_capability)"
                         + " VALUES (?, ?, 'COMPLETED', 'STANDARD', ?, 10, 0, ?, ?, 'COMPLETED',"
                         + " 'ADVANCED_PAYMENTS_DISBURSEMENT')",
-                intentId, reservation, amount, chargeIntentId, UUID.randomUUID().toString());
+                intentId, reservation, new BigDecimal(amount), chargeIntentId, UUID.randomUUID().toString());
         UUID recordId = UUID.randomUUID();
+        BigDecimal numericAmount = new BigDecimal(amount);
         jdbc.update("INSERT INTO settlement_record (id, settlement_intent_id, reservation_id, owner_id, boat_id,"
                         + " amount, rental_gross_amount, insurance_amount, deposit_amount, created_at)"
                         + " VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)",
-                recordId, intentId, reservation, owner, boatId, amount, amount, Timestamp.from(createdAt));
+                recordId, intentId, reservation, owner, boatId, numericAmount, numericAmount,
+                Timestamp.from(createdAt));
         jdbc.update("INSERT INTO commission_record (id, settlement_record_id, settlement_intent_id, reservation_id,"
                         + " owner_id, boat_id, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, 10, ?)",
                 UUID.randomUUID(), recordId, intentId, reservation, owner, boatId,
@@ -125,7 +129,7 @@ class FinancialRecordQueryAdapterIntegrationTest {
     void returnsTheFourRecordTypesForTheDeclaredScope() {
         LocalDate window = LocalDate.of(2026, 10, 1);
         Instant base = Instant.parse("2026-10-10T10:00:00Z");
-        insertChargeRecord(reservationId, chargeIntentId, ownerId, "1000", base);
+        insertChargeRecord(reservationId, ownerId, "1000", base);
         insertRefundRecord(reservationId, ownerId, "100", base.plusSeconds(60));
         insertSettlementRecord(reservationId, ownerId, "800", base.plusSeconds(120));
 
@@ -142,8 +146,8 @@ class FinancialRecordQueryAdapterIntegrationTest {
     void filtersByOwnerAndNeverLeaksAnotherOwnersRecords() {
         LocalDate window = LocalDate.of(2026, 11, 1);
         Instant base = Instant.parse("2026-11-10T10:00:00Z");
-        insertChargeRecord(reservationId, chargeIntentId, ownerId, "1000", base);
-        insertChargeRecord(otherReservationId, otherChargeIntentId, otherOwnerId, "2000", base.plusSeconds(60));
+        insertChargeRecord(reservationId, ownerId, "1000", base);
+        insertChargeRecord(otherReservationId, otherOwnerId, "2000", base.plusSeconds(60));
 
         FinancialRecordsPageResult page = adapter.query(
                 command(ReportScope.OWNER, new OwnerId(ownerId), 1, 10, window));
@@ -156,9 +160,9 @@ class FinancialRecordQueryAdapterIntegrationTest {
     void paginatesWithAStableOrder() {
         LocalDate window = LocalDate.of(2026, 12, 1);
         Instant base = Instant.parse("2026-12-10T10:00:00Z");
-        insertChargeRecord(reservationId, chargeIntentId, ownerId, "100", base);
-        insertChargeRecord(reservationId, chargeIntentId, ownerId, "200", base.plusSeconds(60));
-        insertChargeRecord(reservationId, chargeIntentId, ownerId, "300", base.plusSeconds(120));
+        insertChargeRecord(reservationId, ownerId, "100", base);
+        insertChargeRecord(reservationId, ownerId, "200", base.plusSeconds(60));
+        insertChargeRecord(reservationId, ownerId, "300", base.plusSeconds(120));
 
         FinancialRecordsPageResult first = adapter.query(
                 command(ReportScope.PLATFORM, null, 1, 2, window));

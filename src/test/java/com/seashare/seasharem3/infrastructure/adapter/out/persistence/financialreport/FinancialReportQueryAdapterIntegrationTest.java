@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
@@ -78,10 +79,11 @@ class FinancialReportQueryAdapterIntegrationTest {
     }
 
     private void insertChargeRecord(UUID reservation, UUID owner, String amount, Instant createdAt) {
+        BigDecimal numericAmount = new BigDecimal(amount);
         jdbc.update("INSERT INTO charge_record (id, charge_intent_id, reservation_id, owner_id, boat_id, amount,"
                         + " rental_amount, insurance_amount, deposit_amount, created_at)"
                         + " VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)",
-                UUID.randomUUID(), chargeIntentId, reservation, owner, boatId, amount, amount,
+                UUID.randomUUID(), chargeIntentId, reservation, owner, boatId, numericAmount, numericAmount,
                 Timestamp.from(createdAt));
     }
 
@@ -89,10 +91,11 @@ class FinancialReportQueryAdapterIntegrationTest {
         UUID intentId = UUID.randomUUID();
         jdbc.update("INSERT INTO refund_intent (id, reservation_id, trigger, scope, amount, charge_intent_id,"
                         + " idempotency_key, status) VALUES (?, ?, 'CANCELLED_MODERATE', 'FULL', ?, ?, ?, 'COMPLETED')",
-                intentId, reservation, amount, chargeIntentId, UUID.randomUUID().toString());
+                intentId, reservation, new BigDecimal(amount), chargeIntentId, UUID.randomUUID().toString());
+        BigDecimal numericAmount = new BigDecimal(amount);
         jdbc.update("INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount,"
                         + " released_amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                UUID.randomUUID(), intentId, reservation, owner, boatId, amount, amount,
+                UUID.randomUUID(), intentId, reservation, owner, boatId, numericAmount, numericAmount,
                 Timestamp.from(createdAt));
     }
 
@@ -102,12 +105,14 @@ class FinancialReportQueryAdapterIntegrationTest {
                         + " deposit_amount, charge_intent_id, idempotency_key, status, gateway_capability)"
                         + " VALUES (?, ?, 'COMPLETED', 'STANDARD', ?, 10, 0, ?, ?, 'COMPLETED',"
                         + " 'ADVANCED_PAYMENTS_DISBURSEMENT')",
-                intentId, reservation, amount, chargeIntentId, UUID.randomUUID().toString());
+                intentId, reservation, new BigDecimal(amount), chargeIntentId, UUID.randomUUID().toString());
         UUID recordId = UUID.randomUUID();
+        BigDecimal numericAmount = new BigDecimal(amount);
         jdbc.update("INSERT INTO settlement_record (id, settlement_intent_id, reservation_id, owner_id, boat_id,"
                         + " amount, rental_gross_amount, insurance_amount, deposit_amount, created_at)"
                         + " VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)",
-                recordId, intentId, reservation, owner, boatId, amount, amount, Timestamp.from(createdAt));
+                recordId, intentId, reservation, owner, boatId, numericAmount, numericAmount,
+                Timestamp.from(createdAt));
         jdbc.update("INSERT INTO commission_record (id, settlement_record_id, settlement_intent_id, reservation_id,"
                         + " owner_id, boat_id, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, 10, ?)",
                 UUID.randomUUID(), recordId, intentId, reservation, owner, boatId, Timestamp.from(createdAt));
