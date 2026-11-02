@@ -65,6 +65,14 @@ class FlywaySchemaTest {
 	}
 
 	@Test
+	void storesNoSensitiveCardData() throws SQLException {
+		assertThat(columnNames("charge_intent"))
+				.doesNotContain("pan", "card_number", "cvv", "security_code", "expiration_date", "expiry");
+		assertThat(columnNames("charge_record"))
+				.doesNotContain("pan", "card_number", "cvv", "security_code", "expiration_date", "expiry");
+	}
+
+	@Test
 	void enforcesOneRecordPerIntent() throws SQLException {
 		Fixture fixture = new Fixture();
 		execute("INSERT INTO charge_record (id, charge_intent_id, reservation_id, owner_id, boat_id, amount,"
@@ -225,8 +233,8 @@ class FlywaySchemaTest {
 		UUID disputeId = UUID.randomUUID();
 		execute("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount, commission_amount,"
 				+ " deposit_amount, charge_intent_id, idempotency_key, status, status_detail, external_reference,"
-				+ " dispute_id) VALUES (?, ?, 'DISPUTE_COMPLETED', 'DEPOSIT', 90, 10, 80, ?, ?, 'PENDING_SEND',"
-				+ " 'detalle', ?, ?)",
+				+ " dispute_id, gateway_capability) VALUES (?, ?, 'DISPUTE_COMPLETED', 'DEPOSIT', 90, 10, 80, ?, ?, 'PENDING_SEND',"
+				+ " 'detalle', ?, ?, 'ADVANCED_PAYMENTS_DISBURSEMENT')",
 				settlementIntentId, fixture.reservationId, fixture.chargeIntentId, UUID.randomUUID().toString(),
 				"9001", disputeId);
 		assertThat(queryStrings("SELECT external_reference FROM settlement_intent WHERE id = ?", settlementIntentId))
@@ -374,8 +382,10 @@ class FlywaySchemaTest {
 					+ " 'COMPLETED')",
 					refundIntentId, reservationId, chargeIntentId, UUID.randomUUID().toString());
 			execute("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount,"
-					+ " commission_amount, deposit_amount, charge_intent_id, idempotency_key, status)"
-					+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, ?, 'COMPLETED')",
+					+ " commission_amount, deposit_amount, charge_intent_id, idempotency_key, status,"
+					+ " gateway_capability)"
+					+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, ?, 'COMPLETED',"
+					+ " 'ADVANCED_PAYMENTS_DISBURSEMENT')",
 					settlementIntentId, reservationId, chargeIntentId, UUID.randomUUID().toString());
 		}
 

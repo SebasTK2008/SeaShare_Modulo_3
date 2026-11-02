@@ -143,6 +143,33 @@ class GatewayWebhookControllerTest {
     }
 
     @Test
+    void acceptsADuplicateNotificationAndConfirmsItAgain() throws Exception {
+        String body = "{\"action\":\"payment.updated\",\"data\":{\"id\":\"" + DATA_ID + "\"},\"type\":\"payment\"}";
+
+        mockMvc.perform(notification(signature(), body)).andExpect(status().isOk());
+        mockMvc.perform(notification(signature(), body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("received"));
+
+        assertThat(dispatcher.notifications).hasSize(2);
+    }
+
+    @Test
+    void acceptsAnUnknownTypeAndConfirmsReceipt() throws Exception {
+        mockMvc.perform(post("/api/v1/webhook/gateway")
+                .param("data.id", DATA_ID)
+                .param("type", "unknown_type")
+                .header("x-request-id", REQUEST_ID)
+                .header("x-signature", signature())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"action\":\"unknown.updated\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("received"));
+
+        assertThat(dispatcher.notifications).hasSize(1);
+    }
+
+    @Test
     void answersWithInternalErrorWhenTheNotificationCannotBePersisted() throws Exception {
         dispatcher.failure = new IllegalStateException("the database is not available");
 

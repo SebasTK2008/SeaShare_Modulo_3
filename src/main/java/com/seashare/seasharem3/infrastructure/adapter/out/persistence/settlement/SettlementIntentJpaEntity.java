@@ -57,6 +57,9 @@ public class SettlementIntentJpaEntity {
     @Column(name = "dispute_id")
     private UUID disputeId;
 
+    @Column(name = "gateway_capability", nullable = false)
+    private String gatewayCapability;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -79,6 +82,7 @@ public class SettlementIntentJpaEntity {
         entity.chargeIntentId = intent.chargeIntentId();
         entity.idempotencyKey = intent.idempotencyKey().value();
         entity.disputeId = intent.disputeId();
+        entity.gatewayCapability = intent.capability().name();
         entity.createdAt = intent.createdAt();
         entity.apply(intent);
         return entity;
@@ -145,6 +149,10 @@ public class SettlementIntentJpaEntity {
 
     UUID getDisputeId() {
         return disputeId;
+    }
+
+    String getGatewayCapability() {
+        return gatewayCapability;
     }
 
     Instant getCreatedAt() {

@@ -132,6 +132,56 @@ class RegisterSettlementResultServiceTest {
         verify(commissionRecordRepository, never()).save(any());
     }
 
+    @Test
+    void anUnknownStatusIsRecordedWithoutTouchingTheIntent() {
+        SettlementIntent intent = intent(SettlementScope.STANDARD, SettlementStatus.IN_PROCESS);
+        when(settlementIntentRepository.findByExternalReference("st-unknown")).thenReturn(Optional.of(intent));
+
+        service.register(new GatewaySettlementResult("unknown_status", "st-unknown", null, null));
+
+        verify(settlementIntentRepository, never()).save(any(SettlementIntent.class));
+        verify(settlementRecordRepository, never()).save(any());
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
+    @Test
+    void aResultWithoutExternalIdIsRecordedAsIntentNotFound() {
+        service.register(new GatewaySettlementResult("approved", " ", null, null));
+
+        assertThat(failureRecorder.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::reason)
+                .containsExactly("SETTLEMENT_INTENT_NOT_FOUND");
+        verify(settlementRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void anExpiredResultClosesTheIntentWithoutRecords() {
+        SettlementIntent intent = intent(SettlementScope.STANDARD, SettlementStatus.IN_PROCESS);
+        when(settlementIntentRepository.findByExternalReference("st-exp")).thenReturn(Optional.of(intent));
+
+        service.register(new GatewaySettlementResult("expired", "st-exp", "expired_by_gateway", null));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
+        verify(settlementIntentRepository).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(SettlementStatus.EXPIRED);
+        verify(settlementRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void aSettlementWithoutBreakdownIsRecordedAsFailure() {
+        SettlementIntent intent = intent(SettlementScope.STANDARD, SettlementStatus.IN_PROCESS);
+        when(settlementIntentRepository.findByExternalReference("st-no-breakdown")).thenReturn(Optional.of(intent));
+        when(chargeIntentRepository.findById(charge.id())).thenReturn(Optional.empty());
+        when(reservationInformationRepository.findByReservationId(intent.reservationId()))
+                .thenReturn(Optional.empty());
+
+        service.register(new GatewaySettlementResult("approved", "st-no-breakdown", null,
+                new Money(new BigDecimal("660000.00"))));
+
+        verify(settlementRecordRepository, never()).save(any());
+        assertThat(failureRecorder.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::reason)
+                .contains("RESERVATION_INFO_NOT_FOUND");
+    }
+
     private SettlementIntent intent(SettlementScope scope, SettlementStatus status) {
         SettlementIntent created = SettlementIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
                 scope == SettlementScope.STANDARD ? SettlementTrigger.COMPLETED

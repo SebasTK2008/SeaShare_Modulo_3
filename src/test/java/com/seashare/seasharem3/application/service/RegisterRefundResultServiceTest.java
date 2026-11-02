@@ -117,6 +117,70 @@ class RegisterRefundResultServiceTest {
                 .containsExactly("REFUND_INTENT_NOT_FOUND");
     }
 
+    @Test
+    void anUnknownStatusIsRecordedWithoutTouchingTheIntent() {
+        RefundIntent intent = pendingIntent();
+        when(refundIntentRepository.findByExternalReference("rf-x")).thenReturn(Optional.of(intent));
+
+        service.register(new RefundGatewayResult("unknown_status", "rf-x", null, null, null));
+
+        verify(refundIntentRepository, never()).save(any(RefundIntent.class));
+        verify(refundRecordRepository, never()).save(any());
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
+    @Test
+    void aResultWithoutExternalIdIsRecordedAsIntentNotFound() {
+        service.register(new RefundGatewayResult("approved", " ", null, null, null));
+
+        assertThat(failureRecorder.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::reason)
+                .containsExactly("REFUND_INTENT_NOT_FOUND");
+        verify(refundRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void anInProcessResultOnlyUpdatesTheIntent() {
+        RefundIntent intent = pendingIntent();
+        when(refundIntentRepository.findByExternalReference("rf-ip")).thenReturn(Optional.of(intent));
+
+        service.register(new RefundGatewayResult("in_process", "rf-ip", null, null, null));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(RefundIntent.class);
+        verify(refundIntentRepository).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(RefundIntentStatus.IN_PROCESS);
+        verify(refundRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void anExpiredResultClosesTheIntentWithoutRecord() {
+        RefundIntent intent = pendingIntent();
+        when(refundIntentRepository.findByExternalReference("rf-exp")).thenReturn(Optional.of(intent));
+
+        service.register(new RefundGatewayResult("expired", "rf-exp", null, "expired_by_gateway", null));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(RefundIntent.class);
+        verify(refundIntentRepository).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(RefundIntentStatus.EXPIRED);
+        assertThat(captor.getValue().statusDetail()).isEqualTo("expired_by_gateway");
+    }
+
+    @Test
+    void aCompletedRefundWithoutOwnerBoatIsRecordedAsFailure() {
+        RefundIntent intent = pendingIntent();
+        when(refundIntentRepository.findByExternalReference("rf-no-owner")).thenReturn(Optional.of(intent));
+        when(refundRecordRepository.findByRefundIntentId(intent.id())).thenReturn(Optional.empty());
+        when(chargeIntentRepository.findById(charge.id())).thenReturn(Optional.empty());
+        when(reservationInformationRepository.findByReservationId(intent.reservationId()))
+                .thenReturn(Optional.empty());
+
+        service.register(new RefundGatewayResult("approved", "rf-no-owner",
+                new Money(new BigDecimal("30000.00")), null, null));
+
+        verify(refundRecordRepository, never()).save(any());
+        assertThat(failureRecorder.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::reason)
+                .contains("RESERVATION_INFO_NOT_FOUND");
+    }
+
     private RefundIntent completedIntent(String externalReference) {
         return pendingIntent().transitionTo(RefundIntentStatus.IN_PROCESS)
                 .transitionTo(RefundIntentStatus.COMPLETED).withExternalReference(externalReference);

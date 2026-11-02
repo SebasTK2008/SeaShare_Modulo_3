@@ -43,4 +43,13 @@ class Uc12ArchitectureTest {
                         "..persistence.settlement..", "..persistence.parameters..")
                 .check(MAIN_CLASSES);
     }
+
+    @Test
+    void uc12DoesNotConsultFleetNorExportFiles() {
+        noClasses().that().haveNameMatching(".*(FinancialRecords|FinancialRecordQuery).*")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "..adapter.out.fleet..", "..adapter.in.web.financialreport..")
+                .because("UC12 es solo lectura y no exporta: Flota y el CSV pertenecen a otros casos de uso")
+                .check(MAIN_CLASSES);
+    }
 }

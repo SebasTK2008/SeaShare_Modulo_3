@@ -163,7 +163,6 @@ CREATE TABLE charge_intent (
     payer_email         TEXT,          -- [CONV] payer.email requerido por el contrato de cobro; no es dato de pago sensible
     external_reference  TEXT,
     status_detail       TEXT,         -- [D-UC05-02; D-UC06-02] detalle del estado externo publicado por UC05 (lo consume UC06)
-    requested_amount    NUMERIC(18,4), -- [D-UC05-02] monto solicitado; el núcleo no lo modela aun (GAP)
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
     version             INTEGER       NOT NULL DEFAULT 0,
     CONSTRAINT uq_charge_intent_idempotency_key UNIQUE (idempotency_key),
@@ -171,8 +170,7 @@ CREATE TABLE charge_intent (
     CONSTRAINT chk_charge_intent_status CHECK (
         status IN ('PENDING_SEND', 'IN_PROCESS', 'CAPTURED', 'REJECTED', 'CANCELLED', 'EXPIRED',
                    'COMMUNICATION_ERROR')),
-    CONSTRAINT chk_charge_intent_amount CHECK (amount >= 0),
-    CONSTRAINT chk_charge_intent_requested_amount CHECK (requested_amount IS NULL OR requested_amount >= 0)
+    CONSTRAINT chk_charge_intent_amount CHECK (amount >= 0)
 );
 
 -- Sin UNIQUE(reservation_id): se permiten múltiples intenciones por reserva (UC05 RF-004A).
@@ -323,10 +321,13 @@ CREATE TABLE settlement_intent (
     status_detail     TEXT,         -- [CONV] detalle del estado externo (simétrico a charge/refund_intent)
     external_reference TEXT,        -- [CONV] referencia externa de la pasarela (UC10 plan T012a); omitida en general-plan §4
     dispute_id        UUID,         -- [CONV] traza de la disputa adjudicada (UC10 plan T012a; scope DEPOSIT); omitida en general-plan §4
+    gateway_capability VARCHAR(64)  NOT NULL, -- [RF-009] capacidad de la pasarela utilizada por la dispersión
     created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitida en general-plan §4
     version           INTEGER       NOT NULL DEFAULT 0,     -- [CONV] bloqueo optimista para webhook/worker
     CONSTRAINT uq_settlement_intent_idempotency_key UNIQUE (idempotency_key),
     CONSTRAINT fk_settlement_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id),
+    CONSTRAINT chk_settlement_intent_capability CHECK (
+        gateway_capability IN ('ADVANCED_PAYMENTS_DISBURSEMENT', 'STANDARD_SETTLEMENT')),
     CONSTRAINT chk_settlement_intent_scope CHECK (
         scope IN ('STANDARD', 'CANCELLATION_COMPENSATION', 'DEPOSIT')),
     CONSTRAINT chk_settlement_intent_status CHECK (

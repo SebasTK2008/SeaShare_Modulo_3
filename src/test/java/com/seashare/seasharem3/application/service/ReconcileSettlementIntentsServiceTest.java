@@ -93,6 +93,48 @@ class ReconcileSettlementIntentsServiceTest {
         verify(settlementGatewayPort, never()).fetch(any());
     }
 
+    @Test
+    void recordsFailureOnceWhenTheGatewayDoesNotKnowTheSettlement() {
+        SettlementIntent intent = pendingIntent().withExternalReference("st-404");
+        when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+        when(settlementGatewayPort.fetch("st-404")).thenReturn(Optional.empty());
+
+        service.reconcile();
+
+        when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(
+                intent.withStatusDetail("The payment gateway does not know the settlement st-404")));
+        service.reconcile();
+
+        verify(settlementGatewayPort, org.mockito.Mockito.times(2)).fetch("st-404");
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
+    @Test
+    void keepsTheIntentOpenWhenTheGatewayCommunicationFails() {
+        SettlementIntent intent = pendingIntent().withExternalReference("st-err");
+        when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+        when(settlementGatewayPort.fetch("st-err"))
+                .thenThrow(new com.seashare.seasharem3.domain.exception.GatewayCommunicationException("timeout"));
+
+        service.reconcile();
+
+        var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
+        verify(settlementIntentRepository).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(SettlementStatus.PENDING_SEND);
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
+    @Test
+    void recordsAFailureForAnIntentWithoutExternalReferenceThatIsNotPendingSend() {
+        SettlementIntent intent = pendingIntent().transitionTo(SettlementStatus.IN_PROCESS);
+        when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+
+        service.reconcile();
+
+        verify(settlementCommandPublisher, never()).publish(any());
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
     private SettlementIntent pendingIntent() {
         return SettlementIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
                 SettlementTrigger.COMPLETED, SettlementScope.STANDARD, new Money(new BigDecimal("660000.00")),

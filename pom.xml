@@ -240,6 +240,11 @@
                                         <include>com/seashare/seasharem3/domain/valueobject/Percentage</include>
                                         <include>com/seashare/seasharem3/domain/valueobject/ReservationValue</include>
                                         <include>com/seashare/seasharem3/domain/exception/BaseRateException*</include>
+                                        <include>com/seashare/seasharem3/domain/model/ChargeIntent</include>
+                                        <include>com/seashare/seasharem3/domain/model/ChargeRecord</include>
+                                        <include>com/seashare/seasharem3/domain/model/RefundIntent</include>
+                                        <include>com/seashare/seasharem3/domain/model/SettlementIntent</include>
+                                        <include>com/seashare/seasharem3/domain/model/FinancialRecord</include>
                                     </includes>
                                     <limits>
                                         <limit>
@@ -262,6 +267,23 @@
                                         <include>com/seashare/seasharem3/application/dto/ProvideBaseRateCommand</include>
                                         <include>com/seashare/seasharem3/application/dto/BaseRateResult</include>
                                         <include>com/seashare/seasharem3/application/dto/ReservationStatusCommand</include>
+                                        <include>com/seashare/seasharem3/application/service/RegisterReservationInformationService</include>
+                                        <include>com/seashare/seasharem3/application/service/ProcessChargeService</include>
+                                        <include>com/seashare/seasharem3/application/service/SendChargeToGatewayService</include>
+                                        <include>com/seashare/seasharem3/application/service/RegisterChargeResultService</include>
+                                        <include>com/seashare/seasharem3/application/service/ReconcileChargeIntentsService</include>
+                                        <include>com/seashare/seasharem3/application/service/DisputeInformationService</include>
+                                        <include>com/seashare/seasharem3/application/service/OpenDepositTrackingService</include>
+                                        <include>com/seashare/seasharem3/application/service/RequestRefundService</include>
+                                        <include>com/seashare/seasharem3/application/service/SendRefundToGatewayService</include>
+                                        <include>com/seashare/seasharem3/application/service/RegisterRefundResultService</include>
+                                        <include>com/seashare/seasharem3/application/service/ReconcileRefundIntentsService</include>
+                                        <include>com/seashare/seasharem3/application/service/RequestSettlementService</include>
+                                        <include>com/seashare/seasharem3/application/service/SendSettlementToGatewayService</include>
+                                        <include>com/seashare/seasharem3/application/service/RegisterSettlementResultService</include>
+                                        <include>com/seashare/seasharem3/application/service/ReconcileSettlementIntentsService</include>
+                                        <include>com/seashare/seasharem3/application/service/FinancialRecordsQueryService</include>
+                                        <include>com/seashare/seasharem3/application/service/FinancialReportService</include>
                                     </includes>
                                     <limits>
                                         <limit>

@@ -4,6 +4,8 @@ import com.seashare.seasharem3.application.dto.FinancialReportResult;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.financialreport.dto.FinancialReportResponse;
 import org.springframework.stereotype.Component;
 
+import java.math.RoundingMode;
+
 @Component
 public class FinancialReportResponseMapper {
 
@@ -16,7 +18,8 @@ public class FinancialReportResponseMapper {
                 new FinancialReportResponse.Comparison(comparison.previousPeriod().value(),
                         amount(comparison.absoluteVariation()),
                         comparison.percentageVariation() == null ? null
-                                : comparison.percentageVariation().setScale(2).toPlainString()));
+                                : comparison.percentageVariation().setScale(2, RoundingMode.HALF_UP)
+                                        .toPlainString()));
     }
 
     private static String amount(com.seashare.seasharem3.domain.valueobject.Money money) {

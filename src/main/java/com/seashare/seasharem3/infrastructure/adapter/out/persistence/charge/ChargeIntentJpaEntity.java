@@ -17,8 +17,8 @@ import java.util.UUID;
  * intenciones por reserva: la unicidad la da {@code UNIQUE(idempotency_key)}, no la reserva
  * (RF-004A, D-28). No sale del adaptador.
  *
- * <p>{@code requested_amount} no se mapea: el dominio todavía no modela el monto solicitado
- * por separado del monto del cobro (GAP documentado en el esquema).
+ * <p>El monto solicitado es el propio {@code amount} del intento: el cobro es directo y por el
+ * total calculado de la reserva (RF-015), sin un segundo importe que modelar.</p>
  */
 @Entity
 @Table(name = "charge_intent")

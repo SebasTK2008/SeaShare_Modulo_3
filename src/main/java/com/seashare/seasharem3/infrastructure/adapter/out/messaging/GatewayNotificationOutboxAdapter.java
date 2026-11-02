@@ -5,6 +5,7 @@ import com.seashare.seasharem3.application.port.out.GatewayNotificationPublisher
 import com.seashare.seasharem3.application.port.out.OutboxPort;
 import com.seashare.seasharem3.infrastructure.config.amqp.AmqpNames;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -22,15 +23,19 @@ public class GatewayNotificationOutboxAdapter implements GatewayNotificationPubl
 
     private final OutboxPort outbox;
     private final JsonMapper jsonMapper;
+    private final TransactionTemplate transactions;
 
-    public GatewayNotificationOutboxAdapter(OutboxPort outbox, JsonMapper jsonMapper) {
+    public GatewayNotificationOutboxAdapter(OutboxPort outbox, JsonMapper jsonMapper,
+            TransactionTemplate transactions) {
         this.outbox = outbox;
         this.jsonMapper = jsonMapper;
+        this.transactions = transactions;
     }
 
     @Override
     public void publish(GatewayWebhookNotification notification) {
-        outbox.publish(AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_GATEWAY_NOTIFICATION,
-                jsonMapper.writeValueAsString(notification));
+        String payload = jsonMapper.writeValueAsString(notification);
+        transactions.executeWithoutResult(status ->
+                outbox.publish(AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_GATEWAY_NOTIFICATION, payload));
     }
 }

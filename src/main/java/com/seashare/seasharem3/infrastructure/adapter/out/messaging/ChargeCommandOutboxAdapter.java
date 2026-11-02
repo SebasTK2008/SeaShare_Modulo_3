@@ -5,6 +5,7 @@ import com.seashare.seasharem3.application.port.out.ChargeCommandPublisher;
 import com.seashare.seasharem3.application.port.out.OutboxPort;
 import com.seashare.seasharem3.infrastructure.config.amqp.AmqpNames;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -17,21 +18,30 @@ import tools.jackson.databind.json.JsonMapper;
  * mensaje, el worker lo lee de {@code charge_intent} (CE-005).</p>
  *
  * <p>Fuente: UC05 plan T008 y T014; contracts/README §3.1 y §3.5.</p>
+ *
+ * <p>El puerto del outbox exige una transacción activa ({@code Propagation.MANDATORY}). Este
+ * adaptador abre una transacción si el llamador no la tiene —el caso de la conciliación, que
+ * republica un {@code PENDING_SEND} sin transacción previa— y se une a la del llamador cuando ya
+ * existe, como en {@code ProcessChargeService}.</p>
  */
 @Component
 public class ChargeCommandOutboxAdapter implements ChargeCommandPublisher {
 
     private final OutboxPort outbox;
     private final JsonMapper jsonMapper;
+    private final TransactionTemplate transactions;
 
-    public ChargeCommandOutboxAdapter(OutboxPort outbox, JsonMapper jsonMapper) {
+    public ChargeCommandOutboxAdapter(OutboxPort outbox, JsonMapper jsonMapper,
+            TransactionTemplate transactions) {
         this.outbox = outbox;
         this.jsonMapper = jsonMapper;
+        this.transactions = transactions;
     }
 
     @Override
     public void publish(ChargeCommand command) {
-        outbox.publish(AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_CHARGE_COMMAND,
-                jsonMapper.writeValueAsString(command));
+        String payload = jsonMapper.writeValueAsString(command);
+        transactions.executeWithoutResult(status ->
+                outbox.publish(AmqpNames.EXCHANGE_COMMANDS, AmqpNames.ROUTING_CHARGE_COMMAND, payload));
     }
 }

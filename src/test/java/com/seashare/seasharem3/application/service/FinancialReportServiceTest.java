@@ -5,6 +5,7 @@ import com.seashare.seasharem3.application.dto.GetFinancialReportCommand;
 import com.seashare.seasharem3.application.port.out.ClockPort;
 import com.seashare.seasharem3.application.port.out.FinancialReportQueryPort;
 import com.seashare.seasharem3.domain.model.FinancialRecord;
+import com.seashare.seasharem3.domain.model.ReportMetrics;
 import com.seashare.seasharem3.domain.valueobject.BoatId;
 import com.seashare.seasharem3.domain.valueobject.FinancialRecordType;
 import com.seashare.seasharem3.domain.valueobject.Money;
@@ -14,6 +15,7 @@ import com.seashare.seasharem3.domain.valueobject.ReportPeriod;
 import com.seashare.seasharem3.domain.valueobject.ReportScope;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.domain.service.ReportPeriodResolver;
+import com.seashare.seasharem3.domain.service.FinancialAggregator;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -130,9 +132,9 @@ class FinancialReportServiceTest {
         }
 
         @Override
-        public List<FinancialRecord> query(GetFinancialReportCommand command) {
+        public ReportMetrics aggregate(GetFinancialReportCommand command) {
             commands.add(command);
-            return records;
+            return new FinancialAggregator().aggregate(records, command.scope());
         }
     }
 }

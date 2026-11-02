@@ -219,23 +219,23 @@ Cobertura objetivo **[CONV]**: dominio ≥90 %, aplicación ≥80 %. JaCoCo 0.8.
 
 - [x] **T001** · Dominio: completar `PaymentConfirmationStatus` con `from(ChargeIntentStatus)` y el mapeo de §8 (incluye `UNKNOWN`); `ChargeIntentNotFoundException` ya existe en el núcleo compartido. Consume `ChargeIntentStatus` por nombre desde UC05. **[ACT-06: el enum y la excepción ya existían; se añadió `from(ChargeIntentStatus)`.]**
 - [x] **T002** · Pruebas del mapeo: estados internos → estados devueltos, incluyendo `COMMUNICATION_ERROR`→`UNKNOWN`.
-- [x] **T003** · `GetPaymentConfirmationUseCase`, `PaymentConfirmationQuery`, `PaymentConfirmationResult` (montos `BigDecimal` anulables). · M: `none` · P: `pending` **[ACT-06: ya existen; la firma publicada es `PaymentConfirmationResult get(PaymentConfirmationQuery)`.]**
-- [x] **T004** · Pruebas de `GetPaymentConfirmationService` (Mockito): intención aprobada (escenario 1), rechazada (2), en proceso (3), sin intención (RF-005), montos nulos, la más reciente, `released_amount` con y sin reembolsos confirmados. · M: `none` · P: `pending` **[ACT-10]**
+- [x] **T003** · `GetPaymentConfirmationUseCase`, `PaymentConfirmationQuery`, `PaymentConfirmationResult` (montos `BigDecimal` anulables). **[ACT-06: ya existen; la firma publicada es `PaymentConfirmationResult get(PaymentConfirmationQuery)`.]**
+- [x] **T004** · Pruebas de `GetPaymentConfirmationService` (Mockito): intención aprobada (escenario 1), rechazada (2), en proceso (3), sin intención (RF-005), montos nulos, la más reciente, `released_amount` con y sin reembolsos confirmados. **[ACT-10]**
 - [x] **T005** · `GetPaymentConfirmationService` (`@Transactional(readOnly = true)`): lee por `ChargeIntentRepository.findLatestByReservationId`, agrega `released_amount` con `RefundRecordQueryPort.releasedAmountByReservationId`, traduce el estado y lanza `ChargeIntentNotFoundException` con el mensaje del contrato. Sin dependencia de la pasarela; consume las firmas de UC05/UC09 por nombre. **[ACT-10]**
-- [x] **T006** · `PaymentConfirmationController` (`GET`) y `PaymentConfirmationResponse` con las claves del contrato (`@JsonProperty`, montos como *string* decimal, redondeo `HALF_UP` a 2 decimales). · M: `none` · P: `pending`
+- [x] **T006** · `PaymentConfirmationController` (`GET`) y `PaymentConfirmationResponse` con las claves del contrato (`@JsonProperty`, montos como *string* decimal, redondeo `HALF_UP` a 2 decimales).
 - [x] **T007** · verificar que `GlobalExceptionHandler`/`ErrorCode` ya traducen `CHARGE_INTENT_NOT_FOUND` a 404 `retryable: true` y `VALIDATION_ERROR` a 400 por `reservation_id` no UUID; no se reconfigura el handler compartido. **[ACT-06: el mapeo ya existe; esta tarea es de verificación.]**
-- [x] **T008** · `PaymentConfirmationConfiguration`: registrar `GetPaymentConfirmationService` como bean (patrón de `ChargeConfiguration`), porque `application` no puede depender de Spring. · M: `none` · P: `pending` **[ACT-06]**
-- [x] **T009** · Pruebas de contrato MockMvc con los ejemplos del contrato: `200` por cada estado, `400`, `404`, y que repetir la consulta no modifica datos; `standaloneSetup` con `GlobalExceptionHandler` real y `JacksonConfig`. · M: `none` · P: `pending`
+- [x] **T008** · `PaymentConfirmationConfiguration`: registrar `GetPaymentConfirmationService` como bean (patrón de `ChargeConfiguration`), porque `application` no puede depender de Spring. **[ACT-06]**
+- [x] **T009** · Pruebas de contrato MockMvc con los ejemplos del contrato: `200` por cada estado, `400`, `404`, y que repetir la consulta no modifica datos; `standaloneSetup` con `GlobalExceptionHandler` real y `JacksonConfig`.
 - [x] **T010** · Integración (Testcontainers): varias `ChargeIntent` de una reserva con `createdAt` distintos → se devuelve la más reciente usando el adaptador de persistencia publicado por UC05; se cubre el desempate por `id` (D-UC06-05).
-- [x] **T011** · **`ce001_estado_devuelto_coincide_con_la_intencion`** (CE-001). · M: `none` · P: `pending`
-- [x] **T012** · **`ce002_no_se_realizan_solicitudes_a_la_pasarela`** (CE-002). · M: `none` · P: `pending`
-- [x] **T013** · **`ce003_reserva_sin_intencion_responde_error_controlado`** (CE-003). · M: `none` · P: `pending`
+- [x] **T011** · **`ce001_estado_devuelto_coincide_con_la_intencion`** (CE-001).
+- [x] **T012** · **`ce002_no_se_realizan_solicitudes_a_la_pasarela`** (CE-002).
+- [x] **T013** · **`ce003_reserva_sin_intencion_responde_error_controlado`** (CE-003).
 
 ### Phase 4: Polish & Cross-Cutting Concerns
 
-- [x] **T014** · `Uc06ArchitectureTest`: `GetPaymentConfirmationService` y el controller no dependen de `ChargeGatewayPort` ni de repositorios; entidades JPA fuera de `adapter/out/persistence` (RF-006). · M: `none` · P: `pending` **[ACT-06]**
-- [x] **T015** · Verificar el contrato `UC06-confirmacion-pago.md` frente a la implementación (rutas, códigos, `retryable`) y registrar cualquier diferencia como D-UC06-xx. · M: `none` · P: `pending` **[ACT-09: verificado con `UC06PaymentConfirmationContractTest`.]**
-- [x] **T016** · Cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]) con `PaymentConfirmationStatus` y `GetPaymentConfirmationService` en los `includes` de JaCoCo, y `./mvnw clean verify`. · M: `none` · P: `pending` **[ACT-05] [ACT-09: 1292 pruebas sin fallos en los reportes de Surefire (1286 previas + 6 casos nuevos de contrato); `jacoco:check` con cobertura de UC06. El suite completo termina con el fork de Surefire abortado a los 30 s por el shutdown de Testcontainers/Ryuk; no afecta a los resultados.]**
+- [x] **T014** · `Uc06ArchitectureTest`: `GetPaymentConfirmationService` y el controller no dependen de `ChargeGatewayPort` ni de repositorios; entidades JPA fuera de `adapter/out/persistence` (RF-006). **[ACT-06]**
+- [x] **T015** · Verificar el contrato `UC06-confirmacion-pago.md` frente a la implementación (rutas, códigos, `retryable`) y registrar cualquier diferencia como D-UC06-xx. **[ACT-09: verificado con `UC06PaymentConfirmationContractTest`.]**
+- [x] **T016** · Cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]) con `PaymentConfirmationStatus` y `GetPaymentConfirmationService` en los `includes` de JaCoCo, y `./mvnw clean verify`. **[ACT-05] [ACT-09: 1292 pruebas sin fallos en los reportes de Surefire (1286 previas + 6 casos nuevos de contrato); `jacoco:check` con cobertura de UC06. El suite completo termina con el fork de Surefire abortado a los 30 s por el shutdown de Testcontainers/Ryuk; no afecta a los resultados.]**
 
 ## Dependencies & Execution Order
 

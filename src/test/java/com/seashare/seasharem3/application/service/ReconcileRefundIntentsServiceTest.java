@@ -99,6 +99,60 @@ class ReconcileRefundIntentsServiceTest {
         verify(refundGatewayPort, never()).fetchRefund(any(), any());
     }
 
+    @Test
+    void recordsFailureOnceWhenTheGatewayDoesNotKnowTheRefund() {
+        RefundIntent intent = pendingIntent().withExternalReference("rf-404");
+        when(refundIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+        when(refundGatewayPort.fetchRefund("mp-payment-1", "rf-404")).thenReturn(Optional.empty());
+
+        service.reconcile();
+
+        when(refundIntentRepository.findByStatusIn(any())).thenReturn(List.of(
+                intent.withStatusDetail("The payment gateway does not know the refund rf-404")));
+        service.reconcile();
+
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
+    @Test
+    void keepsTheIntentOpenWhenTheGatewayCommunicationFails() {
+        RefundIntent intent = pendingIntent().withExternalReference("rf-err");
+        when(refundIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+        when(refundGatewayPort.fetchRefund("mp-payment-1", "rf-err"))
+                .thenThrow(new com.seashare.seasharem3.domain.exception.GatewayCommunicationException("timeout"));
+
+        service.reconcile();
+
+        var captor = org.mockito.ArgumentCaptor.forClass(RefundIntent.class);
+        verify(refundIntentRepository).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(RefundIntentStatus.PENDING_SEND);
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
+    @Test
+    void recordsAFailureWhenTheOriginalChargeHasNoExternalReference() {
+        RefundIntent intent = pendingIntent().withExternalReference("rf-2");
+        when(refundIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+        ChargeIntent withoutReference = ChargeFixtures.pendingIntent(RESERVATION);
+        when(chargeIntentRepository.findById(charge.id())).thenReturn(Optional.of(withoutReference));
+
+        service.reconcile();
+
+        assertThat(failureRecorder.failures()).hasSize(1);
+        verify(registerRefundResult, never()).register(any());
+    }
+
+    @Test
+    void recordsAFailureForAnIntentWithoutExternalReferenceThatIsNotPendingSend() {
+        RefundIntent intent = pendingIntent().transitionTo(RefundIntentStatus.IN_PROCESS);
+        when(refundIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+
+        service.reconcile();
+
+        verify(refundCommandPublisher, never()).publish(any());
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
     private RefundIntent pendingIntent() {
         return RefundIntent.create(UUID.randomUUID(), RESERVATION.reservationId(), RefundTrigger.DISPUTE_REJECTED,
                 RefundScope.DEPOSIT_ONLY, new Money(new BigDecimal("30000.00")), charge.id(),

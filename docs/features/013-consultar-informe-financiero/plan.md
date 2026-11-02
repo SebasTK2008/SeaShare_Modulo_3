@@ -50,8 +50,8 @@ docs/technical-plan/contracts/rest/{UC13-consultar-informe-financiero.md,UC13-ex
 
 src/main/java/com/seashare/seasharem3/
 ├── domain/
-│   ├── model/{ReportPeriod,FinancialReport,ReportMetrics,PeriodComparison}.java
-│   ├── valueobject/{Periodicity,ReportScope}.java # VOs compartidos no se redefinen
+│   ├── model/{ReportMetrics,PeriodComparison}.java
+│   ├── valueobject/{Periodicity,ReportScope,ReportPeriod}.java # VOs compartidos no se redefinen
 │   └── service/{ReportPeriodResolver,FinancialAggregator,VariationCalculator}.java
 ├── application/
 │   ├── port/in/{GetFinancialReportUseCase,ExportFinancialReportUseCase}.java
@@ -61,18 +61,18 @@ src/main/java/com/seashare/seasharem3/
 └── infrastructure/
     ├── adapter/in/web/financialreport/
     │   ├── FinancialReportController.java
-    │   ├── FinancialReportExceptionHandler.java
-    │   └── dto/{FinancialReportResponse,FinancialReportExportResponse}.java
+    │   ├── FinancialReportResponseMapper.java
+    │   └── dto/FinancialReportResponse.java
     ├── adapter/out/persistence/financialreport/FinancialReportQueryAdapter.java
-    ├── adapter/out/export/csv/CsvReportExporter.java
-    └── config/{ProblemDetailsConfig,ObservabilityConfig}.java
+    ├── adapter/in/web/financialreport/CsvReportExporter.java
+    └── config/FinancialReportConfiguration.java
 
 src/test/java/com/seashare/seasharem3/
-├── contract/{FinancialReportControllerContractTest,FinancialReportExportContractTest}.java
-├── domain/service/{ReportPeriodResolverTest,FinancialAggregatorTest}.java
+├── contract/UC13FinancialReportControllerContractTest.java
+├── infrastructure/adapter/in/web/financialreport/FinancialReportResponseMapperTest.java
 ├── application/service/FinancialReportServiceTest.java
-├── integration/FinancialReportConsistencyIT.java
-└── arch/ArchitectureTest.java
+├── infrastructure/adapter/out/persistence/financialreport/FinancialReportQueryAdapterIntegrationTest.java
+└── arch/Uc13ArchitectureTest.java
 ```
 
 **Structure Decision**: `domain` no depende de Spring/JPA/Jackson; `application` solo depende de `domain`; adaptadores de entrada invocan `port.in`; adaptadores de salida implementan `port.out`; el controller no accede a repositorios. `ClockPort` y los VOs `Money`, `ReservationId`, `OwnerId` se consumen del núcleo compartido y no se redeclaran. Zona horaria: períodos y fechas de negocio en `America/Bogota` (`seashare.timezone`); instantes en UTC, mediante `ClockPort` (general-plan D-12).
@@ -90,6 +90,8 @@ src/test/java/com/seashare/seasharem3/
 9. El CSV reutiliza exactamente `FinancialReportResult` e incluye solo los datos exigidos por el SPEC (RF-009, RF-010, RF-013): neto, totales, conteos y comparación con el período anterior; las métricas extra (`total_gross_volume`, `retained_funds`, `disputed_amount`, `open_disputes_count`) quedan **fuera** del contrato y del CSV.
 10. `q` no forma parte del contrato: los parámetros de UC13 son `periodicity`, `scope`, `owner_id` y `period`.
 
+**Notas de implementación (2026-11-01).** (a) La variación porcentual se calcula con escala interna 4 y se publica redondeada `HALF_UP` a 2 decimales: `setScale(2)` sin modo de redondeo lanzaba `ArithmeticException` (500) cuando el cociente tenía decimales no nulos en las posiciones 3-4; lo cubre `FinancialReportResponseMapperTest`. (b) La agregación existe una sola vez: `FinancialReportQueryPort` expone únicamente `aggregate(...)` y el adaptador SQL es la ruta de producción; el cálculo en memoria de `FinancialAggregator` queda para los dobles de prueba.
+
 ## Contratos REST
 
 `GET /api/v1/financial-report`: `periodicity` y `scope` obligatorios, `owner_id` obligatorio si `scope=OWNER`; `period` opcional. `GET /api/v1/financial-report/export`: igual, respuesta `text/csv`. Ambos usan Problem Details para `INVALID_PERIOD`, `VALIDATION_ERROR` e `INTERNAL_ERROR` según los contratos (sin `401`/`403`: seguridad fuera de alcance, general-plan §7.1).
@@ -101,7 +103,7 @@ src/test/java/com/seashare/seasharem3/
 | Unitario dominio | períodos, cierres, fórmulas y variaciones | `domain/service/*Test` |
 | Unitario aplicación | alcance y agregación única | `FinancialReportServiceTest` |
 | Contrato/Web | JSON, CSV, headers y errores | `contract/*Test` |
-| Integración | vista, fechas y equivalencia JSON/CSV | `FinancialReportConsistencyIT` |
+| Integración | vista, fechas y equivalencia JSON/CSV | `FinancialReportQueryAdapterIntegrationTest`, `Uc13AcceptanceTest` |
 | Arquitectura | capas, sin Flota ni mutaciones | `ArchitectureTest` |
 
 - `ce001_scope_platform_and_owner`
@@ -141,12 +143,12 @@ src/test/java/com/seashare/seasharem3/
 
 - [x] T009 [US1] Exponer informe de plataforma para el alcance declarado `PLATFORM`.
 - [x] T010 [US2] Exponer informe propio para el alcance declarado `OWNER` (`owner_id`).
-- [x] T011 [US3] Exportar CSV desde el resultado común, solo con campos definidos por SPEC; `q` y las métricas extra quedan fuera del contrato y del CSV.
-- [x] T012 `ce001_scope_platform_and_owner`.
-- [x] T013 `ce002_net_without_double_commission`.
-- [x] T014 `ce003_fixed_period_boundaries` y `ce004_previous_equivalent_comparison`.
-- [x] T015 `ce006_csv_matches_json_report`.
-- [x] T016 `ce005_pending_deposits_excluded`.
+- [x] T011 [US3] Exportar CSV desde el resultado común con las métricas agregadas del informe (neto, totales por tipo, conteos y variación frente al período anterior, [SPEC HU3, RF-010]); `q` queda fuera del contrato.
+- [x] T012 `ce001_scope_platform_and_owner` (en `Uc13AcceptanceTest`).
+- [x] T013 `ce002_net_without_double_commission` (en `Uc13AcceptanceTest`).
+- [x] T014 `ce003_fixed_period_boundaries` y `ce004_previous_equivalent_comparison` (en `Uc13AcceptanceTest`).
+- [x] T015 `ce006_csv_matches_json_report` (en `Uc13AcceptanceTest`).
+- [x] T016 `ce005_pending_deposits_excluded` (en `Uc13AcceptanceTest`).
 
 ### Phase 4: Polish
 

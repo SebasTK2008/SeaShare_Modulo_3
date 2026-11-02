@@ -107,7 +107,7 @@ src/main/java/com/seashare/seasharem3/
 │   ├── model/{SettlementIntent,SettlementRecord,CommissionRecord}.java
 │   ├── valueobject/{SettlementScope,SettlementStatus,SettlementTrigger}.java  # Money/IdempotencyKey son compartidos
 │   ├── service/SettlementCalculator.java
-│   └── exception/{DomainException,SettlementException}.java
+│   └── exception/DomainException.java (las excepciones de dominio de UC10 son las compartidas)
 ├── application/
 │   ├── port/in/
 │   │   ├── RequestSettlementUseCase.java          # UC07/UC08 lo consumen
@@ -163,13 +163,13 @@ src/test/java/com/seashare/seasharem3/
 ├── domain/model/{SettlementIntentTest,SettlementRecordTest,CommissionRecordTest}.java
 ├── domain/service/SettlementCalculatorTest.java
 ├── application/service/{RequestSettlementServiceTest,SendSettlementToGatewayServiceTest,RegisterSettlementResultServiceTest,ReconcileSettlementIntentsServiceTest}.java
-├── contract/SettlementGatewayContractTest.java
+├── application/service/ReconcileSettlementIntentsServiceTest.java
 ├── infrastructure/adapter/in/messaging/SettlementCommandListenerTest.java
 ├── infrastructure/adapter/out/gateway/MercadoPagoSettlementAdapterTest.java
-├── infrastructure/adapter/out/persistence/SettlementPersistenceAdapterTest.java
+├── integration/RefundSettlementPersistenceIntegrationTest.java (persistencia real de settlement_intent/settlement_record/commission_record)
 ├── arch/Uc10ArchitectureTest.java
 ├── acceptance/Uc10AcceptanceTest.java
-└── integration/SettlementProcessingIT.java
+
 ``` **[ACT-01] [ACT-02]**
 
 **Structure Decision**: sigue `general-plan.md` §3.2–§3.4. UC05 es dueño del receptor/verificación/despachador del webhook; UC10 solo registra su manejador y define sus puertos `SendSettlementToGatewayUseCase`/`ReconcileSettlementIntentsUseCase` (núcleo compartido), además de `RegisterSettlementResultUseCase` para el resultado. `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`.
@@ -184,7 +184,7 @@ src/test/java/com/seashare/seasharem3/
 4. **Estándar** [SPEC RF-005, RF-014]: liquidación = **alquiler bruto − comisión − seguro náutico**; la comisión se calcula con el % de la **versión de parámetros referenciada** por la reserva (`frozen_parameters_id`) y el seguro es el monto registrado en la reserva. La decisión **D-35** reemplaza a D-30 y **D-UC10-12** reemplaza a D-UC10-07. **[ACT-03]**
 5. **Depósito por disputa** [SPEC RF-006]: el `scope` es `DEPOSIT` (no `DEPOSIT_DISPUTE`) y `dispute_id` identifica la liquidación del 100 % del depósito interno, sin comisión ni seguro. Solo el trigger `DISPUTE_COMPLETED` marca el depósito como `SETTLEMENT_REQUESTED`; la liquidación estándar mantiene el depósito asociado sin disponerlo. **[ACT-04] [ACT-06]**
 6. **Intención antes de pasarela** [SPEC RF-009]: registrar desencadenante, alcance, monto, comisión si aplica, depósito, cobro original, capacidad y `idempotency_key = settlement:<trigger>:<operationKey>` antes de enviar. El prefijo evita colisiones con la clave de UC09. **[ACT-02]**
-7. **Pasarela** [SPEC RF-008; contrato comando]: UC10 solo envía `disbursements[].amount`, `disbursements[].collector_id` y `disbursements[].external_reference`; `collector_id` es un dato plano de configuración (`seashare.gateway.collector-id`), no se valida. Los campos `payer_email`, `payment_method_id`, `installments` y `description` pertenecen al contrato de cobro (UC05) y no se copian aquí. **[ACT-04]**
+7. **Pasarela** [SPEC RF-008; contrato comando]: UC10 solo envía `disbursements[].amount`, `disbursements[].collector_id` y `disbursements[].external_reference`; `collector_id` es un dato plano de configuración (`seashare.gateway.collector-id`); si no está configurado (> 0), el worker no llama a la pasarela: la intención pasa a `COMMUNICATION_ERROR` con detalle técnico, se registra en `operational_failure` y la cola reintenta. Los campos `payer_email`, `payment_method_id`, `installments` y `description` pertenecen al contrato de cobro (UC05) y no se copian aquí. **[ACT-04]**
 8. **Confirmación** [SPEC RF-010, RF-012]: aprobado crea `SettlementRecord` inmutable; `pending`, `rejected`, `cancelled`, `expired` solo actualizan la intención. El mapeo externo es `approved → COMPLETED`, `in_process/pending → IN_PROCESS`, `rejected → REJECTED`, `cancelled → CANCELLED`, `expired → EXPIRED`; un estado desconocido no altera la intención y se registra. **[ACT-04]**
 9. **Comisión** [SPEC RF-004, RF-014]: comisión = % de la **versión de parámetros referenciada** por la reserva (`frozen_parameters_id`, resuelta vía `ReservationInformationRepository.findByReservationId`) × alquiler bruto; se conserva en la intención. Solo aplica a `scope = STANDARD`; cancelaciones y depósito guardan `commission_amount = 0`. Si faltan la comisión o los parámetros en una liquidación estándar, UC10 **registra el fallo con `FailureRecorderPort` y no crea intención ni llama a la pasarela** (no hay `503`: UC10 no tiene endpoint REST). 4 decimales internos y salidas `HALF_UP` a 2 decimales (`contracts/README.md` §3.1). **[ACT-03] [ACT-05]**
 10. **Trazabilidad** [SPEC RF-009A, RF-015, RF-016]: registros incluyen intención, reserva, propietario, embarcación, bruto, seguro, depósito, monto confirmado, detalle, referencia externa y fecha de creación. `settlement_record.insurance_amount` es 0 en cancelación/depósito y el seguro de la reserva en la liquidación estándar; `deposit_amount` conserva siempre el depósito asociado. **[ACT-04]**
@@ -251,11 +251,11 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 | Unitario dominio | porcentajes, alcances, comisión, seguro, depósito, escala 4 | `domain/service/SettlementCalculatorTest` |
 | Unitario aplicación | intención, faltantes, idempotencia, puertos, envío, estados externos y handler webhook | `application/service/{RequestSettlementServiceTest,SendSettlementToGatewayServiceTest,RegisterSettlementResultServiceTest,ReconcileSettlementIntentsServiceTest,SettlementWebhookHandlerTest}` |
 | Contrato | payload de pasarela, idempotency key y consulta de detalle | `MercadoPagoSettlementAdapterTest` |
-| Integración | PostgreSQL, persistencia, comisión y CAS del depósito | `RefundSettlementPersistenceIntegrationTest`, `FlywaySchemaTest`; `SettlementProcessingIT` **pendiente** |
+| Integración | PostgreSQL, persistencia, comisión y CAS del depósito | `RefundSettlementPersistenceIntegrationTest`, `FlywaySchemaTest` y `Uc10AcceptanceTest` |
 | Resiliencia | timeout, 5xx, retry y conciliación | `MercadoPagoSettlementAdapterTest`, `ReconcileSettlementIntentsServiceTest` |
 | Arquitectura | reglas §3.4 e inmutabilidad; UC10 no depende de `RefundIntent`/`RefundRecord` | `arch/Uc10ArchitectureTest` **[ACT-08]** |
 
-**Estado de las pruebas**: implementadas las pruebas unitarias, WireMock, persistencia, handler, UC08 mínimo y Arquitectura. Pendientes: `SettlementCommandListenerTest`, `SettlementProcessingIT`, pruebas explícitas de duplicados/concurrencia/estados fuera de orden y las pruebas de aceptación con los nombres `ce00X_…`. **[ACT-09]**
+**Estado de las pruebas**: implementadas las pruebas unitarias, WireMock, persistencia, handler, UC08 mínimo y Arquitectura. Pendientes: `SettlementCommandListenerTest`, `RefundSettlementPersistenceIntegrationTest`, pruebas explícitas de duplicados/concurrencia/estados fuera de orden y las pruebas de aceptación con los nombres `ce00X_…`. **[ACT-09]**
 
 - **`ce001_precision_financiera_100_casos`**: ≥100 casos para cancelaciones, estándar y depósito; exactitud `BigDecimal` y escala 4.
 - **`ce002_comision_por_alcance`**: cero comisión en cancelación/depósito; estándar usa la comisión de la versión referenciada por la reserva.
@@ -277,7 +277,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 | **D-UC10-03** | El webhook es compartido por UC05/UC09/UC10 | contrato webhook compartido | UC10 consume solo los resultados asociados a su intención; no crea otro webhook | Aplicada |
 | **D-UC10-04** | Migraciones de UC10 | general-plan §4.2 y D-31 | Migración inicial única `V1__initial_schema.sql` (general-plan D-31); UC10 no define ni ordena migraciones propias | Aplicada |
 | **D-UC10-05** | Mecanismo transversal de autenticación/autorización | general-plan §7.1 y D-21 | Seguridad fuera de alcance: sin autenticación ni autorización; UC10 no define ni hereda configuración de seguridad | Aplicada |
-| **D-UC10-06** | Campos del pagador y metadatos exigidos por la pasarela | contrato comando de liquidación vs contrato de cobro | UC10 **no** envía `payer_email`, `payment_method_id`, `installments` ni `description`: son campos del contrato de cobro (UC05). Solo envía `disbursements[].amount`, `collector_id` y `external_reference`; `collector_id` se inyecta desde `seashare.gateway.collector-id` y no se valida | Aplicada **[ACT-04]** |
+| **D-UC10-06** | Campos del pagador y metadatos exigidos por la pasarela | contrato comando de liquidación vs contrato de cobro | UC10 **no** envía `payer_email`, `payment_method_id`, `installments` ni `description`: son campos del contrato de cobro (UC05). Solo envía `disbursements[].amount`, `collector_id` y `external_reference`; `collector_id` se inyecta desde `seashare.gateway.collector-id` y se valida antes de enviar (sin configuración no se llama a la pasarela) | Aplicada **[ACT-04]** |
 | **D-UC10-07** | Tratamiento del seguro en la base de liquidación | SPEC 10 RF-004/RF-014 | **Reemplazada por D-UC10-12**: el seguro sí se descuenta, conforme al SPEC 10 | Reemplazada |
 | **D-UC10-08** | Cálculo, base y ausencia de comisión | SPEC 10 RF-004/RF-014 | Comisión = % de la versión referenciada × alquiler bruto, solo para `scope = STANDARD`; en cancelación/depósito `commission_amount = 0`. Si faltan comisión o parámetros, se registra el fallo con `FailureRecorderPort` y no se crea intención ni se llama a la pasarela (sin `503`) | Aplicada **[ACT-05]** |
 | **D-UC10-09** | Escala y redondeo | `contracts/README.md` §3.1 | 4 decimales internos; salidas `HALF_UP` a 2 decimales | Aplicada |
@@ -326,7 +326,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 - [x] **T018** Integración con PostgreSQL/RabbitMQ y disponibilidad para UC12/UC13 mediante la vista financiera: cubierto por `RefundSettlementPersistenceIntegrationTest` y `FlywaySchemaTest` (`v_financial_records`: columnas, tipos y consulta por `reservation_id`). **[ACT-09] [ACT-10]**
 - [x] **T019** Pruebas de duplicados de webhook y registros inmutables: cubierto por `RegisterSettlementResultServiceTest` (confirmación repetida sin duplicar la comisión), `FlywaySchemaTest` (inmutabilidad) y `DisputeEventLogPersistenceAdapterIntegrationTest` (un único desenlace del depósito). **[ACT-09] [ACT-10]**
 - [x] **T020** **CE-004 — fallas de pasarela sin estado indefinido**: cubierto por `MercadoPagoSettlementAdapterTest`, `ReconcileSettlementIntentsServiceTest` y la política AMQP compartida verificada en `AmqpListenerRetryIntegrationTest`. **[ACT-09] [ACT-10]**
-- [x] **T021** `Uc10ArchitectureTest`, cobertura y revisión de contratos; no modificar contratos ni planes externos desde la implementación (la alineación documental se hizo en la Fase 0). `Uc10ArchitectureTest` existe y `.\mvnw.cmd verify` cumple las puertas globales; no hay puerta JaCoCo específica de UC10. **[ACT-08] [ACT-09]**
+- [x] **T021** `Uc10ArchitectureTest`, cobertura y revisión de contratos; no modificar contratos ni planes externos desde la implementación (la alineación documental se hizo en la Fase 0). `Uc10ArchitectureTest` existe y `.\mvnw.cmd verify` cumple las puertas; desde el 2026-11-01 la puerta JaCoCo de `pom.xml` incluye las clases de UC10 (dominio y aplicación). **[ACT-08] [ACT-09]**
 
 ## Dependencies & Execution Order
 
@@ -338,12 +338,12 @@ UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettleme
 
 No modificar `pom.xml`, SPEC ni planes de UC03/UC05/UC07/UC08/UC09/UC11/UC12/UC13. La alineación documental de la Fase 0 ya actualizó `general-plan` y los contratos de liquidación/webhook. No implementar transferencias fuera del ACL, estados de éxito para timeouts, comisiones en penalidades/depósitos ni registros mutables. **[ACT-08]**
 
-- **Estado de cierre (2026-10-30)**: UC10 implementado y verificado con `.\mvnw.cmd verify` (1353 tests, 0 fallos, cobertura global OK). Pendientes documentados: pruebas de aceptación `ce00X_…` con esos nombres, `SettlementCommandListenerTest`, pruebas de concurrencia/duplicados y puerta JaCoCo específica de UC10. **[ACT-09]**
+- **Estado de cierre (2026-11-01)**: UC10 implementado y verificado con `.\mvnw.cmd verify` (**1600 tests, 0 fallos, 84 omitidos por requerir Docker**). Las pruebas que estaban pendientes ya existen: `SettlementIntentTest`, `SettlementRecordTest`, `CommissionRecordTest`, `SettlementCommandListenerTest` y `Uc10AcceptanceTest` (CE-001…CE-006). La capacidad de la pasarela (RF-009) se persiste en `settlement_intent.gateway_capability`. **[ACT-09]**
 
 ## Checklist de auto-revisión
 
 - [x] Alineado con SPEC 10, contratos de liquidación/webhook y `contracts/README.md`. **[ACT-03] [ACT-04]**
-- [ ] Cada RF/RNF/CE/HU tiene componente, tarea y prueba. La trazabilidad existe, pero varias pruebas de aceptación `ce00X_…` no están implementadas con ese nombre. **[ACT-09]**
+- [x] Cada RF/RNF/CE/HU tiene componente, tarea y prueba. La trazabilidad existe y `Uc10AcceptanceTest` implementa CE-001…CE-006. **[ACT-09]**
 - [x] Intención, registro, comisión, idempotencia e inmutabilidad están trazados. **[ACT-09]**
 - [x] Solo éxitos externos crean registros financieros. **[ACT-09]**
 - [x] Requisitos de esquema de UC10 verificados contra la migración inicial única (general-plan §4.2, D-31). **[ACT-04]**

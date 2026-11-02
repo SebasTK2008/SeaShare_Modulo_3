@@ -42,6 +42,60 @@ class FinancialRecordsQueryServiceTest {
                         ReportScope.PLATFORM, 3, 10, null, null, null, null, null, null)));
     }
 
+    @Test
+    void rejectsAMissingScope() {
+        FinancialRecordsQueryService service = new FinancialRecordsQueryService(
+                new CapturingPort(new FinancialRecordsPageResult(List.of(), 1, 10, 0, 0)));
+
+        assertThatExceptionOfType(com.seashare.seasharem3.application.exception.ContractException.class)
+                .isThrownBy(() -> service.query(new QueryFinancialRecordsCommand(
+                        null, 1, 10, null, null, null, null, null, null)));
+    }
+
+    @Test
+    void rejectsAPageBelowOne() {
+        FinancialRecordsQueryService service = new FinancialRecordsQueryService(
+                new CapturingPort(new FinancialRecordsPageResult(List.of(), 1, 10, 0, 0)));
+
+        assertThatExceptionOfType(com.seashare.seasharem3.application.exception.ContractException.class)
+                .isThrownBy(() -> service.query(new QueryFinancialRecordsCommand(
+                        ReportScope.PLATFORM, 0, 10, null, null, null, null, null, null)));
+    }
+
+    @Test
+    void rejectsAPageSizeOutsideTheAllowedRange() {
+        FinancialRecordsQueryService service = new FinancialRecordsQueryService(
+                new CapturingPort(new FinancialRecordsPageResult(List.of(), 1, 10, 0, 0)));
+
+        assertThatExceptionOfType(com.seashare.seasharem3.application.exception.ContractException.class)
+                .isThrownBy(() -> service.query(new QueryFinancialRecordsCommand(
+                        ReportScope.PLATFORM, 1, 101, null, null, null, null, null, null)));
+        assertThatExceptionOfType(com.seashare.seasharem3.application.exception.ContractException.class)
+                .isThrownBy(() -> service.query(new QueryFinancialRecordsCommand(
+                        ReportScope.PLATFORM, 1, 0, null, null, null, null, null, null)));
+    }
+
+    @Test
+    void rejectsAnOwnerScopeWithoutOwnerId() {
+        FinancialRecordsQueryService service = new FinancialRecordsQueryService(
+                new CapturingPort(new FinancialRecordsPageResult(List.of(), 1, 10, 0, 0)));
+
+        assertThatExceptionOfType(com.seashare.seasharem3.application.exception.ContractException.class)
+                .isThrownBy(() -> service.query(new QueryFinancialRecordsCommand(
+                        ReportScope.OWNER, 1, 10, null, null, null, null, null, null)));
+    }
+
+    @Test
+    void rejectsAnInvertedDateRange() {
+        FinancialRecordsQueryService service = new FinancialRecordsQueryService(
+                new CapturingPort(new FinancialRecordsPageResult(List.of(), 1, 10, 0, 0)));
+
+        assertThatExceptionOfType(com.seashare.seasharem3.application.exception.ContractException.class)
+                .isThrownBy(() -> service.query(new QueryFinancialRecordsCommand(
+                        ReportScope.PLATFORM, 1, 10, null, null, null, null,
+                        java.time.LocalDate.of(2026, 10, 31), java.time.LocalDate.of(2026, 10, 1))));
+    }
+
     private static final class CapturingPort implements FinancialRecordQueryPort {
         private final FinancialRecordsPageResult result;
         private QueryFinancialRecordsCommand command;
