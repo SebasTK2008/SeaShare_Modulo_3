@@ -64,9 +64,11 @@ public class SendRefundToGatewayService implements SendRefundToGatewayUseCase {
         Optional<ChargeIntent> charge = chargeIntentRepository.findById(intent.chargeIntentId());
         if (charge.isEmpty() || charge.get().externalReference() == null
                 || charge.get().externalReference().isBlank()) {
-            refundIntentRepository.save(intent.transitionTo(RefundIntentStatus.REJECTED)
-                    .withStatusDetail("The original charge has no external reference"));
-            return;
+            String detail = "The original charge has no external reference";
+            refundIntentRepository.save(intent.transitionTo(RefundIntentStatus.COMMUNICATION_ERROR)
+                    .withStatusDetail(detail));
+            failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(), detail);
+            throw new GatewayCommunicationException(detail);
         }
 
         RefundGatewayResult result;
@@ -83,9 +85,13 @@ public class SendRefundToGatewayService implements SendRefundToGatewayUseCase {
         }
 
         if (result.externalId() == null || result.externalId().isBlank()) {
+            GatewayCommunicationException exception = new GatewayCommunicationException(
+                    "The payment gateway returned no external reference");
+            refundIntentRepository.save(intent.transitionTo(RefundIntentStatus.COMMUNICATION_ERROR)
+                    .withStatusDetail(exception.getMessage()));
             failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
                     "refundIntentId=" + intent.id() + ";status=" + result.status());
-            return;
+            throw exception;
         }
         refundIntentRepository.save(intent.withExternalReference(result.externalId()));
         registerRefundResult.register(result);

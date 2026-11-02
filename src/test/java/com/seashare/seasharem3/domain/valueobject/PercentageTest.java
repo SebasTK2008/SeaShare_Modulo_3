@@ -23,9 +23,9 @@ class PercentageTest {
     }
 
     @Test
-    void roundsExcessPrecisionHalfUpTo4Decimals() {
-        assertThat(new Percentage(new BigDecimal("15.12345")).value())
-                .isEqualByComparingTo(new BigDecimal("15.1235"));
+    void rejectsExcessPrecision() {
+        assertThatExceptionOfType(DomainException.class)
+                .isThrownBy(() -> new Percentage(new BigDecimal("15.12345")));
     }
 
     @Test

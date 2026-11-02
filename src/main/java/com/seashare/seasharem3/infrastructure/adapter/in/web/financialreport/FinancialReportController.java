@@ -60,8 +60,12 @@ public class FinancialReportController {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("text/csv"));
         headers.setContentDisposition(ContentDisposition.attachment()
-                .filename("informe_financiero_" + period + ".csv").build());
+                .filename("informe_financiero_" + safeFilenamePeriod(result.report().period().value()) + ".csv").build());
         return ResponseEntity.ok().headers(headers).body(exporter.export(result));
+    }
+
+    private static String safeFilenamePeriod(String period) {
+        return period.replaceAll("[^0-9A-Za-z-]", "_");
     }
 
     private static GetFinancialReportCommand command(String scope, String periodicity,

@@ -78,7 +78,8 @@ public class SendChargeToGatewayService implements SendChargeToGatewayUseCase {
 
         ChargeGatewayResult result;
         try {
-            result = chargeGatewayPort.send(toRequest(intent, command.payerEmail()));
+            String payerEmail = command.payerEmail() != null ? command.payerEmail() : intent.payerEmail();
+            result = chargeGatewayPort.send(toRequest(intent, payerEmail));
         } catch (InvalidPaymentTokenException exception) {
             chargeIntentRepository.save(intent.transitionTo(ChargeIntentStatus.REJECTED)
                     .withStatusDetail(exception.getMessage()));
@@ -91,9 +92,13 @@ public class SendChargeToGatewayService implements SendChargeToGatewayUseCase {
 
         String externalId = result.externalId();
         if (externalId == null || externalId.isBlank()) {
+            GatewayCommunicationException exception = new GatewayCommunicationException(
+                    "The payment gateway returned no external reference");
+            chargeIntentRepository.save(intent.transitionTo(ChargeIntentStatus.COMMUNICATION_ERROR)
+                    .withStatusDetail(exception.getMessage()));
             failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
                     "chargeIntentId=" + intent.id() + ";status=" + result.status());
-            return;
+            throw exception;
         }
         chargeIntentRepository.save(intent.withExternalReference(externalId));
         registerChargeResult.register(result);

@@ -58,9 +58,18 @@ class FlywaySchemaTest {
 
 	@Test
 	void addsIntentTraceabilityColumns() throws SQLException {
+		assertThat(columnNames("charge_intent")).contains("payer_email");
 		assertThat(columnNames("refund_intent")).contains("created_at");
 		assertThat(columnNames("settlement_intent"))
 				.contains("created_at", "external_reference", "status_detail", "dispute_id");
+	}
+
+	@Test
+	void storesNoSensitiveCardData() throws SQLException {
+		assertThat(columnNames("charge_intent"))
+				.doesNotContain("pan", "card_number", "cvv", "security_code", "expiration_date", "expiry");
+		assertThat(columnNames("charge_record"))
+				.doesNotContain("pan", "card_number", "cvv", "security_code", "expiration_date", "expiry");
 	}
 
 	@Test
@@ -224,8 +233,8 @@ class FlywaySchemaTest {
 		UUID disputeId = UUID.randomUUID();
 		execute("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount, commission_amount,"
 				+ " deposit_amount, charge_intent_id, idempotency_key, status, status_detail, external_reference,"
-				+ " dispute_id) VALUES (?, ?, 'DISPUTE_COMPLETED', 'DEPOSIT', 90, 10, 80, ?, ?, 'PENDING_SEND',"
-				+ " 'detalle', ?, ?)",
+				+ " dispute_id, gateway_capability) VALUES (?, ?, 'DISPUTE_COMPLETED', 'DEPOSIT', 90, 10, 80, ?, ?, 'PENDING_SEND',"
+				+ " 'detalle', ?, ?, 'ADVANCED_PAYMENTS_DISBURSEMENT')",
 				settlementIntentId, fixture.reservationId, fixture.chargeIntentId, UUID.randomUUID().toString(),
 				"9001", disputeId);
 		assertThat(queryStrings("SELECT external_reference FROM settlement_intent WHERE id = ?", settlementIntentId))
@@ -277,9 +286,12 @@ class FlywaySchemaTest {
 		List<String> indexes = queryStrings(
 				"SELECT indexname FROM pg_indexes WHERE schemaname = 'public' ORDER BY indexname");
 		assertThat(indexes).contains(
-				"idx_charge_intent_external_reference",
-				"idx_refund_intent_external_reference",
-				"idx_settlement_intent_external_reference",
+				"uq_charge_intent_external_reference",
+				"uq_refund_intent_external_reference",
+				"uq_settlement_intent_external_reference",
+				"idx_charge_intent_status_created",
+				"idx_refund_intent_status_created",
+				"idx_settlement_intent_status_created",
 				"idx_operational_failure_unresolved",
 				"idx_operational_failure_reservation",
 				"idx_outbox_message_unpublished");
@@ -370,8 +382,10 @@ class FlywaySchemaTest {
 					+ " 'COMPLETED')",
 					refundIntentId, reservationId, chargeIntentId, UUID.randomUUID().toString());
 			execute("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount,"
-					+ " commission_amount, deposit_amount, charge_intent_id, idempotency_key, status)"
-					+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, ?, 'COMPLETED')",
+					+ " commission_amount, deposit_amount, charge_intent_id, idempotency_key, status,"
+					+ " gateway_capability)"
+					+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, ?, 'COMPLETED',"
+					+ " 'ADVANCED_PAYMENTS_DISBURSEMENT')",
 					settlementIntentId, reservationId, chargeIntentId, UUID.randomUUID().toString());
 		}
 

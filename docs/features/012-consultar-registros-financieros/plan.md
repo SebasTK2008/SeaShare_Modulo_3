@@ -16,11 +16,11 @@ Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domai
 | Requisito | Componente | Tareas | Prueba |
 |---|---|---|---|
 | RF-001 | `FinancialRecordsController`, request/query DTO | T006, T007 | T012 |
-| RF-002 | `RecordFilter`, query adapter | T004, T008 | T013 |
+| RF-002 | `QueryFinancialRecordsCommand`, `FinancialRecordQueryAdapter` | T004, T008 | T013 |
 | RF-003, RF-011 | `FinancialRecordScopeResolver` (alcance declarado) | T005, T008 | **T014 `ce001_…`**, T015 |
 | RF-004 | `FinancialRecordQueryPort` sobre `v_financial_records` | T004 | T013, T016 |
 | RF-005, RF-006 | `FinancialRecordResult`, mapper | T006, T009 | **T017 `ce004_…`** |
-| RF-007, RF-008 | `PageResult`, `PageRequestPolicy` | T003, T008 | **T018 `ce003_…`** |
+| RF-007, RF-008 | `FinancialRecordsPageResult`, paginación del servicio | T003, T008 | **T018 `ce003_…`** |
 | RF-009 | validación + `PAGE_OUT_OF_RANGE` | T003, T007 | T012, T018 |
 | RF-010 | puerto/query de solo lectura | T004, T010 | **T019 `ce005_…`** |
 | RF-012 | ausencia de `FleetRatePort`/cliente Flota | T004, T010 | T019 |
@@ -66,8 +66,8 @@ docs/technical-plan/contracts/rest/UC12-consultar-registros-financieros.md
 src/main/java/com/seashare/seasharem3/
 ├── SeashareM3Application.java
 ├── domain/
-│   ├── model/{FinancialRecord,RecordType,RecordFilter,PageResult}.java
-│   ├── valueobject/{Money,ReservationId,OwnerId,BoatId}.java
+│   ├── model/FinancialRecord.java
+│   ├── valueobject/{FinancialRecordType,ReportScope,Money,ReservationId,OwnerId,BoatId}.java
 │   └── exception/{DomainException,InvalidPageException}.java
 ├── application/
 │   ├── port/in/QueryFinancialRecordsUseCase.java
@@ -78,27 +78,25 @@ src/main/java/com/seashare/seasharem3/
 │       ├── FinancialRecordResult.java
 │       └── FinancialRecordsPageResult.java
 └── infrastructure/
-    ├── adapter/in/web/financialrecords/
+    ├── adapter/in/web/
     │   ├── FinancialRecordsController.java
-    │   ├── FinancialRecordsExceptionHandler.java
-    │   └── dto/{FinancialRecordsRequest,FinancialRecordsResponse}.java
+    │   └── dto/FinancialRecordsResponse.java
     ├── adapter/out/persistence/financialrecords/
     │   ├── FinancialRecordQueryAdapter.java
-    │   ├── FinancialRecordProjection.java
-    │   └── FinancialRecordQueryMapper.java
-    └── config/{ProblemDetailsConfig,ObservabilityConfig}.java
+    └── config/FinancialRecordsConfiguration.java
 
 src/main/resources/db/migration/
 └── V1__initial_schema.sql # migración inicial única: incluye la vista v_financial_records (general-plan §4.2, D-31)
 
 src/test/java/com/seashare/seasharem3/
-├── arch/ArchitectureTest.java
-├── contract/FinancialRecordsControllerContractTest.java
-├── domain/model/FinancialRecordQueryTest.java
+├── arch/Uc12ArchitectureTest.java
+├── contract/UC12FinancialRecordsControllerContractTest.java
 ├── application/service/FinancialRecordsQueryServiceTest.java
-├── infrastructure/adapter/out/persistence/FinancialRecordQueryAdapterTest.java
-└── integration/FinancialRecordsPaginationIT.java
+├── acceptance/Uc12AcceptanceTest.java
+└── infrastructure/adapter/out/persistence/financialrecords/FinancialRecordQueryAdapterIntegrationTest.java
 ```
+
+**Correcciones de la auditoría (2026-11-01).** La prueba de integración del adaptador destapó dos defectos de producción en `FinancialRecordQueryAdapter`: (1) los parámetros temporales se enviaban como `java.time.Instant`, tipo que el driver de PostgreSQL no sabe inferir, por lo que **toda** consulta lanzaba `PSQLException`; ahora se envían como `OffsetDateTime`; (2) la consulta concatenaba `predicates` con `ORDER BY` sin separador, generando el parámetro inexistente `dateToExclusiveORDER` en cuanto se aplicaba un filtro. Ambos están corregidos y cubiertos por `FinancialRecordQueryAdapterIntegrationTest`.
 
 **Structure Decision**: sigue `general-plan.md` §3.2–§3.4. Los VOs compartidos (`Money`, `ReservationId`, `OwnerId`, `ClockPort`) se consumen del núcleo compartido y no se redeclaran. `domain` no depende de Spring/JPA/Jackson; `application` solo depende de `domain`; controller invoca solo `application.port.in`; query adapter implementa `FinancialRecordQueryPort`; no se expone entidad JPA ni se accede a repositorios desde el controller.
 
@@ -161,15 +159,16 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 |---|---|---|
 | Unitario dominio | filtros, tipos, paginación y moneda | `domain/model/FinancialRecordQueryTest` |
 | Unitario aplicación | alcance, filtros, default, páginas y errores | `application/service/FinancialRecordsQueryServiceTest` |
-| Contrato/Web | query params, JSON, códigos y metadatos | `FinancialRecordsControllerContractTest` |
-| Integración | vista, orden estable, páginas y solo lectura | `FinancialRecordsPaginationIT` |
-| Arquitectura | capas, ausencia de Flota y ausencia de export | `arch/ArchitectureTest` |
+| Contrato/Web | query params, JSON, códigos y metadatos | `UC12FinancialRecordsControllerContractTest` |
+| Integración | vista, orden estable, páginas y solo lectura | `FinancialRecordQueryAdapterIntegrationTest` |
+| Arquitectura | capas, ausencia de Flota y ausencia de export | `arch/Uc12ArchitectureTest` |
+| Aceptación | CE-001…CE-005 | `acceptance/Uc12AcceptanceTest` |
 
-- **`ce001_alcance_propietario`**: con alcance declarado `OWNER`, ningún registro de otro `owner_id` aparece y los filtros enviados no amplían el alcance declarado.
-- **`ce002_cobertura_global_sin_duplicados`**: Administrador obtiene conjunto global filtrado, recorriendo todas las páginas sin omisiones/duplicados.
-- **`ce003_paginacion_default_y_metadatos`**: default 10, `page_number`, `page_size`, `total_elements`, `total_pages`; página vacía válida.
-- **`ce004_detalle_completo_y_comision`**: cuatro tipos, campos obligatorios y referencia externa opcional; comisión solo por tipo.
-- **`ce005_solo_lectura_sin_exportacion`**: ninguna operación de escritura ni archivo generado; no se invoca Flota.
+- **`ce001_alcance_propietario`** (en `Uc12AcceptanceTest`): con alcance declarado `OWNER`, ningún registro de otro `owner_id` aparece y los filtros enviados no amplían el alcance declarado.
+- **`ce002_cobertura_global_sin_duplicados`** (en `Uc12AcceptanceTest`): Administrador obtiene conjunto global filtrado, recorriendo todas las páginas sin omisiones/duplicados.
+- **`ce003_paginacion_default_y_metadatos`** (en `Uc12AcceptanceTest`): default 10, `page_number`, `page_size`, `total_elements`, `total_pages`; página vacía válida.
+- **`ce004_detalle_completo_y_comision`** (en `Uc12AcceptanceTest`): cuatro tipos, campos obligatorios y referencia externa opcional; comisión solo por tipo.
+- **`ce005_solo_lectura_sin_exportacion`** (en `Uc12AcceptanceTest`): ninguna operación de escritura ni archivo generado; no se invoca Flota.
 
 ## Decisiones de diseño (D-UC12-xx)
 
@@ -208,7 +207,7 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC12
 - [x] **T013** `ce001_alcance_propietario`.
 - [x] **T014** `ce002_cobertura_global_sin_duplicados`.
 - [x] **T015** `ce003_paginacion_default_y_metadatos`.
-- [x] **T016** Integración de orden estable y consistencia entre páginas.
+- [x] **T016** Integración de orden estable y consistencia entre páginas: `FinancialRecordQueryAdapterIntegrationTest` (paginación `created_at DESC, record_id DESC` contra PostgreSQL) y `Uc12AcceptanceTest.ce002_cobertura_global_sin_duplicados`.
 - [x] **T017** `ce004_detalle_completo_y_comision`.
 
 ### Phase 4: Polish

@@ -25,6 +25,7 @@ import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.Percentage;
 import com.seashare.seasharem3.domain.valueobject.RefundBreakdown;
 import com.seashare.seasharem3.domain.valueobject.SettlementCalculation;
+import com.seashare.seasharem3.domain.valueobject.SettlementCapability;
 import com.seashare.seasharem3.domain.valueobject.SettlementScope;
 import com.seashare.seasharem3.domain.valueobject.SettlementStatus;
 import com.seashare.seasharem3.domain.valueobject.SettlementTrigger;
@@ -43,6 +44,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class RequestSettlementService implements RequestSettlementUseCase {
 
     private static final String USE_CASE = "UC10";
+
+    /**
+     * Capacidad de la integración de pasarela configurada (contrato de liquidación:
+     * {@code POST /v1/advanced_payments/{id}/disbursements}). La intención la conserva por RF-009.
+     */
+    private static final SettlementCapability GATEWAY_CAPABILITY =
+            SettlementCapability.ADVANCED_PAYMENTS_DISBURSEMENT;
 
     private final SettlementIntentRepository settlementIntentRepository;
     private final ChargeIntentRepository chargeIntentRepository;
@@ -128,7 +136,7 @@ public class RequestSettlementService implements RequestSettlementUseCase {
         SettlementIntent intent = SettlementIntent.create(UUID.randomUUID(), command.reservationId(),
                 command.trigger(), command.scope(), calculation.disbursedAmount(),
                 calculation.commissionAmount(), calculation.depositAmount(), charge.id(), key, command.disputeId(),
-                clock.instant());
+                GATEWAY_CAPABILITY, clock.instant());
         settlementIntentRepository.save(intent);
         settlementCommandPublisher.publish(intent.id());
         return new SettlementRequestResult(intent.id(), intent.status());

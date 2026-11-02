@@ -3,8 +3,8 @@
 -- Contiene TODO el esquema en una sola migración: las 15 tablas, sus CHECK/UNIQUE/FK,
 -- índices, la vista v_financial_records y los triggers anti-mutación.
 -- Política de migraciones: general-plan §4.2 y D-31 — única migración inicial; los cambios
--- posteriores se añaden como V2__… en orden cronológico y append-only. No existen migraciones
--- por caso de uso ni por fase.
+-- posteriores a un despliegue se añaden como V2__… en orden cronológico y append-only. No existen
+-- migraciones por caso de uso ni por fase.
 
 -- =====================================================================
 -- UC11 · financial_parameters (antes V2__financial_parameters.sql)
@@ -160,9 +160,9 @@ CREATE TABLE charge_intent (
     payment_token_ref   TEXT          NOT NULL,
     payment_method_type VARCHAR(64),
     last_four           VARCHAR(4),
+    payer_email         TEXT,          -- [CONV] payer.email requerido por el contrato de cobro; no es dato de pago sensible
     external_reference  TEXT,
     status_detail       TEXT,         -- [D-UC05-02; D-UC06-02] detalle del estado externo publicado por UC05 (lo consume UC06)
-    requested_amount    NUMERIC(18,4), -- [D-UC05-02] monto solicitado; el núcleo no lo modela aun (GAP)
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
     version             INTEGER       NOT NULL DEFAULT 0,
     CONSTRAINT uq_charge_intent_idempotency_key UNIQUE (idempotency_key),
@@ -170,8 +170,7 @@ CREATE TABLE charge_intent (
     CONSTRAINT chk_charge_intent_status CHECK (
         status IN ('PENDING_SEND', 'IN_PROCESS', 'CAPTURED', 'REJECTED', 'CANCELLED', 'EXPIRED',
                    'COMMUNICATION_ERROR')),
-    CONSTRAINT chk_charge_intent_amount CHECK (amount >= 0),
-    CONSTRAINT chk_charge_intent_requested_amount CHECK (requested_amount IS NULL OR requested_amount >= 0)
+    CONSTRAINT chk_charge_intent_amount CHECK (amount >= 0)
 );
 
 -- Sin UNIQUE(reservation_id): se permiten múltiples intenciones por reserva (UC05 RF-004A).
@@ -180,9 +179,11 @@ CREATE INDEX idx_charge_intent_reservation_created
 
 -- [CONV] general-plan §4 no define índice para external_reference; necesario para asociar el
 -- webhook de la pasarela (data.id) con la intención registrada (UC05 §Reglas 5).
-CREATE INDEX idx_charge_intent_external_reference
+CREATE UNIQUE INDEX uq_charge_intent_external_reference
     ON charge_intent (external_reference)
     WHERE external_reference IS NOT NULL;
+CREATE INDEX idx_charge_intent_status_created
+    ON charge_intent (status, created_at);
 
 CREATE TABLE charge_record (
     id                  UUID          PRIMARY KEY,
@@ -259,9 +260,11 @@ CREATE TABLE refund_intent (
 CREATE INDEX idx_refund_intent_reservation ON refund_intent (reservation_id);
 
 -- [CONV] índice para asociar el webhook de reembolso (data.id) con la intención (UC09 §Reglas).
-CREATE INDEX idx_refund_intent_external_reference
+CREATE UNIQUE INDEX uq_refund_intent_external_reference
     ON refund_intent (external_reference)
     WHERE external_reference IS NOT NULL;
+CREATE INDEX idx_refund_intent_status_created
+    ON refund_intent (status, created_at);
 
 -- CHOQUE (general-plan §4.1): el ER declara refund_intent.dispute_id como string; aquí se tipa UUID
 -- (DisputeId) siguiendo D-UC09-02 y la entrada de disputas del sistema.
@@ -318,10 +321,13 @@ CREATE TABLE settlement_intent (
     status_detail     TEXT,         -- [CONV] detalle del estado externo (simétrico a charge/refund_intent)
     external_reference TEXT,        -- [CONV] referencia externa de la pasarela (UC10 plan T012a); omitida en general-plan §4
     dispute_id        UUID,         -- [CONV] traza de la disputa adjudicada (UC10 plan T012a; scope DEPOSIT); omitida en general-plan §4
+    gateway_capability VARCHAR(64)  NOT NULL, -- [RF-009] capacidad de la pasarela utilizada por la dispersión
     created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitida en general-plan §4
     version           INTEGER       NOT NULL DEFAULT 0,     -- [CONV] bloqueo optimista para webhook/worker
     CONSTRAINT uq_settlement_intent_idempotency_key UNIQUE (idempotency_key),
     CONSTRAINT fk_settlement_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id),
+    CONSTRAINT chk_settlement_intent_capability CHECK (
+        gateway_capability IN ('ADVANCED_PAYMENTS_DISBURSEMENT', 'STANDARD_SETTLEMENT')),
     CONSTRAINT chk_settlement_intent_scope CHECK (
         scope IN ('STANDARD', 'CANCELLATION_COMPENSATION', 'DEPOSIT')),
     CONSTRAINT chk_settlement_intent_status CHECK (
@@ -336,9 +342,11 @@ CREATE TABLE settlement_intent (
 CREATE INDEX idx_settlement_intent_reservation ON settlement_intent (reservation_id);
 
 -- [CONV] índice para asociar el webhook de liquidación (data.id) con la intención (UC10 §Reglas).
-CREATE INDEX idx_settlement_intent_external_reference
+CREATE UNIQUE INDEX uq_settlement_intent_external_reference
     ON settlement_intent (external_reference)
     WHERE external_reference IS NOT NULL;
+CREATE INDEX idx_settlement_intent_status_created
+    ON settlement_intent (status, created_at);
 
 CREATE TABLE settlement_record (
     id                   UUID          PRIMARY KEY,

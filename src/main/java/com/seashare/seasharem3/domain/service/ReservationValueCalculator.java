@@ -28,17 +28,17 @@ public class ReservationValueCalculator {
     private static final Percentage GUARANTEE_DEPOSIT_PCT = new Percentage(new BigDecimal("10"));
 
     /**
-     * Devuelve el desglose completo; el total es la suma exacta de los tres montos ya redondeados a
-     * 2 decimales, de modo que la salida cumple CE-001 con cero errores de redondeo.
+     * Devuelve el desglose completo conservando la escala interna de cuatro decimales. El redondeo
+     * de presentación se aplica únicamente al serializar la respuesta.
      */
     public ReservationValue calculate(ReservationInformation information, FinancialParameters parameters) {
         Objects.requireNonNull(information, "information");
         Objects.requireNonNull(parameters, "parameters");
 
         Money dailyRate = information.baseRate().amount();
-        Money rentalAmount = toOutput(dailyRate.multiply(inclusiveDays(information)));
-        Money insuranceAmount = toOutput(parameters.insuranceFeePerPassenger().multiply(information.passengers()));
-        Money guaranteeDeposit = toOutput(dailyRate.percentageOf(GUARANTEE_DEPOSIT_PCT));
+        Money rentalAmount = dailyRate.multiply(inclusiveDays(information));
+        Money insuranceAmount = parameters.insuranceFeePerPassenger().multiply(information.passengers());
+        Money guaranteeDeposit = dailyRate.percentageOf(GUARANTEE_DEPOSIT_PCT);
         Money totalAmount = rentalAmount.add(insuranceAmount).add(guaranteeDeposit);
 
         return new ReservationValue(rentalAmount, insuranceAmount, guaranteeDeposit, totalAmount);
@@ -49,8 +49,4 @@ public class ReservationValueCalculator {
         return ChronoUnit.DAYS.between(information.startDate(), information.endDate()) + 1;
     }
 
-    /** Redondeo final de toda salida monetaria a 2 decimales HALF_UP [contracts/README §3.1]. */
-    private static Money toOutput(Money amount) {
-        return new Money(amount.toOutputAmount());
-    }
 }

@@ -58,19 +58,22 @@ public class SendSettlementToGatewayService implements SendSettlementToGatewayUs
             return;
         }
         if (collectorId <= 0) {
+            String detail = "seashare.gateway.collector-id is not configured";
             failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
-                    "seashare.gateway.collector-id is not configured");
-            settlementIntentRepository.save(intent.transitionTo(SettlementStatus.REJECTED)
-                    .withStatusDetail("seashare.gateway.collector-id is not configured"));
-            return;
+                    detail);
+            settlementIntentRepository.save(intent.transitionTo(SettlementStatus.COMMUNICATION_ERROR)
+                    .withStatusDetail(detail));
+            throw new GatewayCommunicationException(detail);
         }
 
         Optional<ChargeIntent> charge = chargeIntentRepository.findById(intent.chargeIntentId());
         if (charge.isEmpty() || charge.get().externalReference() == null
                 || charge.get().externalReference().isBlank()) {
-            settlementIntentRepository.save(intent.transitionTo(SettlementStatus.REJECTED)
-                    .withStatusDetail("The original charge has no external reference"));
-            return;
+            String detail = "The original charge has no external reference";
+            settlementIntentRepository.save(intent.transitionTo(SettlementStatus.COMMUNICATION_ERROR)
+                    .withStatusDetail(detail));
+            failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(), detail);
+            throw new GatewayCommunicationException(detail);
         }
 
         GatewaySettlementResult result;
@@ -87,9 +90,13 @@ public class SendSettlementToGatewayService implements SendSettlementToGatewayUs
         }
 
         if (result.externalId() == null || result.externalId().isBlank()) {
+            GatewayCommunicationException exception = new GatewayCommunicationException(
+                    "The payment gateway returned no external reference");
+            settlementIntentRepository.save(intent.transitionTo(SettlementStatus.COMMUNICATION_ERROR)
+                    .withStatusDetail(exception.getMessage()));
             failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
                     "settlementIntentId=" + intent.id() + ";status=" + result.status());
-            return;
+            throw exception;
         }
         settlementIntentRepository.save(intent.withExternalReference(result.externalId()));
         registerSettlementResult.register(result);

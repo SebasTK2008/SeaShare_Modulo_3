@@ -294,6 +294,8 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 ## Implementation Phases
 
 > **Convención**: cada tarea `T0NN` es una unidad de trabajo granular y verificable de forma independiente; su casilla `[ ]` es el mecanismo de seguimiento. Las dependencias externas se expresan por caso de uso, puerto o tabla; no se duplican tareas de otros planes.
+>
+> **Numeración**: `T004` no existe en la secuencia (salta de `T003` a `T005`); es un hueco histórico de numeración, no una tarea implícita, y ninguna trazabilidad lo referencia.
 
 ### Phase 1: Setup
 

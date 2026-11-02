@@ -85,4 +85,22 @@ class Uc09ArchitectureTest {
         assertThat(Arrays.stream(RefundRecord.class.getMethods()).map(Method::getName))
                 .noneMatch(name -> name.matches("set[A-Z].*"));
     }
+
+    @Test
+    void uc09DomainDoesNotDependOnFrameworks() {
+        noClasses().that().haveNameMatching(
+                        ".*domain\\.(model\\.(RefundIntent|RefundRecord)|service\\.RefundCalculator)")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "org.springframework..", "jakarta.persistence..", "tools.jackson..", "org.amqp..")
+                .because("general-plan §3.4: el dominio no conoce frameworks")
+                .check(MAIN_CLASSES);
+    }
+
+    @Test
+    void uc09ListenerOnlyInvokesInboundPorts() {
+        noClasses().that().haveSimpleName("RefundCommandListener")
+                .should().dependOnClassesThat().resideInAnyPackage("..application.port.out..", "..adapter.out..")
+                .because("general-plan §3.4: los adaptadores de entrada solo invocan application.port.in")
+                .check(MAIN_CLASSES);
+    }
 }

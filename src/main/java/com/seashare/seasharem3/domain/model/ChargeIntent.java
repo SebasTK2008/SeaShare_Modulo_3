@@ -50,19 +50,21 @@ public final class ChargeIntent {
     private final ChargeIntentStatus status;
     private final Money amount;
     private final PaymentMethodReference paymentMethod;
+    private final String payerEmail;
     private final String externalReference;
     private final String statusDetail;
     private final Instant createdAt;
 
     private ChargeIntent(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
             ChargeIntentStatus status, Money amount, PaymentMethodReference paymentMethod, String externalReference,
-            String statusDetail, Instant createdAt) {
+            String statusDetail, String payerEmail, Instant createdAt) {
         this.id = Objects.requireNonNull(id, "id");
         this.reservationId = Objects.requireNonNull(reservationId, "reservationId");
         this.idempotencyKey = Objects.requireNonNull(idempotencyKey, "idempotencyKey");
         this.status = Objects.requireNonNull(status, "status");
         this.amount = Objects.requireNonNull(amount, "amount");
         this.paymentMethod = Objects.requireNonNull(paymentMethod, "paymentMethod");
+        this.payerEmail = payerEmail;
         this.externalReference = externalReference;
         this.statusDetail = statusDetail;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
@@ -75,8 +77,13 @@ public final class ChargeIntent {
      */
     public static ChargeIntent create(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
             Money amount, PaymentMethodReference paymentMethod, Instant createdAt) {
+        return create(id, reservationId, idempotencyKey, amount, paymentMethod, null, createdAt);
+    }
+
+    public static ChargeIntent create(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
+            Money amount, PaymentMethodReference paymentMethod, String payerEmail, Instant createdAt) {
         return new ChargeIntent(id, reservationId, idempotencyKey, ChargeIntentStatus.PENDING_SEND, amount,
-                paymentMethod, null, null, createdAt);
+                paymentMethod, null, null, payerEmail, createdAt);
     }
 
     /**
@@ -87,8 +94,15 @@ public final class ChargeIntent {
     public static ChargeIntent restore(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
             ChargeIntentStatus status, Money amount, PaymentMethodReference paymentMethod, String externalReference,
             String statusDetail, Instant createdAt) {
+        return restore(id, reservationId, idempotencyKey, status, amount, paymentMethod, externalReference,
+                statusDetail, null, createdAt);
+    }
+
+    public static ChargeIntent restore(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
+            ChargeIntentStatus status, Money amount, PaymentMethodReference paymentMethod, String externalReference,
+            String statusDetail, String payerEmail, Instant createdAt) {
         return new ChargeIntent(id, reservationId, idempotencyKey, status, amount, paymentMethod, externalReference,
-                statusDetail, createdAt);
+                statusDetail, payerEmail, createdAt);
     }
 
     /**
@@ -104,7 +118,7 @@ public final class ChargeIntent {
             throw new DomainException("ChargeIntent transition not allowed: " + status + " → " + next);
         }
         return new ChargeIntent(id, reservationId, idempotencyKey, next, amount, paymentMethod, externalReference,
-                statusDetail, createdAt);
+                statusDetail, payerEmail, createdAt);
     }
 
     /**
@@ -117,13 +131,13 @@ public final class ChargeIntent {
             throw new DomainException("ChargeIntent already has an external_reference: " + externalReference);
         }
         return new ChargeIntent(id, reservationId, idempotencyKey, status, amount, paymentMethod, reference,
-                statusDetail, createdAt);
+                statusDetail, payerEmail, createdAt);
     }
 
     /** Detalle técnico del estado externo publicado por UC05 (lo consume UC06). Fuente: D-UC05-02. */
     public ChargeIntent withStatusDetail(String detail) {
         return new ChargeIntent(id, reservationId, idempotencyKey, status, amount, paymentMethod, externalReference,
-                detail, createdAt);
+                detail, payerEmail, createdAt);
     }
 
     /** {@code true} si la intención alcanzó un estado sin transiciones salientes (D-33). */
@@ -159,6 +173,10 @@ public final class ChargeIntent {
 
     public PaymentMethodReference paymentMethod() {
         return paymentMethod;
+    }
+
+    public String payerEmail() {
+        return payerEmail;
     }
 
     /** Id del pago en la pasarela; {@code null} hasta que la pasarela lo publique. Fuente: UC05 §Reglas 8. */

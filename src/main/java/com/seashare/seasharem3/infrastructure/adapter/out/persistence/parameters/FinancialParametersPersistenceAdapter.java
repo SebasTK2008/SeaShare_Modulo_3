@@ -26,6 +26,12 @@ public class FinancialParametersPersistenceAdapter implements FinancialParameter
     }
 
     @Override
+    @Transactional
+    public void lockVersionAssignment() {
+        repository.lockVersionAssignment();
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<FinancialParameters> findCurrent() {
         return repository.findFirstByOrderByVersionNumberDesc()

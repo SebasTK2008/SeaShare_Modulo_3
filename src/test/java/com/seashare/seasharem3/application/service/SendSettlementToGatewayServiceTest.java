@@ -102,16 +102,52 @@ class SendSettlementToGatewayServiceTest {
     }
 
     @Test
-    void missingCollectorConfigurationIsRecordedAndRejected() {
+    void missingCollectorConfigurationIsRecordedAsTransientFailure() {
         service = new SendSettlementToGatewayService(settlementIntentRepository, chargeIntentRepository,
                 settlementGatewayPort, registerSettlementResult, failureRecorder, 0);
 
-        service.send(intent.id());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.send(intent.id()))
+                .isInstanceOf(com.seashare.seasharem3.domain.exception.GatewayCommunicationException.class);
 
         var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
         verify(settlementIntentRepository).save(captor.capture());
-        assertThat(captor.getValue().status()).isEqualTo(SettlementStatus.REJECTED);
+        assertThat(captor.getValue().status()).isEqualTo(SettlementStatus.COMMUNICATION_ERROR);
         assertThat(failureRecorder.failures()).hasSize(1);
         verify(settlementGatewayPort, never()).send(any());
+    }
+
+    @Test
+    void anUnknownIntentIsRecordedAsFailureWithoutCallingTheGateway() {
+        when(settlementIntentRepository.findByIdForUpdate(any())).thenReturn(Optional.empty());
+
+        service.send(UUID.randomUUID());
+
+        assertThat(failureRecorder.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::reason)
+                .containsExactly("SETTLEMENT_INTENT_NOT_FOUND");
+        verify(settlementGatewayPort, never()).send(any());
+    }
+
+    @Test
+    void aTerminalIntentIsNotSentAgain() {
+        SettlementIntent completed = intent.transitionTo(SettlementStatus.COMPLETED);
+        when(settlementIntentRepository.findByIdForUpdate(completed.id())).thenReturn(Optional.of(completed));
+
+        service.send(completed.id());
+
+        verify(settlementGatewayPort, never()).send(any());
+        verify(settlementIntentRepository, never()).save(any());
+    }
+
+    @Test
+    void aChargeWithoutExternalReferenceStopsTheRetries() {
+        when(chargeIntentRepository.findById(charge.id()))
+                .thenReturn(Optional.of(ChargeFixtures.pendingIntent(RESERVATION)));
+
+        assertThatThrownBy(() -> service.send(intent.id()))
+                .isInstanceOf(GatewayCommunicationException.class);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
+        verify(settlementIntentRepository).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(SettlementStatus.COMMUNICATION_ERROR);
     }
 }

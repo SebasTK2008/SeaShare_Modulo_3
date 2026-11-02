@@ -97,4 +97,54 @@ class SendRefundToGatewayServiceTest {
         assertThat(captor.getValue().externalReference()).isEqualTo("rf-1");
         verify(registerRefundResult).register(result);
     }
+
+    @Test
+    void anUnknownIntentIsRecordedAsFailureWithoutCallingTheGateway() {
+        when(refundIntentRepository.findByIdForUpdate(any())).thenReturn(Optional.empty());
+
+        service.send(UUID.randomUUID());
+
+        assertThat(failureRecorder.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::reason)
+                .containsExactly("REFUND_INTENT_NOT_FOUND");
+        verify(refundGatewayPort, org.mockito.Mockito.never()).send(any());
+    }
+
+    @Test
+    void aTerminalIntentIsNotSentAgain() {
+        RefundIntent completed = RefundIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
+                RefundTrigger.CANCELLED_STRICT, RefundScope.DEPOSIT_ONLY, new Money(new BigDecimal("30000.00")),
+                charge.id(), new IdempotencyKey("refund:CANCELLED_STRICT:op-9"), null, NOW)
+                .transitionTo(RefundIntentStatus.COMPLETED);
+        when(refundIntentRepository.findByIdForUpdate(completed.id())).thenReturn(Optional.of(completed));
+
+        service.send(completed.id());
+
+        verify(refundGatewayPort, org.mockito.Mockito.never()).send(any());
+        verify(refundIntentRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void aChargeWithoutExternalReferenceStopsTheRetries() {
+        when(chargeIntentRepository.findById(charge.id()))
+                .thenReturn(Optional.of(ChargeFixtures.pendingIntent(RESERVATION)));
+
+        assertThatThrownBy(() -> service.send(intent.id()))
+                .isInstanceOf(GatewayCommunicationException.class);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(RefundIntent.class);
+        verify(refundIntentRepository).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(RefundIntentStatus.COMMUNICATION_ERROR);
+    }
+
+    @Test
+    void aResultWithoutExternalIdIsRetriedAsCommunicationError() {
+        when(refundGatewayPort.send(any())).thenReturn(new RefundGatewayResult("approved", " ",
+                new Money(new BigDecimal("30000.00")), null, null));
+
+        assertThatThrownBy(() -> service.send(intent.id()))
+                .isInstanceOf(GatewayCommunicationException.class);
+
+        verify(registerRefundResult, org.mockito.Mockito.never()).register(any());
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
 }

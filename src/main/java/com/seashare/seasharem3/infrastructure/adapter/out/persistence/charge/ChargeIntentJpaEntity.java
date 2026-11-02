@@ -17,8 +17,8 @@ import java.util.UUID;
  * intenciones por reserva: la unicidad la da {@code UNIQUE(idempotency_key)}, no la reserva
  * (RF-004A, D-28). No sale del adaptador.
  *
- * <p>{@code requested_amount} no se mapea: el dominio todavía no modela el monto solicitado
- * por separado del monto del cobro (GAP documentado en el esquema).
+ * <p>El monto solicitado es el propio {@code amount} del intento: el cobro es directo y por el
+ * total calculado de la reserva (RF-015), sin un segundo importe que modelar.</p>
  */
 @Entity
 @Table(name = "charge_intent")
@@ -45,6 +45,9 @@ public class ChargeIntentJpaEntity {
 
     @Column(name = "payment_method_type")
     private String paymentMethodType;
+
+    @Column(name = "payer_email")
+    private String payerEmail;
 
     @Column(name = "last_four", length = 4)
     private String lastFour;
@@ -75,6 +78,7 @@ public class ChargeIntentJpaEntity {
         entity.paymentTokenRef = intent.paymentMethod().paymentTokenRef();
         entity.paymentMethodType = intent.paymentMethod().paymentMethodType();
         entity.lastFour = intent.paymentMethod().lastFour();
+        entity.payerEmail = intent.payerEmail();
         entity.createdAt = intent.createdAt();
         entity.apply(intent);
         return entity;
@@ -117,6 +121,10 @@ public class ChargeIntentJpaEntity {
 
     String getPaymentMethodType() {
         return paymentMethodType;
+    }
+
+    String getPayerEmail() {
+        return payerEmail;
     }
 
     String getLastFour() {

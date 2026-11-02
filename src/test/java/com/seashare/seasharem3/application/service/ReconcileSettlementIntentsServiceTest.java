@@ -5,6 +5,7 @@ import com.seashare.seasharem3.application.port.in.RegisterSettlementResultUseCa
 import com.seashare.seasharem3.application.port.out.SettlementGatewayPort;
 import com.seashare.seasharem3.application.port.out.SettlementIntentRepository;
 import com.seashare.seasharem3.application.port.out.SettlementRecordRepository;
+import com.seashare.seasharem3.application.port.out.SettlementCommandPublisher;
 import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.model.SettlementIntent;
 import com.seashare.seasharem3.domain.model.SettlementRecord;
@@ -42,25 +43,27 @@ class ReconcileSettlementIntentsServiceTest {
     private final SettlementGatewayPort settlementGatewayPort = mock(SettlementGatewayPort.class);
     private final RegisterSettlementResultUseCase registerSettlementResult = mock(RegisterSettlementResultUseCase.class);
     private final InMemoryFailureRecorder failureRecorder = new InMemoryFailureRecorder();
+    private final SettlementCommandPublisher settlementCommandPublisher = mock(SettlementCommandPublisher.class);
 
     private ReconcileSettlementIntentsService service;
 
     @BeforeEach
     void setUp() {
         service = new ReconcileSettlementIntentsService(settlementIntentRepository, settlementRecordRepository,
-                settlementGatewayPort, registerSettlementResult, failureRecorder);
+                settlementGatewayPort, registerSettlementResult, failureRecorder, settlementCommandPublisher);
         when(settlementIntentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
-    void recordsAFailureWhenTheIntentNeverReachedTheGateway() {
+    void republishesAnIntentThatNeverReachedTheGateway() {
         SettlementIntent intent = pendingIntent();
         when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
 
         service.reconcile();
 
-        verify(settlementIntentRepository).save(any(SettlementIntent.class));
-        assertThat(failureRecorder.failures()).hasSize(1);
+        verify(settlementCommandPublisher).publish(intent.id());
+        assertThat(failureRecorder.failures()).isEmpty();
+        verify(settlementIntentRepository, never()).save(any(SettlementIntent.class));
         verify(settlementGatewayPort, never()).fetch(any());
     }
 
@@ -88,6 +91,48 @@ class ReconcileSettlementIntentsServiceTest {
         service.reconcile();
 
         verify(settlementGatewayPort, never()).fetch(any());
+    }
+
+    @Test
+    void recordsFailureOnceWhenTheGatewayDoesNotKnowTheSettlement() {
+        SettlementIntent intent = pendingIntent().withExternalReference("st-404");
+        when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+        when(settlementGatewayPort.fetch("st-404")).thenReturn(Optional.empty());
+
+        service.reconcile();
+
+        when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(
+                intent.withStatusDetail("The payment gateway does not know the settlement st-404")));
+        service.reconcile();
+
+        verify(settlementGatewayPort, org.mockito.Mockito.times(2)).fetch("st-404");
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
+    @Test
+    void keepsTheIntentOpenWhenTheGatewayCommunicationFails() {
+        SettlementIntent intent = pendingIntent().withExternalReference("st-err");
+        when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+        when(settlementGatewayPort.fetch("st-err"))
+                .thenThrow(new com.seashare.seasharem3.domain.exception.GatewayCommunicationException("timeout"));
+
+        service.reconcile();
+
+        var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
+        verify(settlementIntentRepository).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(SettlementStatus.PENDING_SEND);
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
+    @Test
+    void recordsAFailureForAnIntentWithoutExternalReferenceThatIsNotPendingSend() {
+        SettlementIntent intent = pendingIntent().transitionTo(SettlementStatus.IN_PROCESS);
+        when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
+
+        service.reconcile();
+
+        verify(settlementCommandPublisher, never()).publish(any());
+        assertThat(failureRecorder.failures()).hasSize(1);
     }
 
     private SettlementIntent pendingIntent() {

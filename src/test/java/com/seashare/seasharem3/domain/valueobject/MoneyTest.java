@@ -20,9 +20,9 @@ class MoneyTest {
     }
 
     @Test
-    void roundsExcessPrecisionHalfUpTo4Decimals() {
-        assertThat(new Money(new BigDecimal("350000.12345")).amount())
-                .isEqualByComparingTo(new BigDecimal("350000.1235"));
+    void rejectsExcessPrecision() {
+        assertThatExceptionOfType(DomainException.class)
+                .isThrownBy(() -> new Money(new BigDecimal("350000.12345")));
     }
 
     @Test

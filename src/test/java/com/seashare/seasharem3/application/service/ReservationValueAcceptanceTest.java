@@ -140,11 +140,11 @@ class ReservationValueAcceptanceTest {
                 Arguments.of(new ExpectedBreakdown("300000.00", 4,
                         "900000.00", "60000.00", "30000.00", "990000.00")),
                 Arguments.of(new ExpectedBreakdown("437500.1234", 3,
-                        "1312500.37", "45000.00", "43750.01", "1401250.38")),
+                        "1312500.3702", "45000.0000", "43750.0123", "1401250.3825")),
                 Arguments.of(new ExpectedBreakdown("33333.3333", 7,
-                        "100000.00", "105000.00", "3333.33", "208333.33")),
+                        "99999.9999", "105000.0000", "3333.3333", "208333.3332")),
                 Arguments.of(new ExpectedBreakdown("0.0001", 1,
-                        "0.00", "15000.00", "0.00", "15000.00")));
+                        "0.0003", "15000.0000", "0.0000", "15000.0003")));
     }
 
     // --- CE-002: cálculo solo desde la información registrada ---

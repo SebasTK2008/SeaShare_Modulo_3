@@ -313,7 +313,7 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 | **D-UC11-09** | `created_by` permanece `null` | El contrato PUT no transporta identidad; seguridad fuera de alcance (general-plan §7.1) | Se documenta y se prueba en `FinancialParametersServiceTest` | **Aplicada** |
 | **D-UC11-10** | Fallo de `insert/flush` → `PARAMETERS_SAVE_FAILED` con causa; fallo de lectura previa o de commit → `INTERNAL_ERROR` registrado | El `try` se reduce a la persistencia; el commit ocurre fuera del método transaccional | Ambos son 500 `retryable`; el operador distingue por el log con correlación y la causa | **Aplicada** |
 | **D-UC11-11** | El mapper de persistencia es manual, no MapStruct | La entidad usa constructor protegido y factoría estática; el dominio es inmutable | Se registra la desviación de D-04; no se añaden setters ni builder | **Aplicada** |
-| **D-UC11-12** | Los VO normalizan a 4 decimales HALF_UP y el GET de UC11 devuelve los cuatro parámetros con 4 decimales; no se rechaza el exceso de precisión | contracts/README §3.1 define 4 decimales internos; la salida a 2 rompía `PUT → GET → PUT` | Pruebas en `PercentageTest`/`MoneyTest` y `UC11GetFinancialParametersContractTest`; round-trip en la prueba web de UC11 | **Aplicada** |
+| **D-UC11-12** | Los VO normalizan a 4 decimales HALF_UP y el GET de UC11 devuelve los cuatro parámetros con 4 decimales; el exceso de precisión (escala mayor que 4) se rechaza con la excepción de validación del dominio | contracts/README §3.1 define 4 decimales internos; la salida a 2 rompía `PUT → GET → PUT` | Pruebas en `PercentageTest`/`MoneyTest` y `UC11GetFinancialParametersContractTest`; round-trip en la prueba web de UC11 | **Aplicada** |
 | **D-UC11-13** | Inmutabilidad en BD mediante triggers de `UPDATE`, `DELETE` y `TRUNCATE` en `V1`; sin documento de privilegios ni `V2` | El propietario de la tabla no pierde privilegios por `REVOKE`; los roles son específicos del entorno | Se añaden triggers `BEFORE TRUNCATE` a `financial_parameters` y a las cuatro tablas `*_record`; se actualizan general-plan y `FlywaySchemaTest`; en desarrollo se recrea la base por el cambio de checksum de `V1` | **Aplicada** |
 | **D-UC11-14** | `HighSeasonCalendar` y `DynamicRatePolicy` viven en `PricingConfiguration` | B5: el calendario no debe pertenecer al wiring de Flota | Se mueven los beans; el despliegue único sigue exigiendo `seashare.fleet.base-url` | **Aplicada** |
 | **D-UC11-15** | Los errores de deserialización reportan el primer campo inválido; `errors[]` puede tener un elemento | Jackson se detiene en el primer fallo; se evita duplicar la validación con DTOs de `BigDecimal` | `GlobalExceptionHandler` extrae el path de `JacksonException` | **Aplicada** |
@@ -322,6 +322,8 @@ Registro de contradicciones detectadas al elaborar este plan. **No se resuelven 
 ## Implementation Phases
 
 > **Convención**: cada tarea `T0NN` es una unidad granular y verificable; su casilla (`[ ]`) es el mecanismo de seguimiento. Las dependencias se expresan mediante puertos, firmas y tablas, no mediante tareas externas.
+>
+> **Numeración**: `T009` y `T028` no existen en la secuencia (salta de `T008` a `T010` y de `T027` a `T029`); son huecos históricos de numeración, no tareas implícitas, y ninguna trazabilidad los referencia.
 
 ### Phase 1: Setup
 
@@ -335,62 +337,62 @@ Dependencias mínimas del proyecto para que UC11 y los demás casos de uso pueda
 
 Prerrequisitos transversales sin los cuales ninguna tarea de UC11 es testeable.
 
-- [x] **T004** · `DomainException` + `FinancialParametersValidationException` (`domain/exception`), base de `ProblemDetailsConfig` (T008). La excepción transporta el campo de dominio y la usa la validación del seguro negativo; el adaptador web la traduce a `errors[]` con la clave JSON. · M: `none` · P: `pending`
-- [x] **T005** · `FinancialParameters` (dominio, inmutable, `BigDecimal`, validación de rangos de RF-013, `equals`/`hashCode`). · M: `none` · P: `pending`
-- [x] **T006** · Pruebas unitarias de dominio: rangos válidos/inválidos, null, formatos (RF-013, RNF-002). · M: `none` · P: `pending`
+- [x] **T004** · `DomainException` + `FinancialParametersValidationException` (`domain/exception`), base de `ProblemDetailsConfig` (T008). La excepción transporta el campo de dominio y la usa la validación del seguro negativo; el adaptador web la traduce a `errors[]` con la clave JSON.
+- [x] **T005** · `FinancialParameters` (dominio, inmutable, `BigDecimal`, validación de rangos de RF-013, `equals`/`hashCode`).
+- [x] **T006** · Pruebas unitarias de dominio: rangos válidos/inválidos, null, formatos (RF-013, RNF-002).
 - [x] **T007** · `FinancialParametersRepository`, `SaveFinancialParametersUseCase`, `LoadFinancialParametersUseCase` y los puertos compartidos `FailureRecorderPort`, `OutboxPort`, `ReservationLockPort`, `ClockPort`, además de los VOs `Money`, `BoatId`, `ReservationId`, `OwnerId` y `Percentage`; publicar sus firmas por nombre.
-- [x] **T008** · `ProblemDetailsConfig` (RFC 9457, `contracts/README.md` §3.3) con mapeo `VALIDATION_ERROR` 400, `PARAMETERS_NOT_CONFIGURED` 404, `PARAMETERS_SAVE_FAILED` 500, `INTERNAL_ERROR` 500. · M: `none` · P: `pending`
+- [x] **T008** · `ProblemDetailsConfig` (RFC 9457, `contracts/README.md` §3.3) con mapeo `VALIDATION_ERROR` 400, `PARAMETERS_NOT_CONFIGURED` 404, `PARAMETERS_SAVE_FAILED` 500, `INTERNAL_ERROR` 500.
 - [x] **T046** · adaptador `OperationalFailurePersistenceAdapter` (`REQUIRES_NEW`, con `OperationalFailureJpaEntity`/`OperationalFailureJpaRepository`) y `OutboxPersistenceAdapter`, además de `OutboxRelayJob`; `operational_failure.reservation_id` nullable y sin FK, `payload_ref` referencial y procedimiento de reproceso.
 - [x] **T047** · pruebas de PostgreSQL/RabbitMQ para fallo aislado, outbox transaccional, relay, DLQ `<cola>.dlq`, lock único y reintentos idempotentes.
 
 ### Phase 3: US1 — Comisión de plataforma y tarifa de seguro (HU1, RF-001, RF-002, RNF-001/002, CE-001, CE-002, CE-004)
 
-- [x] **T010** · Test de contrato del `PUT` para los dos campos de US1: cuerpo válido → 200; string decimal aceptado (RNF-002). · M: `none` · P: `pending`
-- [x] **T011** · Prueba unitaria de `FinancialParametersService.save` con command de HU1 (Mockito sobre el puerto). · M: `none` · P: `pending`
-- [x] **T012** · `SaveFinancialParametersUseCase` + `FinancialParametersCommand` (los cuatro campos obligatorios, RNF-001). · M: `none` · P: `pending`
-- [x] **T013** · `FinancialParametersRepository` (out) — definido en T007; aquí se congelan sus métodos `findCurrent`/`findById`/`saveNewVersion` para consumidores RF-006 y para resolver versiones congeladas. · M: `none` · P: `pending`
-- [x] **T014** · `FinancialParametersJpaEntity` + `FinancialParametersJpaRepository` sobre la tabla **versionada** (`@Table(name = "financial_parameters")`, PK `id UUID`, `version_number` único; sin `UPDATE`). · M: `none` · P: `pending`
-- [x] **T015** · `FinancialParametersMapper` manual: dominio ↔ entidad, con mapeo D-UC11-04 (`platform_commission_percentage`→`commission_pct`…). **Desviación de D-04 registrada como D-UC11-11**: MapStruct exigiría setters/builder sobre una entidad inmutable. · M: `none` · P: `pending`
-- [x] **T016** · `FinancialParametersPersistenceAdapter` (out): `saveNewVersion` atómico (INSERT append-only; primera configuración = versión `1`, D-UC11-07) y degradación de errores a `PARAMETERS_SAVE_FAILED`. · M: `none` · P: `pending`
-- [x] **T017** · `FinancialParametersService.save`: valida → si los cuatro valores son **idénticos** a la versión vigente no crea versión nueva (idempotencia; devuelve la versión vigente) → si difieren, inserta una **versión nueva** en una transacción única → sin actualizaciones parciales ni `UPDATE` (RF-005, RF-011). · M: `none` · P: `pending`
-- [x] **T018** · `FinancialParametersController` (`PUT`) + `FinancialParametersRequest` (claves JSON de los contratos). · M: `none` · P: `pending`
-- [x] **T019** · Pruebas de integración del adaptador (Testcontainers): persistencia real de los dos campos + CHECK de BD (`FlywaySchemaTest.enforcesFinancialParametersRangeChecks`). · M: `none` · P: `pending`
+- [x] **T010** · Test de contrato del `PUT` para los dos campos de US1: cuerpo válido → 200; string decimal aceptado (RNF-002).
+- [x] **T011** · Prueba unitaria de `FinancialParametersService.save` con command de HU1 (Mockito sobre el puerto).
+- [x] **T012** · `SaveFinancialParametersUseCase` + `FinancialParametersCommand` (los cuatro campos obligatorios, RNF-001).
+- [x] **T013** · `FinancialParametersRepository` (out) — definido en T007; aquí se congelan sus métodos `findCurrent`/`findById`/`saveNewVersion` para consumidores RF-006 y para resolver versiones congeladas.
+- [x] **T014** · `FinancialParametersJpaEntity` + `FinancialParametersJpaRepository` sobre la tabla **versionada** (`@Table(name = "financial_parameters")`, PK `id UUID`, `version_number` único; sin `UPDATE`).
+- [x] **T015** · `FinancialParametersMapper` manual: dominio ↔ entidad, con mapeo D-UC11-04 (`platform_commission_percentage`→`commission_pct`…). **Desviación de D-04 registrada como D-UC11-11**: MapStruct exigiría setters/builder sobre una entidad inmutable.
+- [x] **T016** · `FinancialParametersPersistenceAdapter` (out): `saveNewVersion` atómico (INSERT append-only; primera configuración = versión `1`, D-UC11-07) y degradación de errores a `PARAMETERS_SAVE_FAILED`.
+- [x] **T017** · `FinancialParametersService.save`: valida → si los cuatro valores son **idénticos** a la versión vigente no crea versión nueva (idempotencia; devuelve la versión vigente) → si difieren, inserta una **versión nueva** en una transacción única → sin actualizaciones parciales ni `UPDATE` (RF-005, RF-011).
+- [x] **T018** · `FinancialParametersController` (`PUT`) + `FinancialParametersRequest` (claves JSON de los contratos).
+- [x] **T019** · Pruebas de integración del adaptador (Testcontainers): persistencia real de los dos campos + CHECK de BD (`FlywaySchemaTest.enforcesFinancialParametersRangeChecks`).
 
 ### Phase 4: US2 — Porcentajes de tarifa dinámica (HU2, RF-003, RF-004, RF-011, RF-013)
 
-- [x] **T020** · Pruebas de dominio para `weekendIncreasePct`/`highSeasonIncreasePct`: límites 0, 100 y fuera de rango (RF-013), cubiertas por `PercentageTest` y la validación de `Percentage`/`DomainException` en `FinancialParameters.create`; el formato no numérico pertenece al borde JSON (T024). · M: `none` · P: `pending`
-- [x] **T021** · Test de contrato: `PUT` con los 4 campos y un valor fuera de rango → `400 VALIDATION_ERROR` con detalle de campo y **sin persistencia** (CE-004). · M: `none` · P: `pending`
-- [x] **T022** · Prueba de integración del adaptador: cada guardado con contenido distinto crea una versión nueva conservando las anteriores (RF-005); guardado idéntico no crea versión; `UNIQUE(version_number)` ante concurrencia (`FinancialParametersConcurrencyIntegrationTest`). · M: `none` · P: `pending`
-- [x] **T023** · Completar `FinancialParametersRequest`/command con los dos porcentajes (si se añadieron por partes en HU1). · M: `none` · P: `pending`
-- [x] **T024** · Pruebas de RF-013 para formatos no numéricos en los cuatro campos: el formato se valida en el borde JSON, por lo que la cobertura vive en `UC11SaveFinancialParametersContractTest` y `UC11FinancialParametersWebIntegrationTest`; el dominio cubre rangos y el seguro negativo. · M: `none` · P: `pending`
-- [x] **T025** · Verificación de atomicidad en `FinancialParametersService` (RF-005): fallo de persistencia → no se reporta éxito. · M: `none` · P: `pending`
+- [x] **T020** · Pruebas de dominio para `weekendIncreasePct`/`highSeasonIncreasePct`: límites 0, 100 y fuera de rango (RF-013), cubiertas por `PercentageTest` y la validación de `Percentage`/`DomainException` en `FinancialParameters.create`; el formato no numérico pertenece al borde JSON (T024).
+- [x] **T021** · Test de contrato: `PUT` con los 4 campos y un valor fuera de rango → `400 VALIDATION_ERROR` con detalle de campo y **sin persistencia** (CE-004).
+- [x] **T022** · Prueba de integración del adaptador: cada guardado con contenido distinto crea una versión nueva conservando las anteriores (RF-005); guardado idéntico no crea versión; `UNIQUE(version_number)` ante concurrencia (`FinancialParametersConcurrencyIntegrationTest`).
+- [x] **T023** · Completar `FinancialParametersRequest`/command con los dos porcentajes (si se añadieron por partes en HU1).
+- [x] **T024** · Pruebas de RF-013 para formatos no numéricos en los cuatro campos: el formato se valida en el borde JSON, por lo que la cobertura vive en `UC11SaveFinancialParametersContractTest` y `UC11FinancialParametersWebIntegrationTest`; el dominio cubre rangos y el seguro negativo.
+- [x] **T025** · Verificación de atomicidad en `FinancialParametersService` (RF-005): fallo de persistencia → no se reporta éxito.
 
 ### Phase 5: US3 — Visualizar vigentes y datos de solo lectura (HU3, RF-009, RF-012, RF-006)
 
-- [x] **T026** · Test de contrato del `GET`: 200 con los 7 campos (`version_number` + 4 editables + `guarantee_deposit_rule` + `high_season_windows`) y strings decimales con 4 decimales para los parámetros (RF-009, RNF-002, A1). · M: `none` · P: `pending`
-- [x] **T027** · Test de contrato del `GET` sin fila configurada → `404 PARAMETERS_NOT_CONFIGURED` (HU3 escenario 2). · M: `none` · P: `pending`
+- [x] **T026** · Test de contrato del `GET`: 200 con los 7 campos (`version_number` + 4 editables + `guarantee_deposit_rule` + `high_season_windows`) y strings decimales con 4 decimales para los parámetros (RF-009, RNF-002, A1).
+- [x] **T027** · Test de contrato del `GET` sin fila configurada → `404 PARAMETERS_NOT_CONFIGURED` (HU3 escenario 2).
 - [x] **T029** · Consumir `HighSeasonCalendar.windowsForYear` de UC02 en `FinancialParametersService` para obtener las ventanas de temporada alta (RF-012). UC11 no implementa ni prueba el calendario.
-- [x] **T030** · `LoadFinancialParametersUseCase` + `FinancialParametersResult` (4 vigentes + 2 derivados, RF-009, RNF-001). · M: `none` · P: `pending`
-- [x] **T031** · `FinancialParametersService.load`: combina la **versión vigente** + ventanas del `HighSeasonCalendar` (T029) + regla del depósito; propaga `PARAMETERS_NOT_CONFIGURED`. · M: `none` · P: `pending`
-- [x] **T032** · `FinancialParametersController` (`GET`) + `FinancialParametersResponse` con las claves del contrato **incluida `version_number`**; los cuatro parámetros con 4 decimales (A1) y `high_season_windows` con el formato `MM-dd→MM-dd` / `semana-santa`. · M: `none` · P: `pending`
-- [x] **T033** · `FinancialParametersPersistenceAdapter.load` (lectura de la fila; vacío → `Optional.empty`). · M: `none` · P: `pending`
+- [x] **T030** · `LoadFinancialParametersUseCase` + `FinancialParametersResult` (4 vigentes + 2 derivados, RF-009, RNF-001).
+- [x] **T031** · `FinancialParametersService.load`: combina la **versión vigente** + ventanas del `HighSeasonCalendar` (T029) + regla del depósito; propaga `PARAMETERS_NOT_CONFIGURED`.
+- [x] **T032** · `FinancialParametersController` (`GET`) + `FinancialParametersResponse` con las claves del contrato **incluida `version_number`**; los cuatro parámetros con 4 decimales (A1) y `high_season_windows` con el formato `MM-dd→MM-dd` / `semana-santa`.
+- [x] **T033** · `FinancialParametersPersistenceAdapter.load` (lectura de la fila; vacío → `Optional.empty`).
 
 ### Phase 6: US4 — Guardar, cancelar y manejo de fallos (HU4, RF-005, RF-007, RF-010, RF-011, CE-001, CE-002, CE-004)
 
-- [x] **T034** · **`ce001_lectura_refleja_ultima_escritura`** (CE-001): `PUT` → `GET` devuelve lo persistido (`UC11FinancialParametersWebIntegrationTest`, Testcontainers). · M: `none` · P: `pending`
-- [x] **T035** · **`ce002_version_nueva_completa_sin_parciales`** (CE-002): `PUT` inválido no modifica la versión vigente; un `PUT` válido distinto crea una versión nueva conservando las anteriores; el adaptador solo escribe en `financial_parameters` (nunca `UPDATE`) (RF-007). Cubierto en `UC11FinancialParametersWebIntegrationTest` y `FinancialParametersConcurrencyIntegrationTest`. · M: `none` · P: `pending`
-- [x] **T036** · **`ce004_…`** (CE-004): sin endpoint de cancelación (la cancelación no genera petición, `README` §2); `PUT` inválido → 400 sin cambios (`UC11FinancialParametersWebIntegrationTest.ce004_invalidPutDoesNotPersist`). · M: `none` · P: `pending`
-- [x] **T037** · Prueba unitaria de `FinancialParametersService` ante repositorio que lanza excepción → `PARAMETERS_SAVE_FAILED` (RF-011). · M: `none` · P: `pending`
-- [x] **T038** · Prueba de integración: fallo real de BD por `UNIQUE(version_number)` en `FinancialParametersConcurrencyIntegrationTest` → 500 `PARAMETERS_SAVE_FAILED`, causa `DataIntegrityViolationException` y fila anterior intacta; los CHECK de rango se cubren en `FlywaySchemaTest`. · M: `none` · P: `pending`
-- [x] **T039** · Manejo del error no controlado → Problem Details `INTERNAL_ERROR` (catálogo §3.4). · M: `none` · P: `pending`
-- [x] **T040** · Revisión de transaccionalidad: una única transacción por `PUT`, asignación de `version_number` y `UNIQUE` ante concurrencia (RF-005, RNF-003), verificada con dos `save` reales en `FinancialParametersConcurrencyIntegrationTest`. · M: `none` · P: `pending`
-- [x] **T041** · Test de contrato del `PUT` completo con los cuatro campos (HU4, flujo feliz y 200). · M: `none` · P: `pending`
+- [x] **T034** · **`ce001_lectura_refleja_ultima_escritura`** (CE-001): `PUT` → `GET` devuelve lo persistido (`UC11FinancialParametersWebIntegrationTest`, Testcontainers).
+- [x] **T035** · **`ce002_version_nueva_completa_sin_parciales`** (CE-002): `PUT` inválido no modifica la versión vigente; un `PUT` válido distinto crea una versión nueva conservando las anteriores; el adaptador solo escribe en `financial_parameters` (nunca `UPDATE`) (RF-007). Cubierto en `UC11FinancialParametersWebIntegrationTest` y `FinancialParametersConcurrencyIntegrationTest`.
+- [x] **T036** · **`ce004_…`** (CE-004): sin endpoint de cancelación (la cancelación no genera petición, `README` §2); `PUT` inválido → 400 sin cambios (`UC11FinancialParametersWebIntegrationTest.ce004_invalidPutDoesNotPersist`).
+- [x] **T037** · Prueba unitaria de `FinancialParametersService` ante repositorio que lanza excepción → `PARAMETERS_SAVE_FAILED` (RF-011).
+- [x] **T038** · Prueba de integración: fallo real de BD por `UNIQUE(version_number)` en `FinancialParametersConcurrencyIntegrationTest` → 500 `PARAMETERS_SAVE_FAILED`, causa `DataIntegrityViolationException` y fila anterior intacta; los CHECK de rango se cubren en `FlywaySchemaTest`.
+- [x] **T039** · Manejo del error no controlado → Problem Details `INTERNAL_ERROR` (catálogo §3.4).
+- [x] **T040** · Revisión de transaccionalidad: una única transacción por `PUT`, asignación de `version_number` y `UNIQUE` ante concurrencia (RF-005, RNF-003), verificada con dos `save` reales en `FinancialParametersConcurrencyIntegrationTest`.
+- [x] **T041** · Test de contrato del `PUT` completo con los cuatro campos (HU4, flujo feliz y 200).
 
 ### Phase 7: Polish — **parcialmente compartido con Fase 7 (general)**
 
-- [x] **T042** · ArchUnit: `domain` sin Spring/JPA/Jackson; `application` sin JPA/MapStruct; controller no toca repositorios; entidad JPA no sale de `adapter/out/persistence`; **sin imports de repositorios UC01/UC02/UC04** (RF-007, alcance de datos). Regla específica en `Uc11ArchitectureTest` (servicio, controller y adaptador). · M: `none` · P: `pending`
+- [x] **T042** · ArchUnit: `domain` sin Spring/JPA/Jackson; `application` sin JPA/MapStruct; controller no toca repositorios; entidad JPA no sale de `adapter/out/persistence`; **sin imports de repositorios UC01/UC02/UC04** (RF-007, alcance de datos). Regla específica en `Uc11ArchitectureTest` (servicio, controller y adaptador).
 - [x] **T043** · revisar cobertura (dominio ≥90 %, aplicación ≥80 % [CONV]); `jacoco:check` incluye `FinancialParameters` y `FinancialParametersService`, y `FinancialParametersTest` cubre `equals`/`hashCode`/`toString`.
-- [x] **T044** · Documentación/contratos: verificar que los contratos UC11 y el catálogo `contracts/README.md` §3.4 quedan alineados (códigos, rutas, `version_number` en respuestas y ausencia de 401/403), que el ejemplo «15-dic a 15-ene» de `UC11-obtener-parametros-financieros.md` quedó corregido a 15-nov a 15-ene y con formato de ventanas por tokens (D-UC11-01), y que **CE-003 queda como verificación documental** (exclusividad declarada del Administrador Financiero sin mecanismos de control de acceso; seguridad fuera de alcance, general-plan §7.1). · M: `none` · P: `pending`
+- [x] **T044** · Documentación/contratos: verificar que los contratos UC11 y el catálogo `contracts/README.md` §3.4 quedan alineados (códigos, rutas, `version_number` en respuestas y ausencia de 401/403), que el ejemplo «15-dic a 15-ene» de `UC11-obtener-parametros-financieros.md` quedó corregido a 15-nov a 15-ene y con formato de ventanas por tokens (D-UC11-01), y que **CE-003 queda como verificación documental** (exclusividad declarada del Administrador Financiero sin mecanismos de control de acceso; seguridad fuera de alcance, general-plan §7.1).
 - [x] **T045** · `./mvnw clean verify` final + ejecución de tests de aceptación CE-001…CE-004.
 
 ## Dependencies & Execution Order

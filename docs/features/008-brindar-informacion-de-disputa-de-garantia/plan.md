@@ -31,7 +31,7 @@ La versión anterior puede recuperarse con `git show b92b0da:docs/features/008-b
 | **ACT-07** | `Implementation Phases` y `D-UC08-01..05` | Todas las tareas en `[ ]`; D-UC08-02 «Decidida», D-UC08-03 «Aplicada» → T001-T003, T007 y T008a hechas; T004-T006 parciales; T008-T018 pendientes; estados corregidos | Registrar el avance real sin declarar cerrada la implementación. |
 | **ACT-08** | `Estrategia de testing`, `Notes` y `Checklist de auto-revisión` | Nombres de pruebas que no existen y cobertura ≥90/80 sin puerta → pruebas existentes y pendientes; ausencia de puerta JaCoCo de UC08; checklist documental revisado | Cerrar la revisión documental. |
 | **ACT-09** | `Estado actual`, `Firmas referenciadas`, regla 8, trazabilidad, `D-UC08-06`, T008/T009/T016 y `ce005` | `dispute_status` pendiente de decidir → no se pobla; `dispute_event_log` es la fuente única; `deposit_disposition` conserva `dispute_id`; guarda de disposición y lock antes de delegar | Cerrar la decisión de T008/T009 y dejar definida la idempotencia del desenlace. |
-| **ACT-10** | `Estado actual`, `Project Structure`, `Estrategia de testing`, `D-UC08-01/03/06`, `Implementation Phases`, `Notes` y `Checklist de auto-revisión` | Ingesta pendiente y pruebas planificadas → ingesta implementada y probada; T004-T018 cerradas; nombres reales de pruebas; suite completa con 1395 tests, 0 fallos y 0 errores | Cerrar el plan tras la implementación de UC08. |
+| **ACT-10** | `Estado actual`, `Project Structure`, `Estrategia de testing`, `D-UC08-01/03/06`, `Implementation Phases`, `Notes` y `Checklist de auto-revisión` | Ingesta pendiente y pruebas planificadas → ingesta implementada y probada; T004-T018 cerradas; nombres reales de pruebas; suite completa con 1600 tests, 0 fallos y 0 errores | Cerrar el plan tras la implementación de UC08. |
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea **[ACT-06] [ACT-09]**
 
@@ -68,7 +68,7 @@ La versión anterior puede recuperarse con `git show b92b0da:docs/features/008-b
 **Constraints**: `BigDecimal` a 4 decimales; importes solo desde registros internos; `PENDING` no mueve dinero; finales son tratamientos del 100 %; un depósito tiene un solo desenlace; sin respuesta al productor; sin sub-resultados parciales ni cron de 24 horas [SPEC RF-004..RF-010].  
 **Scale/Scope**: un consumidor AMQP, dos tablas propietarias, dos puertos consumidos de UC09/UC10, 10 RF + RF-009A + 3 RNF + 6 CE + 1 HU [SPEC 08]. **[ACT-02]**
 
-**Estado actual de UC08**: UC08 está implementado y verificado. El desenlace del depósito está en uso: `OpenDepositTrackingService` (bajo `ReservationLockPort`, creación idempotente en `HELD` y *compare-and-set* a `REFUND_REQUESTED`/`SETTLEMENT_REQUESTED`), `DepositDisposition`, su persistencia JPA en `infrastructure/adapter/out/persistence/deposit/` y el wiring `DepositConfiguration`. UC09 invoca el puerto para cualquier reembolso y UC10 solo para `DISPUTE_COMPLETED`; UC07 aún no lo invoca. Las tablas `deposit_disposition` y `dispute_event_log`, la cola `finance.guarantee-dispute.v1` con su DLQ y la política compartida de ack/nack/reintentos existen. La ingesta de disputas está implementada: `DisputeEvent` con reglas canónicas; `DisputeInformationService` con inserción idempotente en `dispute_event_log`, `processed_at`, guarda de `deposit_disposition` bajo `ReservationLockPort` y delegación en UC09/UC10; `DisputeNotificationListener` con DTO/mapper; persistencia JPA de `dispute_event_log`; y pruebas de dominio, servicio, contrato, integración, aceptación y arquitectura. `.\mvnw.cmd verify` ejecutó 1395 tests con 0 fallos y 0 errores; la puerta JaCoCo pasó. La columna `deposit_disposition.dispute_status` permanece nullable y reservada: no se pobla desde el evento; el estado canónico se lee de `dispute_event_log` (D-UC08-06). **[ACT-03] [ACT-09] [ACT-10]**
+**Estado actual de UC08**: UC08 está implementado y verificado. El desenlace del depósito está en uso: `OpenDepositTrackingService` (bajo `ReservationLockPort`, creación idempotente en `HELD` y *compare-and-set* a `REFUND_REQUESTED`/`SETTLEMENT_REQUESTED`), `DepositDisposition`, su persistencia JPA en `infrastructure/adapter/out/persistence/deposit/` y el wiring `DepositConfiguration`. UC09 invoca el puerto para cualquier reembolso, UC10 solo para `DISPUTE_COMPLETED` y UC07 al registrar el estado `COMPLETED` (`HandleReservationStatusService` abre el seguimiento del depósito en `HELD`). Las tablas `deposit_disposition` y `dispute_event_log`, la cola `finance.guarantee-dispute.v1` con su DLQ y la política compartida de ack/nack/reintentos existen. La ingesta de disputas está implementada: `DisputeEvent` con reglas canónicas; `DisputeInformationService` con inserción idempotente en `dispute_event_log`, `processed_at`, guarda de `deposit_disposition` bajo `ReservationLockPort` y delegación en UC09/UC10; `DisputeNotificationListener` con DTO/mapper; persistencia JPA de `dispute_event_log`; y pruebas de dominio, servicio, contrato, integración, aceptación y arquitectura. `.\mvnw.cmd verify` ejecutó 1600 tests con 0 fallos y 0 errores; la puerta JaCoCo pasó. La columna `deposit_disposition.dispute_status` permanece nullable y reservada: no se pobla desde el evento; el estado canónico se lee de `dispute_event_log` (D-UC08-06). **[ACT-03] [ACT-09] [ACT-10]**
 
 ## Project Structure
 
@@ -212,7 +212,7 @@ Respuesta: ninguna; ack para errores no reintentables, nack/DLQ para fallas tran
 
 ## Estrategia de testing **[ACT-08] [ACT-10]**
 
-Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %. La puerta JaCoCo del `pom.xml` (0.8.15) todavía no incluye clases de UC08; hasta que se añadan, la cobertura de UC08 no se exige automáticamente. La suite completa ejecutó 1395 tests con 0 fallos y 0 errores; la puerta JaCoCo pasó.
+Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %. La puerta JaCoCo del `pom.xml` (0.8.15) ya incluye las clases de UC08 (`DisputeInformationService`, `OpenDepositTrackingService`); hasta que se añadan, la cobertura de UC08 no se exige automáticamente. La suite completa ejecutó 1600 tests con 0 fallos y 0 errores; la puerta JaCoCo pasó.
 
 | Nivel | Cobertura | Ubicación | Estado |
 |---|---|---|---|
@@ -252,11 +252,11 @@ Registro de las decisiones de diseño de este plan; los `D-xx` sin prefijo `UC08
 
 ## Implementation Phases **[ACT-07] [ACT-09] [ACT-10]**
 
-> **Actualización 2026-10-30 [ACT-07]**: se marcan como hechas T001, T002, T003, T007 y T008a; T004, T005 y T006 quedan parciales; T008–T018 siguen pendientes. T009 se reescribe para reflejar que UC09/UC10 consultan los registros internos y aplican el CAS.
+> **Actualización 2026-10-30 [ACT-07]** (estado superado por [ACT-10]): se marcaron como hechas T001, T002, T003, T007 y T008a; T004, T005 y T006 quedaron parciales en ese momento. T009 se reescribe para reflejar que UC09/UC10 consultan los registros internos y aplican el CAS.
 
 > **Actualización 2026-10-30 [ACT-09]**: T008/T009 incorporan `dispute_event_log` como fuente única, `processed_at`, la guarda de `deposit_disposition` y el lock por reserva; T016/`ce005` cubren la idempotencia del desenlace.
 
-> **Actualización 2026-10-30 [ACT-10]**: implementación cerrada; T004–T018 completadas y verificadas con `.\mvnw.cmd verify` (1395 tests, 0 fallos, 0 errores; JaCoCo correcto).
+> **Actualización 2026-10-30 [ACT-10]**: implementación cerrada; T004–T018 completadas y verificadas con `.\mvnw.cmd verify` (1600 tests, 0 fallos, 0 errores; JaCoCo correcto).
 
 ### Phase 1: Setup — Compartido
 
@@ -297,7 +297,7 @@ UC08 consume las firmas publicadas por UC09/UC10 y publica `OpenDepositTrackingU
 
 ## Notes **[ACT-08] [ACT-10]**
 
-No modificar `pom.xml`, `general-plan.md`, SPEC, contratos ni planes de UC07/UC09/UC10/UC11. No implementar montos desde Reservas, operaciones parciales, cron de 24 horas ni respuesta de negocio al productor. La actualización del 2026-10-30 se registra en [Actualizaciones del plan](#actualizaciones-del-plan); el plan original del 2026-10-09 y la revisión del 2026-10-29 permanecen en el historial de Git (commits `e2b3970` y `b92b0da`). La implementación se cerró el 2026-10-30 con 1395 tests, 0 fallos y 0 errores. **[ACT-08] [ACT-10]**
+No modificar `pom.xml`, `general-plan.md`, SPEC, contratos ni planes de UC07/UC09/UC10/UC11. No implementar montos desde Reservas, operaciones parciales, cron de 24 horas ni respuesta de negocio al productor. La actualización del 2026-10-30 se registra en [Actualizaciones del plan](#actualizaciones-del-plan); el plan original del 2026-10-09 y la revisión del 2026-10-29 permanecen en el historial de Git (commits `e2b3970` y `b92b0da`). La implementación se cerró el 2026-10-30 con 1600 tests, 0 fallos y 0 errores. **[ACT-08] [ACT-10]**
 
 ## Checklist de auto-revisión **[ACT-08] [ACT-10]**
 
@@ -307,4 +307,4 @@ No modificar `pom.xml`, `general-plan.md`, SPEC, contratos ni planes de UC07/UC0
 - [x] Cada RF/RNF/CE/HU tiene componente, tarea y prueba.
 - [x] Ack/nack, DLQ, idempotencia y exclusión mutua documentados.
 - [x] Sin REST, jobs, montos externos ni migraciones propias (migración inicial única, general-plan D-31).
-- [x] Implementación cerrada con 1395 tests, 0 fallos y 0 errores (ver ACT-10).
+- [x] Implementación cerrada con 1600 tests, 0 fallos y 0 errores (ver ACT-10).

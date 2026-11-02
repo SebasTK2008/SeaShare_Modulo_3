@@ -11,6 +11,13 @@ import java.util.UUID;
  */
 public interface FinancialParametersRepository {
 
+    /**
+     * Serializa la asignación de version_number dentro de la transacción del llamador.
+     * Los adaptadores no transaccionales pueden conservar la implementación vacía.
+     */
+    default void lockVersionAssignment() {
+    }
+
     Optional<FinancialParameters> findCurrent();
 
     Optional<FinancialParameters> findById(UUID parametersId);

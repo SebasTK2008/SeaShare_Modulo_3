@@ -53,7 +53,7 @@ UC03 corresponde a la **fase 5** de la hoja de ruta [general-plan §10]: consume
 - **Núcleo compartido ya implementado**: `DomainException`, `FailureRecorderPort` + adaptador de `operational_failure`, `ReservationId`, `OwnerId`, `BoatId`, `BaseRate`, `Money`, `ReservationValue`, `ReservationLockPort`; topología AMQP `RabbitTopologyConfig`/`AmqpNames` (exchange `seashare.reservations`, cola `finance.reservation-info.v1`, DLQ `finance.reservation-info.v1.dlq`), `AmqpListenerFailurePolicy` y `OperationalFailureMessageRecoverer`; configuración de reintentos en `application.properties`; pruebas AMQP compartidas.
 - **UC02 ya implementado**: `ProvideBaseRateUseCase`, `ProvideBaseRateCommand` (incluye overload de 2 args), `BaseRateResult`, `BaseRate`, `BoatId`, `BaseRateException` (con `PARAMETERS_UNAVAILABLE` transitorio), `ProvideBaseRateService`, adaptador `FleetRateRestClient` y configuración de Flota.
 - **Implementado en esta rama**: `RegisterReservationInformationService` (aplicación), `ReservationInfoListener` y `ReservationInfoMessage`/`ReservationInfoMessageMapper` (mensajería), `ReservationInformationValidationException`/`BaseRateUnavailableException`, validación estricta de enteros en el listener, y las pruebas `RegisterReservationInformationServiceTest`, `ReservationInfoListenerContractTest`, `ReservationInfoListenerRetryPolicyTest`, `ReservationInformationAcceptanceTest`, `ReservationInformationPersistenceAcceptanceTest`, `ReservationInformationSourceIntegrityAcceptanceTest`, `ReservationInformationPersistenceAdapterTest` y `Uc03ArchitectureTest`. La firma vigente del puerto es `void register(RegisterReservationInformationCommand command)`.
-- **Pendiente de verificación**: T026 (`./mvnw clean verify` con Docker para ejecutar CE-001 y la política de reintentos/DLQ; en este entorno Docker no está disponible y esas pruebas se omiten). T025 queda cubierto por esta actualización del plan.
+- **Verificación de T026**: `.\mvnw.cmd verify` se ejecutó sobre el repositorio completo (**1600 tests, 0 fallos, 0 errores, 84 omitidos**); las pruebas que requieren Docker (CE-001 y la política de reintentos/DLQ: `ReservationInformationPersistenceAcceptanceTest`, `ReservationInfoListenerRetryPolicyTest`) se **omiten** en este entorno y quedan como *no verificables* aquí, no como pendientes de desarrollo. T025 queda cubierto por esta actualización del plan.
 - **Alcance de la implementación**: la topología y la política de fallos AMQP son compartidas; `ReservationInfoListener` reutiliza `RabbitTopologyConfig`/`AmqpNames`/`AmqpListenerFailurePolicy`/`OperationalFailureMessageRecoverer` (no se crearon `RabbitMqProperties` ni `ReservationInfoRabbitConfig`). El adaptador de persistencia existente mapea manualmente (no hay `ReservationInformationMapper` de MapStruct), su *upsert* es lectura-modificación-escritura transaccional (no `INSERT … ON CONFLICT`) y adquiere el bloqueo asesor por reserva al inicio de la transacción (D-15).
 
 ## Project Structure
@@ -110,7 +110,7 @@ src/main/java/com/seashare/seasharem3/
     │   └── dto/
     │       ├── ReservationInfoMessage.java          # T007 [SPEC RNF-001; claves snake_case del contrato]
     │       └── ReservationInfoMessageMapper.java    # T007 [CONV: mensaje → command]
-    ├── adapter/out/persistence/
+    ├── adapter/out/persistence/reservation/
     │   ├── ReservationInformationJpaEntity.java     # T015 [general-plan D-04; mapeo manual]
     │   ├── ReservationInformationJpaRepository.java # T015 [CONV]
     │   └── ReservationInformationPersistenceAdapter.java  # T015 [upsert con invalidación; lock asesor D-15]
@@ -134,7 +134,7 @@ src/test/java/com/seashare/seasharem3/
 ├── infrastructure/adapter/in/messaging/
 │   ├── ReservationInfoListenerContractTest.java     # T012 (mensaje vs contrato UC03)
 │   └── ReservationInfoListenerRetryPolicyTest.java  # T020 (ack/nack/DLQ, Testcontainers RabbitMQ)
-├── infrastructure/adapter/out/persistence/
+├── infrastructure/adapter/out/persistence/reservation/
 │   ├── ReservationInformationPersistenceAdapterIntegrationTest.java  # T016 (Testcontainers PostgreSQL)
 │   └── ReservationInformationPersistenceAdapterTest.java  # bloqueo asesor D-15 (unitario)
 ├── integration/

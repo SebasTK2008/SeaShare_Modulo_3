@@ -35,7 +35,8 @@ public final class ChargePersistenceMapper {
                 new Money(entity.getAmount()),
                 new PaymentMethodReference(entity.getPaymentTokenRef(), entity.getPaymentMethodType(),
                         entity.getLastFour()),
-                entity.getExternalReference(), entity.getStatusDetail(), entity.getCreatedAt());
+                entity.getExternalReference(), entity.getStatusDetail(), entity.getPayerEmail(),
+                entity.getCreatedAt());
     }
 
     public static ChargeRecordJpaEntity toEntity(ChargeRecord record) {

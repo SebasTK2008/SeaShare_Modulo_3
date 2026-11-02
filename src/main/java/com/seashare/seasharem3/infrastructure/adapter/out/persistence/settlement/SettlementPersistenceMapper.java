@@ -8,6 +8,7 @@ import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.OwnerId;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
+import com.seashare.seasharem3.domain.valueobject.SettlementCapability;
 import com.seashare.seasharem3.domain.valueobject.SettlementScope;
 import com.seashare.seasharem3.domain.valueobject.SettlementTrigger;
 
@@ -27,7 +28,9 @@ public final class SettlementPersistenceMapper {
                 new Money(entity.getAmount()), new Money(entity.getCommissionAmount()),
                 new Money(entity.getDepositAmount()), entity.getChargeIntentId(),
                 new IdempotencyKey(entity.getIdempotencyKey()), entity.statusValue(), entity.getStatusDetail(),
-                entity.getExternalReference(), entity.getDisputeId(), entity.getCreatedAt());
+                entity.getExternalReference(), entity.getDisputeId(),
+                SettlementCapability.valueOf(entity.getGatewayCapability()),
+                entity.getCreatedAt());
     }
 
     public static SettlementRecordJpaEntity toEntity(SettlementRecord record) {

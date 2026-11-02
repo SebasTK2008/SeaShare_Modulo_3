@@ -4,6 +4,7 @@ import com.seashare.seasharem3.domain.exception.DomainException;
 import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
+import com.seashare.seasharem3.domain.valueobject.SettlementCapability;
 import com.seashare.seasharem3.domain.valueobject.SettlementScope;
 import com.seashare.seasharem3.domain.valueobject.SettlementStatus;
 import com.seashare.seasharem3.domain.valueobject.SettlementTrigger;
@@ -34,8 +35,7 @@ public final class SettlementIntent {
             SettlementStatus.COMPLETED, EnumSet.noneOf(SettlementStatus.class),
             SettlementStatus.REJECTED, EnumSet.noneOf(SettlementStatus.class),
             SettlementStatus.CANCELLED, EnumSet.noneOf(SettlementStatus.class),
-            SettlementStatus.EXPIRED, EnumSet.noneOf(SettlementStatus.class),
-            SettlementStatus.FAILED, EnumSet.noneOf(SettlementStatus.class));
+            SettlementStatus.EXPIRED, EnumSet.noneOf(SettlementStatus.class));
 
     private final UUID id;
     private final ReservationId reservationId;
@@ -50,12 +50,13 @@ public final class SettlementIntent {
     private final String statusDetail;
     private final String externalReference;
     private final UUID disputeId;
+    private final SettlementCapability capability;
     private final Instant createdAt;
 
     private SettlementIntent(UUID id, ReservationId reservationId, SettlementTrigger trigger, SettlementScope scope,
             Money amount, Money commissionAmount, Money depositAmount, UUID chargeIntentId,
             IdempotencyKey idempotencyKey, SettlementStatus status, String statusDetail, String externalReference,
-            UUID disputeId, Instant createdAt) {
+            UUID disputeId, SettlementCapability capability, Instant createdAt) {
         this.id = Objects.requireNonNull(id, "id");
         this.reservationId = Objects.requireNonNull(reservationId, "reservationId");
         this.trigger = Objects.requireNonNull(trigger, "trigger");
@@ -69,6 +70,7 @@ public final class SettlementIntent {
         this.statusDetail = statusDetail;
         this.externalReference = externalReference;
         this.disputeId = disputeId;
+        this.capability = Objects.requireNonNull(capability, "capability");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         amount.requirePositive();
         commissionAmount.requireNonNegative();
@@ -78,16 +80,34 @@ public final class SettlementIntent {
     public static SettlementIntent create(UUID id, ReservationId reservationId, SettlementTrigger trigger,
             SettlementScope scope, Money amount, Money commissionAmount, Money depositAmount, UUID chargeIntentId,
             IdempotencyKey idempotencyKey, UUID disputeId, Instant createdAt) {
+        return create(id, reservationId, trigger, scope, amount, commissionAmount, depositAmount, chargeIntentId,
+                idempotencyKey, disputeId, SettlementCapability.ADVANCED_PAYMENTS_DISBURSEMENT, createdAt);
+    }
+
+    public static SettlementIntent create(UUID id, ReservationId reservationId, SettlementTrigger trigger,
+            SettlementScope scope, Money amount, Money commissionAmount, Money depositAmount, UUID chargeIntentId,
+            IdempotencyKey idempotencyKey, UUID disputeId, SettlementCapability capability, Instant createdAt) {
         return new SettlementIntent(id, reservationId, trigger, scope, amount, commissionAmount, depositAmount,
-                chargeIntentId, idempotencyKey, SettlementStatus.PENDING_SEND, null, null, disputeId, createdAt);
+                chargeIntentId, idempotencyKey, SettlementStatus.PENDING_SEND, null, null, disputeId, capability,
+                createdAt);
     }
 
     public static SettlementIntent restore(UUID id, ReservationId reservationId, SettlementTrigger trigger,
             SettlementScope scope, Money amount, Money commissionAmount, Money depositAmount, UUID chargeIntentId,
             IdempotencyKey idempotencyKey, SettlementStatus status, String statusDetail, String externalReference,
             UUID disputeId, Instant createdAt) {
+        return restore(id, reservationId, trigger, scope, amount, commissionAmount, depositAmount, chargeIntentId,
+                idempotencyKey, status, statusDetail, externalReference, disputeId,
+                SettlementCapability.ADVANCED_PAYMENTS_DISBURSEMENT, createdAt);
+    }
+
+    public static SettlementIntent restore(UUID id, ReservationId reservationId, SettlementTrigger trigger,
+            SettlementScope scope, Money amount, Money commissionAmount, Money depositAmount, UUID chargeIntentId,
+            IdempotencyKey idempotencyKey, SettlementStatus status, String statusDetail, String externalReference,
+            UUID disputeId, SettlementCapability capability, Instant createdAt) {
         return new SettlementIntent(id, reservationId, trigger, scope, amount, commissionAmount, depositAmount,
-                chargeIntentId, idempotencyKey, status, statusDetail, externalReference, disputeId, createdAt);
+                chargeIntentId, idempotencyKey, status, statusDetail, externalReference, disputeId, capability,
+                createdAt);
     }
 
     public SettlementIntent transitionTo(SettlementStatus next) {
@@ -99,7 +119,8 @@ public final class SettlementIntent {
             throw new DomainException("SettlementIntent transition not allowed: " + status + " -> " + next);
         }
         return new SettlementIntent(id, reservationId, trigger, scope, amount, commissionAmount, depositAmount,
-                chargeIntentId, idempotencyKey, next, statusDetail, externalReference, disputeId, createdAt);
+                chargeIntentId, idempotencyKey, next, statusDetail, externalReference, disputeId, capability,
+                createdAt);
     }
 
     public SettlementIntent withExternalReference(String reference) {
@@ -108,12 +129,12 @@ public final class SettlementIntent {
             throw new DomainException("SettlementIntent already has an external_reference: " + externalReference);
         }
         return new SettlementIntent(id, reservationId, trigger, scope, amount, commissionAmount, depositAmount,
-                chargeIntentId, idempotencyKey, status, statusDetail, reference, disputeId, createdAt);
+                chargeIntentId, idempotencyKey, status, statusDetail, reference, disputeId, capability, createdAt);
     }
 
     public SettlementIntent withStatusDetail(String detail) {
         return new SettlementIntent(id, reservationId, trigger, scope, amount, commissionAmount, depositAmount,
-                chargeIntentId, idempotencyKey, status, detail, externalReference, disputeId, createdAt);
+                chargeIntentId, idempotencyKey, status, detail, externalReference, disputeId, capability, createdAt);
     }
 
     public boolean isTerminal() {
@@ -175,6 +196,10 @@ public final class SettlementIntent {
 
     public UUID disputeId() {
         return disputeId;
+    }
+
+    public SettlementCapability capability() {
+        return capability;
     }
 
     public Instant createdAt() {

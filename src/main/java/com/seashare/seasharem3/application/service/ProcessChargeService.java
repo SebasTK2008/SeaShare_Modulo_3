@@ -97,6 +97,7 @@ public class ProcessChargeService implements ProcessChargeUseCase {
                 information.totalAmount(),
                 new PaymentMethodReference(paymentTokenRef, command.paymentMethodType(),
                         lastFour(command.paymentMetadata())),
+                payerEmail(command.paymentMetadata()),
                 instantClock.instant());
 
         chargeIntentRepository.save(intent);

@@ -56,9 +56,27 @@ Un valor de `period` que no coincida con el formato de `periodicity` recibido de
 `200 OK` — `Content-Type: text/csv`
 Header sugerido: `Content-Disposition: attachment; filename="informe_financiero_2026-10.csv"`
 
+Columnas, en este orden (las métricas agregadas son las mismas del `GET /api/v1/financial-report`, [SPEC HU3, RF-010]):
+
+| # | Columna | Origen |
+|---|---|---|
+| 1 | `Fecha de Generacion` | instante de la exportación |
+| 2 | `Alcance` | `scope` declarado |
+| 3 | `Periodicidad` | `periodicity` |
+| 4 | `Periodo` | `period` |
+| 5 | `Neto Generado` | métrica agregada |
+| 6 | `Total Cobros` | métrica agregada |
+| 7 | `Total Reembolsos` | métrica agregada |
+| 8 | `Total Dispersiones` | métrica agregada |
+| 9 | `Total Comisiones` | métrica agregada |
+| 10-13 | `Count Charge`, `Count Refund`, `Count Settlement`, `Count Commission` | conteos por tipo |
+| 14 | `Periodo Anterior` | período de comparación |
+| 15 | `Variacion Absoluta` | [SPEC RF-010] |
+| 16 | `Variacion Porcentual` | [SPEC RF-010]; vacío si el período anterior es cero |
+
 ```csv
-Fecha de Generacion,Alcance,Periodicidad,Periodo,Neto Generado,Total Cobros,Total Reembolsos,Total Dispersiones,Total Comisiones
-2026-11-01T10:00:00Z,PLATFORM,MONTHLY,2026-10,150000.00,1150000.00,100000.00,900000.00,135000.00
+Fecha de Generacion,Alcance,Periodicidad,Periodo,Neto Generado,Total Cobros,Total Reembolsos,Total Dispersiones,Total Comisiones,Count Charge,Count Refund,Count Settlement,Count Commission,Periodo Anterior,Variacion Absoluta,Variacion Porcentual
+2026-11-01T10:00:00Z,PLATFORM,MONTHLY,2026-10,150000.00,1150000.00,100000.00,900000.00,135000.00,1,1,1,1,2026-09,20000.00,15.38
 ```
 
 ## 5. Respuestas de error
