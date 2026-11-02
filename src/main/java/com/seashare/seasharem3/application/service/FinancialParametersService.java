@@ -63,6 +63,7 @@ public class FinancialParametersService implements SaveFinancialParametersUseCas
     @Override
     @Transactional
     public SaveFinancialParametersResult save(FinancialParametersCommand command) {
+        repository.lockVersionAssignment();
         Optional<FinancialParameters> current = repository.findCurrent();
 
         // Idempotencia: si los cuatro valores son idénticos a la versión vigente, no crear versión nueva (D-UC11-03).
@@ -155,4 +156,3 @@ public class FinancialParametersService implements SaveFinancialParametersUseCas
                 window.endInclusive().getDayOfMonth());
     }
 }
-

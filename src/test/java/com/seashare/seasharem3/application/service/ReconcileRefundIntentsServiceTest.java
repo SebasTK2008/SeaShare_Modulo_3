@@ -6,6 +6,7 @@ import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
 import com.seashare.seasharem3.application.port.out.RefundGatewayPort;
 import com.seashare.seasharem3.application.port.out.RefundIntentRepository;
 import com.seashare.seasharem3.application.port.out.RefundRecordRepository;
+import com.seashare.seasharem3.application.port.out.RefundCommandPublisher;
 import com.seashare.seasharem3.domain.model.ChargeIntent;
 import com.seashare.seasharem3.domain.model.RefundIntent;
 import com.seashare.seasharem3.domain.model.RefundRecord;
@@ -45,6 +46,7 @@ class ReconcileRefundIntentsServiceTest {
     private final RefundGatewayPort refundGatewayPort = mock(RefundGatewayPort.class);
     private final RegisterRefundResultUseCase registerRefundResult = mock(RegisterRefundResultUseCase.class);
     private final InMemoryFailureRecorder failureRecorder = new InMemoryFailureRecorder();
+    private final RefundCommandPublisher refundCommandPublisher = mock(RefundCommandPublisher.class);
 
     private ReconcileRefundIntentsService service;
     private ChargeIntent charge;
@@ -52,21 +54,23 @@ class ReconcileRefundIntentsServiceTest {
     @BeforeEach
     void setUp() {
         service = new ReconcileRefundIntentsService(refundIntentRepository, refundRecordRepository,
-                chargeIntentRepository, refundGatewayPort, registerRefundResult, failureRecorder);
+                chargeIntentRepository, refundGatewayPort, registerRefundResult, failureRecorder,
+                refundCommandPublisher);
         charge = ChargeFixtures.capturedIntent(RESERVATION, "mp-payment-1");
         when(chargeIntentRepository.findById(charge.id())).thenReturn(Optional.of(charge));
         when(refundIntentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
-    void recordsAFailureWhenTheIntentNeverReachedTheGateway() {
+    void republishesAnIntentThatNeverReachedTheGateway() {
         RefundIntent intent = pendingIntent();
         when(refundIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
 
         service.reconcile();
 
-        verify(refundIntentRepository).save(any(RefundIntent.class));
-        assertThat(failureRecorder.failures()).hasSize(1);
+        verify(refundCommandPublisher).publish(intent.id());
+        assertThat(failureRecorder.failures()).isEmpty();
+        verify(refundIntentRepository, never()).save(any(RefundIntent.class));
         verify(refundGatewayPort, never()).fetchRefund(any(), any());
     }
 

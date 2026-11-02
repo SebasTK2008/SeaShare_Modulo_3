@@ -3,8 +3,8 @@
 -- Contiene TODO el esquema en una sola migración: las 15 tablas, sus CHECK/UNIQUE/FK,
 -- índices, la vista v_financial_records y los triggers anti-mutación.
 -- Política de migraciones: general-plan §4.2 y D-31 — única migración inicial; los cambios
--- posteriores se añaden como V2__… en orden cronológico y append-only. No existen migraciones
--- por caso de uso ni por fase.
+-- posteriores a un despliegue se añaden como V2__… en orden cronológico y append-only. No existen
+-- migraciones por caso de uso ni por fase.
 
 -- =====================================================================
 -- UC11 · financial_parameters (antes V2__financial_parameters.sql)
@@ -160,6 +160,7 @@ CREATE TABLE charge_intent (
     payment_token_ref   TEXT          NOT NULL,
     payment_method_type VARCHAR(64),
     last_four           VARCHAR(4),
+    payer_email         TEXT,          -- [CONV] payer.email requerido por el contrato de cobro; no es dato de pago sensible
     external_reference  TEXT,
     status_detail       TEXT,         -- [D-UC05-02; D-UC06-02] detalle del estado externo publicado por UC05 (lo consume UC06)
     requested_amount    NUMERIC(18,4), -- [D-UC05-02] monto solicitado; el núcleo no lo modela aun (GAP)
@@ -180,9 +181,11 @@ CREATE INDEX idx_charge_intent_reservation_created
 
 -- [CONV] general-plan §4 no define índice para external_reference; necesario para asociar el
 -- webhook de la pasarela (data.id) con la intención registrada (UC05 §Reglas 5).
-CREATE INDEX idx_charge_intent_external_reference
+CREATE UNIQUE INDEX uq_charge_intent_external_reference
     ON charge_intent (external_reference)
     WHERE external_reference IS NOT NULL;
+CREATE INDEX idx_charge_intent_status_created
+    ON charge_intent (status, created_at);
 
 CREATE TABLE charge_record (
     id                  UUID          PRIMARY KEY,
@@ -259,9 +262,11 @@ CREATE TABLE refund_intent (
 CREATE INDEX idx_refund_intent_reservation ON refund_intent (reservation_id);
 
 -- [CONV] índice para asociar el webhook de reembolso (data.id) con la intención (UC09 §Reglas).
-CREATE INDEX idx_refund_intent_external_reference
+CREATE UNIQUE INDEX uq_refund_intent_external_reference
     ON refund_intent (external_reference)
     WHERE external_reference IS NOT NULL;
+CREATE INDEX idx_refund_intent_status_created
+    ON refund_intent (status, created_at);
 
 -- CHOQUE (general-plan §4.1): el ER declara refund_intent.dispute_id como string; aquí se tipa UUID
 -- (DisputeId) siguiendo D-UC09-02 y la entrada de disputas del sistema.
@@ -336,9 +341,11 @@ CREATE TABLE settlement_intent (
 CREATE INDEX idx_settlement_intent_reservation ON settlement_intent (reservation_id);
 
 -- [CONV] índice para asociar el webhook de liquidación (data.id) con la intención (UC10 §Reglas).
-CREATE INDEX idx_settlement_intent_external_reference
+CREATE UNIQUE INDEX uq_settlement_intent_external_reference
     ON settlement_intent (external_reference)
     WHERE external_reference IS NOT NULL;
+CREATE INDEX idx_settlement_intent_status_created
+    ON settlement_intent (status, created_at);
 
 CREATE TABLE settlement_record (
     id                   UUID          PRIMARY KEY,

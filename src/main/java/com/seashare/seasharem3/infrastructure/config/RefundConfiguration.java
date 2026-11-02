@@ -69,9 +69,11 @@ public class RefundConfiguration {
     public ReconcileRefundIntentsService reconcileRefundIntentsService(
             RefundIntentRepository refundIntentRepository, RefundRecordRepository refundRecordRepository,
             ChargeIntentRepository chargeIntentRepository, RefundGatewayPort refundGatewayPort,
-            RegisterRefundResultService registerRefundResult, FailureRecorderPort failureRecorder) {
+            RegisterRefundResultService registerRefundResult, FailureRecorderPort failureRecorder,
+            RefundCommandPublisher refundCommandPublisher) {
         return new ReconcileRefundIntentsService(refundIntentRepository, refundRecordRepository,
-                chargeIntentRepository, refundGatewayPort, registerRefundResult, failureRecorder);
+                chargeIntentRepository, refundGatewayPort, registerRefundResult, failureRecorder,
+                refundCommandPublisher);
     }
 
     @Bean

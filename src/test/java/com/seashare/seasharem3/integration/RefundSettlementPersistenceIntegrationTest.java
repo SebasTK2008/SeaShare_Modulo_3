@@ -158,7 +158,7 @@ class RefundSettlementPersistenceIntegrationTest {
                 new PaymentMethodReference("token-123", "CREDIT_CARD", "4242"), ChargeFixtures.CREATED_AT)
                 .transitionTo(ChargeIntentStatus.IN_PROCESS)
                 .transitionTo(ChargeIntentStatus.CAPTURED)
-                .withExternalReference("mp-payment-1");
+                .withExternalReference("mp-payment-" + UUID.randomUUID());
         chargeIntentAdapter.save(charge);
         chargeRecordAdapter.save(com.seashare.seasharem3.domain.model.ChargeRecord.create(UUID.randomUUID(), charge,
                 calculated, ChargeFixtures.CREATED_AT));

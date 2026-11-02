@@ -46,6 +46,9 @@ public class ChargeIntentJpaEntity {
     @Column(name = "payment_method_type")
     private String paymentMethodType;
 
+    @Column(name = "payer_email")
+    private String payerEmail;
+
     @Column(name = "last_four", length = 4)
     private String lastFour;
 
@@ -75,6 +78,7 @@ public class ChargeIntentJpaEntity {
         entity.paymentTokenRef = intent.paymentMethod().paymentTokenRef();
         entity.paymentMethodType = intent.paymentMethod().paymentMethodType();
         entity.lastFour = intent.paymentMethod().lastFour();
+        entity.payerEmail = intent.payerEmail();
         entity.createdAt = intent.createdAt();
         entity.apply(intent);
         return entity;
@@ -117,6 +121,10 @@ public class ChargeIntentJpaEntity {
 
     String getPaymentMethodType() {
         return paymentMethodType;
+    }
+
+    String getPayerEmail() {
+        return payerEmail;
     }
 
     String getLastFour() {

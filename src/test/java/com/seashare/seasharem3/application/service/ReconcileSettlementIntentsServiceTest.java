@@ -5,6 +5,7 @@ import com.seashare.seasharem3.application.port.in.RegisterSettlementResultUseCa
 import com.seashare.seasharem3.application.port.out.SettlementGatewayPort;
 import com.seashare.seasharem3.application.port.out.SettlementIntentRepository;
 import com.seashare.seasharem3.application.port.out.SettlementRecordRepository;
+import com.seashare.seasharem3.application.port.out.SettlementCommandPublisher;
 import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.model.SettlementIntent;
 import com.seashare.seasharem3.domain.model.SettlementRecord;
@@ -42,25 +43,27 @@ class ReconcileSettlementIntentsServiceTest {
     private final SettlementGatewayPort settlementGatewayPort = mock(SettlementGatewayPort.class);
     private final RegisterSettlementResultUseCase registerSettlementResult = mock(RegisterSettlementResultUseCase.class);
     private final InMemoryFailureRecorder failureRecorder = new InMemoryFailureRecorder();
+    private final SettlementCommandPublisher settlementCommandPublisher = mock(SettlementCommandPublisher.class);
 
     private ReconcileSettlementIntentsService service;
 
     @BeforeEach
     void setUp() {
         service = new ReconcileSettlementIntentsService(settlementIntentRepository, settlementRecordRepository,
-                settlementGatewayPort, registerSettlementResult, failureRecorder);
+                settlementGatewayPort, registerSettlementResult, failureRecorder, settlementCommandPublisher);
         when(settlementIntentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
-    void recordsAFailureWhenTheIntentNeverReachedTheGateway() {
+    void republishesAnIntentThatNeverReachedTheGateway() {
         SettlementIntent intent = pendingIntent();
         when(settlementIntentRepository.findByStatusIn(any())).thenReturn(List.of(intent));
 
         service.reconcile();
 
-        verify(settlementIntentRepository).save(any(SettlementIntent.class));
-        assertThat(failureRecorder.failures()).hasSize(1);
+        verify(settlementCommandPublisher).publish(intent.id());
+        assertThat(failureRecorder.failures()).isEmpty();
+        verify(settlementIntentRepository, never()).save(any(SettlementIntent.class));
         verify(settlementGatewayPort, never()).fetch(any());
     }
 

@@ -6,6 +6,7 @@ import com.seashare.seasharem3.application.port.in.ReconcileSettlementIntentsUse
 import com.seashare.seasharem3.application.port.in.RegisterSettlementResultUseCase;
 import com.seashare.seasharem3.application.port.out.FailureRecorderPort;
 import com.seashare.seasharem3.application.port.out.SettlementGatewayPort;
+import com.seashare.seasharem3.application.port.out.SettlementCommandPublisher;
 import com.seashare.seasharem3.application.port.out.SettlementIntentRepository;
 import com.seashare.seasharem3.application.port.out.SettlementRecordRepository;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;
@@ -29,10 +30,21 @@ public class ReconcileSettlementIntentsService implements ReconcileSettlementInt
     private final SettlementGatewayPort settlementGatewayPort;
     private final RegisterSettlementResultUseCase registerSettlementResult;
     private final FailureRecorderPort failureRecorder;
+    private final SettlementCommandPublisher settlementCommandPublisher;
 
     public ReconcileSettlementIntentsService(SettlementIntentRepository settlementIntentRepository,
             SettlementRecordRepository settlementRecordRepository, SettlementGatewayPort settlementGatewayPort,
             RegisterSettlementResultUseCase registerSettlementResult, FailureRecorderPort failureRecorder) {
+        this(settlementIntentRepository, settlementRecordRepository, settlementGatewayPort,
+                registerSettlementResult, failureRecorder, id -> {
+                });
+    }
+
+    public ReconcileSettlementIntentsService(
+            SettlementIntentRepository settlementIntentRepository,
+            SettlementRecordRepository settlementRecordRepository, SettlementGatewayPort settlementGatewayPort,
+            RegisterSettlementResultUseCase registerSettlementResult, FailureRecorderPort failureRecorder,
+            SettlementCommandPublisher settlementCommandPublisher) {
         this.settlementIntentRepository = Objects.requireNonNull(settlementIntentRepository,
                 "settlementIntentRepository");
         this.settlementRecordRepository = Objects.requireNonNull(settlementRecordRepository,
@@ -40,6 +52,8 @@ public class ReconcileSettlementIntentsService implements ReconcileSettlementInt
         this.settlementGatewayPort = Objects.requireNonNull(settlementGatewayPort, "settlementGatewayPort");
         this.registerSettlementResult = Objects.requireNonNull(registerSettlementResult, "registerSettlementResult");
         this.failureRecorder = Objects.requireNonNull(failureRecorder, "failureRecorder");
+        this.settlementCommandPublisher = Objects.requireNonNull(settlementCommandPublisher,
+                "settlementCommandPublisher");
     }
 
     @Override
@@ -59,6 +73,10 @@ public class ReconcileSettlementIntentsService implements ReconcileSettlementInt
 
     private void reconcile(SettlementIntent intent) {
         if (intent.externalReference() == null || intent.externalReference().isBlank()) {
+            if (intent.status() == SettlementStatus.PENDING_SEND) {
+                settlementCommandPublisher.publish(intent.id());
+                return;
+            }
             recordOnce(intent, "The settlement was never confirmed by the payment gateway");
             return;
         }

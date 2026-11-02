@@ -74,7 +74,7 @@ class ReservationValueCalculatorTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("roundingCases")
-    void roundsEveryAmountHalfUpToTwoDecimalsKeepingTheExactTotal(CalculationCase testCase) {
+    void keepsEveryAmountAtInternalScaleAndTheExactTotal(CalculationCase testCase) {
         ReservationValue value = CALCULATOR.calculate(
                 information(testCase.baseRate(), testCase.start(), testCase.end(), testCase.passengers()),
                 parameters(testCase.insurancePerPassenger()));
@@ -93,13 +93,13 @@ class ReservationValueCalculatorTest {
         return Stream.of(
                 Arguments.of(new CalculationCase("437500.1234", "15000.1234",
                         LocalDate.of(2026, 12, 10), LocalDate.of(2026, 12, 11), 3,
-                        "875000.25", "45000.37", "43750.01", "963750.63")),
+                        "875000.2468", "45000.3702", "43750.0123", "963750.6293")),
                 Arguments.of(new CalculationCase("33333.3333", "1111.1111",
                         LocalDate.of(2026, 12, 10), LocalDate.of(2026, 12, 14), 7,
-                        "166666.67", "7777.78", "3333.33", "177777.78")),
+                        "166666.6665", "7777.7777", "3333.3333", "177777.7775")),
                 Arguments.of(new CalculationCase("0.0001", "0.0001",
                         LocalDate.of(2026, 12, 10), LocalDate.of(2026, 12, 10), 1,
-                        "0.00", "0.00", "0.00", "0.00")));
+                        "0.0001", "0.0001", "0.0000", "0.0002")));
     }
 
     @Test
