@@ -58,6 +58,7 @@ class FlywaySchemaTest {
 
 	@Test
 	void addsIntentTraceabilityColumns() throws SQLException {
+		assertThat(columnNames("charge_intent")).contains("payer_email");
 		assertThat(columnNames("refund_intent")).contains("created_at");
 		assertThat(columnNames("settlement_intent"))
 				.contains("created_at", "external_reference", "status_detail", "dispute_id");
@@ -277,9 +278,12 @@ class FlywaySchemaTest {
 		List<String> indexes = queryStrings(
 				"SELECT indexname FROM pg_indexes WHERE schemaname = 'public' ORDER BY indexname");
 		assertThat(indexes).contains(
-				"idx_charge_intent_external_reference",
-				"idx_refund_intent_external_reference",
-				"idx_settlement_intent_external_reference",
+				"uq_charge_intent_external_reference",
+				"uq_refund_intent_external_reference",
+				"uq_settlement_intent_external_reference",
+				"idx_charge_intent_status_created",
+				"idx_refund_intent_status_created",
+				"idx_settlement_intent_status_created",
 				"idx_operational_failure_unresolved",
 				"idx_operational_failure_reservation",
 				"idx_outbox_message_unpublished");

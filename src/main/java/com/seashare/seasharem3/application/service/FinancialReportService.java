@@ -12,7 +12,6 @@ import com.seashare.seasharem3.application.port.out.ClockPort;
 import com.seashare.seasharem3.application.port.out.FinancialReportQueryPort;
 import com.seashare.seasharem3.domain.model.PeriodComparison;
 import com.seashare.seasharem3.domain.model.ReportMetrics;
-import com.seashare.seasharem3.domain.service.FinancialAggregator;
 import com.seashare.seasharem3.domain.service.ReportPeriodResolver;
 import com.seashare.seasharem3.domain.service.VariationCalculator;
 import com.seashare.seasharem3.domain.valueobject.Periodicity;
@@ -29,7 +28,6 @@ public class FinancialReportService implements GetFinancialReportUseCase, Export
 
     private final FinancialReportQueryPort queryPort;
     private final ReportPeriodResolver periodResolver;
-    private final FinancialAggregator aggregator;
     private final VariationCalculator variationCalculator;
     private final Clock instantClock;
 
@@ -37,7 +35,6 @@ public class FinancialReportService implements GetFinancialReportUseCase, Export
                                   Clock instantClock) {
         this.queryPort = Objects.requireNonNull(queryPort, "queryPort");
         this.periodResolver = new ReportPeriodResolver(clockPort::today);
-        this.aggregator = new FinancialAggregator();
         this.variationCalculator = new VariationCalculator();
         this.instantClock = Objects.requireNonNull(instantClock, "instantClock");
     }
@@ -65,11 +62,10 @@ public class FinancialReportService implements GetFinancialReportUseCase, Export
     private FinancialReportResult calculate(GetFinancialReportCommand command, ReportPeriod period) {
         GetFinancialReportCommand normalized = new GetFinancialReportCommand(
                 command.periodicity(), command.scope(), command.ownerId(), period);
-        ReportMetrics current = aggregator.aggregate(queryPort.query(normalized), command.scope());
+        ReportMetrics current = queryPort.aggregate(normalized);
         ReportPeriod previousPeriod = periodResolver.previous(period);
-        ReportMetrics previous = aggregator.aggregate(queryPort.query(new GetFinancialReportCommand(
-                command.periodicity(), command.scope(), command.ownerId(), previousPeriod)),
-                command.scope());
+        ReportMetrics previous = queryPort.aggregate(new GetFinancialReportCommand(
+                command.periodicity(), command.scope(), command.ownerId(), previousPeriod));
         PeriodComparison comparison = variationCalculator.compare(previousPeriod,
                 current.netAmount(), previous.netAmount());
         return new FinancialReportResult(command.periodicity(), period,

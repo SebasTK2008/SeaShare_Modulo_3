@@ -6,6 +6,7 @@ import com.seashare.seasharem3.application.port.in.ReconcileChargeIntentsUseCase
 import com.seashare.seasharem3.application.port.in.RegisterChargeResultUseCase;
 import com.seashare.seasharem3.application.port.out.ChargeGatewayPort;
 import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
+import com.seashare.seasharem3.application.port.out.ChargeCommandPublisher;
 import com.seashare.seasharem3.application.port.out.ChargeRecordQueryPort;
 import com.seashare.seasharem3.application.port.out.FailureRecorderPort;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;
@@ -48,15 +49,26 @@ public class ReconcileChargeIntentsService implements ReconcileChargeIntentsUseC
     private final ChargeGatewayPort chargeGatewayPort;
     private final RegisterChargeResultUseCase registerChargeResult;
     private final FailureRecorderPort failureRecorder;
+    private final ChargeCommandPublisher chargeCommandPublisher;
 
     public ReconcileChargeIntentsService(ChargeIntentRepository chargeIntentRepository,
             ChargeRecordQueryPort chargeRecordQueryPort, ChargeGatewayPort chargeGatewayPort,
             RegisterChargeResultUseCase registerChargeResult, FailureRecorderPort failureRecorder) {
+        this(chargeIntentRepository, chargeRecordQueryPort, chargeGatewayPort, registerChargeResult,
+                failureRecorder, command -> {
+                });
+    }
+
+    public ReconcileChargeIntentsService(ChargeIntentRepository chargeIntentRepository,
+            ChargeRecordQueryPort chargeRecordQueryPort, ChargeGatewayPort chargeGatewayPort,
+            RegisterChargeResultUseCase registerChargeResult, FailureRecorderPort failureRecorder,
+            ChargeCommandPublisher chargeCommandPublisher) {
         this.chargeIntentRepository = Objects.requireNonNull(chargeIntentRepository, "chargeIntentRepository");
         this.chargeRecordQueryPort = Objects.requireNonNull(chargeRecordQueryPort, "chargeRecordQueryPort");
         this.chargeGatewayPort = Objects.requireNonNull(chargeGatewayPort, "chargeGatewayPort");
         this.registerChargeResult = Objects.requireNonNull(registerChargeResult, "registerChargeResult");
         this.failureRecorder = Objects.requireNonNull(failureRecorder, "failureRecorder");
+        this.chargeCommandPublisher = Objects.requireNonNull(chargeCommandPublisher, "chargeCommandPublisher");
     }
 
     @Override
@@ -78,6 +90,11 @@ public class ReconcileChargeIntentsService implements ReconcileChargeIntentsUseC
     private void reconcile(ChargeIntent intent) {
         String externalReference = intent.externalReference();
         if (externalReference == null || externalReference.isBlank()) {
+            if (intent.status() == ChargeIntentStatus.PENDING_SEND && intent.payerEmail() != null) {
+                chargeCommandPublisher.publish(new com.seashare.seasharem3.application.dto.ChargeCommand(
+                        intent.id(), intent.payerEmail()));
+                return;
+            }
             recordOnce(intent, "The charge was never confirmed by the payment gateway");
             return;
         }

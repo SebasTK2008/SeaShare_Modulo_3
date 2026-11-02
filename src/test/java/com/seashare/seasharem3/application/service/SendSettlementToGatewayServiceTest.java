@@ -102,15 +102,16 @@ class SendSettlementToGatewayServiceTest {
     }
 
     @Test
-    void missingCollectorConfigurationIsRecordedAndRejected() {
+    void missingCollectorConfigurationIsRecordedAsTransientFailure() {
         service = new SendSettlementToGatewayService(settlementIntentRepository, chargeIntentRepository,
                 settlementGatewayPort, registerSettlementResult, failureRecorder, 0);
 
-        service.send(intent.id());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.send(intent.id()))
+                .isInstanceOf(com.seashare.seasharem3.domain.exception.GatewayCommunicationException.class);
 
         var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
         verify(settlementIntentRepository).save(captor.capture());
-        assertThat(captor.getValue().status()).isEqualTo(SettlementStatus.REJECTED);
+        assertThat(captor.getValue().status()).isEqualTo(SettlementStatus.COMMUNICATION_ERROR);
         assertThat(failureRecorder.failures()).hasSize(1);
         verify(settlementGatewayPort, never()).send(any());
     }

@@ -7,6 +7,7 @@ import com.seashare.seasharem3.application.port.in.RegisterRefundResultUseCase;
 import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
 import com.seashare.seasharem3.application.port.out.FailureRecorderPort;
 import com.seashare.seasharem3.application.port.out.RefundGatewayPort;
+import com.seashare.seasharem3.application.port.out.RefundCommandPublisher;
 import com.seashare.seasharem3.application.port.out.RefundIntentRepository;
 import com.seashare.seasharem3.application.port.out.RefundRecordRepository;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;
@@ -35,17 +36,28 @@ public class ReconcileRefundIntentsService implements ReconcileRefundIntentsUseC
     private final RefundGatewayPort refundGatewayPort;
     private final RegisterRefundResultUseCase registerRefundResult;
     private final FailureRecorderPort failureRecorder;
+    private final RefundCommandPublisher refundCommandPublisher;
 
     public ReconcileRefundIntentsService(RefundIntentRepository refundIntentRepository,
             RefundRecordRepository refundRecordRepository, ChargeIntentRepository chargeIntentRepository,
             RefundGatewayPort refundGatewayPort, RegisterRefundResultUseCase registerRefundResult,
             FailureRecorderPort failureRecorder) {
+        this(refundIntentRepository, refundRecordRepository, chargeIntentRepository, refundGatewayPort,
+                registerRefundResult, failureRecorder, id -> {
+                });
+    }
+
+    public ReconcileRefundIntentsService(RefundIntentRepository refundIntentRepository,
+            RefundRecordRepository refundRecordRepository, ChargeIntentRepository chargeIntentRepository,
+            RefundGatewayPort refundGatewayPort, RegisterRefundResultUseCase registerRefundResult,
+            FailureRecorderPort failureRecorder, RefundCommandPublisher refundCommandPublisher) {
         this.refundIntentRepository = Objects.requireNonNull(refundIntentRepository, "refundIntentRepository");
         this.refundRecordRepository = Objects.requireNonNull(refundRecordRepository, "refundRecordRepository");
         this.chargeIntentRepository = Objects.requireNonNull(chargeIntentRepository, "chargeIntentRepository");
         this.refundGatewayPort = Objects.requireNonNull(refundGatewayPort, "refundGatewayPort");
         this.registerRefundResult = Objects.requireNonNull(registerRefundResult, "registerRefundResult");
         this.failureRecorder = Objects.requireNonNull(failureRecorder, "failureRecorder");
+        this.refundCommandPublisher = Objects.requireNonNull(refundCommandPublisher, "refundCommandPublisher");
     }
 
     @Override
@@ -65,6 +77,10 @@ public class ReconcileRefundIntentsService implements ReconcileRefundIntentsUseC
 
     private void reconcile(RefundIntent intent) {
         if (intent.externalReference() == null || intent.externalReference().isBlank()) {
+            if (intent.status() == RefundIntentStatus.PENDING_SEND) {
+                refundCommandPublisher.publish(intent.id());
+                return;
+            }
             recordOnce(intent, "The refund was never confirmed by the payment gateway");
             return;
         }

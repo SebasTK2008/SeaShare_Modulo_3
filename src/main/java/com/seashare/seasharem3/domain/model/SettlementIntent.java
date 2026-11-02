@@ -34,8 +34,7 @@ public final class SettlementIntent {
             SettlementStatus.COMPLETED, EnumSet.noneOf(SettlementStatus.class),
             SettlementStatus.REJECTED, EnumSet.noneOf(SettlementStatus.class),
             SettlementStatus.CANCELLED, EnumSet.noneOf(SettlementStatus.class),
-            SettlementStatus.EXPIRED, EnumSet.noneOf(SettlementStatus.class),
-            SettlementStatus.FAILED, EnumSet.noneOf(SettlementStatus.class));
+            SettlementStatus.EXPIRED, EnumSet.noneOf(SettlementStatus.class));
 
     private final UUID id;
     private final ReservationId reservationId;

@@ -77,9 +77,10 @@ public class SettlementConfiguration {
     public ReconcileSettlementIntentsService reconcileSettlementIntentsService(
             SettlementIntentRepository settlementIntentRepository,
             SettlementRecordRepository settlementRecordRepository, SettlementGatewayPort settlementGatewayPort,
-            RegisterSettlementResultService registerSettlementResult, FailureRecorderPort failureRecorder) {
+            RegisterSettlementResultService registerSettlementResult, FailureRecorderPort failureRecorder,
+            SettlementCommandPublisher settlementCommandPublisher) {
         return new ReconcileSettlementIntentsService(settlementIntentRepository, settlementRecordRepository,
-                settlementGatewayPort, registerSettlementResult, failureRecorder);
+                settlementGatewayPort, registerSettlementResult, failureRecorder, settlementCommandPublisher);
     }
 
     @Bean

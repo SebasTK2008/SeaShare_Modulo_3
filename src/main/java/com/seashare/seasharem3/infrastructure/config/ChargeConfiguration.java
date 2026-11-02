@@ -2,6 +2,7 @@ package com.seashare.seasharem3.infrastructure.config;
 
 import com.seashare.seasharem3.application.port.in.GatewayWebhookHandler;
 import com.seashare.seasharem3.application.port.out.ChargeGatewayPort;
+import com.seashare.seasharem3.application.port.out.ChargeCommandPublisher;
 import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
 import com.seashare.seasharem3.application.port.out.ChargeRecordQueryPort;
 import com.seashare.seasharem3.application.port.out.ChargeRecordRepository;
@@ -68,9 +69,10 @@ public class ChargeConfiguration {
             ChargeRecordQueryPort chargeRecordQueryPort,
             ChargeGatewayPort chargeGatewayPort,
             RegisterChargeResultService registerChargeResultService,
-            FailureRecorderPort failureRecorderPort) {
+            FailureRecorderPort failureRecorderPort,
+            ChargeCommandPublisher chargeCommandPublisher) {
         return new ReconcileChargeIntentsService(chargeIntentRepository, chargeRecordQueryPort, chargeGatewayPort,
-                registerChargeResultService, failureRecorderPort);
+                registerChargeResultService, failureRecorderPort, chargeCommandPublisher);
     }
 
     @Bean

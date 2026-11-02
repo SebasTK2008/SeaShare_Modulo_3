@@ -25,6 +25,9 @@ public record Money(BigDecimal amount) implements Comparable<Money> {
 
     public Money {
         Objects.requireNonNull(amount, "amount");
+        if (amount.scale() > INTERNAL_SCALE) {
+            throw new DomainException("Amount scale cannot exceed " + INTERNAL_SCALE + ": " + amount);
+        }
         amount = amount.setScale(INTERNAL_SCALE, RoundingMode.HALF_UP);
     }
 
@@ -51,12 +54,12 @@ public record Money(BigDecimal amount) implements Comparable<Money> {
         if (factor.signum() < 0) {
             throw new IllegalArgumentException("factor must not be negative");
         }
-        return new Money(amount.multiply(factor));
+        return new Money(amount.multiply(factor).setScale(INTERNAL_SCALE, RoundingMode.HALF_UP));
     }
 
     /** Multiplica el importe por un factor entero. Fuente: general-plan §3.6. */
     public Money multiply(long factor) {
-        return new Money(amount.multiply(BigDecimal.valueOf(factor)));
+        return new Money(amount.multiply(BigDecimal.valueOf(factor)).setScale(INTERNAL_SCALE, RoundingMode.HALF_UP));
     }
 
     /**
