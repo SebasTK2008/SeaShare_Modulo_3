@@ -61,10 +61,9 @@ src/main/java/com/seashare/seasharem3/
 └── infrastructure/
     ├── adapter/in/web/financialreport/
     │   ├── FinancialReportController.java
-    │   ├── FinancialReportResponseMapper.java
+    │   ├── {FinancialReportResponseMapper,CsvReportExporter}.java
     │   └── dto/FinancialReportResponse.java
     ├── adapter/out/persistence/financialreport/FinancialReportQueryAdapter.java
-    ├── adapter/in/web/financialreport/CsvReportExporter.java
     └── config/FinancialReportConfiguration.java
 
 src/test/java/com/seashare/seasharem3/

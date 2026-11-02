@@ -163,13 +163,11 @@ src/test/java/com/seashare/seasharem3/
 ├── domain/model/{SettlementIntentTest,SettlementRecordTest,CommissionRecordTest}.java
 ├── domain/service/SettlementCalculatorTest.java
 ├── application/service/{RequestSettlementServiceTest,SendSettlementToGatewayServiceTest,RegisterSettlementResultServiceTest,ReconcileSettlementIntentsServiceTest}.java
-├── application/service/ReconcileSettlementIntentsServiceTest.java
 ├── infrastructure/adapter/in/messaging/SettlementCommandListenerTest.java
 ├── infrastructure/adapter/out/gateway/MercadoPagoSettlementAdapterTest.java
-├── integration/RefundSettlementPersistenceIntegrationTest.java (persistencia real de settlement_intent/settlement_record/commission_record)
+├── integration/RefundSettlementPersistenceIntegrationTest.java
 ├── arch/Uc10ArchitectureTest.java
-├── acceptance/Uc10AcceptanceTest.java
-
+└── acceptance/Uc10AcceptanceTest.java
 ``` **[ACT-01] [ACT-02]**
 
 **Structure Decision**: sigue `general-plan.md` §3.2–§3.4. UC05 es dueño del receptor/verificación/despachador del webhook; UC10 solo registra su manejador y define sus puertos `SendSettlementToGatewayUseCase`/`ReconcileSettlementIntentsUseCase` (núcleo compartido), además de `RegisterSettlementResultUseCase` para el resultado. `domain` no depende de Spring/JPA/Jackson/AMQP; `application` solo depende de `domain`; adaptadores de entrada invocan `application.port.in`; adaptadores de salida implementan `application.port.out`.

@@ -89,11 +89,10 @@ src/main/resources/db/migration/
 └── V1__initial_schema.sql # migración inicial única: incluye la vista v_financial_records (general-plan §4.2, D-31)
 
 src/test/java/com/seashare/seasharem3/
-├── arch/ArchitectureTest.java
+├── arch/Uc12ArchitectureTest.java
 ├── contract/UC12FinancialRecordsControllerContractTest.java
-├── domain/model/FinancialRecordQueryTest.java
 ├── application/service/FinancialRecordsQueryServiceTest.java
-├── infrastructure/adapter/out/persistence/FinancialRecordQueryAdapterTest.java
+├── acceptance/Uc12AcceptanceTest.java
 └── infrastructure/adapter/out/persistence/financialrecords/FinancialRecordQueryAdapterIntegrationTest.java
 ```
 

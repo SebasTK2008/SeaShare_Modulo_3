@@ -182,7 +182,7 @@ src/test/java/com/seashare/seasharem3/
 ├── domain/model/{RefundIntentTest, RefundRecordTest}.java                  # T002
 ├── domain/service/RefundCalculatorTest.java                              # T003, T015
 ├── application/service/{RequestRefundServiceTest, SendRefundToGatewayServiceTest, RegisterRefundResultServiceTest, ReconcileRefundIntentsServiceTest}.java  # T007, T014, T019, T023
-├── infrastructure/adapter/in/messaging/{RefundCommandListenerTest, SettlementCommandListenerTest}.java  # T014 (worker de comando)
+├── infrastructure/adapter/in/messaging/RefundCommandListenerTest.java  # T014 (worker de comando)
 ├── infrastructure/adapter/out/gateway/MercadoPagoRefundAdapterTest.java  # T012, T022
 ├── integration/RefundSettlementPersistenceIntegrationTest.java            # T010 (persistencia real de refund_intent/refund_record)
 ├── arch/Uc09ArchitectureTest.java                                         # T027 [ACT-06]
