@@ -31,6 +31,7 @@ Este caso de prueba verifica que, tras modificar uno o más campos en la pantall
 * Sin frontend propio: la “pantalla” es el estado local del cliente de prueba.
 
 ##### Dependencies & Assumptions
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): con la BD recién recreada deja `v7` vigente y `count = 7`; si otro TC de UC11 ya creó versiones, recrear la BD o ajustar `version_number` en los pasos.
 * **TC-UC11-HU4-E1 debe haber pasado** (existe una versión vigente y el guardado crea versiones nuevas).
 * Acceso a los logs de la aplicación para comprobar que no se emitió ningún `PUT`.
 

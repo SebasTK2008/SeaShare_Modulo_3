@@ -34,10 +34,11 @@ Este caso de prueba verifica que, cuando todavía no existe ninguna versión de 
 
 ##### Dependencies & Assumptions
 * **TC-UC11-HU4-E1 debe haber pasado** para conocer que el primer `PUT` crea la versión `1`.
-* Capacidad de recrear la base o de ejecutar `TRUNCATE`/restaurar un snapshot limpio antes de la prueba.
+* Capacidad de recrear la base (`docker compose --profile app down -v`) o restaurar un snapshot limpio antes de la prueba; `financial_parameters` es append-only y rechaza `UPDATE`, `DELETE` y `TRUNCATE`.
 
 ##### Preconditions & Default Setup
 * **Initial State** : `financial_parameters` vacía (`SELECT count(*) = 0`); no hay ninguna versión guardada.
+* **Excepción de seed** : este TC requiere una BD **sin** el seed base. Ejecutar `docker compose --profile app down -v` y levantar con `SPRING_PROFILES_ACTIVE=dev` (sin `qa`); en PowerShell: `$env:SPRING_PROFILES_ACTIVE = "dev"; docker compose --profile app up --build -d`. Así `R__qa_seed.sql` no se aplica. Al terminar, restaurar `$env:SPRING_PROFILES_ACTIVE = "dev,qa"`.
 * **Environment** : staging local (`docker compose --profile app up --build -d`), health en `http://localhost:8080/actuator/health`.
 * **Test Accounts** : N/A (sin validación de identidad; RF-008).
 

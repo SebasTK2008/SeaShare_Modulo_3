@@ -29,7 +29,7 @@ Este caso de prueba verifica que, existiendo más de diez registros financieros 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* Los registros financieros son inmutables y los generan UC05/UC09/UC10; se preparan con datos de prueba ya confirmados (o *seed* controlado), no desde esta consulta.
+* Los registros financieros son inmutables y los generan UC05/UC09/UC10; se preparan con datos de prueba ya confirmados o con un dataset propio de este TC (no forman parte del seed automático del perfil `qa`), no desde esta consulta.
 * Sin frontend propio: la consulta se ejecuta directamente contra el endpoint.
 
 ##### Dependencies & Assumptions

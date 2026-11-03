@@ -29,15 +29,15 @@ Este caso de prueba verifica que, al recibir **únicamente** la lista de identif
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* El stub local de Flota ([fleet-base-rates.json](../../../../wiremock/mappings/fleet-base-rates.json)) solo devuelve **2** tarifas: para el lote de 10 hay que cargar un mapping con 10 tarifas vía la API de administración de WireMock (`POST /__admin/mappings`) o usar la Flota del entorno de `release/0.1.0`.
+* El stub local de Flota ([fleet-base-rates.json](../../../../wiremock/mappings/fleet-base-rates.json)) ya incluye `bodyPatterns` (requiere `boat_ids`) y devuelve **10 tarifas** por defecto, acordes al lote de prueba.
 * Los montos de esta ficha son **ilustrativos** (stub y ejemplos de los contratos); **ajustar a la versión vigente del entorno**.
 
 ##### Dependencies & Assumptions
-* **Seed de `financial_parameters`**: existe versión vigente con tarifa de seguro y el porcentaje que exige la fecha evaluada (no depende de otro TC).
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): existe versión vigente con tarifa de seguro y el porcentaje que exige la fecha evaluada (no depende de otro TC).
 * Flota (stub o real) con tarifa base para las 10 embarcaciones de prueba.
 
 ##### Preconditions & Default Setup
-* **Initial State** : parámetros de ejemplo `insurance_fee_per_passenger = 15000.0000`, `weekend_increase_pct = 15.0000`, `high_season_increase_pct = 25.0000`, `commission_pct = 15.0000`; 10 embarcaciones con `base_rate` conocida (una de ellas `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` → `350000.00`).
+* **Initial State** : parámetros de ejemplo `insurance_fee_per_passenger = 15000.0000`, `weekend_increase_pct = 10.0000`, `high_season_increase_pct = 25.0000`, `commission_pct = 15.0000`; 10 embarcaciones con `base_rate` conocida (una de ellas `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` → `350000.00`).
 * **Environment** : staging local (`docker compose --profile app up --build -d`), health en `http://localhost:8080/actuator/health`, stub de Flota en `http://localhost:8081`, BD con `psql "host=localhost port=5433 dbname=seashare user=seashare"` (puerto publicado `POSTGRES_HOST_PORT`).
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 

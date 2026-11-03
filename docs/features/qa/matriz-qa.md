@@ -29,6 +29,36 @@ Plan de trazabilidad de QA. Cada fila ancla un Test Case (TC) a **un escenario d
 
 > Excepción intencional: en UC06 las pruebas de `400 VALIDATION_ERROR` usan `R-100` sin UUID porque validan precisamente el formato.
 
+### Seed inicial de QA
+
+El perfil `qa` carga automáticamente un seed base con los datos generales compartidos por los TC:
+
+| Dato | Origen | Versiones / valores |
+|---|---|---|
+| `financial_parameters` | `src/main/resources/db/qa/R__qa_seed.sql` | `v1..v7`; vigente `v7` (`commission_pct=15.0000`, `insurance_fee_per_passenger=15000.0000`, `weekend_increase_pct=10.0000`, `high_season_increase_pct=25.0000`) |
+| Tarifas base de Flota | `wiremock/mappings/fleet-base-rates.json` | 10 embarcaciones; la primera es `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01 → 350000.00` |
+
+Se activa con:
+
+```powershell
+docker compose --profile app up --build -d
+# equivale a SPRING_PROFILES_ACTIVE=dev,qa (default de docker-compose)
+
+# Fuera de docker compose (IDE, mvn spring-boot:run):
+$env:SPRING_PROFILES_ACTIVE = "dev,qa"
+```
+
+**No se siembran** reservas, `charge_intent`, `refund_intent`, `settlement_intent`, `deposit_disposition`, disputas ni `v_financial_records`: esos datos son específicos de cada TC y deben prepararse en el paso correspondiente. En particular, los datasets de UC12/UC13 (registros financieros con conteos y montos propios de cada caso: 23, 34, periodos 2026-08/09/10, etc.) **no forman parte del seed** y deben generarse con los TC de UC05/UC09/UC10 o prepararse en el propio TC. Para volver al estado base antes de una corrida completa:
+
+```powershell
+docker compose --profile app down -v   # incluye la app y borra la BD/seed
+docker compose --profile app up --build -d
+```
+
+> El `--profile app` es obligatorio en `down`: sin él, Docker Compose no detiene el contenedor de la aplicación y la BD se recrea por debajo sin que la app vuelva a ejecutar Flyway.
+
+> `financial_parameters` es append-only: cada TC de UC11 que hace `PUT` agrega una versión (`v8`, etc.). Para ejecutar varios TC de UC11 que esperan `v7`/`count = 7`, recrear la BD entre ellos (`docker compose --profile app down -v` y volver a levantar); de lo contrario el `version_number` y el `count` dejan de coincidir con el seed.
+
 ## Matriz de trazabilidad
 
 | TC ID | Spec (UC) | HU | Escenario (nº + título) | Pri | RF/CE cubierto | Nombre del TC | Estado | Resultado | Defecto |
@@ -130,7 +160,7 @@ Los **62 escenarios** de los 13 specs están cubiertos por un TC cada uno y marc
 3. Idempotencia **concurrente** (se probaron duplicados secuenciales).
 4. Rendimiento y carga de la aplicación.
 5. Seguridad (fuera de alcance por diseño).
-6. Reproducibilidad clean-room (`docker compose down -v` + recarga de mappings).
+6. Reproducibilidad clean-room (`docker compose --profile app down -v` + recarga de mappings).
 7. Integración con los demás módulos y el frontend.
 
 
@@ -140,11 +170,11 @@ Detectados al redactar los TC y contrastar spec ↔ plan ↔ contratos. No cambi
 
 1. **UC05-HU2-E3 (autorización expira)**: el contrato vigente usa cobro directo con captura automática (D-32), sin autorización retenida. El escenario se materializa con el estado `expired` reportado por el webhook.
 2. **UC06 (confirmación de pago)**: el `reservation_id` de la ruta debe ser UUID v4; usar el UUID de ejemplo del contrato (no la etiqueta `R-100`).
-3. **UC01 (estimaciones)**: `wiremock/mappings/fleet-base-rates.json` solo trae 2 embarcaciones; cargar 10 (HU1) y 50 (HU3) vía `POST /__admin/mappings` antes de ejecutar.
+3. **UC01 (estimaciones)**: `wiremock/mappings/fleet-base-rates.json` trae 10 embarcaciones por defecto; para HU3 (50) o para IDs fuera de esas 10, cargar el mapping adicional vía `POST /__admin/mappings` antes de ejecutar.
 4. **PostgreSQL**: `docker-compose.yml` publica el puerto host **5433** (el README menciona 5432). Usar 5433 desde el host en las consultas `psql`.
 5. **UC11-HU3**: `GET /api/v1/financial-parameters` devuelve `guarantee_deposit_rule` como texto, no como monto (decisión D-UC11-02).
 6. **UC10 (dispersiones)**: `GATEWAY_COLLECTOR_ID` debe ser `≠ 0`; con el default dev `0` no hay dispersiones que verificar.
-7. **Montos de ejemplo**: los TC usan cifras ilustrativas distintas (`360.00/200.00/12.00` vs `900000.00/60000.00/30000.00`). Antes de ejecutar, fijar los valores de la versión vigente de parámetros del entorno.
+7. **Montos de ejemplo**: los TC usan cifras ilustrativas distintas (`360.00/200.00/12.00` vs `900000.00/60000.00/30000.00`). El seed de QA fija los parámetros en `15.0000` / `15000.0000` / `10.0000` / `25.0000`; los montos de cada reserva siguen siendo ilustrativos y deben corresponder a la reserva creada en el TC.
 8. **UC13 (exportación)**: el contrato no declara `406 NOT_ACCEPTABLE`, pero el catálogo E1 lo exige como caso de ejemplo; verificar la respuesta real en release y registrar defecto si difiere.
 9. **UC02-HU1-E3 (festivos)**: el SPEC dice que los puentes/festivos se evalúan como fin de semana; el plan (D-UC02-11) y el código solo tratan sábado y domingo como fin de semana. Los TC siguen el plan; si se valida el texto literal del spec, registrar la divergencia.
 10. **Stub de Pasarela (entorno)**: debe devolver un `id` único por operación. Un `id` fijo choca con los UNIQUE de `external_reference` en `charge_intent`, `refund_intent` y `settlement_intent`. Corregido en el script de QA (`qa-wiremock-setup.ps1`); no es defecto del producto.

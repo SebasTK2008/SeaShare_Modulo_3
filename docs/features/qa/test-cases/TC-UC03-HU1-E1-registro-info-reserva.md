@@ -33,12 +33,12 @@ Este caso de prueba verifica que, al recibir por cola los datos de una reserva (
 * Los montos y porcentajes son **ilustrativos**; **ajustar a la versión vigente del entorno**.
 
 ##### Dependencies & Assumptions
-* **Seed de `financial_parameters`**: versión vigente con seguro y porcentajes (no depende de otro TC).
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): versión vigente con seguro y porcentajes (no depende de otro TC).
 * **TC-UC02-HU1-E3** ejecutado: la tarifa de una fecha de temporada alta se ajusta correctamente.
 * RabbitMQ arriba con exchange `seashare.reservations` y cola `finance.reservation-info.v1`.
 
 ##### Preconditions & Default Setup
-* **Initial State** : `high_season_increase_pct = 25.0000`, `weekend_increase_pct = 15.0000`, `insurance_fee_per_passenger = 15000.0000`; embarcación `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` con `base_rate = 350000.00`; no existe la reserva `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10`.
+* **Initial State** : `high_season_increase_pct = 25.0000`, `weekend_increase_pct = 10.0000`, `insurance_fee_per_passenger = 15000.0000`; embarcación `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` con `base_rate = 350000.00`; no existe la reserva `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10`.
 * **Environment** : staging local (`docker compose --profile app up --build -d`), consola RabbitMQ en `http://localhost:15672`, stub de Flota en `http://localhost:8081`, BD con `psql "host=localhost port=5433 dbname=seashare user=seashare"`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 

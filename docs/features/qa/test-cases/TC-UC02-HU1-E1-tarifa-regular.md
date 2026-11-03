@@ -33,11 +33,11 @@ Este caso de prueba verifica que, cuando la fecha evaluada no es fin de semana n
 * Los montos y porcentajes son **ilustrativos**; **ajustar a la versión vigente del entorno**.
 
 ##### Dependencies & Assumptions
-* **Seed de `financial_parameters`**: versión vigente con seguro y porcentajes (no depende de otro TC).
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): versión vigente con seguro y porcentajes (no depende de otro TC).
 * Flota (stub o real) arriba y RabbitMQ con la cola `finance.reservation-info.v1` declarada.
 
 ##### Preconditions & Default Setup
-* **Initial State** : `insurance_fee_per_passenger = 15000.0000`, `weekend_increase_pct = 15.0000`, `high_season_increase_pct = 25.0000`; embarcación `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` → `350000.00` y `9a1b7c33-2e4f-4b58-8d6a-0c9e5f3a2b02` → `480000.00`; fecha evaluada de ejemplo **2027-02-10 (miércoles, fuera de toda ventana)**.
+* **Initial State** : `insurance_fee_per_passenger = 15000.0000`, `weekend_increase_pct = 10.0000`, `high_season_increase_pct = 25.0000`; embarcación `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` → `350000.00` y `9a1b7c33-2e4f-4b58-8d6a-0c9e5f3a2b02` → `480000.00`; fecha evaluada de ejemplo **2027-02-10 (miércoles, fuera de toda ventana)**.
 * **Environment** : staging local (`docker compose --profile app up --build -d`), RabbitMQ en `http://localhost:15672`, stub de Flota en `http://localhost:8081`, BD con `psql "host=localhost port=5433 dbname=seashare user=seashare"`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
@@ -58,7 +58,7 @@ Este caso de prueba verifica que, cuando la fecha evaluada no es fin de semana n
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Fecha regular sin configuración de parámetros | BD recreada sin versión de `financial_parameters` y evento con fecha regular | `start_date = 2027-02-10` | La tarifa se obtiene igual (`350000.0000`) y `base_rate_parameters_id` queda `NULL` (regla 13: el día regular no exige porcentaje). | [x] | `docker compose down -v` antes de la prueba. |
+| 1 | Fecha regular sin configuración de parámetros | BD recreada sin versión de `financial_parameters` y evento con fecha regular | `start_date = 2027-02-10` | La tarifa se obtiene igual (`350000.0000`) y `base_rate_parameters_id` queda `NULL` (regla 13: el día regular no exige porcentaje). | [x] | `docker compose --profile app down -v` antes de la prueba. |
 | 2 | Flota caída o timeout | Detener el stub y publicar el evento | N/A | UC03 reintenta y envía a `finance.reservation-info.v1.dlq`, registrando el fallo; no se persiste información incompleta (RNF-003, CE-003). | [x] | En UC01: `503 FLEET_UNAVAILABLE`. |
 | 3 | Embarcación sin tarifa base | Publicar el evento con un `boat_id` que Flota no devuelve | UUID desconocido | No se registra la reserva y se anota el fallo; no se asume tarifa (casos extremos). | [x] | |
 | 4 | Evento con fechas inválidas | Publicar con `end_date` anterior a `start_date` | `2027-02-12` → `2027-02-10` | Se confirma (ack) y se registra el fallo; no se consulta Flota ni se persiste (UC03 RF-005). | [x] | |

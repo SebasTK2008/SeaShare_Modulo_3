@@ -33,11 +33,11 @@ Este caso de prueba verifica que, al recibir el identificador de una embarcació
 * El aviso legal se valida carácter a carácter contra el texto fijado por el contrato.
 
 ##### Dependencies & Assumptions
-* **Seed de `financial_parameters`**: existe versión vigente con tarifa de seguro y ambos porcentajes de tarifa dinámica (no depende de otro TC).
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): existe versión vigente con tarifa de seguro y ambos porcentajes de tarifa dinámica (no depende de otro TC).
 * Flota (stub o real) con tarifa base para la embarcación de prueba.
 
 ##### Preconditions & Default Setup
-* **Initial State** : `insurance_fee_per_passenger = 15000.0000`, `weekend_increase_pct = 15.0000`, `high_season_increase_pct = 25.0000`; embarcación `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` con `base_rate = 350000.00`.
+* **Initial State** : `insurance_fee_per_passenger = 15000.0000`, `weekend_increase_pct = 10.0000`, `high_season_increase_pct = 25.0000`; embarcación `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` con `base_rate = 350000.00`.
 * **Environment** : staging local (`docker compose --profile app up --build -d`), health en `http://localhost:8080/actuator/health`, stub de Flota en `http://localhost:8081`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
@@ -52,7 +52,7 @@ Este caso de prueba verifica que, al recibir el identificador de una embarcació
 | 2 | Solicitar la estimación individual | `POST http://localhost:8080/api/v1/estimates/individual` | `boat_id`, `start_date = 2026-12-20`, `end_date = 2026-12-22`, `passengers = 4` | `200 OK` con eco de `boat_id`, fechas y pasajeros (RF-003, RF-004). | [x] | |
 | 3 | Verificar los días inclusivos informados | Revisar `duration_days` | inicio 20, fin 22 | `duration_days = 3` (20, 21 y 22) (RF-003). | [x] | |
 | 4 | Verificar el aviso legal obligatorio | Comparar el campo `warning` con el texto del contrato | N/A | Texto exacto: `Valor estimado. El valor incluye el seguro náutico, pero no incluye el depósito de garantía ni penalidades o ajustes derivados de cambios posteriores de la reserva` (HU2 esc. 1). | [x] | |
-| 5 | Verificar la tarifa aplicada y el total | Comparar `estimated_total` con `(tarifa final del 2026-12-20 × 3) + (15000.00 × 4)` | Temporada alta 25 % > fin de semana 15 % ⇒ `437500.00` | `1312500.00 + 60000.00 = 1372500.00` (RF-003, RF-002). | [x] | |
+| 5 | Verificar la tarifa aplicada y el total | Comparar `estimated_total` con `(tarifa final del 2026-12-20 × 3) + (15000.00 × 4)` | Temporada alta 25 % > fin de semana 10 % ⇒ `437500.00` | `1312500.00 + 60000.00 = 1372500.00` (RF-003, RF-002). | [x] | |
 | 6 | Verificar que la tarifa de inicio rige toda la duración | Recalcular los 3 días con la misma tarifa (no día a día) | `437500.00` diarios | El total no varía por el 21/22-dic: se usa la tarifa de la fecha de inicio (CE-002, UC02 RF-001). | [x] | |
 | 7 | Verificar que el estimado excluye el depósito | Comprobar que el total no suma el 10 % de la tarifa diaria | N/A | El aviso y el monto confirman que no se incluye depósito de garantía (RF-002, HU2 esc. 1). | [x] | |
 

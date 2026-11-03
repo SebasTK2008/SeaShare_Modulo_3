@@ -32,7 +32,7 @@ Este caso de prueba verifica que el Administrador Financiero puede definir o aju
 * Sin frontend: la pantalla se representa por sus dos endpoints REST (`GET` y `PUT`); la validación de rol no existe (seguridad fuera de alcance).
 
 ##### Dependencies & Assumptions
-* Existe al menos una versión vigente de `financial_parameters` (si no, ver TC-UC11-HU3-E2).
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): con la BD recién recreada deja `v7` vigente y `count = 7`; si otro TC de UC11 ya creó versiones, recrear la BD o ajustar `version_number` en los pasos.
 * Al menos una reserva calculada antes del cambio, para comprobar la ausencia de efecto retroactivo.
 
 ##### Preconditions & Default Setup

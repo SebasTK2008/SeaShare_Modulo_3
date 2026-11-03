@@ -33,11 +33,11 @@ Este caso de prueba verifica que, existiendo una versión vigente de `Parámetro
 * Las ventanas de temporada alta dependen del calendario de UC02 (`HighSeasonCalendar`); este TC no re-prueba el calendario, solo que el `GET` las expone.
 
 ##### Dependencies & Assumptions
-* **Seed de `financial_parameters`**: existe al menos una versión persistida (seed o TC-UC11-HU4-E1); no bloquea la ejecución.
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): existe al menos una versión persistida (seed o TC-UC11-HU4-E1); no bloquea la ejecución.
 * Base de datos accesible (`docker compose exec postgres psql -U seashare -d seashare`).
 
 ##### Preconditions & Default Setup
-* **Initial State** : `financial_parameters` con dos versiones: `v6` (valores anteriores) y `v7` **vigente** con `commission_pct = 15.0000`, `insurance_fee_per_passenger = 15000.0000`, `weekend_increase_pct = 10.0000`, `high_season_increase_pct = 25.0000` (valores ilustrativos del contrato; ajustar a la versión vigente del entorno).
+* **Initial State** : `financial_parameters` con `v7` **vigente** y `v6` como versión anterior (el seed base carga `v1..v7`; basta con que exista una versión previa): `commission_pct = 15.0000`, `insurance_fee_per_passenger = 15000.0000`, `weekend_increase_pct = 10.0000`, `high_season_increase_pct = 25.0000` (valores ilustrativos del contrato; ajustar a la versión vigente del entorno).
 * **Environment** : staging local (`docker compose --profile app up --build -d`), health en `http://localhost:8080/actuator/health`.
 * **Test Accounts** : N/A (el sistema no valida identidad; RF-008).
 

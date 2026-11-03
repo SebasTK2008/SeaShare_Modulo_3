@@ -33,6 +33,7 @@ Este caso de prueba verifica que el Administrador Financiero puede definir o aju
 * Sin frontend: la pantalla se representa por sus dos endpoints REST; no hay validación de rol (seguridad fuera de alcance).
 
 ##### Dependencies & Assumptions
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): con la BD recién recreada deja `v7` vigente; si otro TC de UC11 ya creó versiones, recrear la BD o ajustar `version_number` en los pasos.
 * **TC-UC11-HU1-E1 debe haber pasado** (versionado append-only operativo).
 * Existe información de reserva registrada con un número conocido de pasajeros, para comprobar el efecto de la tarifa.
 

@@ -33,7 +33,7 @@ Este caso de prueba verifica que, al guardar valores válidos de comisión, segu
 * La verificación de “sin efecto retroactivo” requiere una reserva ya calculada; si el entorno no la tiene, registrar el paso como bloqueado y anotar la dependencia.
 
 ##### Dependencies & Assumptions
-* **Seed de `financial_parameters`**: existe una versión vigente persistida (seed o TC-UC11-HU3-E1); este TC no depende de otro TC.
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): existe una versión vigente persistida (seed o TC-UC11-HU3-E1); este TC no depende de otro TC.
 * Base de datos accesible (`docker compose exec postgres psql -U seashare -d seashare`).
 
 ##### Preconditions & Default Setup

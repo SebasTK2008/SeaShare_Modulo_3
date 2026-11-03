@@ -29,7 +29,7 @@ Este caso de prueba verifica que el Sistema de Gestión de Flota devuelve la tar
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* El SLA de **< 500 ms es un compromiso de Flota** y solo se puede medir contra la Flota real del entorno de `release/0.1.0`. El stub local (WireMock) **no** demuestra el SLA: en local solo se verifica la consulta única y el presupuesto del cliente.
+* El SLA de **< 500 ms es un compromiso de Flota** y solo se puede medir contra la Flota real del entorno de `release/0.1.0`. El stub local (WireMock) **no** demuestra el SLA: en local solo se verifica la consulta única y el presupuesto del cliente. El mapping base trae 10 tarifas; este TC requiere cargar las 50 en Flota o en el stub (paso 1).
 * Los tiempos incluyen la red entre el cliente de medición y Flota; registrar el método y el equipo usado.
 
 ##### Dependencies & Assumptions
@@ -49,11 +49,11 @@ Este caso de prueba verifica que el Sistema de Gestión de Flota devuelve la tar
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Preparar el lote de medición | Cargar en Flota (o en el mapping del stub) 50 embarcaciones con tarifa | 50 UUID + `base_rate` | Flota devuelve tarifa para las 50 (RF-005). | [x] | |
-| 2 | Medir la respuesta de Flota | `POST /api/v1/fleet/base-rates` cronometrando la petición (`curl.exe -w "%{time_total}"`) | `{"boat_ids":[50 UUID]}` | Tiempo total **< 0.500 s** (HU3 esc. 1, contrato Flota §3 regla 2). | [x] | Usar la Flota real; en local no es evidencia del SLA. |
-| 3 | Repetir con 50 solicitudes concurrentes | Lanzar 50 peticiones simultáneas (script o herramienta de carga) | 50 peticiones de 1 embarcación (o 50 lotes) | p95 < 500 ms y 0 errores; sin degradación por concurrencia (Prueba Independiente HU3). | [x] | Registrar nº de peticiones y errores. |
+| 2 | Medir la respuesta de Flota | `POST /api/v1/fleet/base-rates` cronometrando la petición (`curl.exe -w "%{time_total}"`) | `{"boat_ids":[50 UUID]}` | Tiempo total **< 0.500 s** (HU3 esc. 1, contrato Flota §3 regla 2). | [~] | Usar la Flota real; en local no es evidencia del SLA. |
+| 3 | Repetir con 50 solicitudes concurrentes | Lanzar 50 peticiones simultáneas (script o herramienta de carga) | 50 peticiones de 1 embarcación (o 50 lotes) | p95 < 500 ms y 0 errores; sin degradación por concurrencia (Prueba Independiente HU3). | [~] | Registrar nº de peticiones y errores. |
 | 4 | Verificar el contenido completo de la respuesta | Revisar `rates` | N/A | 50 objetos con `boat_id` y `base_rate` como string decimal, sin tipo ni categoría (RNF-001, RF-007 de UC02). | [x] | |
-| 5 | Verificar el consumo del sistema en una sola consulta | `POST http://localhost:8080/api/v1/estimates/batch` con los 50 IDs y revisar el journal del stub | 50 UUID | Una sola llamada a Flota, 50 estimaciones y respuesta en menos de 2 s (presupuesto de carga ligera del plan UC01 T022). | [x] | El cliente de Flota corta a 1 s. |
-| 6 | Verificar que no hay caché ni degradación entre llamadas | Repetir el paso 5 y comparar el journal | N/A | Cada solicitud realiza su consulta (sin caché, D-19) y el tiempo se mantiene estable. | [x] | |
+| 5 | Verificar el consumo del sistema en una sola consulta | `POST http://localhost:8080/api/v1/estimates/batch` con los 50 IDs y revisar el journal del stub | 50 UUID | Una sola llamada a Flota, 50 estimaciones y respuesta en menos de 2 s (presupuesto de carga ligera del plan UC01 T022). | [~] | El cliente de Flota corta a 1 s. |
+| 6 | Verificar que no hay caché ni degradación entre llamadas | Repetir el paso 5 y comparar el journal | N/A | Cada solicitud realiza su consulta (sin caché, D-19) y el tiempo se mantiene estable. | [~] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |

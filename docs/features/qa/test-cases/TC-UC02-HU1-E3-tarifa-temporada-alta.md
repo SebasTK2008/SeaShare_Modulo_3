@@ -31,11 +31,11 @@ Este caso de prueba verifica que, cuando la fecha evaluada cae dentro de una de 
 * Los montos y porcentajes son **ilustrativos**; **ajustar a la versión vigente del entorno**. Las fechas de las pruebas de frontera deben corresponder al mismo tipo de día (ventana / fuera de ventana) en el calendario del año de ejecución.
 
 ##### Dependencies & Assumptions
-* **Seed de `financial_parameters`**: versión vigente con ambos porcentajes y seguro (no depende de otro TC).
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): versión vigente con ambos porcentajes y seguro (no depende de otro TC).
 * Flota (stub o real) arriba y cola `finance.reservation-info.v1` operativa.
 
 ##### Preconditions & Default Setup
-* **Initial State** : `high_season_increase_pct = 25.0000`, `weekend_increase_pct = 15.0000`, `insurance_fee_per_passenger = 15000.0000`; embarcación `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` → `350000.00`; fecha evaluada de ejemplo **2026-11-19 (jueves, ventana de fin de año)**.
+* **Initial State** : `high_season_increase_pct = 25.0000`, `weekend_increase_pct = 10.0000`, `insurance_fee_per_passenger = 15000.0000`; embarcación `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01` → `350000.00`; fecha evaluada de ejemplo **2026-11-19 (jueves, ventana de fin de año)**.
 * **Environment** : staging local (`docker compose --profile app up --build -d`), RabbitMQ en `http://localhost:15672`, stub de Flota en `http://localhost:8081`, BD con `psql "host=localhost port=5433 dbname=seashare user=seashare"`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
@@ -56,8 +56,8 @@ Este caso de prueba verifica que, cuando la fecha evaluada cae dentro de una de 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Frontera de fin de año | Registrar reservas con las fechas de frontera | `2026-11-14` (sábado), `2026-11-15` (domingo), `2027-01-15` (viernes), `2027-01-16` (sábado) | `11-14` y `01-16`: solo fin de semana (`402500.0000`); `11-15` y `01-15`: temporada alta (`437500.0000`) (RF-006). | [x] | |
-| 2 | Ventana de mitad de año | Repetir con la frontera de junio/julio | `2027-07-30` (viernes) y `2027-07-31` (sábado) | `07-30`: temporada alta (`437500.0000`); `07-31`: solo fin de semana (`402500.0000`) (RF-006). | [x] | |
+| 1 | Frontera de fin de año | Registrar reservas con las fechas de frontera | `2026-11-14` (sábado), `2026-11-15` (domingo), `2027-01-15` (viernes), `2027-01-16` (sábado) | `11-14` y `01-16`: solo fin de semana (`385000.0000`); `11-15` y `01-15`: temporada alta (`437500.0000`) (RF-006). | [x] | |
+| 2 | Ventana de mitad de año | Repetir con la frontera de junio/julio | `2027-07-30` (viernes) y `2027-07-31` (sábado) | `07-30`: temporada alta (`437500.0000`); `07-31`: solo fin de semana (`385000.0000`) (RF-006). | [x] | |
 | 3 | Semana Santa calculada por calendario | Repetir con Jueves y Viernes Santo y con el día anterior | `2027-03-24`, `2027-03-25`, `2027-03-26` | `03-24`: regular (`350000.0000`); `03-25` y `03-26`: temporada alta (`437500.0000`) (RF-006, RNF-004). | [x] | |
 | 4 | Ventana de receso | Repetir en los límites de la ventana | `2027-10-05` (martes) y `2027-10-13` (miércoles) | `10-05`: temporada alta; `10-13`: regular (RF-006). | [x] | |
 | 5 | Sin versión vigente de parámetros | BD recreada sin `financial_parameters` y evento en temporada alta | `start_date = 2026-11-19` | No se calcula la tarifa: UC03 registra el fallo y envía a la DLQ; UC01 responde `503 FINANCIAL_PARAMETERS_NOT_CONFIGURED` (casos extremos). | [x] | |

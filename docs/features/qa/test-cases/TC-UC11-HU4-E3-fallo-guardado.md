@@ -33,7 +33,8 @@ Este caso de prueba verifica que, cuando los valores superan la validación pero
 * En un entorno compartido, coordinar la ventana de indisponibilidad de la base.
 
 ##### Dependencies & Assumptions
-* **TC-UC11-HU4-E1 debe haber pasado** (guardado exitoso y versionado append-only).
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): con la BD recién recreada deja `v7` vigente y `count = 7`; si otro TC de UC11 ya creó versiones, recrear la BD o ajustar `version_number` en los pasos.
+* **TC-UC11-HU4-E1 debe haber pasado** (conocimiento del guardado exitoso y versionado append-only); E3 se ejecuta sobre una BD recreada con el seed, no sobre la misma BD de E1.
 * Acceso a `docker compose` para detener/restaurar `postgres` y a los logs de la aplicación con `X-Correlation-Id`.
 
 ##### Preconditions & Default Setup

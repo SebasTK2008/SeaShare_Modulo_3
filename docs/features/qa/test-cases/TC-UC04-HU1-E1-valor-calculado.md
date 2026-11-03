@@ -34,7 +34,7 @@ Este caso de prueba verifica que, para una reserva con información previamente 
 
 ##### Dependencies & Assumptions
 * **TC-UC03-HU1-E1 debe haber pasado**: la reserva está registrada con tarifa base, fechas, pasajeros, propietario y capacidad.
-* **Seed de `financial_parameters`**: existe versión vigente (no depende de otro TC).
+* **Seed de `financial_parameters`** (automático con el perfil `qa`, ver `matriz-qa.md` → *Seed inicial de QA*): existe versión vigente (no depende de otro TC).
 * **TC-UC02-HU1-E1** ejecutado: la tarifa registrada para una fecha regular no lleva ajuste.
 
 ##### Preconditions & Default Setup
