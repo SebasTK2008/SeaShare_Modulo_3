@@ -5,6 +5,7 @@ import com.seashare.seasharem3.application.dto.RefundGatewayRequest;
 import com.seashare.seasharem3.application.dto.RefundGatewayResult;
 import com.seashare.seasharem3.domain.exception.GatewayBusinessRejectionException;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;
+import com.seashare.seasharem3.domain.exception.GatewayResourceNotFoundException;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.RefundOperationType;
 import com.seashare.seasharem3.infrastructure.config.GatewayProperties;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -95,6 +97,26 @@ class MercadoPagoRefundAdapterTest {
 
         assertThat(adapter.fetchRefund("mp-payment-1", "555")).isEmpty();
         wireMock.verify(getRequestedFor(urlEqualTo("/v1/payments/mp-payment-1/refunds/555")));
+    }
+
+    @Test
+    void listsTheRefundsOfThePayment() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1/refunds"))
+                .willReturn(okJson("[{\"status\":\"approved\",\"id\":555,\"amount\":30000.00}]")));
+
+        List<RefundGatewayResult> refunds = adapter.fetchRefunds("mp-payment-1");
+
+        assertThat(refunds).hasSize(1);
+        assertThat(refunds.get(0).externalId()).isEqualTo("555");
+    }
+
+    @Test
+    void fetchRefundsFailsWhenTheGatewayDoesNotKnowThePayment() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1/refunds"))
+                .willReturn(aResponse().withStatus(404)));
+
+        assertThatThrownBy(() -> adapter.fetchRefunds("mp-payment-1"))
+                .isInstanceOf(GatewayResourceNotFoundException.class);
     }
 
     private static RefundGatewayRequest request() {

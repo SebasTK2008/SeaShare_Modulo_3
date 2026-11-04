@@ -18,9 +18,9 @@ import java.util.Objects;
  *
  * <p>El {@code data.id} de la notificacion es el identificador del pago (la referencia externa del
  * cobro). Cada reembolso se asocia con su intencion local por {@code refund.id ==
- * refund_intent.external_reference}; los reembolsos sin intencion local se ignoran porque pueden
- * pertenecer a otra integracion o a un pago aun no confirmado. Asi el handler comparte el topic
- * {@code payment} con UC05 sin depender de un topic inexistente (D-UC09-10).</p>
+ * refund_intent.external_reference}; los reembolsos sin intencion local se registran en
+ * {@code operational_failure} y la notificacion se confirma, sin reintento. Asi el handler comparte
+ * el topic {@code payment} con UC05 sin depender de un topic inexistente (D-UC09-11).</p>
  *
  * <p>Fuente: UC09 plan T021; contrato {@code pasarela-webhook-resultados.md} §3.4 y §6.</p>
  */
@@ -62,7 +62,10 @@ public class RefundWebhookHandler implements GatewayWebhookHandler {
                 continue;
             }
             if (refundIntentRepository.findByExternalReference(refund.externalId()).isEmpty()) {
-                // Reembolso ajeno a esta integracion o aun no confirmado localmente: no es un fallo.
+                // Reembolso ajeno a esta integracion o aun no confirmado localmente: se registra
+                // para revision y la notificacion se confirma (contrato webhook §3.6).
+                failureRecorder.record(USE_CASE, null, ErrorCode.REFUND_INTENT_NOT_FOUND.name(),
+                        payloadRef(notification) + ";refundId=" + refund.externalId());
                 continue;
             }
             registerRefundResult.register(refund);

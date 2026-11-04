@@ -12,6 +12,7 @@ import com.seashare.seasharem3.support.InMemoryReservationInformationRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -105,6 +106,34 @@ class RegisterChargeResultServiceTest {
         assertThat(intents.findById(intent.id()).orElseThrow().status())
                 .isEqualTo(ChargeIntentStatus.IN_PROCESS);
         assertThat(records.count()).isZero();
+    }
+
+    @Test
+    void keepsAPendingChargeInProcessWithoutCreatingAnAuditRecord() {
+        ReservationInformation reservation = registerCalculatedReservation();
+        ChargeIntent intent = storeIntent(reservation);
+
+        service.register(new ChargeGatewayResult("pending", EXTERNAL_REFERENCE, "pending_review"));
+
+        assertThat(intents.findById(intent.id()).orElseThrow().status())
+                .isEqualTo(ChargeIntentStatus.IN_PROCESS);
+        assertThat(records.count()).isZero();
+        assertThat(failures.failures()).isEmpty();
+    }
+
+    @Test
+    void ignoresRefundedChargebackAndMediationStatesWithoutRecordingAFailure() {
+        ReservationInformation reservation = registerCalculatedReservation();
+        ChargeIntent intent = storeIntent(reservation);
+
+        for (String status : List.of("refunded", "charged_back", "in_mediation")) {
+            service.register(new ChargeGatewayResult(status, EXTERNAL_REFERENCE, "detail"));
+        }
+
+        assertThat(intents.findById(intent.id()).orElseThrow().status())
+                .isEqualTo(ChargeIntentStatus.PENDING_SEND);
+        assertThat(records.count()).isZero();
+        assertThat(failures.failures()).isEmpty();
     }
 
     @Test

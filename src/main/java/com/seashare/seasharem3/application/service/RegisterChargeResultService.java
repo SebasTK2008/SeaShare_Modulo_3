@@ -18,6 +18,7 @@ import java.time.Clock;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class RegisterChargeResultService implements RegisterChargeResultUseCase {
 
     private static final String USE_CASE = "UC05";
+
+    /**
+     * Estados externos que no alteran la intencion de cobro y no son un fallo: el reembolso y el
+     * contracargo los resuelve UC09. Tratarlos como fallo contaminaria {@code operational_failure}
+     * en cada reembolso legitimo (contrato {@code pasarela-webhook-resultados.md} §3.4).
+     */
+    private static final Set<String> IGNORED_STATUSES = Set.of("refunded", "charged_back", "in_mediation");
 
     private final ChargeIntentRepository chargeIntentRepository;
     private final ChargeRecordRepository chargeRecordRepository;
@@ -76,7 +84,11 @@ public class RegisterChargeResultService implements RegisterChargeResultUseCase 
             return;
         }
 
-        ChargeIntentStatus status = toStatus(result.status());
+        String externalStatus = normalize(result.status());
+        if (IGNORED_STATUSES.contains(externalStatus)) {
+            return;
+        }
+        ChargeIntentStatus status = toStatus(externalStatus);
         if (status == null) {
             failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
                     payloadRef(result));
@@ -136,20 +148,26 @@ public class RegisterChargeResultService implements RegisterChargeResultUseCase 
     /**
      * Traduce el estado externo de la pasarela al estado interno. Con cobro directo y captura
      * automatica (general-plan D-32) la aprobacion de la pasarela es el cobro: {@code approved}
-     * se traduce a {@code CAPTURED}. Un estado desconocido no altera la intencion.
+     * se traduce a {@code CAPTURED}. {@code pending} es un pago en revision y se trata como
+     * {@code IN_PROCESS}. Un estado desconocido no altera la intencion y se registra como fallo.
      */
     private static ChargeIntentStatus toStatus(String externalStatus) {
-        if (externalStatus == null) {
-            return null;
-        }
-        return switch (externalStatus.toLowerCase(Locale.ROOT)) {
+        return switch (externalStatus) {
             case "approved" -> ChargeIntentStatus.CAPTURED;
-            case "in_process" -> ChargeIntentStatus.IN_PROCESS;
+            case "in_process", "pending" -> ChargeIntentStatus.IN_PROCESS;
             case "rejected" -> ChargeIntentStatus.REJECTED;
             case "cancelled" -> ChargeIntentStatus.CANCELLED;
             case "expired" -> ChargeIntentStatus.EXPIRED;
             default -> null;
         };
+    }
+
+    /**
+     * Normaliza el estado externo para compararlo; un estado ausente se convierte en cadena vacia
+     * para que caiga en la rama desconocida y no en una coincidencia accidental.
+     */
+    private static String normalize(String externalStatus) {
+        return externalStatus == null ? "" : externalStatus.toLowerCase(Locale.ROOT);
     }
 
     private static String payloadRef(ChargeGatewayResult result) {

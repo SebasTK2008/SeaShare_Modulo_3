@@ -5,6 +5,7 @@ import com.seashare.seasharem3.application.dto.RefundGatewayResult;
 import com.seashare.seasharem3.application.port.out.RefundGatewayPort;
 import com.seashare.seasharem3.domain.exception.GatewayBusinessRejectionException;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;
+import com.seashare.seasharem3.domain.exception.GatewayResourceNotFoundException;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.infrastructure.config.GatewayProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -147,7 +148,8 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
         } catch (JacksonException exception) {
             throw communicationFailure("The payment gateway returned an invalid refund list", exception);
         } catch (HttpClientErrorException.NotFound exception) {
-            return List.of();
+            throw new GatewayResourceNotFoundException(
+                    "The payment gateway does not know the payment " + chargeReference, exception);
         } catch (RestClientResponseException exception) {
             throw communicationFailure("The payment gateway did not answer the refund list query", exception);
         } catch (RestClientException exception) {

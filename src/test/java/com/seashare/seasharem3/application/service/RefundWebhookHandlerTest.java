@@ -5,6 +5,7 @@ import com.seashare.seasharem3.application.dto.RefundGatewayResult;
 import com.seashare.seasharem3.application.port.in.RegisterRefundResultUseCase;
 import com.seashare.seasharem3.application.port.out.RefundGatewayPort;
 import com.seashare.seasharem3.application.port.out.RefundIntentRepository;
+import com.seashare.seasharem3.domain.exception.GatewayResourceNotFoundException;
 import com.seashare.seasharem3.domain.model.RefundIntent;
 import com.seashare.seasharem3.domain.model.ReservationInformation;
 import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
@@ -23,6 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -66,7 +68,7 @@ class RefundWebhookHandlerTest {
     }
 
     @Test
-    void ignoresRefundsWithoutALocalIntent() {
+    void recordsRefundsWithoutALocalIntentAsFailure() {
         RefundGatewayResult foreign = new RefundGatewayResult("approved", "rf-other",
                 new Money(new BigDecimal("1000.00")), null, null);
         when(refundGatewayPort.fetchRefunds(CHARGE_REFERENCE)).thenReturn(List.of(foreign));
@@ -74,7 +76,17 @@ class RefundWebhookHandlerTest {
         handler.handle(new GatewayWebhookNotification("payment", "payment.updated", CHARGE_REFERENCE));
 
         verify(registerRefundResult, never()).register(org.mockito.ArgumentMatchers.any());
-        assertThat(failureRecorder.failures()).isEmpty();
+        assertThat(failureRecorder.failures()).hasSize(1);
+    }
+
+    @Test
+    void propagatesAnUnknownPaymentSoTheListenerRecordsIt() {
+        when(refundGatewayPort.fetchRefunds(CHARGE_REFERENCE))
+                .thenThrow(new GatewayResourceNotFoundException("the payment does not exist"));
+
+        assertThatThrownBy(() -> handler.handle(
+                new GatewayWebhookNotification("payment", "payment.updated", CHARGE_REFERENCE)))
+                .isInstanceOf(GatewayResourceNotFoundException.class);
     }
 
     @Test

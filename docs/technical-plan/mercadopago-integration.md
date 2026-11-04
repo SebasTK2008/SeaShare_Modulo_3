@@ -115,10 +115,10 @@ Puntos clave:
 | `circuit-breaker.permitted-number-of-calls-in-half-open-state` | `1` | Llamadas en half-open |
 | `reconciliation-interval` | `5m` | Cadencia del job de conciliación |
 
-> `reconciliation-interval` y los umbrales del *circuit breaker* **no** están declarados en
-> `META-INF/additional-spring-configuration-metadata.json`: no aparecen en el autocompletado del IDE
-> ni en la tabla de variables del README. Se ajustan por `application.properties` o por entorno con
-> el nombre completo.
+> `reconciliation-interval` y los umbrales del *circuit breaker* están declarados en
+> `META-INF/additional-spring-configuration-metadata.json` (autocompletado del IDE), pero **no** se
+> exponen como variables de entorno en el README: se ajustan por `application.properties` o por
+> entorno con el nombre completo.
 
 ---
 
@@ -128,30 +128,30 @@ Puntos clave:
 |---|---|---|
 | `approved` | `CAPTURED` | `COMPLETED` |
 | `in_process` | `IN_PROCESS` | `IN_PROCESS` |
-| `pending` | `IN_PROCESS` *(ver G-02)* | `IN_PROCESS` |
+| `pending` | `IN_PROCESS` | `IN_PROCESS` |
 | `rejected` | `REJECTED` | `REJECTED` |
 | `cancelled` | `CANCELLED` | `CANCELLED` |
 | `expired` | `EXPIRED` | `EXPIRED` |
-| `refunded` / `charged_back` / `in_mediation` | Sin cambio *(ver G-03)* | — |
+| `refunded` / `charged_back` / `in_mediation` | Sin cambio (no-op) | — |
 | Desconocido | Sin cambio + `operational_failure` | Sin cambio + `operational_failure` |
 
 ---
 
-## 7. Brechas de código pendientes
+## 7. Brechas de código
 
-La documentación describe el comportamiento **objetivo**. Las siguientes brechas son de **código** y
-deben resolverse en una sesión de implementación, no rebajando la documentación.
+La documentación describe el comportamiento **objetivo**. El código se alineó con ella el
+**2026-11-04**; solo queda abierta la brecha del stub del modo A.
 
-| ID | Brecha | Evidencia | Severidad | ¿Bloquea sandbox? |
+| ID | Brecha | Evidencia | Severidad | Estado |
 |---|---|---|---|---|
-| **G-01** | No existe stub de pasarela para los TC que citan "request journal del simulador" | `wiremock/` solo contiene `mappings/fleet-base-rates.json` | Media | No (se cubre con modo B o con la suite automática) |
-| **G-02** | `pending` no se mapea en UC05; se registra `operational_failure` y la intención no avanza | `RegisterChargeResultService.java:145-151` | **Alta** | **Sí**: un pago pendiente queda estancado |
-| **G-03** | `refunded` / `charged_back` / `in_mediation` registran `operational_failure` en lugar de ser no-op | `RegisterChargeResultService.java:80-83,151` | Media | No, pero contamina la revisión manual |
-| **G-04** | Reembolso sin intención local se ignora en silencio | `RefundWebhookHandler.java:64-67` | **Alta** | **Sí**: rompe la trazabilidad de B-06 |
-| **G-05** | `404` de `GET /refunds` devuelve lista vacía sin registrar el evento | `MercadoPagoRefundAdapter.java:149-150` | Media | No, pero oculta errores de configuración |
-| **G-06** | El webhook no valida `Content-Type` | `GatewayWebhookController.java:56-62` | Baja | No |
-| **G-07** | `MercadoPagoPaymentResponse.refunds` se lee y no se usa | `MercadoPagoPaymentResponse.java:20-21` | Baja | No |
-| **G-08** | Faltan `reconciliation-interval` y `circuit-breaker.*` en la metadata de configuración | `additional-spring-configuration-metadata.json` | Baja | No |
+| **G-01** | No existe stub de pasarela para los TC que citan "request journal del simulador" | `wiremock/` solo contiene `mappings/fleet-base-rates.json` | Media | **Abierta** (no bloquea sandbox) |
+| **G-02** | `pending` no se mapeaba en UC05; se registraba `operational_failure` y la intención no avanzaba | `RegisterChargeResultService.toStatus` | Alta | **Cerrada** (2026-11-04) |
+| **G-03** | `refunded` / `charged_back` / `in_mediation` registraban `operational_failure` en lugar de ser no-op | `RegisterChargeResultService.IGNORED_STATUSES` | Media | **Cerrada** (2026-11-04) |
+| **G-04** | Reembolso sin intención local se ignoraba en silencio | `RefundWebhookHandler.handle` | Alta | **Cerrada** (2026-11-04) |
+| **G-05** | `404` de `GET /refunds` devolvía lista vacía sin registrar el evento | `MercadoPagoRefundAdapter.executeFetchRefunds` | Media | **Cerrada** (2026-11-04) |
+| **G-06** | El webhook no validaba `Content-Type` | `GatewayWebhookController.isJson` | Baja | **Cerrada** (2026-11-04) |
+| **G-07** | `MercadoPagoPaymentResponse.refunds` se leía y no se usaba | `MercadoPagoPaymentResponse` | Baja | **Cerrada** (2026-11-04) |
+| **G-08** | Faltaban `reconciliation-interval` y `circuit-breaker.*` en la metadata de configuración | `additional-spring-configuration-metadata.json` | Baja | **Cerrada** (2026-11-04) |
 
 ---
 

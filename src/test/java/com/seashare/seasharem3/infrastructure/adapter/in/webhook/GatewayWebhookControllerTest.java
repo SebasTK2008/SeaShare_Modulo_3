@@ -130,6 +130,21 @@ class GatewayWebhookControllerTest {
     }
 
     @Test
+    void rejectsANotificationWithoutJsonContentType() throws Exception {
+        mockMvc.perform(post("/api/v1/webhook/gateway")
+                .param("data.id", DATA_ID)
+                .param("type", "payment")
+                .header("x-request-id", REQUEST_ID)
+                .header("x-signature", signature())
+                .contentType(MediaType.TEXT_PLAIN)
+                .content("{\"action\":\"payment.updated\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        assertThat(dispatcher.notifications).isEmpty();
+    }
+
+    @Test
     void rejectsANotificationWithoutType() throws Exception {
         mockMvc.perform(post("/api/v1/webhook/gateway")
                 .param("data.id", DATA_ID)
