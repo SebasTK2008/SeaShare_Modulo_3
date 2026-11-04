@@ -31,11 +31,13 @@ Donde `{id}` corresponde al ID del pago original devuelto por Mercado Pago (`ori
 
 ### Body (Payload)
 
-Si no se envía body, Mercado Pago asume un **reembolso total**. Para un **reembolso parcial** (ej. reembolsar solo el depósito de garantía), se debe especificar el monto.
+El sistema envía **siempre** el campo `amount`, tanto en reembolsos totales como parciales. Mercado
+Pago acepta omitir el cuerpo para asumir un **reembolso total**; esta integración no usa esa forma:
+el monto a devolver siempre se conoce en la intención.
 
 | Campo | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
-| `amount` | decimal | No | Monto específico a reembolsar. Omitir para reembolso total. | [SPEC RF-002, RF-003, RNF-002] |
+| `amount` | decimal | Sí | Monto a reembolsar. En un reembolso total coincide con el monto del pago original; en uno parcial es la parte a devolver (ej. solo el depósito de garantía). | [SPEC RF-002, RF-003, RNF-002] |
 
 ```json
 {
@@ -79,9 +81,15 @@ Authorization: Bearer <ACCESS_TOKEN>
 
 `payment_id` es la referencia externa del `charge_intent` original (el `data.id` del webhook). La
 lista se mapea a `RefundGatewayResult`; cada reembolso se asocia con su intención local por
-`refund.id == refund_intent.external_reference`. Los reembolsos sin intención local se ignoran. El
-worker también conserva `GET /v1/payments/{payment_id}/refunds/{refund_id}` para consultar un
-reembolso puntual; un `404` no es un veredicto financiero y no cierra la intención.
+`refund.id == refund_intent.external_reference`. Un reembolso sin intención local **se registra en
+`operational_failure`** y la notificación se confirma: no es un veredicto financiero y no se
+reintenta. El worker también conserva `GET /v1/payments/{payment_id}/refunds/{refund_id}` para
+consultar un reembolso puntual.
+
+Un `404` al consultar la lista no cierra la intención: el evento se registra en
+`operational_failure`. Un `5xx` o un *timeout* tampoco es un veredicto financiero: el mensaje se
+reintenta por la política de la cola (5 intentos, *backoff* exponencial base 1 s) y, al agotarlos,
+se rechaza a la DLQ y se registra en `operational_failure` (README §4.4).
 
 ## 5. Manejo de Errores
 

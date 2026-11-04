@@ -64,7 +64,7 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el éxito d
 | 2 | Payload incompleto | Enviar sin `action`, sin `data.id` o sin `type` | payload incompleto | `400 VALIDATION_ERROR`; no se encola ni se registra el resultado (contrato webhook §5). | [ ] | |
 | 3 | Notificación duplicada del mismo resultado | Reenviar el mismo webhook | mismo `data.id` | `200 OK` y el resultado ya registrado no se altera ni crea otro `refund_record` (contrato webhook §3.5 y §6). | [ ] | |
 | 4 | La Pasarela no conoce el pago | Simular `404` en la lista de reembolsos | N/A | La intención **no** se cierra; el evento se registra en `operational_failure` (contrato webhook §3.6). | [ ] | |
-| 5 | `data.id` sin reembolso local | Notificar un `payment_id` cuyos reembolsos no coinciden con ninguna `refund_intent` | `payment_id` sin coincidencia | `200 OK`; los reembolsos sin intención local se ignoran, sin creación de registros (D-UC09-11). | [ ] | |
+| 5 | `data.id` sin reembolso local | Notificar un `payment_id` cuyos reembolsos no coinciden con ninguna `refund_intent` | `payment_id` sin coincidencia | `200 OK`; cada reembolso sin intención local se registra en `operational_failure`, sin creación de registros ni reintento (contrato webhook §3.6). | [ ] | |
 | 6 | Falla al persistir la notificación | Simular BD no disponible antes del acuse | N/A | `500 INTERNAL_ERROR` para que la Pasarela reintente (contrato webhook §3.7). | [ ] | |
 | 7 | Falla en el paso asíncrono | Simular error de la consulta o del registro tras el `200 OK` | N/A | Reintentos de la cola interna (5 intentos, *backoff* base 1 s); al agotarlos, DLQ y `operational_failure` (README §4.4). | [ ] | |
 

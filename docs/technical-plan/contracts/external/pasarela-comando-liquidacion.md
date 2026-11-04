@@ -18,6 +18,10 @@ liquidación al Propietario se resuelve dentro del sistema para mantener el fluj
 auditable. El marketplace real de Mercado Pago (split de pagos y cuentas vinculadas de los
 Propietarios) queda como **fase futura no implementada** (D-UC10-18).
 
+El registro que produce (`settlement_record` y, en la liquidación estándar, `commission_record`) es
+un **asiento contable interno**: acredita cuánto corresponde al Propietario, pero **no transfiere
+dinero** ni acredita fondos en su cuenta de Mercado Pago.
+
 El puerto de aplicación es `SettlementGatewayPort.send(GatewaySettlementRequest)` y su única
 implementación es `SimulatedSettlementGatewayAdapter`. La capacidad persistida en
 `settlement_intent.gateway_capability` es siempre `STANDARD_SETTLEMENT`; la migración inicial

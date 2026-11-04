@@ -30,7 +30,7 @@ Este caso de prueba verifica que, ante una cancelación moderada (72 h – 24 h)
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La liquidación usa un **libro interno simulado** (`SimulatedSettlementGatewayAdapter`): no hay llamada HTTP a Mercado Pago, ni cuenta destino, ni confirmación externa. La operación se verifica por la BD, los logs de la app y la referencia determinista `sim-settlement-<idempotency_key>`.
+* La liquidación usa un **libro interno simulado** (`SimulatedSettlementGatewayAdapter`): no hay llamada HTTP a Mercado Pago, ni cuenta destino, ni confirmación externa. La operación se verifica por la BD, los logs de la app y la referencia determinista `sim-settlement-<operationKey>`.
 
 ##### Dependencies & Assumptions
 * **TC-UC05-HU2-E1 debe haber pasado**: existe un cobro aprobado con `charge_record` (alquiler, seguro y depósito).
@@ -54,7 +54,7 @@ Este caso de prueba verifica que, ante una cancelación moderada (72 h – 24 h)
 | 3 | Notificar la cancelación moderada | Publicar en `seashare.reservations` con routing key `reservation.status.changed` | `{"reservation_id":"b7d0e2a1-…","status":"CANCELLED_MODERATE","status_changed_at":"2026-12-20T10:00:00Z"}` | El mensaje se confirma (ack); se crea la solicitud de dispersión sin montos externos (RF-001). | [ ] | Disparador real: UC07. |
 | 4 | Verificar la intención registrada | `SELECT * FROM settlement_intent WHERE reservation_id = '...'` | N/A | `trigger = CANCELLED_MODERATE`, `scope = CANCELLATION_COMPENSATION`, `amount = 450000.00`, `commission_amount = 0`, `deposit_amount = 30000.00`, estado inicial `PENDING_SEND`, `gateway_capability = STANDARD_SETTLEMENT` e `idempotency_key` con formato UUID v4 (RF-002, RF-007, RF-009). | [ ] | 50 % de `900000.00`. |
 | 5 | Verificar el comando interno | Inspeccionar `finance.settlement-command.v1` y el *outbox* | N/A | Cuerpo `{"settlement_intent_id":"..."}`; no viaja un monto arbitrario desde Reservas (RF-001). | [ ] | |
-| 6 | Verificar el registro en el libro interno | `SELECT status, external_reference, status_detail, gateway_capability FROM settlement_intent` tras el worker | N/A | La intención pasa a `COMPLETED`; `external_reference = sim-settlement-<idempotency_key>` y `status_detail = simulated internal settlement`; `gateway_capability = STANDARD_SETTLEMENT` (D-UC10-10, D-UC10-18). | [ ] | No hay petición HTTP ni journal de pasarela. |
+| 6 | Verificar el registro en el libro interno | `SELECT status, external_reference, status_detail, gateway_capability FROM settlement_intent` tras el worker | N/A | La intención pasa a `COMPLETED`; `external_reference = sim-settlement-<operationKey>` y `status_detail = simulated internal settlement`; `gateway_capability = STANDARD_SETTLEMENT` (D-UC10-18). | [ ] | No hay petición HTTP ni journal de pasarela. |
 | 7 | Verificar el registro inmutable | `SELECT * FROM settlement_record WHERE settlement_intent_id = '<id>'` | N/A | Exactamente **una** fila con `amount = 450000.00`, `rental_gross_amount = 900000.00`, `insurance_amount = 0`, `deposit_amount = 30000.00`, reserva, propietario y embarcación (RF-009A, RF-010, RF-016). | [ ] | |
 | 8 | Verificar que no se genera comisión | `SELECT count(*) FROM commission_record WHERE settlement_intent_id = '<id>'` | N/A | `0` filas: las penalidades no llevan comisión de la plataforma (RF-007, RF-014, CE-002). | [ ] | |
 | 9 | Verificar el depósito asociado | `SELECT deposit_amount FROM settlement_intent` y `SELECT disposition FROM deposit_disposition` | N/A | El depósito `30000.00` se conserva asociado; UC10 no lo dispone, su desenlace pertenece al flujo de reembolso de UC09 (D-34; plan UC10, regla 5). | [ ] | |
@@ -65,7 +65,7 @@ Este caso de prueba verifica que, ante una cancelación moderada (72 h – 24 h)
 | 1 | Reserva sin alquiler registrado | Publicar `CANCELLED_MODERATE` para una reserva sin desglose | reserva sin `rental_amount` | Se registra el fallo en `operational_failure`; no se crea intención ni se escribe en el libro interno (RF-013; caso extremo del UC10). | [ ] | Sin cálculo parcial. |
 | 2 | Modo de liquidación inválido | Arrancar con `GATEWAY_SETTLEMENT_MODE` distinto de `simulated` | configuración inválida | La aplicación no arranca y el error identifica el valor no soportado (D-UC10-18). | [ ] | |
 | 3 | Fallo del libro interno | Provocar `GatewayBusinessRejectionException` con un doble de prueba | N/A | Intención `REJECTED`, fallo **no reintentable**, sin registro inmutable; el adaptador simulado real no produce rechazos (D-UC10-18). | [ ] | Se cubre en pruebas unitarias. |
-| 4 | Reintento del worker | Reprocesar el mismo `settlement_intent_id` | misma intención | La referencia `sim-settlement-<idempotency_key>` es determinista y el registro sigue siendo único (D-UC10-10). | [ ] | |
+| 4 | Reintento del worker | Reprocesar el mismo `settlement_intent_id` | misma intención | La referencia `sim-settlement-<operationKey>` es determinista y el registro sigue siendo único (D-UC10-10). | [ ] | |
 | 5 | Evento repetido con la misma identidad | Publicar dos veces el mismo `CANCELLED_MODERATE` | misma `operationKey` | Sin segunda intención ni segunda liquidación; el mensaje se confirma (UC07 RF-009A; contrato UC07, regla 7). | [ ] | |
 
 ##### Edge Cases & Boundary Conditions

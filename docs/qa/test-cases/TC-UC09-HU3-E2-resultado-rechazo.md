@@ -60,10 +60,10 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el rechazo 
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Firma inválida o ausente | Enviar el webhook con `x-signature` incorrecta | `data.id` y `type` válidos | `401 UNAUTHENTICATED`; no se actualiza la intención (contrato webhook §5). | [ ] | |
 | 2 | Payload incompleto | Enviar sin `action`, sin `data.id` o sin `type` | payload incompleto | `400 VALIDATION_ERROR`; no se procesa el resultado (contrato webhook §5). | [ ] | |
-| 3 | Falla técnica, no rechazo de negocio | Simular timeout o `5xx` en la lista de reembolsos | N/A | Intención `COMMUNICATION_ERROR`, nunca `REJECTED`; reintentos de la cola (RNF-003; CE-004). | [ ] | |
+| 3 | Falla técnica, no rechazo de negocio | Simular timeout o `5xx` en la lista de reembolsos | N/A | La intención no se marca `REJECTED`; el mensaje se reintenta (5 intentos, *backoff* base 1 s) y, al agotarlos, se rechaza a la DLQ y se registra en `operational_failure` (RNF-003; CE-004). | [ ] | |
 | 4 | La Pasarela no conoce el pago | Simular `404` en `GET .../refunds` | N/A | La intención no se cierra y el evento queda en `operational_failure` (contrato webhook §3.6). | [ ] | |
 | 5 | Notificación repetida del mismo fallo | Reenviar el mismo webhook | mismo `data.id` | `200 OK`; no se altera el estado ya registrado ni se crea registro (contrato webhook §6). | [ ] | |
-| 6 | Reembolso sin intención local | Notificar un pago cuyo reembolso no coincide con ninguna `refund_intent` | `refund.id` desconocido | `200 OK`; el reembolso se ignora sin cambios en intenciones (D-UC09-11). | [ ] | |
+| 6 | Reembolso sin intención local | Notificar un pago cuyo reembolso no coincide con ninguna `refund_intent` | `refund.id` desconocido | `200 OK`; el reembolso se registra una vez en `operational_failure` y no se reintenta (contrato webhook §3.6). | [ ] | |
 | 7 | Falla al persistir la notificación | Simular BD no disponible antes del acuse | N/A | `500 INTERNAL_ERROR` para que la Pasarela reintente (contrato webhook §3.7). | [ ] | |
 
 ##### Edge Cases & Boundary Conditions

@@ -21,6 +21,10 @@ converger en el resultado de los reembolsos del pago (D-UC09-11). No se consumen
 reembolsos ni de órdenes de marketplace, porque Mercado Pago no los expone como eventos de esta
 integración en la Payments API.
 
+La documentación vigente de Mercado Pago etiqueta el topic `payment` como **legacy** para Checkout
+API y promueve `orders`. Esta integración usa **Payments API** (`POST /v1/payments`), para la cual
+`payment` es el topic correcto y el único que se consume.
+
 1. **Notificación entrante**: MP hace `POST` al endpoint del sistema con un payload mínimo y query
    params identificadores. El sistema responde `200 OK` inmediatamente para acusar recibo.
 2. **Consulta activa a la API de MP**: el sistema usa el `data.id` recibido —el identificador del
@@ -34,6 +38,10 @@ worker de la cola interna `finance.gateway-notification.v1` (§3.3).
 ## 2. Petición (Webhook entrante de Mercado Pago)
 
 `POST /api/v1/webhook/gateway`
+
+La URL se registra en el panel de Mercado Pago **a nivel de aplicación** (topic `payment`). Esta
+integración no envía `notification_url` en cada pago, de modo que la recepción de notificaciones
+depende de esa configuración de la aplicación.
 
 ### Query Parameters (enviados por Mercado Pago en la URL)
 
@@ -122,18 +130,29 @@ se ignoran.
 
 4. **Mapeo de tipo de evento a operación interna** (el estado se toma de la **consulta a la
    pasarela**, no del cuerpo de la notificación):
-   - `type=payment` → operación de cobro (UC05) → actualiza `IntenciónDeCobro` y, con el estado
-     `approved`, genera `RegistroDeCobro` inmutable [SPEC 5 RF-006]. Se atiende cualquier `action`
-     del tipo (`payment.created`, `payment.updated`…); el `action` no discrimina el resultado.
-   - `type=payment` con estado `rejected` / `expired` → cobro fallido / expirado
-     [SPEC 5 RF-014].
+   - `type=payment` → operación de cobro (UC05) → actualiza `IntenciónDeCobro` según la tabla de
+     estados de abajo y, con el estado `approved`, genera `RegistroDeCobro` inmutable
+     [SPEC 5 RF-006]. Se atiende cualquier `action` del tipo (`payment.created`,
+     `payment.updated`…); el `action` no discrimina el resultado.
    - `type=payment` → operación de reembolso (UC09) → el mismo `data.id` identifica el pago; UC09
      consulta la lista de reembolsos y asocia cada uno con `refund_intent.external_reference` por
-     `refund.id`. Los reembolsos sin intención local se ignoran porque pueden pertenecer a otra
-     integración o a un pago aún no confirmado; con estado exitoso se genera
-     `RegistroDeReembolso` inmutable [SPEC 9 RF-007; D-UC09-11].
+     `refund.id`. Un reembolso sin intención local se registra en `operational_failure` y la
+     notificación se confirma; con estado exitoso se genera `RegistroDeReembolso` inmutable
+     [SPEC 9 RF-007; D-UC09-11].
    - Un tipo distinto de `payment` no tiene manejador en esta entrega: se registra en
      `operational_failure` y se confirma la recepción.
+
+   **Tabla de estados del pago (UC05)**
+
+   | Estado en Mercado Pago | `IntenciónDeCobro` | Registro inmutable |
+   |---|---|---|
+   | `approved` | `CAPTURED` | `RegistroDeCobro` |
+   | `in_process` / `pending` | `IN_PROCESS` | No |
+   | `rejected` | `REJECTED` | No |
+   | `cancelled` | `CANCELLED` | No |
+   | `expired` | `EXPIRED` | No |
+   | `refunded` / `charged_back` / `in_mediation` | Sin cambio (no-op): el reembolso lo resuelve UC09 | No |
+   | Desconocido | Sin cambio + registro en `operational_failure` | No |
 
 5. **Deduplicación**: la notificación se asocia a la intención interna por el `external_reference`
    de la intención —el `data.id` del pago que la pasarela devolvió al crear la operación y que el
@@ -141,10 +160,13 @@ se ignoran.
 
 6. **`data.id` o `type` desconocidos**: si el ID o el tipo no pueden asociarse a ninguna intención
    interna, el sistema responde `200 OK` (para evitar reintentos infinitos de MP) y registra el
-   evento en `operational_failure` para revisión manual [CONV]. Lo mismo ocurre si la pasarela
-   responde `404` al consultar el pago: un `404` **no** es un veredicto financiero, de modo que la
-   intención **no** se cierra en `REJECTED` y el evento queda registrado [CONV]
-   (UC05 plan D-UC05-13).
+   evento en `operational_failure` para revisión manual [CONV]. La misma regla aplica a un
+   reembolso individual sin `refund_intent` asociada: se registra una vez y no se reintenta. Un
+   `5xx` o un *timeout* al consultar el pago o la lista de reembolsos **no** es un veredicto
+   financiero: el mensaje se reintenta por la política de la cola (§3.7) y, al agotar los intentos,
+   se rechaza a la DLQ y se registra en `operational_failure`. Un `404` al consultar el pago
+   tampoco cierra la intención en `REJECTED`: la intención conserva su estado y el evento queda
+   registrado [CONV] (UC05 plan D-UC05-13).
 
 7. **Resiliencia**: si el sistema no puede persistir la notificación (base de datos no disponible),
    responde `500 INTERNAL_ERROR` para que MP reintente la notificación. Si el fallo ocurre en el

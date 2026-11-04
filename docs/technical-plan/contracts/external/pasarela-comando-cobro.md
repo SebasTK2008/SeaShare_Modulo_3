@@ -37,7 +37,7 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
 | `token` | string | Sí | Token seguro de la tarjeta generado por el SDK de Mercado Pago | [SPEC RF-001, RF-011] |
 | `description` | string | Sí | Descripción de la reserva para el estado de cuenta; la fija el sistema como `Reserva <reservation_id>` | [CONV] |
 | `installments` | integer | Sí | Número de cuotas; el sistema fija `1` | [CONV] |
-| `payment_method_id` | string | No* | ID del medio de pago (marca); se omite cuando UC07 informa un tipo genérico (`CREDIT_CARD`, `DEBIT_CARD`, `PREPAID_CARD`): Mercado Pago lo resuelve desde el token. Cuando UC07 ya aporta la marca (`VISA`, `MASTER`, etc.), se envía en minúsculas. | [SPEC] + [CONV] + [D-UC05-16] |
+| `payment_method_id` | string | No* | ID del medio de pago (marca). Se omite cuando UC07 informa un tipo genérico (`CREDIT_CARD`, `DEBIT_CARD`, `PREPAID_CARD`) y se envía en minúsculas cuando UC07 ya aporta la marca (`VISA`, `MASTER`, etc.). **[PENDIENTE SANDBOX]**: que Mercado Pago infiera la marca desde el token **no está confirmado**; su documentación lista el campo entre los mínimos y define el error `4001` («Payment_method_id attribute can't be null»). Enviar un tipo genérico sí está descartado (error `3028`). Ver `docs/qa/pagos-api-real.md` B-09. | [SPEC] + [CONV] + [D-UC05-16] |
 | `payer.email` | string | Sí | Email del arrendatario; se envía `payment_metadata.payer_email` del mensaje de UC07 (dato plano) | [SPEC] + [CONV] |
 | `external_reference` | string | Sí | Identificador de la reserva para trazabilidad cruzada; el sistema envía el `reservation_id` | [SPEC SolicitudCobroPasarela] + [CONV] |
 
@@ -62,8 +62,9 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
    clave se genera una vez por operación (UUID v4), se persiste y se reutiliza en los reintentos; un
    timeout no significa fallo [SPEC RNF-003; D-UC05-15].
 4. **Cobro directo**: se solicita el cobro con captura automática; no se usa autorización retenida ni `capture=false`. La aprobación de Mercado Pago ya es el cobro (general-plan D-32).
-5. **Datos obligatorios**: si el correo del pagador no está disponible, **no se envía** la solicitud (el SPEC exige no enviar un cobro con datos incompletos): la intención de cobro queda en `REJECTED` con el detalle técnico y sin registro de cobro [CONV] (UC05 plan D-UC05-11). El `payment_method_id` es opcional: Mercado Pago lo infiere desde el token; solo se envía cuando UC07 ya informa una marca (`VISA`, `MASTER`, etc.) [D-UC05-16].
+5. **Datos obligatorios**: si el correo del pagador no está disponible, **no se envía** la solicitud (el SPEC exige no enviar un cobro con datos incompletos): la intención de cobro queda en `REJECTED` con el detalle técnico y sin registro de cobro [CONV] (UC05 plan D-UC05-11). El tipo de medio **no** es obligatorio: se aplica la regla **[PENDIENTE SANDBOX]** de §2 (`payment_method_id` omitido para tipos genéricos, marca en minúsculas cuando UC07 la informa) [D-UC05-16].
 6. **Protección de la pasarela**: la llamada usa un *timeout* de **10 s** de conexión y de lectura (general-plan §7.2) y el adaptador aplica un *circuit breaker* (50 % de fallos sobre una ventana de 10 llamadas, mínimo 5 llamadas, 10 s abierto, 1 llamada en *half-open*) para no gastar los reintentos de la cola contra una pasarela caída. Un `400` de validación del token **no** cuenta como fallo del circuito: no es una caída de la pasarela [CONV] (general-plan §7.2, D-20).
+7. **Notificaciones**: el webhook de resultados se configura **a nivel de aplicación** en el panel de Mercado Pago (topic `payment`). Esta integración **no** envía `notification_url` en el cuerpo del pago, de modo que un pago creado desde ella depende de la configuración de la aplicación para recibir notificaciones (ver `pasarela-webhook-resultados.md` §2).
 
 ## 4. Respuesta exitosa (Técnica)
 
@@ -92,4 +93,4 @@ Un *timeout* **nunca** permite concluir que el cobro falló: la intención queda
 
 ## 6. Trazabilidad
 
-HU1 · RF-001 a RF-004, RF-011, RF-015 · RNF-001 a RNF-004 · D-UC05-15.
+HU1 · RF-001 a RF-004, RF-011, RF-015 · RNF-001 a RNF-004 · D-UC05-15, D-UC05-16.

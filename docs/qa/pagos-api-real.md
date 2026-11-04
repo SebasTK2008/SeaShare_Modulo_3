@@ -29,14 +29,18 @@ persistidos y no contacta a la pasarela.
 ### 2.1 Condiciones de ejecución
 
 - Aplicación arrancada con `.env` local (gitignored) y credenciales **TEST** de la app
-  `SeaShareFinanzasDemo` (site MCO). Nunca usar credenciales de producción ni versionarlas.
+  **`SeaShareFinanzasDemo`** —nombre previsto, **pendiente de creación** en el panel— (site MCO).
+  Nunca usar credenciales de producción ni versionarlas.
 - `GATEWAY_WEBHOOK_SECRET` completo, copiado del panel de Mercado Pago. Sin él el webhook responde
   `401 UNAUTHENTICATED` y el modo B no es válido.
 - Callback público HTTPS registrado en Mercado Pago, topic `payment`. Si el túnel cambia, actualizar
-  el callback antes de ejecutar.
+  el callback antes de ejecutar. El procedimiento es genérico: cualquier túnel HTTPS sirve.
 - Usuarios de prueba MCO: vendedor con fondos y comprador. Anotar sus IDs en la evidencia.
-- Tokenización de la tarjeta de prueba mediante Bricks o el flujo de tokenización de Mercado Pago.
+- Tokenización de la tarjeta de prueba con la `public_key` desde el repositorio de frontend
+  ([contrato de frontera](../technical-plan/contracts/external/frontend-tokenizacion.md)).
   El sistema solo recibe el token; nunca PAN, CVV ni fecha de vencimiento.
+
+**Procedimiento paso a paso:** [`runbook-sandbox-mercadopago.md`](runbook-sandbox-mercadopago.md).
 
 ### 2.2 Escenarios mínimos obligatorios
 
@@ -50,6 +54,8 @@ persistidos y no contacta a la pasarela.
 | **B-06** | Webhook de reembolso | Notificación `payment` posterior al reembolso | El worker consulta `GET /v1/payments/{id}/refunds`, asocia por `refund.id == external_reference` y no altera reembolsos ajenos |
 | **B-07** | Idempotencia | Repetir el mismo cobro/reembolso con la misma `X-Idempotency-Key` | Mercado Pago devuelve la misma operación; no se crea un segundo cobro, reembolso, intención ni registro |
 | **B-08** | Datos sensibles | Inspeccionar payloads, logs y BD tras B-01…B-07 | Solo se envía/persiste el token; no aparecen PAN, CVV ni vencimiento |
+| **B-09** | `payment_method_id` omitido | `POST /v1/payments` con UC07 informando solo `CREDIT_CARD` (sin marca) | Registrar la respuesta real: si es `approved`, la omisión es válida; si es `400` con código `4001`, la omisión **no** es válida y UC07 debe aportar la marca. Guardar `status`, `status_detail` y `error.code`. **Bloquea** la validación de D-UC05-16 |
+| **B-10** | Reembolso total con `amount` explícito | `POST /v1/payments/{payment_id}/refunds` con `amount` igual al total del pago | Reembolso `approved`; si Mercado Pago lo rechaza, registrar el error y ajustar el cliente a enviar el cuerpo vacío (contrato `pasarela-comando-reembolso.md` §2) |
 
 ### 2.3 Evidencia exigida
 
@@ -68,7 +74,7 @@ Guardar la evidencia sin credenciales ni datos de tarjeta.
 
 ### 2.4 Criterio de salida
 
-Todos los escenarios B-01…B-08 deben pasar. Un fallo, una credencial ausente o un webhook no
+Todos los escenarios B-01…B-10 deben pasar. Un fallo, una credencial ausente o un webhook no
 entregado **bloquea la aprobación del release**; no se sustituye por el modo simulado. Si Mercado
 Pago sandbox no está disponible, el resultado es «bloqueado», no «aprobado con simulador».
 

@@ -10,7 +10,7 @@
 
 UC10 es el caso de uso interno que solicita dispersiones al propietario por tres motivos: cancelación moderada (50 % del alquiler), cancelación tardía (100 % del alquiler), liquidación estándar de una reserva `COMPLETED` y liquidación total del depósito cuando una disputa termina en `COMPLETED`. No recibe montos desde Reservas: recupera los valores de `reservation_information` y conserva la comisión calculada en la intención de dispersión [SPEC RF-001..RF-009, RF-016].
 
-El sistema registra una `SettlementIntent` antes de enviar el comando a Mercado Pago. La respuesta/webhook actualiza siempre la intención; solo un resultado externo exitoso crea un `SettlementRecord` inmutable y, únicamente para liquidación estándar, un `CommissionRecord` inmutable en la misma transacción. Operaciones rechazadas, canceladas, expiradas o pendientes no crean registros exitosos [SPEC RF-010..RF-014].
+El sistema registra una `SettlementIntent` antes de invocar el libro interno de liquidación. El resultado actualiza siempre la intención; solo un resultado externo exitoso crea un `SettlementRecord` inmutable y, únicamente para liquidación estándar, un `CommissionRecord` inmutable en la misma transacción. Operaciones rechazadas, canceladas, expiradas o pendientes no crean registros exitosos [SPEC RF-010..RF-014].
 
 Enfoque técnico: servicio Spring Boot único con arquitectura hexagonal (`domain` / `application` / `infrastructure`), puertos internos consumidos por UC07/UC08, libro interno simulado de liquidaciones y outbox/worker para reintentos. UC10 es dueño de `settlement_intent`, `settlement_record` y `commission_record`; UC12/UC13 solo los consultan. Las piezas de otros planes se referencian por nombre y no se replanifican.
 
@@ -96,7 +96,6 @@ docs/features/010-liquidar-fondos-alquiler/
 └── spec.md
 docs/technical-plan/contracts/external/
 ├── pasarela-comando-liquidacion.md
-└── pasarela-webhook-resultados.md
 ```
 
 ### Source Code
@@ -116,7 +115,7 @@ src/main/java/com/seashare/seasharem3/
 │   │   ├── SendSettlementToGatewayUseCase.java    # worker de envío (núcleo compartido)
 │   │   └── ReconcileSettlementIntentsUseCase.java # job de conciliación (núcleo compartido)
 │   ├── port/out/
-│   │   ├── SettlementGatewayPort.java             # ACL Mercado Pago
+│   │   ├── SettlementGatewayPort.java             # puerto del libro interno de liquidaciones
 │   │   ├── SettlementIntentRepository.java        # incluye findByIdForUpdate
 │   │   ├── SettlementRecordRepository.java        # incluye findBySettlementIntentId
 │   │   ├── CommissionRecordRepository.java        # incluye findBySettlementRecordId
@@ -162,7 +161,7 @@ src/test/java/com/seashare/seasharem3/
 ├── domain/service/SettlementCalculatorTest.java
 ├── application/service/{RequestSettlementServiceTest,SendSettlementToGatewayServiceTest,RegisterSettlementResultServiceTest,ReconcileSettlementIntentsServiceTest}.java
 ├── infrastructure/adapter/in/messaging/SettlementCommandListenerTest.java
-├── infrastructure/adapter/out/gateway/SimulatedSettlementGatewayAdapterTest.java
+├── infrastructure/adapter/out/gateway/SimulatedSettlementGatewayAdapterTest.java   # pendiente de implementar
 ├── integration/RefundSettlementPersistenceIntegrationTest.java
 ├── arch/Uc10ArchitectureTest.java
 └── acceptance/Uc10AcceptanceTest.java
@@ -254,12 +253,12 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 | Resiliencia | fallo del libro simulado, reintento y conciliación interna | `SendSettlementToGatewayServiceTest`, `ReconcileSettlementIntentsServiceTest` |
 | Arquitectura | reglas §3.4 e inmutabilidad; UC10 no depende de `RefundIntent`/`RefundRecord` | `arch/Uc10ArchitectureTest` **[ACT-08]** |
 
-**Estado de las pruebas**: implementadas las pruebas unitarias, persistencia, handler, UC08 mínimo y Arquitectura. Pendientes: `SettlementCommandListenerTest`, `RefundSettlementPersistenceIntegrationTest`, pruebas explícitas de duplicados/concurrencia/estados fuera de orden y las pruebas de aceptación con los nombres `ce00X_…`. **[ACT-09]**
+**Estado de las pruebas**: implementadas las pruebas unitarias, de persistencia (`RefundSettlementPersistenceIntegrationTest`), del listener (`SettlementCommandListenerTest`) y de Arquitectura. Pendientes: `SimulatedSettlementGatewayAdapterTest` (referencia determinista y estado `approved`), pruebas explícitas de duplicados/concurrencia/estados fuera de orden y las pruebas de aceptación con los nombres `ce00X_…`. **[ACT-09] [ACT-11]**
 
 - **`ce001_precision_financiera_100_casos`**: ≥100 casos para cancelaciones, estándar y depósito; exactitud `BigDecimal` y escala 4.
 - **`ce002_comision_por_alcance`**: cero comisión en cancelación/depósito; estándar usa la comisión de la versión referenciada por la reserva.
 - **`ce003_intencion_a_registro`**: toda solicitud queda en intención y todo éxito genera registro trazable.
-- **`ce004_fallas_de_pasarela_sin_estado_indefinido`**: timeout, 5xx, respuesta pendiente y webhook fallido dejan intención conciliable, nunca éxito falso.
+- **`ce004_fallas_del_libro_interno_sin_estado_indefinido`**: fallo del libro interno y respuesta pendiente dejan la intención conciliable, nunca un éxito falso.
 - **`ce005_fallo_no_es_exito`**: rejected/cancelled/expired/pending no crean `SettlementRecord`.
 - **`ce006_una_comision_atomica`**: estándar confirmado crea exactamente un `SettlementRecord` y un `CommissionRecord` relacionados.
 
@@ -278,13 +277,13 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 | **D-UC10-05** | Mecanismo transversal de autenticación/autorización | general-plan §7.1 y D-21 | Seguridad fuera de alcance: sin autenticación ni autorización; UC10 no define ni hereda configuración de seguridad | Aplicada |
 | **D-UC10-06** | Campos del pagador y metadatos exigidos por la pasarela | contrato de liquidación vs contrato de cobro | UC10 **no** envía `payer_email`, `payment_method_id`, `installments` ni `description`: son campos del contrato de cobro (UC05). El comando al libro interno solo lleva reserva, monto neto y clave idempotente | Aplicada **[ACT-04] [ACT-11]** |
 | **D-UC10-07** | Tratamiento del seguro en la base de liquidación | SPEC 10 RF-004/RF-014 | **Reemplazada por D-UC10-12**: el seguro sí se descuenta, conforme al SPEC 10 | Reemplazada |
-| **D-UC10-08** | Cálculo, base y ausencia de comisión | SPEC 10 RF-004/RF-014 | Comisión = % de la versión referenciada × alquiler bruto, solo para `scope = STANDARD`; en cancelación/depósito `commission_amount = 0`. Si faltan comisión o parámetros, se registra el fallo con `FailureRecorderPort` y no se crea intención ni se llama a la pasarela (sin `503`) | Aplicada **[ACT-05]** |
+| **D-UC10-08** | Cálculo, base y ausencia de comisión | SPEC 10 RF-004/RF-014 | Comisión = % de la versión referenciada × alquiler bruto, solo para `scope = STANDARD`; en cancelación/depósito `commission_amount = 0`. Si faltan comisión o parámetros, se registra el fallo con `FailureRecorderPort` y no se crea intención ni se invoca el libro interno (sin `503`) | Aplicada **[ACT-05]** |
 | **D-UC10-09** | Escala y redondeo | `contracts/README.md` §3.1 | 4 decimales internos; salidas `HALF_UP` a 2 decimales | Aplicada |
 | **D-UC10-10** | Idempotencia de la operación | general-plan D-33 | La identidad de negocio es `reservation_id` + `status` + tipo de operación + `operationKey`; la clave persistida en `settlement_intent.idempotency_key` es un **UUID v4** generado una vez al crear la intención. Los reintentos técnicos reutilizan la clave y un `status_changed_at` nuevo es un intento nuevo. La deduplicación no busca por `findByIdempotencyKey` | Aplicada **[ACT-02]** |
 | **D-UC10-11** | Parámetros congelados frente a globales | general-plan D-24/D-27 | UC10 usa la **versión de parámetros referenciada** por la reserva (`frozen_parameters_id`) como fuente autoritativa para reservas ya calculadas (los valores aplicados —comisión %— se resuelven de ella, sin copiarse en la reserva); una nueva versión de `financial_parameters` nunca altera cálculos ya realizados | Aplicada |
 | **D-UC10-12** | Fórmula de la liquidación estándar | SPEC 10 RF-005, HU2 y caso extremo vs general-plan D-30 | Liquidación estándar = **alquiler bruto − comisión − seguro náutico**. Reemplaza a D-UC10-07 y a D-30 (D-35 en general-plan) | Aplicada **[ACT-03]** |
 | **D-UC10-13** | Valor de la comisión y de los componentes del registro por alcance | V1 `commission_amount NUMERIC(18,4) NOT NULL`; `settlement_record` con componentes `NOT NULL` | `commission_amount = 0` en cancelación/depósito y `> 0` solo en estándar; `insurance_amount = 0` en cancelación/depósito y el seguro de la reserva en estándar; `rental_gross_amount` = alquiler de la reserva; `deposit_amount` = depósito asociado siempre | Aplicada **[ACT-04]** |
-| **D-UC10-14** | Fallo por datos internos incompletos | SPEC 10 RF-013 y caso extremo; contrato de cola | Se registra en `operational_failure` y se devuelve `SettlementRequestResult(null, FAILED)`; no se crea intención ni se llama a la pasarela. No se usa `503` porque UC10 no tiene endpoint REST | Aplicada **[ACT-05]** |
+| **D-UC10-14** | Fallo por datos internos incompletos | SPEC 10 RF-013 y caso extremo; contrato de cola | Se registra en `operational_failure` y se devuelve `SettlementRequestResult(null, FAILED)`; no se crea intención ni se invoca el libro interno. No se usa `503` porque UC10 no tiene endpoint REST | Aplicada **[ACT-05]** |
 | **D-UC10-15** | Origen del desglose de importes | SPEC 10 RF-001 vs UC03 D-UC03-02 | `charge_record` es la fuente autoritativa; `reservation_information` es solo respaldo si el cobro no tiene desglose y exige `isCalculated()` | Aplicada **[ACT-07]** |
 | **D-UC10-16** | DTOs y publicación del comando | Andamiaje real de UC10 | `SettlementCommand.operationKey: String`; `GatewaySettlementResult` incluye `amount`; `SettlementCommandPublisher`/`SettlementCommandOutboxAdapter` publican en `finance.settlement-command.v1`; `findByIdForUpdate` evita carreras entre webhook y conciliación | Aplicada **[ACT-02]** |
 | **D-UC10-17** | Desenlace del depósito | general-plan D-34 vs UC08 no implementado | UC08 es dueño del CAS. UC10 invoca `OpenDepositTrackingUseCase` solo con `DISPUTE_COMPLETED` y `SETTLEMENT_REQUESTED`; la liquidación estándar y las cancelaciones no disponen el depósito | Aplicada **[ACT-06]** |
@@ -296,7 +295,7 @@ Registro de las decisiones de diseño de este plan, con su contexto y estado. Lo
 
 - [x] **T001** Consumir JPA, AMQP, errores, outbox, observabilidad y transacciones del núcleo compartido. **[ACT-01: ya disponible.]**
 - [x] **T002** Publicar la firma de `RequestSettlementUseCase` y documentar consumidores UC07/UC08, sin editar sus planes. **[ACT-01: firma ya publicada.]**
-- [x] **T003** Configurar ACL, `SettlementCommandPublisher`/`SettlementCommandOutboxAdapter`, listener y el manejador UC10 del webhook propiedad de UC05. **No** se configura la recepción/verificación del webhook (es de UC05). Implementado. **[ACT-01] [ACT-09]**
+- [x] **T003** Configurar ACL, `SettlementCommandPublisher`/`SettlementCommandOutboxAdapter`, listener y la conciliación interna. **No** existe manejador de webhook propio: UC10 no consume notificaciones de la pasarela. Implementado. **[ACT-01] [ACT-09] [ACT-11]**
 
 ### Phase 2: Foundational
 
@@ -338,7 +337,7 @@ UC10 consume datos/puertos publicados por UC03 y UC05, y expone `RequestSettleme
 
 No modificar `pom.xml`, SPEC ni planes de UC03/UC05/UC07/UC08/UC09/UC11/UC12/UC13. La alineación documental de la Fase 0 ya actualizó `general-plan` y los contratos de liquidación/webhook. No implementar transferencias fuera del ACL, estados de éxito para timeouts, comisiones en penalidades/depósitos ni registros mutables. **[ACT-08]**
 
-- **Estado de cierre (2026-11-01)**: UC10 implementado y verificado con `.\mvnw.cmd verify` (**1600 tests, 0 fallos; las 84 pruebas que requieren Docker se omiten solo en entornos sin Docker**). Las pruebas que estaban pendientes ya existen: `SettlementIntentTest`, `SettlementRecordTest`, `CommissionRecordTest`, `SettlementCommandListenerTest` y `Uc10AcceptanceTest` (CE-001…CE-006). La capacidad de la pasarela (RF-009) se persiste en `settlement_intent.gateway_capability`. **[ACT-09]**
+- **Estado de cierre (2026-11-01)**: UC10 implementado y verificado con `.\mvnw.cmd verify` (**1600 tests, 0 fallos; las 84 pruebas que requieren Docker se omiten solo en entornos sin Docker**). Las pruebas que estaban pendientes ya existen: `SettlementIntentTest`, `SettlementRecordTest`, `CommissionRecordTest`, `SettlementCommandListenerTest` y `Uc10AcceptanceTest` (CE-001…CE-006). La capacidad de liquidación (RF-009) se persiste en `settlement_intent.gateway_capability`. **[ACT-09]**
 
 ## Checklist de auto-revisión
 
