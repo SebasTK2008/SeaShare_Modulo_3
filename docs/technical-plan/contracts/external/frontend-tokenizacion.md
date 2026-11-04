@@ -63,8 +63,8 @@ El token **no** viaja por la cola interna de comandos: el worker lo lee de `char
 
 ## 5. Requisitos de la tokenización
 
-1. Usar la **`public_key`** de la aplicación de Mercado Pago (nunca el `access_token`, que es secreto
-   y vive solo en el backend).
+1. Usar la **`public_key`** de la aplicación `SeaShareM3` (nunca el `access_token`, que es secreto y
+   vive solo en el backend).
 2. El `card_token` es de **un solo uso**: no reutilizarlo entre intentos ni entre reservas.
 3. No registrar el token en logs del frontend ni en analítica.
 4. Si la tokenización falla, **no** se debe notificar `PENDING` con un token vacío o inventado.

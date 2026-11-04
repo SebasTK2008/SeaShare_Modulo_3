@@ -29,8 +29,8 @@ persistidos y no contacta a la pasarela.
 ### 2.1 Condiciones de ejecución
 
 - Aplicación arrancada con `.env` local (gitignored) y credenciales **TEST** de la app
-  **`SeaShareFinanzasDemo`** —nombre previsto, **pendiente de creación** en el panel— (site MCO).
-  Nunca usar credenciales de producción ni versionarlas.
+  **`SeaShareM3`** (App ID `2901490065617188`, site MCO). Nunca usar credenciales de producción ni
+  versionarlas.
 - `GATEWAY_WEBHOOK_SECRET` completo, copiado del panel de Mercado Pago. Sin él el webhook responde
   `401 UNAUTHENTICATED` y el modo B no es válido.
 - Callback público HTTPS registrado en Mercado Pago, topic `payment`. Si el túnel cambia, actualizar
@@ -80,6 +80,9 @@ Pago sandbox no está disponible, el resultado es «bloqueado», no «aprobado c
 
 ## 3. Estado actual y automatización
 
+- **Aplicación en Mercado Pago:** `SeaShareM3` (App ID `2901490065617188`), producto Checkout API /
+  API Payments, con credenciales `TEST-`. El **webhook aún no está configurado** y no hay
+  notificaciones entregadas: sin ese paso, B-03 y B-06 no pueden pasar.
 - **Modo A:** implementado y verde en `.\mvnw.cmd clean verify` (WireMock para UC05/UC09, webhook
   MockMvc, persistencia Testcontainers y libro simulado de UC10).
 - **Modo B:** especificado en este documento; **pendiente de ejecución** en las fases F3/F4. Las

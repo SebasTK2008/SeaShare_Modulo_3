@@ -24,16 +24,15 @@ recibiendo webhooks reales. **No** se usan credenciales de producción.
 
 ---
 
-## 1. Crear la aplicación y obtener credenciales de prueba
+## 1. Aplicación y credenciales de prueba
 
-1. Entra en [Tus integraciones](https://www.mercadopago.com/developers/panel/app) y crea una
-   aplicación.
-2. Producto: **Checkout API**. API: **Payments** (no Orders).
-3. Nombre previsto: **`SeaShareFinanzasDemo`**. El *site* lo toma Mercado Pago de tu cuenta (MCO).
-4. En la aplicación, abre **Credenciales de prueba** y copia:
+1. Entra en [Tus integraciones](https://www.mercadopago.com/developers/panel/app) y selecciona la
+   aplicación **`SeaShareM3`** (App ID `2901490065617188`). Si hay que recrearla: producto
+   **Checkout API**, API **Payments** (no Orders); el *site* lo toma Mercado Pago de tu cuenta (MCO).
+2. En la aplicación, abre **Credenciales de prueba** y copia:
    - **`access_token`** de prueba (prefijo `TEST-`) → `GATEWAY_ACCESS_TOKEN`.
    - **`public_key`** → se la pasas al repositorio de frontend (nunca al backend).
-5. En **Webhooks → Configurar notificaciones** (modo **Prueba**):
+3. En **Webhooks → Configurar notificaciones** (modo **Prueba**):
    - URL: `https://<tu-tunel>/api/v1/webhook/gateway`
    - Evento: **Pagos** (topic `payment`).
    - Guarda y copia la **firma secreta** → `GATEWAY_WEBHOOK_SECRET`.
@@ -41,7 +40,7 @@ recibiendo webhooks reales. **No** se usan credenciales de producción.
 > Sin `GATEWAY_WEBHOOK_SECRET` el webhook responde `401 UNAUTHENTICATED` y el modo B no es válido.
 > Si rotas la firma en el panel, actualiza la variable y reinicia la aplicación.
 
-6. Crea los **usuarios de prueba** (vendedor con fondos y comprador) desde el panel de Mercado Pago.
+4. Crea los **usuarios de prueba** (vendedor con fondos y comprador) desde el panel de Mercado Pago.
    Anota sus IDs: son parte de la evidencia.
 
 ---
