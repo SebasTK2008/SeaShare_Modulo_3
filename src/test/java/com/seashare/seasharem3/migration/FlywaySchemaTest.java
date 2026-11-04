@@ -234,7 +234,7 @@ class FlywaySchemaTest {
 		execute("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount, commission_amount,"
 				+ " deposit_amount, charge_intent_id, idempotency_key, status, status_detail, external_reference,"
 				+ " dispute_id, gateway_capability) VALUES (?, ?, 'DISPUTE_COMPLETED', 'DEPOSIT', 90, 10, 80, ?, ?, 'PENDING_SEND',"
-				+ " 'detalle', ?, ?, 'ADVANCED_PAYMENTS_DISBURSEMENT')",
+				+ " 'detalle', ?, ?, 'STANDARD_SETTLEMENT')",
 				settlementIntentId, fixture.reservationId, fixture.chargeIntentId, UUID.randomUUID().toString(),
 				"9001", disputeId);
 		assertThat(queryStrings("SELECT external_reference FROM settlement_intent WHERE id = ?", settlementIntentId))
@@ -385,7 +385,7 @@ class FlywaySchemaTest {
 					+ " commission_amount, deposit_amount, charge_intent_id, idempotency_key, status,"
 					+ " gateway_capability)"
 					+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, ?, 'COMPLETED',"
-					+ " 'ADVANCED_PAYMENTS_DISBURSEMENT')",
+					+ " 'STANDARD_SETTLEMENT')",
 					settlementIntentId, reservationId, chargeIntentId, UUID.randomUUID().toString());
 		}
 

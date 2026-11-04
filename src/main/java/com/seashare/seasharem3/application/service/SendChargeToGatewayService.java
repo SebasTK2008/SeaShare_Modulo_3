@@ -116,15 +116,13 @@ public class SendChargeToGatewayService implements SendChargeToGatewayUseCase {
     }
 
     /**
-     * El contrato de la pasarela exige tipo de medio y correo del pagador: sin ellos no se envia un
+     * El contrato de la pasarela exige correo del pagador: sin él no se envia un
      * cobro con datos incompletos y la intencion queda rechazada con el detalle tecnico, sin
-     * marcar la reserva como cobrada.
+     * marcar la reserva como cobrada. El {@code payment_method_id} es opcional: Mercado Pago
+     * lo infiere desde el token; solo se envia cuando UC07 ya informa una marca (ej. {@code VISA},
+     * {@code MASTER}) [D-UC05-16].
      */
     private static String incompleteRequestDetail(ChargeIntent intent, String payerEmail) {
-        if (intent.paymentMethod().paymentMethodType() == null
-                || intent.paymentMethod().paymentMethodType().isBlank()) {
-            return "The payment method type is required to charge the reservation";
-        }
         if (payerEmail == null || payerEmail.isBlank()) {
             return "The payer email is required to charge the reservation";
         }

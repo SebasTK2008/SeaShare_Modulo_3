@@ -81,7 +81,7 @@ public final class SettlementIntent {
             SettlementScope scope, Money amount, Money commissionAmount, Money depositAmount, UUID chargeIntentId,
             IdempotencyKey idempotencyKey, UUID disputeId, Instant createdAt) {
         return create(id, reservationId, trigger, scope, amount, commissionAmount, depositAmount, chargeIntentId,
-                idempotencyKey, disputeId, SettlementCapability.ADVANCED_PAYMENTS_DISBURSEMENT, createdAt);
+                idempotencyKey, disputeId, SettlementCapability.STANDARD_SETTLEMENT, createdAt);
     }
 
     public static SettlementIntent create(UUID id, ReservationId reservationId, SettlementTrigger trigger,
@@ -98,7 +98,7 @@ public final class SettlementIntent {
             UUID disputeId, Instant createdAt) {
         return restore(id, reservationId, trigger, scope, amount, commissionAmount, depositAmount, chargeIntentId,
                 idempotencyKey, status, statusDetail, externalReference, disputeId,
-                SettlementCapability.ADVANCED_PAYMENTS_DISBURSEMENT, createdAt);
+                SettlementCapability.STANDARD_SETTLEMENT, createdAt);
     }
 
     public static SettlementIntent restore(UUID id, ReservationId reservationId, SettlementTrigger trigger,

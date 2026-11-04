@@ -46,12 +46,15 @@ curl -fsS http://localhost:8080/actuator/health
 
 Los tests de integración usan Testcontainers: sin Docker se omiten automáticamente (los unitarios y ArchUnit siempre corren).
 
+**Pagos — dos modos obligatorios**: la suite automática usa WireMock y el simulador (**modo A**, gate de CI). La aprobación de `release/0.1.0` exige además probar cobro, webhook `payment` y reembolso contra **Mercado Pago sandbox** con credenciales `TEST-*` (**modo B**); el checklist y la evidencia están en [`docs/qa/pagos-api-real.md`](docs/qa/pagos-api-real.md). El modo B no corre en `mvn verify` y no se sustituye por el simulador.
+
 ## Configuración y entornos
 
 - **Perfiles de Spring**: `dev` (por defecto) y `prod`.
   - `application-dev.properties`: defaults locales alineados con `docker-compose.yml`.
   - `application-prod.properties`: **sin defaults** para credenciales, URLs de entorno ni secretos; se activa con `SPRING_PROFILES_ACTIVE=prod` y falla ruidosamente si falta una variable.
 - **Secretos**: copia `.env.example` a `.env` (ignorado por git) para el stack local. En producción los valores se aportan por variables de entorno o Docker secrets; nunca se versionan valores reales.
+- **Base local**: si ya habías aplicado una versión anterior de `V1__initial_schema.sql`, recrea el volumen antes de arrancar (`docker compose down -v`); Flyway valida el checksum de la migración inicial.
 
 | Variable | Uso | Default dev |
 |---|---|---|
@@ -62,7 +65,7 @@ Los tests de integración usan Testcontainers: sin Docker se omiten automáticam
 | `FLEET_BASE_URL` | Sistema de Gestión de Flota | `http://localhost:8081` |
 | `GATEWAY_BASE_URL` | Pasarela de pago | `https://api.mercadopago.com` |
 | `GATEWAY_ACCESS_TOKEN` / `GATEWAY_WEBHOOK_SECRET` | Pasarela (secretos) | vacío en dev; obligatorio en prod |
-| `GATEWAY_COLLECTOR_ID` | Cuenta de Mercado Pago del Propietario para las dispersiones (UC10) | `0` (sin dispersiones); obligatorio en prod |
+| `GATEWAY_SETTLEMENT_MODE` | Modo del libro interno de liquidaciones (UC10); solo `simulated` está implementado | `simulated`; obligatorio en prod |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Credenciales del contenedor PostgreSQL | `seashare` |
 | `APP_PORT` | Puerto publicado de la aplicación | `8080` |
 

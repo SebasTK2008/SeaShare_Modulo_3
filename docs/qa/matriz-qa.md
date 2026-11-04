@@ -13,6 +13,18 @@ Plan de trazabilidad de QA. Cada fila ancla un Test Case (TC) a **un escenario d
 - **Origen del mapeo**: los specs no contienen una tabla explícita HU→RF; la columna "RF/CE cubierto" se derivó del contenido de los escenarios y de la *Prueba Independiente*. Cuando el TC cubre casos extremos en su `Section 2`, los RF/CE correspondientes también se listan en la fila.
 - **No ejecutar en develop**: los TC se crean en `Draft`; la verificación (Pass/Fail) ocurre únicamente en `release/0.1.0`.
 
+### Modos de ejecución de las pruebas de pago
+
+Los pagos tienen **dos modos obligatorios y complementarios** (detalle en
+[`pagos-api-real.md`](pagos-api-real.md)):
+
+- **A · Simulado (gate de CI):** WireMock, simulador y Testcontainers. Es el que ejecutan la suite
+  automática y los TC de esta matriz; no requiere credenciales ni Internet.
+- **B · API real de Mercado Pago (gate de release):** cobro aprobado/rechazado, webhook `payment`
+  real, reembolso parcial/total, idempotencia y ausencia de datos sensibles, con credenciales
+  `TEST-*` en sandbox MCO. Es **obligatorio** para aprobar UC05/UC09 en `release/0.1.0`; no se
+  sustituye por el simulador. UC10 no aplica porque usa un libro interno simulado (D-UC10-18).
+
 ### Datos de prueba (alias → UUID)
 
 `reservation_id` es UUID v4 en el schema y en los contratos. Los TC usan estos alias; en payloads, `reservation_id=` y SQL se debe usar el UUID, nunca el alias.
@@ -71,8 +83,8 @@ Plan de trazabilidad de QA. Cada fila ancla un Test Case (TC) a **un escenario d
 | TC-UC10-HU1-E2 | UC10 | HU1 | E2 Dispersión por cancelación tardía (100 % alquiler) | P1 | RF-001, RF-003, RF-007, RF-009, RF-010, RF-012, RF-013, RF-014, RF-016, RNF-002, RNF-003 · CE-001, CE-002 | [TC-UC10-HU1-E2-dispersion-tardia.md](test-cases/TC-UC10-HU1-E2-dispersion-tardia.md) | Draft | — | — |
 | TC-UC10-HU2-E1 | UC10 | HU2 | E1 Liquidación estándar por reserva completada | P1 | RF-001, RF-004, RF-005, RF-008, RF-009, RF-010, RF-012, RF-013, RF-014, RF-016, RNF-002, RNF-003 · CE-001 | [TC-UC10-HU2-E1-liquidacion-estandar.md](test-cases/TC-UC10-HU2-E1-liquidacion-estandar.md) | Draft | — | — |
 | TC-UC10-HU3-E1 | UC10 | HU3 | E1 Retención total del depósito | P1 | RF-001, RF-006, RF-008, RF-009, RF-010, RF-012, RF-013, RF-014, RNF-002, RNF-003 · CE-001, CE-002 | [TC-UC10-HU3-E1-liquidacion-deposito.md](test-cases/TC-UC10-HU3-E1-liquidacion-deposito.md) | Draft | — | — |
-| TC-UC10-HU4-E1 | UC10 | HU4 | E1 La Pasarela reporta la dispersión como exitosa | P1 | RF-009, RF-009A, RF-010, RF-011, RF-015, RF-016, RNF-002 · CE-003 | [TC-UC10-HU4-E1-resultado-exitoso.md](test-cases/TC-UC10-HU4-E1-resultado-exitoso.md) | Draft | — | — |
-| TC-UC10-HU4-E2 | UC10 | HU4 | E2 La Pasarela reporta rechazo o fallo de la dispersión | P1 | RF-009, RF-010, RF-012, RNF-003 · CE-004, CE-005 | [TC-UC10-HU4-E2-resultado-rechazo.md](test-cases/TC-UC10-HU4-E2-resultado-rechazo.md) | Draft | — | — |
+| TC-UC10-HU4-E1 | UC10 | HU4 | E1 El libro interno confirma la liquidación como exitosa | P1 | RF-009, RF-009A, RF-010, RF-011, RF-015, RF-016, RNF-002 · CE-003 | [TC-UC10-HU4-E1-resultado-exitoso.md](test-cases/TC-UC10-HU4-E1-resultado-exitoso.md) | Draft | — | — |
+| TC-UC10-HU4-E2 | UC10 | HU4 | E2 El libro interno no confirma la liquidación | P1 | RF-009, RF-010, RF-012, RNF-003 · CE-004, CE-005 | [TC-UC10-HU4-E2-resultado-rechazo.md](test-cases/TC-UC10-HU4-E2-resultado-rechazo.md) | Draft | — | — |
 | TC-UC10-HU5-E1 | UC10 | HU5 | E1 Registro de la comisión en una liquidación estándar | P1 | RF-004, RF-005, RF-009A, RF-010, RF-011, RF-012, RF-013, RF-014, RF-015, RF-016, RNF-002 · CE-006 | [TC-UC10-HU5-E1-comision-estandar.md](test-cases/TC-UC10-HU5-E1-comision-estandar.md) | Draft | — | — |
 | TC-UC10-HU5-E2 | UC10 | HU5 | E2 Comisión en cero para dispersiones por penalidad | P1 | RF-001, RF-002, RF-003, RF-006, RF-007, RF-008, RF-009, RF-009A, RF-010, RF-012, RF-013, RF-014, RF-016 · CE-002 | [TC-UC10-HU5-E2-comision-cero.md](test-cases/TC-UC10-HU5-E2-comision-cero.md) | Draft | — | — |
 | TC-UC11-HU1-E1 | UC11 · Parámetros financieros | HU1 | E1 Configuración del porcentaje de comisión | P1 | RF-001, RF-005, RF-006, RF-007, RF-009, RF-011, RF-012, RF-013, RNF-002 · CE-002 | [TC-UC11-HU1-E1-config-comision.md](test-cases/TC-UC11-HU1-E1-config-comision.md) | Draft | — | — |
@@ -110,7 +122,7 @@ Detectados al redactar los TC y contrastar spec ↔ plan ↔ contratos. No cambi
 3. **UC01 (estimaciones)**: `wiremock/mappings/fleet-base-rates.json` solo trae 2 embarcaciones; cargar 10 (HU1) y 50 (HU3) vía `POST /__admin/mappings` antes de ejecutar.
 4. **PostgreSQL**: `docker-compose.yml` publica el puerto host **5433** (el README menciona 5432). Usar 5433 desde el host en las consultas `psql`.
 5. **UC11-HU3**: `GET /api/v1/financial-parameters` devuelve `guarantee_deposit_rule` como texto, no como monto (decisión D-UC11-02).
-6. **UC10 (dispersiones)**: `GATEWAY_COLLECTOR_ID` debe ser `≠ 0`; con el default dev `0` no hay dispersiones que verificar.
+6. **UC10 (liquidaciones)**: `GATEWAY_SETTLEMENT_MODE` debe ser `simulated` (valor por defecto); no existe cuenta destino ni dispersión real. El libro interno devuelve `sim-settlement-<idempotency_key>` y crea el registro inmutable al procesar el comando (D-UC10-18).
 7. **Montos de ejemplo**: los TC usan cifras ilustrativas distintas (`360.00/200.00/12.00` vs `900000.00/60000.00/30000.00`). Antes de ejecutar, fijar los valores de la versión vigente de parámetros del entorno.
 8. **UC13 (exportación)**: el contrato no declara `406 NOT_ACCEPTABLE`, pero el catálogo E1 lo exige como caso de ejemplo; verificar la respuesta real en release y registrar defecto si difiere.
 9. **UC02-HU1-E3 (festivos)**: el SPEC dice que los puentes/festivos se evalúan como fin de semana; el plan (D-UC02-11) y el código solo tratan sábado y domingo como fin de semana. Los TC siguen el plan; si se valida el texto literal del spec, registrar la divergencia.

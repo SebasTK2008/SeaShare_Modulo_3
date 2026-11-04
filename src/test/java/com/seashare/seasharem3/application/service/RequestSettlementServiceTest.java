@@ -69,7 +69,6 @@ class RequestSettlementServiceTest {
                 Clock.fixed(NOW, ZoneOffset.UTC));
         charge = ChargeFixtures.capturedIntent(RESERVATION, "mp-payment-1");
         ChargeRecord chargeRecord = ChargeRecord.create(UUID.randomUUID(), charge, RESERVATION, NOW);
-        when(settlementIntentRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
         when(settlementIntentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(chargeIntentRepository.findApprovedByReservationId(RESERVATION.reservationId()))
                 .thenReturn(Optional.of(charge));
@@ -93,6 +92,9 @@ class RequestSettlementServiceTest {
         assertThat(captor.getValue().amount().amount()).isEqualByComparingTo("660000.00");
         assertThat(captor.getValue().commissionAmount().amount()).isEqualByComparingTo("180000.00");
         assertThat(captor.getValue().depositAmount().amount()).isEqualByComparingTo("30000.00");
+        assertThat(captor.getValue().capability())
+                .isEqualTo(com.seashare.seasharem3.domain.valueobject.SettlementCapability.STANDARD_SETTLEMENT);
+        assertUuidV4(captor.getValue().idempotencyKey().value());
         verify(settlementCommandPublisher).publish(any(UUID.class));
     }
 
@@ -135,19 +137,24 @@ class RequestSettlementServiceTest {
     }
 
     @Test
-    void idempotentRequestReturnsTheExistingIntent() {
-        SettlementIntent existing = SettlementIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
-                SettlementTrigger.COMPLETED, SettlementScope.STANDARD, new Money(new BigDecimal("660000.00")),
-                new Money(new BigDecimal("180000.00")), new Money(new BigDecimal("30000.00")), charge.id(),
-                new com.seashare.seasharem3.domain.valueobject.IdempotencyKey("settlement:COMPLETED:op-5"), null,
-                NOW);
-        when(settlementIntentRepository.findByIdempotencyKey(any())).thenReturn(Optional.of(existing));
+    void assignsADistinctUuidV4KeyToEachRequest() {
+        SettlementCommand command = new SettlementCommand(RESERVATION.reservationId(),
+                SettlementTrigger.COMPLETED, SettlementScope.STANDARD, null, "op-5");
 
-        SettlementRequestResult result = service.request(new SettlementCommand(RESERVATION.reservationId(),
-                SettlementTrigger.COMPLETED, SettlementScope.STANDARD, null, "op-5"));
+        service.request(command);
+        service.request(command);
 
-        assertThat(result.settlementIntentId()).isEqualTo(existing.id());
-        verify(settlementIntentRepository, never()).save(any());
+        var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
+        verify(settlementIntentRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(intent -> intent.idempotencyKey().value())
+                .doesNotHaveDuplicates()
+                .allSatisfy(RequestSettlementServiceTest::assertUuidV4);
+    }
+
+    private static void assertUuidV4(String value) {
+        UUID key = UUID.fromString(value);
+        assertThat(key.version()).isEqualTo(4);
+        assertThat(key.variant()).isEqualTo(2);
     }
 
     private static FinancialParameters financialParameters() {

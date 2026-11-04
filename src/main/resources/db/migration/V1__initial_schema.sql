@@ -319,15 +319,15 @@ CREATE TABLE settlement_intent (
     idempotency_key   VARCHAR(255)  NOT NULL,
     status            VARCHAR(32)   NOT NULL,
     status_detail     TEXT,         -- [CONV] detalle del estado externo (simétrico a charge/refund_intent)
-    external_reference TEXT,        -- [CONV] referencia externa de la pasarela (UC10 plan T012a); omitida en general-plan §4
+    external_reference TEXT,        -- [CONV] referencia determinista del libro interno (UC10 plan T012a); omitida en general-plan §4
     dispute_id        UUID,         -- [CONV] traza de la disputa adjudicada (UC10 plan T012a; scope DEPOSIT); omitida en general-plan §4
-    gateway_capability VARCHAR(64)  NOT NULL, -- [RF-009] capacidad de la pasarela utilizada por la dispersión
+    gateway_capability VARCHAR(64)  NOT NULL, -- [RF-009] capacidad de liquidación (libro interno simulado)
     created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitida en general-plan §4
     version           INTEGER       NOT NULL DEFAULT 0,     -- [CONV] bloqueo optimista para webhook/worker
     CONSTRAINT uq_settlement_intent_idempotency_key UNIQUE (idempotency_key),
     CONSTRAINT fk_settlement_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id),
     CONSTRAINT chk_settlement_intent_capability CHECK (
-        gateway_capability IN ('ADVANCED_PAYMENTS_DISBURSEMENT', 'STANDARD_SETTLEMENT')),
+        gateway_capability IN ('STANDARD_SETTLEMENT')),
     CONSTRAINT chk_settlement_intent_scope CHECK (
         scope IN ('STANDARD', 'CANCELLATION_COMPENSATION', 'DEPOSIT')),
     CONSTRAINT chk_settlement_intent_status CHECK (
@@ -341,7 +341,7 @@ CREATE TABLE settlement_intent (
 -- scope vigente: STANDARD | CANCELLATION_COMPENSATION | DEPOSIT (general-plan §4; sin DEPOSIT_DISPUTE).
 CREATE INDEX idx_settlement_intent_reservation ON settlement_intent (reservation_id);
 
--- [CONV] índice para asociar el webhook de liquidación (data.id) con la intención (UC10 §Reglas).
+-- [CONV] índice para asociar la referencia del libro interno con la intención (UC10 §Reglas).
 CREATE UNIQUE INDEX uq_settlement_intent_external_reference
     ON settlement_intent (external_reference)
     WHERE external_reference IS NOT NULL;

@@ -4,13 +4,12 @@ import com.seashare.seasharem3.application.service.ReconcileSettlementIntentsSer
 import com.seashare.seasharem3.application.service.RegisterSettlementResultService;
 import com.seashare.seasharem3.application.service.RequestSettlementService;
 import com.seashare.seasharem3.application.service.SendSettlementToGatewayService;
-import com.seashare.seasharem3.application.service.SettlementWebhookHandler;
 import com.seashare.seasharem3.domain.model.CommissionRecord;
 import com.seashare.seasharem3.domain.model.SettlementIntent;
 import com.seashare.seasharem3.domain.model.SettlementRecord;
 import com.seashare.seasharem3.domain.service.SettlementCalculator;
 import com.seashare.seasharem3.infrastructure.adapter.in.messaging.SettlementCommandListener;
-import com.seashare.seasharem3.infrastructure.adapter.out.gateway.MercadoPagoSettlementAdapter;
+import com.seashare.seasharem3.infrastructure.adapter.out.gateway.SimulatedSettlementGatewayAdapter;
 import com.seashare.seasharem3.infrastructure.adapter.out.messaging.SettlementCommandOutboxAdapter;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -40,10 +39,9 @@ class Uc10ArchitectureTest {
             SendSettlementToGatewayService.class.getName(),
             RegisterSettlementResultService.class.getName(),
             ReconcileSettlementIntentsService.class.getName(),
-            SettlementWebhookHandler.class.getName(),
             SettlementCommandListener.class.getName(),
             SettlementCommandOutboxAdapter.class.getName(),
-            MercadoPagoSettlementAdapter.class.getName());
+            SimulatedSettlementGatewayAdapter.class.getName());
 
     private static final String UC10_PATTERN = UC10_CLASSES.stream()
             .map(name -> name.replace(".", "\\."))
@@ -74,7 +72,7 @@ class Uc10ArchitectureTest {
     @Test
     void uc10DoesNotTalkToTheGatewayExceptThroughItsPort() {
         noClasses().that().haveNameMatching(UC10_PATTERN)
-                .should().dependOnClassesThat().areAssignableTo(MercadoPagoSettlementAdapter.class)
+                .should().dependOnClassesThat().areAssignableTo(SimulatedSettlementGatewayAdapter.class)
                 .because("general-plan §3.4: la pasarela se consume por el puerto de salida")
                 .check(MAIN_CLASSES);
     }

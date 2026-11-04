@@ -30,7 +30,8 @@ Este caso de prueba verifica que, al recibir `REJECTED`, el sistema registra la 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula** (sin Mercado Pago real en QA); se verifica por el request journal del simulador y por las tablas internas.
+* **Modo A (CI/QA funcional):** la Pasarela de pago se **simula**; se verifica por el request journal del simulador y por las tablas internas.
+* **Modo B (release):** el reembolso del depósito debe repetirse contra la API real de Mercado Pago sandbox, incluido el webhook `payment`, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 
 ##### Dependencies & Assumptions
 * **TC-UC08-HU1-E1 debe haber pasado**: el mismo depósito ya está en seguimiento y la ingesta de disputas funciona.

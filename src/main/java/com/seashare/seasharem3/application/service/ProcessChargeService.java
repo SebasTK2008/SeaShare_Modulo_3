@@ -30,10 +30,12 @@ import org.springframework.transaction.annotation.Transactional;
  * No se contacta a la pasarela desde aquí: el envío lo hace el worker de la cola interna.</p>
  *
  * <p>El monto cobrado es un <em>único</em> importe, el valor total registrado por UC04 (alquiler +
- * seguro + depósito); UC05 no recalcula ni descompone el monto (RF-002, RF-015). La intención se
- * identifica por la clave idempotente del intento ({@code reservation_id} + {@code status} +
- * {@code status_changed_at}), de modo que una invocación repetida no crea un segundo intento ni
- * cobra dos veces (RF-004A, general-plan D-33).</p>
+ * seguro + depósito); UC05 no recalcula ni descompone el monto (RF-002, RF-015). Cada intención
+ * recibe un {@code IdempotencyKey} UUID v4 propio, que viaja como {@code X-Idempotency-Key} al
+ * enviarse a Mercado Pago y se reutiliza en los reintentos del worker (D-UC05-15). La identidad
+ * interna de la operación ({@code reservation_id} + {@code status} + {@code operation_type} +
+ * {@code clave}) sigue viviendo en {@code reservation_status_log} (UC07, general-plan D-33): un
+ * reenvío de UC07 no vuelve a invocar este servicio.</p>
  *
  * <p>Solo se abre un intento si la reserva no tiene ya un cobro capturado: una reserva cobrada no
  * vuelve a cobrarse (D-33). Un token ausente impide el cobro y se rechaza con
@@ -74,13 +76,12 @@ public class ProcessChargeService implements ProcessChargeUseCase {
         Objects.requireNonNull(command, "command");
         UUID reservationId = Objects.requireNonNull(command.reservationId(), "command.reservationId");
         String paymentTokenRef = requirePaymentToken(command.paymentTokenRef());
-        IdempotencyKey idempotencyKey = new IdempotencyKey(
-                Objects.requireNonNull(command.operationKey(), "command.operationKey"));
+        // La identidad de la operación la deduplica UC07; la pasarela recibe una clave UUID v4
+        // propia de este intento y la reutiliza en sus reintentos (D-UC05-15).
+        Objects.requireNonNull(command.operationKey(), "command.operationKey");
+        IdempotencyKey idempotencyKey = new IdempotencyKey(UUID.randomUUID().toString());
         ReservationId reservation = new ReservationId(reservationId);
 
-        if (chargeIntentRepository.findByIdempotencyKey(idempotencyKey).isPresent()) {
-            return;
-        }
         if (chargeIntentRepository.findApprovedByReservationId(reservation).isPresent()) {
             return;
         }

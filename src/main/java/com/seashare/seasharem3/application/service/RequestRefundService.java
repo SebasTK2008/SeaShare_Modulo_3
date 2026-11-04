@@ -40,6 +40,11 @@ import org.springframework.transaction.annotation.Transactional;
  * usa la informacion de reserva calculada como respaldo (D-UC09-08). La intencion y el mensaje se
  * confirman en la misma transaccion (D-08) y el desenlace del deposito se aplica antes de solicitar
  * el reembolso, para no reembolsar un deposito ya liquidado (D-34).</p>
+ *
+ * <p>Cada intencion recibe un {@code IdempotencyKey} UUID v4 propio, que viaja como
+ * {@code X-Idempotency-Key} al enviarse a Mercado Pago y se reutiliza en los reintentos del worker
+ * (D-UC09-10). La identidad interna de la operacion la reclama UC07 en
+ * {@code reservation_status_log}; UC09 no deduplica por clave de intento.</p>
  */
 public class RequestRefundService implements RequestRefundUseCase {
 
@@ -82,13 +87,10 @@ public class RequestRefundService implements RequestRefundUseCase {
         Objects.requireNonNull(command, "command");
         ReservationId reservationId = new ReservationId(
                 Objects.requireNonNull(command.reservationId(), "command.reservationId"));
-        IdempotencyKey key = new IdempotencyKey("refund:" + command.trigger() + ":"
-                + Objects.requireNonNull(command.operationKey(), "command.operationKey"));
-
-        Optional<RefundIntent> existing = refundIntentRepository.findByIdempotencyKey(key);
-        if (existing.isPresent()) {
-            return new RefundRequestResult(existing.get().id(), existing.get().status());
-        }
+        // La identidad de la operación la deduplica UC07; la pasarela recibe una clave UUID v4
+        // propia de este intento y la reutiliza en sus reintentos (D-UC09-10).
+        Objects.requireNonNull(command.operationKey(), "command.operationKey");
+        IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
 
         Optional<ChargeIntent> approvedCharge = chargeIntentRepository.findApprovedByReservationId(reservationId);
         if (approvedCharge.isEmpty()) {

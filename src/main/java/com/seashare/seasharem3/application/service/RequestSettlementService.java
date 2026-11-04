@@ -46,11 +46,10 @@ public class RequestSettlementService implements RequestSettlementUseCase {
     private static final String USE_CASE = "UC10";
 
     /**
-     * Capacidad de la integración de pasarela configurada (contrato de liquidación:
-     * {@code POST /v1/advanced_payments/{id}/disbursements}). La intención la conserva por RF-009.
+     * Capacidad usada por la liquidación simulada interna: la pasarela no dispersa fondos y el
+     * libro interno conserva la traza con {@code STANDARD_SETTLEMENT} (D-UC10-10, RF-009).
      */
-    private static final SettlementCapability GATEWAY_CAPABILITY =
-            SettlementCapability.ADVANCED_PAYMENTS_DISBURSEMENT;
+    private static final SettlementCapability GATEWAY_CAPABILITY = SettlementCapability.STANDARD_SETTLEMENT;
 
     private final SettlementIntentRepository settlementIntentRepository;
     private final ChargeIntentRepository chargeIntentRepository;
@@ -89,13 +88,10 @@ public class RequestSettlementService implements RequestSettlementUseCase {
     @Transactional
     public SettlementRequestResult request(SettlementCommand command) {
         Objects.requireNonNull(command, "command");
-        IdempotencyKey key = new IdempotencyKey("settlement:" + command.trigger() + ":"
-                + Objects.requireNonNull(command.operationKey(), "command.operationKey"));
-
-        Optional<SettlementIntent> existing = settlementIntentRepository.findByIdempotencyKey(key);
-        if (existing.isPresent()) {
-            return new SettlementRequestResult(existing.get().id(), existing.get().status());
-        }
+        // La identidad de la operación la deduplica UC07; el libro interno recibe una clave
+        // UUID v4 propia de este intento y la reutiliza en sus reintentos (D-UC10-10).
+        Objects.requireNonNull(command.operationKey(), "command.operationKey");
+        IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
 
         Optional<ChargeIntent> approvedCharge = chargeIntentRepository
                 .findApprovedByReservationId(command.reservationId());

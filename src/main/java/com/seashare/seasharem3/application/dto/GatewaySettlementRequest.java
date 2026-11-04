@@ -5,10 +5,11 @@ import com.seashare.seasharem3.domain.valueobject.Money;
 import java.util.UUID;
 
 /**
- * Comando de dispersion a la pasarela.
- * Fuente: UC10 plan T006 y contrato external/pasarela-comando-liquidacion.md.
- * {@code collectorId} es el identificador numerico de la cuenta de Mercado Pago del Propietario.
+ * Comando de liquidacion al libro interno simulado de UC10.
+ *
+ * <p>No existe una dispersion real en Mercado Pago: el libro interno usa la capacidad
+ * {@code STANDARD_SETTLEMENT} y conserva la reserva, el monto neto y la clave idempotente del
+ * intento (D-UC10-10). El mercado de pagos real queda como fase futura no implementada.</p>
  */
-public record GatewaySettlementRequest(long collectorId, UUID reservationId, Money amount,
-                                       String externalReference, String operationKey) {
+public record GatewaySettlementRequest(UUID reservationId, Money amount, String operationKey) {
 }

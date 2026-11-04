@@ -1,7 +1,7 @@
 package com.seashare.seasharem3.domain.exception;
 
 /**
- * Rechazo de negocio de la pasarela (400 no reintentable: token, collector_id, fondos, plazo).
+ * Rechazo de negocio de la pasarela (400 no reintentable: token, fondos, plazo o reglas de la cuenta).
  * No es una falla de comunicacion: el resultado es definitivo y no se reintenta.
  * Fuente: contratos de reembolso/liquidacion §5.
  */

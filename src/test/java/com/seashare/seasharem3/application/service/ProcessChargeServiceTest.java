@@ -144,14 +144,22 @@ class ProcessChargeServiceTest {
     }
 
     @Test
-    void doesNotDuplicateIntentForTheSameOperationKey() {
+    void assignsAFreshUuidV4IdempotencyKeyToEachIntent() {
         UUID reservationId = registerCalculatedReservation();
 
         service.process(command(reservationId, OPERATION_KEY));
         service.process(command(reservationId, OPERATION_KEY));
 
-        assertThat(intents.findByStatusIn(List.of(ChargeIntentStatus.PENDING_SEND))).hasSize(1);
-        assertThat(publisher.publishedCount()).isEqualTo(1);
+        List<ChargeIntent> pending = intents.findByStatusIn(List.of(ChargeIntentStatus.PENDING_SEND));
+        assertThat(pending).hasSize(2);
+        assertThat(pending).extracting(intent -> intent.idempotencyKey().value())
+                .doesNotHaveDuplicates()
+                .allSatisfy(value -> {
+                    UUID key = UUID.fromString(value);
+                    assertThat(key.version()).isEqualTo(4);
+                    assertThat(key.variant()).isEqualTo(2);
+                });
+        assertThat(publisher.publishedCount()).isEqualTo(2);
     }
 
     @Test

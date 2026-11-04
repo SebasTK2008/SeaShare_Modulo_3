@@ -29,7 +29,8 @@ Este caso de prueba verifica que, ante una reserva con valor total ya calculado 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula** (sin acceso a Mercado Pago real en QA); se verifica por el request journal del simulador y por los logs de la app.
+* **Modo A (CI/QA funcional):** la Pasarela de pago se **simula**; se verifica por el request journal del simulador y por los logs de la app.
+* **Modo B (release):** el cobro aprobado debe repetirse contra la API real de Mercado Pago sandbox, con webhook `payment` real, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 
 ##### Dependencies & Assumptions
 * **TC-UC04-HU1-E1 debe haber pasado**: la reserva de prueba tiene el valor total calculado y registrado.

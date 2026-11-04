@@ -30,7 +30,8 @@ Este caso de prueba verifica que, ante una cancelación flexible informada por "
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**; se verifica por el request journal del simulador y por `refund_intent`.
+* **Modo A (CI/QA funcional):** la Pasarela se **simula**; se verifica por el request journal del simulador y por `refund_intent`.
+* **Modo B (release):** el reembolso total debe ejecutarse contra la API real de Mercado Pago sandbox, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 * El resultado definitivo de la Pasarela se cubre en UC09 HU3; aquí la operación queda pendiente.
 
 ##### Dependencies & Assumptions

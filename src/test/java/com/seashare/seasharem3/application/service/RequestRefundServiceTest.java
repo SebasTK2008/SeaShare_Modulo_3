@@ -62,7 +62,6 @@ class RequestRefundServiceTest {
                 failureRecorder, Clock.fixed(NOW, ZoneOffset.UTC));
         charge = ChargeFixtures.capturedIntent(RESERVATION, "mp-payment-1");
         chargeRecord = ChargeRecord.create(UUID.randomUUID(), charge, RESERVATION, NOW);
-        when(refundIntentRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
         when(refundIntentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(chargeIntentRepository.findApprovedByReservationId(RESERVATION.reservationId()))
                 .thenReturn(Optional.of(charge));
@@ -83,17 +82,20 @@ class RequestRefundServiceTest {
         verify(refundIntentRepository).save(saved.capture());
         assertThat(saved.getValue().amount().amount()).isEqualByComparingTo("480000.00");
         assertThat(saved.getValue().scope()).isEqualTo(RefundScope.HALF_RENTAL_PLUS_DEPOSIT);
-        assertThat(saved.getValue().idempotencyKey().value()).isEqualTo("refund:CANCELLED_MODERATE:op-1");
+        assertUuidV4(saved.getValue().idempotencyKey().value());
     }
 
     @Test
-    void doesNotCreateASecondIntentForTheSameOperation() {
-        when(refundIntentRepository.findByIdempotencyKey(any())).thenReturn(Optional.of(mock(RefundIntent.class)));
-
+    void assignsADistinctUuidV4KeyToEachRequest() {
+        service.request(command(RefundTrigger.CANCELLED_STRICT, "op-1"));
         service.request(command(RefundTrigger.CANCELLED_STRICT, "op-1"));
 
-        verify(refundIntentRepository, never()).save(any());
-        verify(refundCommandPublisher, never()).publish(any());
+        var captor = org.mockito.ArgumentCaptor.forClass(RefundIntent.class);
+        verify(refundIntentRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(intent -> intent.idempotencyKey().value())
+                .doesNotHaveDuplicates()
+                .allSatisfy(RequestRefundServiceTest::assertUuidV4);
+        verify(refundCommandPublisher, org.mockito.Mockito.times(2)).publish(any(UUID.class));
     }
 
     @Test
@@ -124,5 +126,11 @@ class RequestRefundServiceTest {
 
     private static RefundRequestCommand command(RefundTrigger trigger, String operationKey) {
         return new RefundRequestCommand(RESERVATION.reservationId().value(), trigger, null, operationKey);
+    }
+
+    private static void assertUuidV4(String value) {
+        UUID key = UUID.fromString(value);
+        assertThat(key.version()).isEqualTo(4);
+        assertThat(key.variant()).isEqualTo(2);
     }
 }

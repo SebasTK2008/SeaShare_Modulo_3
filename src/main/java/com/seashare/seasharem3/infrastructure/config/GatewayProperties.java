@@ -24,8 +24,11 @@ public class GatewayProperties {
 
     private String webhookSecret = "";
 
-    /** Cuenta de Mercado Pago del Propietario usada como collector_id en las dispersiones (UC10). */
-    private long collectorId;
+    /**
+     * Modo del libro de liquidaciones (UC10). Solo {@code simulated} es valido en esta entrega:
+     * el mercado de pagos real no esta implementado (D-UC10-10).
+     */
+    private String settlementMode = "simulated";
 
     private Duration connectTimeout = Duration.ofSeconds(10);
 
@@ -57,12 +60,12 @@ public class GatewayProperties {
         this.webhookSecret = webhookSecret;
     }
 
-    public long getCollectorId() {
-        return collectorId;
+    public String getSettlementMode() {
+        return settlementMode;
     }
 
-    public void setCollectorId(long collectorId) {
-        this.collectorId = collectorId;
+    public void setSettlementMode(String settlementMode) {
+        this.settlementMode = settlementMode;
     }
 
     public Duration getConnectTimeout() {

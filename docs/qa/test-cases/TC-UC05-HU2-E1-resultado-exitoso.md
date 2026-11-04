@@ -30,7 +30,8 @@ Este caso de prueba verifica que, ante una solicitud de cobro previamente enviad
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**: el resultado se provoca con el webhook del simulador y se comprueba en su request journal y en los logs de la app.
+* **Modo A (CI/QA funcional):** la Pasarela se **simula**; el resultado se provoca con el webhook del simulador y se comprueba en su request journal y en los logs de la app.
+* **Modo B (release):** el resultado debe confirmarse con una notificación `payment` real de Mercado Pago sandbox y la consulta real del pago, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 
 ##### Dependencies & Assumptions
 * **TC-UC05-HU1-E1 debe haber pasado**: existe una `IntenciónDeCobro` para la reserva, sin resultado definitivo.

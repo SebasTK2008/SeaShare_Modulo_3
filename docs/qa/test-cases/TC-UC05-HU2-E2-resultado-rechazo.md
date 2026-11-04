@@ -30,7 +30,8 @@ Este caso de prueba verifica que, ante el rechazo reportado por la Pasarela para
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**; el rechazo se provoca con el estado del pago en el simulador y su notificación `payment.updated`.
+* **Modo A (CI/QA funcional):** la Pasarela se **simula**; el rechazo se provoca con el estado del pago en el simulador y su notificación `payment.updated`.
+* **Modo B (release):** debe provocarse un rechazo real con tarjeta/caso de prueba de Mercado Pago sandbox y verificar la ausencia de `charge_record`, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 
 ##### Dependencies & Assumptions
 * **TC-UC05-HU1-E1 debe haber pasado** (existe la intención de la reserva, sin resultado definitivo).

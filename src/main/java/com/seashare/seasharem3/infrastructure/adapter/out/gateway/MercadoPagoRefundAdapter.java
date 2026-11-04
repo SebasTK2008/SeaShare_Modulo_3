@@ -17,9 +17,10 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.core.JacksonException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -117,6 +118,40 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
             throw communicationFailure("The payment gateway did not answer the refund query", exception);
         } catch (RestClientException exception) {
             throw communicationFailure("The payment gateway did not answer the refund query", exception);
+        }
+    }
+
+    @Override
+    public List<RefundGatewayResult> fetchRefunds(String chargeReference) {
+        Objects.requireNonNull(chargeReference, "chargeReference");
+        try {
+            Supplier<List<RefundGatewayResult>> call = () -> executeFetchRefunds(chargeReference);
+            return CircuitBreaker.decorateSupplier(circuitBreaker, call).get();
+        } catch (CallNotPermittedException exception) {
+            throw communicationFailure("The payment gateway circuit breaker is open", exception);
+        }
+    }
+
+    private List<RefundGatewayResult> executeFetchRefunds(String chargeReference) {
+        try {
+            String response = restClient.get()
+                    .uri(PAYMENTS_PATH + "/" + chargeReference + "/refunds")
+                    .accept(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                    .retrieve()
+                    .body(String.class);
+            List<MercadoPagoRefundResponse> refunds = mapper.readValue(response,
+                    new TypeReference<List<MercadoPagoRefundResponse>>() {
+                    });
+            return refunds == null ? List.of() : refunds.stream().map(MercadoPagoRefundAdapter::toResult).toList();
+        } catch (JacksonException exception) {
+            throw communicationFailure("The payment gateway returned an invalid refund list", exception);
+        } catch (HttpClientErrorException.NotFound exception) {
+            return List.of();
+        } catch (RestClientResponseException exception) {
+            throw communicationFailure("The payment gateway did not answer the refund list query", exception);
+        } catch (RestClientException exception) {
+            throw communicationFailure("The payment gateway did not answer the refund list query", exception);
         }
     }
 

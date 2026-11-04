@@ -105,7 +105,7 @@ class FinancialRecordQueryAdapterIntegrationTest {
         jdbc.update("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount, commission_amount,"
                         + " deposit_amount, charge_intent_id, idempotency_key, status, gateway_capability)"
                         + " VALUES (?, ?, 'COMPLETED', 'STANDARD', ?, 10, 0, ?, ?, 'COMPLETED',"
-                        + " 'ADVANCED_PAYMENTS_DISBURSEMENT')",
+                        + " 'STANDARD_SETTLEMENT')",
                 intentId, reservation, new BigDecimal(amount), chargeIntentId, UUID.randomUUID().toString());
         UUID recordId = UUID.randomUUID();
         BigDecimal numericAmount = new BigDecimal(amount);

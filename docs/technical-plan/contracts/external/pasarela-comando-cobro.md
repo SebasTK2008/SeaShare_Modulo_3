@@ -27,7 +27,7 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
 | Header | Obligatorio | Valor |
 |---|---|---|
 | `Authorization` | Sí | `Bearer <ACCESS_TOKEN>` (requisito de la integración con Mercado Pago; no es seguridad del proyecto — general-plan §7.1) |
-| `X-Idempotency-Key` | Sí | Clave idempotente del intento: el valor de `charge_intent.idempotency_key`, derivado de `reservation_id` + `status` + `status_changed_at` (general-plan D-33, D-UC05-04). Es la **misma** clave en los reintentos técnicos del worker, de modo que un reintento no genera un cobro doble |
+| `X-Idempotency-Key` | Sí | UUID v4 generado una vez al crear la intención y persistido en `charge_intent.idempotency_key`; es la **misma** clave en los reintentos técnicos del worker, de modo que un reintento no genera un cobro doble. La identidad interna que decide si hay un intento nuevo sigue siendo `reservation_id` + `status` + tipo de operación + clave (D-UC05-15) |
 
 ### Body (Payload)
 
@@ -37,7 +37,7 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
 | `token` | string | Sí | Token seguro de la tarjeta generado por el SDK de Mercado Pago | [SPEC RF-001, RF-011] |
 | `description` | string | Sí | Descripción de la reserva para el estado de cuenta; la fija el sistema como `Reserva <reservation_id>` | [CONV] |
 | `installments` | integer | Sí | Número de cuotas; el sistema fija `1` | [CONV] |
-| `payment_method_id` | string | Sí | ID del medio de pago; se envía el `payment_method_type` recibido en el mensaje de UC07 con una única traducción: `CREDIT_CARD` → `credit_card` (valor que exige Mercado Pago); cualquier otro valor pasa tal cual (ej. `visa`, `master`) | [SPEC] + [CONV] |
+| `payment_method_id` | string | No* | ID del medio de pago (marca); se omite cuando UC07 informa un tipo genérico (`CREDIT_CARD`, `DEBIT_CARD`, `PREPAID_CARD`): Mercado Pago lo resuelve desde el token. Cuando UC07 ya aporta la marca (`VISA`, `MASTER`, etc.), se envía en minúsculas. | [SPEC] + [CONV] + [D-UC05-16] |
 | `payer.email` | string | Sí | Email del arrendatario; se envía `payment_metadata.payer_email` del mensaje de UC07 (dato plano) | [SPEC] + [CONV] |
 | `external_reference` | string | Sí | Identificador de la reserva para trazabilidad cruzada; el sistema envía el `reservation_id` | [SPEC SolicitudCobroPasarela] + [CONV] |
 
@@ -47,7 +47,6 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
   "token": "ff8080814c11e237014c1ff593b57b4d",
   "description": "Reserva b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10",
   "installments": 1,
-  "payment_method_id": "credit_card",
   "payer": {
     "email": "arrendatario@example.com"
   },
@@ -59,9 +58,11 @@ Esta es una representación del modelo que el adaptador (`GatewayPort`) transfor
 
 1. **Minimización de datos**: NUNCA se envía ni se almacena el número completo de tarjeta o CVV. Solo se opera con el `token` de un solo uso [SPEC RF-011, RNF-004].
 2. **Monto único**: El `transaction_amount` es uno solo, englobando alquiler, seguro y depósito. No se hacen llamadas separadas por concepto [SPEC RF-015].
-3. **Idempotencia**: Se garantiza pasando el `X-Idempotency-Key` en los headers de la llamada. Un timeout no significa fallo [SPEC RNF-003].
+3. **Idempotencia**: Se garantiza pasando el `X-Idempotency-Key` en los headers de la llamada. La
+   clave se genera una vez por operación (UUID v4), se persiste y se reutiliza en los reintentos; un
+   timeout no significa fallo [SPEC RNF-003; D-UC05-15].
 4. **Cobro directo**: se solicita el cobro con captura automática; no se usa autorización retenida ni `capture=false`. La aprobación de Mercado Pago ya es el cobro (general-plan D-32).
-5. **Datos obligatorios**: si el tipo de medio o el correo del pagador no están disponibles, **no se envía** la solicitud (el SPEC exige no enviar un cobro con datos incompletos): la intención de cobro queda en `REJECTED` con el detalle técnico y sin registro de cobro [CONV] (UC05 plan D-UC05-11).
+5. **Datos obligatorios**: si el correo del pagador no está disponible, **no se envía** la solicitud (el SPEC exige no enviar un cobro con datos incompletos): la intención de cobro queda en `REJECTED` con el detalle técnico y sin registro de cobro [CONV] (UC05 plan D-UC05-11). El `payment_method_id` es opcional: Mercado Pago lo infiere desde el token; solo se envía cuando UC07 ya informa una marca (`VISA`, `MASTER`, etc.) [D-UC05-16].
 6. **Protección de la pasarela**: la llamada usa un *timeout* de **10 s** de conexión y de lectura (general-plan §7.2) y el adaptador aplica un *circuit breaker* (50 % de fallos sobre una ventana de 10 llamadas, mínimo 5 llamadas, 10 s abierto, 1 llamada en *half-open*) para no gastar los reintentos de la cola contra una pasarela caída. Un `400` de validación del token **no** cuenta como fallo del circuito: no es una caída de la pasarela [CONV] (general-plan §7.2, D-20).
 
 ## 4. Respuesta exitosa (Técnica)
@@ -91,4 +92,4 @@ Un *timeout* **nunca** permite concluir que el cobro falló: la intención queda
 
 ## 6. Trazabilidad
 
-HU1 · RF-001 a RF-004, RF-011, RF-015 · RNF-001 a RNF-004.
+HU1 · RF-001 a RF-004, RF-011, RF-015 · RNF-001 a RNF-004 · D-UC05-15.

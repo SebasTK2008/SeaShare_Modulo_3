@@ -46,7 +46,7 @@ class SettlementIntentTest {
     void recordsTheGatewayCapabilityUsed() {
         SettlementIntent intent = intent();
 
-        assertThat(intent.capability()).isEqualTo(SettlementCapability.ADVANCED_PAYMENTS_DISBURSEMENT);
+        assertThat(intent.capability()).isEqualTo(SettlementCapability.STANDARD_SETTLEMENT);
     }
 
     @Test
@@ -55,7 +55,7 @@ class SettlementIntentTest {
                 .withExternalReference("disbursement-1")
                 .transitionTo(SettlementStatus.COMPLETED);
 
-        assertThat(completed.capability()).isEqualTo(SettlementCapability.ADVANCED_PAYMENTS_DISBURSEMENT);
+        assertThat(completed.capability()).isEqualTo(SettlementCapability.STANDARD_SETTLEMENT);
         assertThat(completed.externalReference()).isEqualTo("disbursement-1");
     }
 
