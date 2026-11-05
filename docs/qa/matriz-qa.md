@@ -18,12 +18,13 @@ Plan de trazabilidad de QA. Cada fila ancla un Test Case (TC) a **un escenario d
 Los pagos tienen **dos modos obligatorios y complementarios** (detalle en
 [`pagos-api-real.md`](pagos-api-real.md)):
 
-- **A · Simulado (gate de CI):** WireMock, simulador y Testcontainers. Es el que ejecutan la suite
-  automática y los TC de esta matriz; no requiere credenciales ni Internet.
+- **A · Simulado (gate de CI):** WireMock embebido y Testcontainers. Es la suite automática
+  (`mvnw verify`); no requiere credenciales ni Internet. Los TC de esta matriz se ejecutan contra el
+  sandbox real; lo que este no reproduce (`expired`, `404`, `503`) lo cubre la suite automática.
 - **B · API real de Mercado Pago (gate de release):** cobro aprobado/rechazado, webhook `payment`
   real, reembolso parcial/total, idempotencia y ausencia de datos sensibles, con credenciales
   `TEST-*` en sandbox MCO. Es **obligatorio** para aprobar UC05/UC09 en `release/0.1.0`; no se
-  sustituye por el simulador. UC10 no aplica porque usa un libro interno simulado (D-UC10-18).
+  sustituye por la suite automática. UC10 no aplica porque usa un libro interno simulado (D-UC10-18).
 
 ### Datos de prueba (alias → UUID)
 
@@ -122,7 +123,7 @@ Detectados al redactar los TC y contrastar spec ↔ plan ↔ contratos. No cambi
 3. **UC01 (estimaciones)**: `wiremock/mappings/fleet-base-rates.json` solo trae 2 embarcaciones; cargar 10 (HU1) y 50 (HU3) vía `POST /__admin/mappings` antes de ejecutar.
 4. **PostgreSQL**: `docker-compose.yml` publica el puerto host **5433** (el README menciona 5432). Usar 5433 desde el host en las consultas `psql`.
 5. **UC11-HU3**: `GET /api/v1/financial-parameters` devuelve `guarantee_deposit_rule` como texto, no como monto (decisión D-UC11-02).
-6. **UC10 (liquidaciones)**: `GATEWAY_SETTLEMENT_MODE` debe ser `simulated` (valor por defecto); no existe cuenta destino ni dispersión real. El libro interno devuelve `sim-settlement-<operationKey>` y crea el registro inmutable al procesar el comando (D-UC10-18).
+6. **UC10 (liquidaciones)**: `GATEWAY_SETTLEMENT_MODE` debe ser `simulated` (valor por defecto); no existe cuenta destino ni dispersión real. El libro interno devuelve `sim-settlement-<idempotency_key>` y crea el registro inmutable al procesar el comando (D-UC10-18).
 7. **Montos de ejemplo**: los TC usan cifras ilustrativas distintas (`360.00/200.00/12.00` vs `900000.00/60000.00/30000.00`). Antes de ejecutar, fijar los valores de la versión vigente de parámetros del entorno.
 8. **UC13 (exportación)**: el contrato no declara `406 NOT_ACCEPTABLE`, pero el catálogo E1 lo exige como caso de ejemplo; verificar la respuesta real en release y registrar defecto si difiere.
 9. **UC02-HU1-E3 (festivos)**: el SPEC dice que los puentes/festivos se evalúan como fin de semana; el plan (D-UC02-11) y el código solo tratan sábado y domingo como fin de semana. Los TC siguen el plan; si se valida el texto literal del spec, registrar la divergencia.

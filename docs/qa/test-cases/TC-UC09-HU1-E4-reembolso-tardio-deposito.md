@@ -30,7 +30,7 @@ Este caso de prueba verifica que, ante una cancelación tardía, el sistema soli
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**; el monto se verifica en el request journal y en `refund_intent`.
+* **Modo A (suite automática):** el cuerpo y las cabeceras que el sistema envía a la Pasarela los verifican `MercadoPagoChargeAdapterTest` y `MercadoPagoRefundAdapterTest` (WireMock embebido); este TC verifica el efecto en la BD, las colas y la consulta real del reembolso.
 * El resultado externo del reembolso se cubre en UC09 HU3; aquí la operación queda pendiente.
 
 ##### Dependencies & Assumptions
@@ -55,7 +55,7 @@ Este caso de prueba verifica que, ante una cancelación tardía, el sistema soli
 | 3 | Verificar la intención de reembolso | `SELECT trigger, scope, amount, status, idempotency_key FROM refund_intent;` | `trigger = 'CANCELLED_STRICT'` | `scope = 'DEPOSIT_ONLY'`, `amount = 30000.00`, clave UUID v4 (D-UC09-12) (RF-003A, RF-006). | [ ] | |
 | 4 | Verificar que alquiler y seguro quedan fuera | Contrastar el `amount` con el valor total y con el alquiler | `30000.00` ≠ `990000.00` ≠ `900000.00` | Solo se solicita el depósito; el alquiler y el seguro no forman parte del reembolso (RF-003A, CE-002). | [ ] | |
 | 5 | Verificar el desenlace del depósito | `SELECT disposition FROM deposit_disposition;` | N/A | `disposition = 'REFUND_REQUESTED'`; el depósito se devuelve al 100 % (RF-003A, RF-005). | [ ] | |
-| 6 | Verificar la llamada a la Pasarela | Journal del simulador (`POST /v1/payments/{id}/refunds`) | `amount = 30000.00` | Reembolso parcial explícito sobre el cobro original, con `X-Idempotency-Key` de la intención (contrato §2). | [ ] | |
+| 6 | Verificar la llamada a la Pasarela | Consultar el reembolso real: `GET /v1/payments/{id}/refunds` en Mercado Pago (o su panel) | `amount = 30000.00` | Reembolso parcial explícito sobre el cobro original, con `X-Idempotency-Key` de la intención (contrato §2). | [ ] | El header `X-Idempotency-Key` lo verifica `MercadoPagoRefundAdapterTest`; en la BD, `refund_intent.idempotency_key` es el UUID v4 que se envía. |
 | 7 | Verificar estado pendiente | `SELECT status FROM refund_intent;` y `SELECT count(*) FROM refund_record;` | N/A | Intención en curso, sin `refund_record` hasta la confirmación externa (RF-006, RF-007). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario

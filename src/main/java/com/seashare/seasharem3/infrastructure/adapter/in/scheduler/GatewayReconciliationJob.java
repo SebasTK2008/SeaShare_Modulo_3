@@ -33,9 +33,19 @@ public class GatewayReconciliationJob {
     @Scheduled(fixedDelayString = "${seashare.gateway.reconciliation-interval:5m}")
     @SchedulerLock(name = "gatewayReconciliationJob", lockAtMostFor = "PT4M", lockAtLeastFor = "PT1S")
     public void reconcile() {
-        reconcileChargeIntents.reconcile();
-        reconcileRefundIntents.reconcile();
-        reconcileSettlementIntents.reconcile();
+        // Cada conciliacion es independiente: si la pasarela falla al conciliar cobros, los reembolsos y la
+        // liquidacion interna (que no usa la pasarela) igual deben conciliarse en este ciclo.
+        runIsolated("charge", reconcileChargeIntents::reconcile);
+        runIsolated("refund", reconcileRefundIntents::reconcile);
+        runIsolated("settlement", reconcileSettlementIntents::reconcile);
         log.info("Charge, refund and settlement reconciliation cycle finished");
+    }
+
+    private static void runIsolated(String name, Runnable reconciliation) {
+        try {
+            reconciliation.run();
+        } catch (RuntimeException exception) {
+            log.error("The {} reconciliation failed; the next one still runs", name, exception);
+        }
     }
 }

@@ -551,7 +551,7 @@ Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). 
 | Externo | [`external/flota-consulta-tarifas-base.md`](contracts/external/flota-consulta-tarifas-base.md) | Sistema → Flota (contrato requerido) |
 | Externo | [`external/pasarela-comando-cobro.md`](contracts/external/pasarela-comando-cobro.md) | Sistema → Pasarela |
 | Externo | [`external/pasarela-comando-reembolso.md`](contracts/external/pasarela-comando-reembolso.md) | Sistema → Pasarela |
-| Externo | [`external/pasarela-comando-liquidacion.md`](contracts/external/pasarela-comando-liquidacion.md) | Sistema → Pasarela |
+| Externo | [`external/pasarela-comando-liquidacion.md`](contracts/external/pasarela-comando-liquidacion.md) | Sistema → libro interno de liquidaciones (sin canal externo) |
 | Externo | [`external/pasarela-webhook-resultados.md`](contracts/external/pasarela-webhook-resultados.md) | Pasarela → sistema |
 
 ### Entrega y verificación
@@ -560,7 +560,7 @@ Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). 
 |---|---|---|
 | Reservas y Operaciones | UC01, UC04, UC06 (REST); UC03, UC07, UC08 (colas) | Implementar cliente REST y productor AMQP |
 | Gestión de Flota | `flota-consulta-tarifas-base` | Exponer la consulta por lote con el SLA del SPEC |
-| Mercado Pago (pasarela, adaptador) | comandos + webhook | Adaptar Mercado Pago al modelo canónico |
+| Mercado Pago (pasarela, adaptador) | comandos de cobro y reembolso + webhook (la liquidación es interna) | Adaptar Mercado Pago al modelo canónico |
 | Administrador Financiero / Propietario | UC11, UC12, UC13 | Consumir los endpoints respetando paginación y períodos fijos |
 
 **Verificación**: pruebas de contrato en el sistema que usan los ejemplos de cada `.md` (REST con MockMvc; mensajes AMQP contra el cuerpo documentado) y *stubs* WireMock para Flota. La pasarela se cubre con WireMock embebido en las pruebas JUnit (`MercadoPagoChargeAdapterTest`, `MercadoPagoRefundAdapterTest`), no con un stub desplegado.
@@ -587,7 +587,7 @@ Actuator (`/health`, `/metrics`), Micrometer + Prometheus, logs JSON con `reserv
 
 ### 7.4 Configuración **[TÉC]** (sobreescribible por entorno)
 `seashare.timezone=America/Bogota`, `seashare.estimates.max-batch-size=50`, `seashare.reporting.max-page-size=100`, `seashare.fleet.*`, `seashare.gateway.*` (`base-url`, `access-token`, `webhook-secret`, `settlement-mode` —solo `simulated`, D-UC10-18—, `credentials-required`, `connect-timeout`, `read-timeout`, `reconciliation-interval` y `circuit-breaker.*`). No hay configuración de ventanas ni de disputas (24 h, vigencias): la administra Reservas [SPEC 008 RF-009].
-Perfiles de Spring: `dev` (por defecto; defaults locales alineados con `docker-compose.yml`; la pasarela apunta al simulador local `gateway-stub`, offline y sin credenciales), `sandbox` (se activa junto a `dev`, con `SPRING_PROFILES_ACTIVE=dev,sandbox`; la pasarela es Mercado Pago sandbox con credenciales `TEST-*` y el access token y el secreto del webhook son obligatorios) y `prod` (activo con `SPRING_PROFILES_ACTIVE=prod`; `application-prod.properties` no define defaults para credenciales ni secretos —llegan por variables de entorno o Docker secrets— y Actuator expone solo `health,info`). En `sandbox` y `prod`, `seashare.gateway.credentials-required=true` hace que la aplicación no arranque si falta una variable o el token y el secreto están vacíos: Spring Boot enlaza un `${VARIABLE}` sin resolver como texto literal, por lo que `GatewayProperties` rechaza expresamente ese valor (verificado en `GatewayProfilesTest`). UC10 es un libro interno simulado en todos los perfiles, incluido `prod`.
+Perfiles de Spring: `dev` (por defecto; defaults locales alineados con `docker-compose.yml`; la pasarela apunta a Mercado Pago y el access token de prueba `TEST-…` y el secreto del webhook salen del entorno) y `prod` (activo con `SPRING_PROFILES_ACTIVE=prod`; `application-prod.properties` no define defaults para credenciales ni secretos —llegan por variables de entorno o Docker secrets— y Actuator expone solo `health,info`). En `prod`, `seashare.gateway.credentials-required=true` hace que la aplicación no arranque si falta una variable o si el token o el secreto están vacíos: Spring Boot enlaza un `${VARIABLE}` sin resolver como texto literal, por lo que `GatewayProperties` lo rechaza expresamente (verificado en `GatewayProfilesTest`). UC10 es un libro interno simulado en todos los perfiles, incluido `prod`.
 
 ---
 

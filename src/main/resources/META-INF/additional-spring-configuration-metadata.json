@@ -132,7 +132,7 @@
     {
       "name": "seashare.gateway.credentials-required",
       "type": "java.lang.Boolean",
-      "description": "Exige access token y secreto del webhook no vacios. Lo activan los perfiles sandbox y prod; en dev (simulador local) es false.",
+      "description": "Exige access token y secreto del webhook no vacios. Lo activa el perfil prod; en dev es false.",
       "defaultValue": false
     },
     {

@@ -12,12 +12,17 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Los tres perfiles de la pasarela (general-plan §7.4): {@code dev} apunta al simulador local sin
- * credenciales, {@code dev,sandbox} exige credenciales de Mercado Pago y {@code prod} no tiene
- * defaults. Carga los {@code application*.properties} reales con las variables de entorno de la
- * maquina excluidas, para que el resultado no dependa de quien ejecute la prueba.
+ * La pasarela en los perfiles reales: {@code dev} arranca sin credenciales y {@code prod} no arranca si
+ * falta alguna variable. Spring Boot enlaza un {@code ${VARIABLE}} sin resolver como texto literal en lugar
+ * de fallar; sin la validacion de {@link GatewayProperties}, prod arrancaria con ese texto como token.
+ * Carga los {@code application*.properties} reales con las variables de entorno de la maquina excluidas,
+ * para que el resultado no dependa de quien ejecute la prueba.
  */
 class GatewayProfilesTest {
+
+    private static final String[] PROD_VARIABLES = {"GATEWAY_BASE_URL=https://api.mercadopago.com",
+        "GATEWAY_ACCESS_TOKEN=APP_USR-token", "GATEWAY_WEBHOOK_SECRET=prod-secret",
+        "GATEWAY_SETTLEMENT_MODE=simulated"};
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withInitializer(context -> context.getEnvironment().getPropertySources()
@@ -26,99 +31,60 @@ class GatewayProfilesTest {
             .withUserConfiguration(PropertiesConfiguration.class);
 
     @Test
-    void devPointsToTheLocalSimulatorWithoutCredentials() {
+    void devStartsWithoutCredentials() {
         contextRunner.withPropertyValues("spring.profiles.active=dev").run(context -> {
             assertThat(context).hasNotFailed();
             GatewayProperties properties = context.getBean(GatewayProperties.class);
-            assertThat(properties.getBaseUrl()).isEqualTo("http://localhost:8082");
+            assertThat(properties.getBaseUrl()).isEqualTo("https://api.mercadopago.com");
             assertThat(properties.getAccessToken()).isEmpty();
-            assertThat(properties.getWebhookSecret()).isEqualTo("dev-webhook-secret");
             assertThat(properties.getSettlementMode()).isEqualTo("simulated");
         });
     }
 
     @Test
-    void devNeverDefaultsToMercadoPago() {
-        contextRunner.withPropertyValues("spring.profiles.active=dev").run(context -> assertThat(
-                context.getBean(GatewayProperties.class).getBaseUrl()).doesNotContain("mercadopago"));
-    }
-
-    @Test
-    void sandboxOverridesDevWithMercadoPagoAndTheProvidedCredentials() {
-        contextRunner.withPropertyValues("spring.profiles.active=dev,sandbox",
-                "GATEWAY_ACCESS_TOKEN=TEST-token", "GATEWAY_WEBHOOK_SECRET=secret-from-panel").run(context -> {
-                    assertThat(context).hasNotFailed();
-                    GatewayProperties properties = context.getBean(GatewayProperties.class);
-                    assertThat(properties.getBaseUrl()).isEqualTo("https://api.mercadopago.com");
-                    assertThat(properties.getAccessToken()).isEqualTo("TEST-token");
-                    assertThat(properties.getWebhookSecret()).isEqualTo("secret-from-panel");
-                    assertThat(properties.getSettlementMode()).isEqualTo("simulated");
-                });
-    }
-
-    @Test
-    void sandboxDoesNotStartWithoutTheAccessToken() {
-        contextRunner.withPropertyValues("spring.profiles.active=dev,sandbox",
-                "GATEWAY_WEBHOOK_SECRET=secret-from-panel").run(context -> assertThat(context).hasFailed());
-    }
-
-    @Test
-    void sandboxDoesNotStartWithoutTheWebhookSecret() {
-        contextRunner.withPropertyValues("spring.profiles.active=dev,sandbox", "GATEWAY_ACCESS_TOKEN=TEST-token")
-                .run(context -> assertThat(context).hasFailed());
-    }
-
-    @Test
-    void sandboxDoesNotStartWithBlankCredentials() {
-        contextRunner.withPropertyValues("spring.profiles.active=dev,sandbox", "GATEWAY_ACCESS_TOKEN=",
-                "GATEWAY_WEBHOOK_SECRET=secret-from-panel").run(context -> assertThat(context).hasFailed());
-        contextRunner.withPropertyValues("spring.profiles.active=dev,sandbox", "GATEWAY_ACCESS_TOKEN=TEST-token",
-                "GATEWAY_WEBHOOK_SECRET=  ").run(context -> assertThat(context).hasFailed());
-    }
-
-    @Test
-    void prodDoesNotStartWithBlankCredentials() {
-        contextRunner.withPropertyValues("spring.profiles.active=prod",
-                "GATEWAY_BASE_URL=https://api.mercadopago.com", "GATEWAY_ACCESS_TOKEN=",
-                "GATEWAY_WEBHOOK_SECRET=prod-secret", "GATEWAY_SETTLEMENT_MODE=simulated")
-                .run(context -> assertThat(context).hasFailed());
-    }
-
-    @Test
-    void failureMessageNamesTheMissingCredential() {
-        contextRunner.withPropertyValues("spring.profiles.active=dev,sandbox",
-                "GATEWAY_WEBHOOK_SECRET=secret-from-panel").run(context -> assertThat(context.getStartupFailure())
-                        .hasStackTraceContaining("GATEWAY_ACCESS_TOKEN"));
-    }
-
-    @Test
-    void prodBindsOnlyWhatTheEnvironmentProvides() {
-        contextRunner.withPropertyValues("spring.profiles.active=prod",
-                "GATEWAY_BASE_URL=https://api.mercadopago.com", "GATEWAY_ACCESS_TOKEN=APP_USR-token",
-                "GATEWAY_WEBHOOK_SECRET=prod-secret", "GATEWAY_SETTLEMENT_MODE=simulated").run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context.getBean(GatewayProperties.class).getBaseUrl())
-                            .isEqualTo("https://api.mercadopago.com");
-                });
+    void prodBindsWhatTheEnvironmentProvides() {
+        contextRunner.withPropertyValues(withProfile("prod", PROD_VARIABLES)).run(context -> {
+            assertThat(context).hasNotFailed();
+            GatewayProperties properties = context.getBean(GatewayProperties.class);
+            assertThat(properties.getAccessToken()).isEqualTo("APP_USR-token");
+            assertThat(properties.getWebhookSecret()).isEqualTo("prod-secret");
+        });
     }
 
     @Test
     void prodDoesNotStartWhenAnyGatewayVariableIsMissing() {
-        String[] all = {"GATEWAY_BASE_URL=https://api.mercadopago.com", "GATEWAY_ACCESS_TOKEN=APP_USR-token",
-                "GATEWAY_WEBHOOK_SECRET=prod-secret", "GATEWAY_SETTLEMENT_MODE=simulated"};
-        for (int missing = 0; missing < all.length; missing++) {
-            String[] properties = new String[all.length];
-            properties[0] = "spring.profiles.active=prod";
-            int next = 1;
-            for (int i = 0; i < all.length; i++) {
-                if (i != missing) {
-                    properties[next++] = all[i];
-                }
-            }
-            String omitted = all[missing].substring(0, all[missing].indexOf('='));
-            contextRunner.withPropertyValues(properties).run(context -> assertThat(context)
+        for (int missing = 0; missing < PROD_VARIABLES.length; missing++) {
+            String omitted = PROD_VARIABLES[missing];
+            String[] provided = java.util.Arrays.stream(PROD_VARIABLES).filter(variable -> !variable.equals(omitted))
+                    .toArray(String[]::new);
+            contextRunner.withPropertyValues(withProfile("prod", provided)).run(context -> assertThat(context)
                     .as("prod must not start without %s", omitted).hasFailed());
         }
+    }
+
+    @Test
+    void prodDoesNotStartWithBlankCredentials() {
+        contextRunner.withPropertyValues(withProfile("prod", "GATEWAY_BASE_URL=https://api.mercadopago.com",
+                "GATEWAY_ACCESS_TOKEN=", "GATEWAY_WEBHOOK_SECRET=prod-secret", "GATEWAY_SETTLEMENT_MODE=simulated"))
+                .run(context -> assertThat(context).hasFailed());
+        contextRunner.withPropertyValues(withProfile("prod", "GATEWAY_BASE_URL=https://api.mercadopago.com",
+                "GATEWAY_ACCESS_TOKEN=APP_USR-token", "GATEWAY_WEBHOOK_SECRET=  ",
+                "GATEWAY_SETTLEMENT_MODE=simulated")).run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void theFailureNamesTheMissingVariable() {
+        contextRunner.withPropertyValues(withProfile("prod", "GATEWAY_BASE_URL=https://api.mercadopago.com",
+                "GATEWAY_WEBHOOK_SECRET=prod-secret", "GATEWAY_SETTLEMENT_MODE=simulated"))
+                .run(context -> assertThat(context.getStartupFailure())
+                        .hasStackTraceContaining("GATEWAY_ACCESS_TOKEN"));
+    }
+
+    private static String[] withProfile(String profile, String... variables) {
+        String[] properties = new String[variables.length + 1];
+        properties[0] = "spring.profiles.active=" + profile;
+        System.arraycopy(variables, 0, properties, 1, variables.length);
+        return properties;
     }
 
     @Configuration(proxyBeanMethods = false)

@@ -29,7 +29,7 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el rechazo 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela se **simula**; el webhook se dispara con una firma HMAC-SHA256 válida y el detalle se sirve desde el simulador.
+* El sandbox no produce reembolsos rechazados, cancelados ni expirados: la Section 1 se verifica con la suite automática (`RefundWebhookHandlerTest`, `RegisterRefundResultServiceTest`). La Section 2 (firma inválida, payload incompleto) sí se ejecuta contra la aplicación; el webhook se firma a mano (runbook §3.1).
 * El escenario cubre estados externos de rechazo/fallo; el fallo puramente técnico se valida en Section 2.
 
 ##### Dependencies & Assumptions
@@ -49,7 +49,7 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el rechazo 
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Confirmar la solicitud en curso | `SELECT status, amount, external_reference FROM refund_intent WHERE reservation_id = '...'` | N/A | Existe la intención enviada, pendiente de resultado y asociada a la referencia externa (RF-006, RF-007). | [ ] | |
 | 2 | Simular la notificación de fallo | `POST /api/v1/webhook/gateway?data.id=<payment_id>&type=payment` | `payment_id` = `charge_intent.external_reference`; body con `action` y `type` (obligatorios); headers `x-signature` válida y `x-request-id` | `200 OK` inmediato y notificación persistida en `outbox_message` (D-UC09-11). | [ ] | |
-| 3 | Verificar la consulta de reembolsos | Request journal: `GET /v1/payments/{payment_id}/refunds` | N/A | El worker lista los reembolsos y obtiene el estado externo del que coincide con `refund_intent.external_reference` (D-UC09-11). | [ ] | |
+| 3 | Verificar la consulta de reembolsos | Logs de la app (consulta `GET /v1/payments/{payment_id}/refunds`) | N/A | El worker lista los reembolsos y obtiene el estado externo del que coincide con `refund_intent.external_reference` (D-UC09-11). | [ ] | |
 | 4 | Verificar la intención actualizada | `SELECT status, status_detail, external_reference FROM refund_intent` | N/A | Estado interno correspondiente al rechazo/fallo (`REJECTED`, `CANCELLED` o `EXPIRED`), con `status_detail` y referencia externa; **nunca** `COMPLETED` (RF-007, RF-009). | [ ] | |
 | 5 | Verificar la ausencia de registro inmutable | `SELECT count(*) FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | `0` filas: no se crea `RegistroDeReembolso` para un reembolso rechazado, cancelado o expirado (RF-009). | [ ] | |
 | 6 | Verificar que no se reporta como devuelto | `SELECT * FROM v_financial_records WHERE reservation_id = '...'` y consultar UC06 | N/A | No aparece un reembolso confirmado; `released_amount` no se incrementa (RF-008, RF-009). | [ ] | |

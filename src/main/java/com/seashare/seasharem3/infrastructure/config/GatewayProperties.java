@@ -32,8 +32,8 @@ public class GatewayProperties implements InitializingBean {
     private String settlementMode = "simulated";
 
     /**
-     * Si es {@code true} el access token y el secreto del webhook son obligatorios: lo activan los
-     * perfiles {@code sandbox} y {@code prod}. En {@code dev} (simulador local) pueden ir vacios.
+     * Si es {@code true} el access token y el secreto del webhook son obligatorios: lo activa el perfil
+     * {@code prod}. En {@code dev} pueden ir vacios (el webhook responde 401 hasta configurarlos).
      */
     private boolean credentialsRequired = false;
 
@@ -89,7 +89,7 @@ public class GatewayProperties implements InitializingBean {
      *
      * <p>Spring Boot enlaza un marcador sin resolver (por ejemplo {@code GATEWAY_ACCESS_TOKEN} entre
      * llaves y precedido de dolar) como texto literal en lugar de fallar: sin esta comprobacion, un
-     * perfil {@code sandbox} o {@code prod} arrancaria con ese texto como token y solo fallaria al primer
+     * perfil {@code prod} arrancaria con ese texto como token y solo fallaria al primer
      * cobro. Se verifica en {@code GatewayProfilesTest}.</p>
      */
     @Override
@@ -113,7 +113,7 @@ public class GatewayProperties implements InitializingBean {
 
     private static void requireText(String property, String variable, String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalStateException(property + " is required in this profile (sandbox or prod): "
+            throw new IllegalStateException(property + " is required in this profile (prod): "
                     + "define a non-empty " + variable);
         }
     }

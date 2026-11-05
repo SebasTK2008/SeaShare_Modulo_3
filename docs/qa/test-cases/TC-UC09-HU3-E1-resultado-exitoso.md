@@ -29,7 +29,7 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el éxito d
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* **Modo A (CI/QA funcional):** la Pasarela se **simula**; el webhook se dispara con una firma HMAC-SHA256 válida del simulador y la consulta de reembolsos (`GET /v1/payments/{payment_id}/refunds`) también se sirve desde el simulador.
+* **Modo A (suite automática):** `RefundWebhookHandlerTest` y `RegisterRefundResultServiceTest` cubren el procesamiento del webhook y de la consulta de reembolsos. Este TC usa el webhook real que entrega Mercado Pago al túnel (runbook §3) o uno firmado a mano (runbook §3.1).
 * **Modo B (release):** el reembolso y su notificación `payment` deben verificarse contra la API real de Mercado Pago sandbox, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 
 ##### Dependencies & Assumptions
@@ -50,10 +50,10 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el éxito d
 | 1 | Confirmar la intención en curso | `SELECT status, amount, external_reference FROM refund_intent WHERE reservation_id = '...'` | N/A | La solicitud previa existe y está pendiente, con su `external_reference` ya persistida (RF-006, RF-007). | [ ] | |
 | 2 | Simular la notificación de la Pasarela | `POST /api/v1/webhook/gateway?data.id=<payment_id>&type=payment` | `payment_id` = `charge_intent.external_reference` del cobro original; body con `action` y `type` (obligatorios, no discriminan el resultado); headers `Content-Type: application/json`, `x-signature` válida, `x-request-id` | `200 OK` inmediato; la notificación queda persistida en `outbox_message` antes del acuse (contrato webhook §3.2). | [ ] | |
 | 3 | Verificar la cola interna | Inspeccionar `finance.gateway-notification.v1` | `{"type":"payment","action":"<el enviado>","data_id":"<payment_id>"}` | El mensaje se publica con routing `gateway.notification` para el procesamiento asíncrono (contrato webhook §3.3). | [ ] | |
-| 4 | Verificar la consulta de reembolsos | Request journal: `GET /v1/payments/{data.id}/refunds` | `{data.id} = payment_id` | El worker lista los reembolsos del pago y asocia el que cumple `refund.id == refund_intent.external_reference`; el cuerpo del webhook no se usa como veredicto (D-UC09-11). | [ ] | |
+| 4 | Verificar la consulta de reembolsos | Logs de la app y `GET /v1/payments/{data.id}/refunds` en Mercado Pago | `{data.id} = payment_id` | El worker lista los reembolsos del pago y asocia el que cumple `refund.id == refund_intent.external_reference`; el cuerpo del webhook no se usa como veredicto (D-UC09-11). | [ ] | |
 | 5 | Verificar la intención actualizada | `SELECT status, status_detail, amount, external_reference FROM refund_intent` | N/A | Estado `COMPLETED`, con `status_detail`, monto confirmado y referencia externa (RF-007). | [ ] | |
 | 6 | Verificar el registro inmutable | `SELECT * FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | Un único `refund_record` con `refund_intent_id NOT NULL`, `amount`, `released_amount`, `detail`, `external_reference`, reserva, propietario, embarcación, `dispute_id` cuando aplique y `created_at` (RF-007, RF-006A). | [ ] | Creación atómica con la intención. |
-| 7 | Verificar el monto neto liberado | Comparar `amount`, `transaction_cost` y `released_amount` | costo reportado por el simulador | `released_amount = amount − transaction_cost` cuando la Pasarela informa costo; si no lo informa, `released_amount = amount` y `transaction_cost` queda `NULL` (RF-011). | [ ] | |
+| 7 | Verificar el monto neto liberado | Comparar `amount`, `transaction_cost` y `released_amount` | costo reportado por Mercado Pago (`fee_details`, si lo informa) | `released_amount = amount − transaction_cost` cuando la Pasarela informa costo; si no lo informa, `released_amount = amount` y `transaction_cost` queda `NULL` (RF-011). | [ ] | |
 | 8 | Verificar disponibilidad para consulta | `SELECT * FROM v_financial_records WHERE record_id = '<refund_record.id>'` | N/A | El registro aparece para "Consultar registros financieros" (RF-008, CE-003). | [ ] | |
 | 9 | Verificar inmutabilidad y no duplicación | `SELECT count(*) FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | Exactamente 1 fila; el registro no admite `UPDATE`/`DELETE` (RF-007; caso extremo del UC09). | [ ] | |
 

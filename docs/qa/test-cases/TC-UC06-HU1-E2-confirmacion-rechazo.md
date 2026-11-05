@@ -37,7 +37,7 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` marcada como rech
 
 ##### Preconditions & Default Setup
 * **Initial State** : reserva con `reservation_id = b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (UUID de ejemplo del contrato; sustituir por el de la reserva de prueba). `charge_intent` en `REJECTED`, `amount = 572.00` (ajustar a la versión vigente del entorno), `status_detail = cc_rejected_bad_filled_other` (ejemplo del contrato de cobro) y `external_reference = "1234567890"`; `charge_record` sin filas.
-* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`; simulador de la Pasarela con su request journal accesible.
+* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`; credenciales de prueba de Mercado Pago en `.env` (runbook).
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
 --------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` marcada como rech
 | 5 | Verificar que no se reporta cobro aprobado | Leer `charged_amount`, `authorized_amount`, `captured_amount` y `released_amount` | N/A | `charged_amount = null` y el resto en `null`: nunca se informa un cobro aprobado cuando la Pasarela rechazó (RF-003, RF-004). | [ ] | |
 | 6 | Verificar la referencia externa | Leer `external_reference` | N/A | `"1234567890"`, la referencia provista por la Pasarela (RF-004). | [ ] | |
 | 7 | Verificar que la consulta es de solo lectura | Comparar `charge_intent` y `charge_record` antes y después de dos consultas | N/A | Sin cambios y sin filas nuevas (RF-002; caso extremo del SPEC). | [ ] | |
-| 8 | Verificar que no se contacta a la Pasarela | Request journal del simulador durante los pasos 2 a 7 | N/A | Cero llamadas nuevas a la Pasarela (RF-006, CE-002). | [ ] | |
+| 8 | Verificar que no se contacta a la Pasarela | Logs de la app (`docker logs seashare-app`) durante los pasos 2 a 7 | N/A | Cero llamadas nuevas a la Pasarela (RF-006, CE-002). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |

@@ -28,7 +28,7 @@ Este caso de prueba verifica que el sistema utiliza **únicamente** el token o r
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**; el token se genera/representa en el simulador.
+* El token lo genera la Pasarela real (sandbox) al tokenizar la tarjeta de prueba con la `public_key` (runbook §4).
 
 ##### Dependencies & Assumptions
 * **TC-UC05-HU1-E1 debe haber pasado** (existe una reserva con valor total y una solicitud de cobro en curso).
@@ -45,9 +45,9 @@ Este caso de prueba verifica que el sistema utiliza **únicamente** el token o r
 ##### Section 1: Uso exclusivo del token y minimización de datos
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar que la Pasarela tokenizó el medio de pago | Verificar en el simulador que existe el token del medio de pago | `mp_tok_QA_01` | Existe una referencia segura de un solo uso; el sistema no recibe el PAN ni el CVV (RF-011). | [ ] | |
+| 1 | Confirmar que la Pasarela tokenizó el medio de pago | Tokenizar una tarjeta de prueba con la `public_key` (runbook §4) y anotar el `card_token` | `<card_token real>` | Existe una referencia segura de un solo uso; el sistema no recibe el PAN ni el CVV (RF-011). | [ ] | |
 | 2 | Iniciar la solicitud de cobro con el token | Publicar el estado `PENDING` de UC07 con la metadata de pago | `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10`, token, `payer_email`, `CREDIT_CARD` | El sistema acepta únicamente el token como referencia del medio de pago (RF-001). | [ ] | |
-| 3 | Inspeccionar lo enviado a la Pasarela | Request journal del simulador (`POST /v1/payments`) | N/A | El body solo contiene `token` como dato del medio de pago; no aparecen número completo de tarjeta, CVV ni fecha de vencimiento (RF-011). | [ ] | |
+| 3 | Inspeccionar lo enviado a la Pasarela | BD (`SELECT payment_token_ref, last_four FROM charge_intent WHERE reservation_id = ...`) y logs de la app | N/A | Solo se persiste `payment_token_ref` y `last_four`; no hay número de tarjeta, CVV ni vencimiento en la BD ni en los logs. Que el cuerpo enviado solo lleve `token` lo verifica `MercadoPagoChargeAdapterTest` (RF-011). | [ ] | |
 | 4 | Inspeccionar lo persistido en la intención | `SELECT` sobre `charge_intent` | `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` | Se guardan el token/referencia segura y, si aplica, metadata no sensible (tipo de medio, últimos 4); no se persiste el número completo, el CVV ni la fecha de vencimiento (RF-011). | [ ] | |
 | 5 | Inspeccionar los logs de la app | Buscar el token y patrones de tarjeta en los logs del worker | N/A | El token del medio de pago **no** se escribe en logs; tampoco aparecen datos de tarjeta (RNF-004). | [ ] | |
 | 6 | Confirmar que la operación quedó registrada | `SELECT` sobre `charge_intent` | `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` | La solicitud de cobro en curso quedó registrada usando solo la referencia segura (RF-004). | [ ] | |

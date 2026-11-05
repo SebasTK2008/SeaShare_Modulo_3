@@ -64,13 +64,13 @@ Desviaciones de implementación registradas en este cierre: `refund_intent.versi
 | RF-013 | validación de información interna + `FailureRecorderPort` | T009 | **T017a `rf013_…`** |
 | RNF-001 | DTOs de comando y resultado de pasarela | T006, T007 | T016, T019 |
 | RNF-002 | `BigDecimal`, `Money`, `SettlementCalculator` | T004, T009 | **T013 `ce001_…`** |
-| RNF-003 | outbox, timeout, retry, conciliación y webhook | T003, T006, T010 | **T021 `ce004_…`** |
+| RNF-003 | outbox, timeout, retry y conciliación (sin webhook: el libro interno no notifica) | T003, T006, T010 | **T020 `ce004_…`** |
 | CE-001 | calculadora por alcance | T004, T009 | **T013 `ce001_…`** |
 | CE-002 | regla de comisión por alcance | T009, T017 | **T014 `ce002_…`** |
-| CE-003 | intención → registro + vista | T008, T017 | **T018 `ce003_…`** |
-| CE-004 | ACL/outbox/webhook | T003, T006, T010 | **T021 `ce004_…`** |
-| CE-005 | estados externos no exitosos | T010, T017 | **T019 `ce005_…`** |
-| CE-006 | creación atómica de comisión | T017 | **T020 `ce006_…`** |
+| CE-003 | intención → registro + vista | T008, T017 | **T016 `ce003_…`** |
+| CE-004 | ACL/outbox | T003, T006, T010 | **T020 `ce004_…`** |
+| CE-005 | estados externos no exitosos | T010, T017 | **T017 `ce005_…`** |
+| CE-006 | creación atómica de comisión | T017 | **T017 `ce006_…`** |
 | HU1 | compensaciones por cancelación | T009 | T013, T014 |
 | HU2 | liquidación estándar | T009, T017 | T013, T014, T020 |
 | HU3 | depósito por disputa | T009 | T015 |
@@ -259,7 +259,7 @@ Cobertura objetivo [CONV]: dominio ≥90 %, aplicación ≥80 %.
 | Resiliencia | fallo del libro simulado, reintento y conciliación interna | `SendSettlementToGatewayServiceTest`, `ReconcileSettlementIntentsServiceTest` |
 | Arquitectura | reglas §3.4 e inmutabilidad; UC10 no depende de `RefundIntent`/`RefundRecord` | `arch/Uc10ArchitectureTest` **[ACT-08]** |
 
-**Estado de las pruebas**: implementadas las pruebas unitarias, de persistencia (`RefundSettlementPersistenceIntegrationTest`), del listener (`SettlementCommandListenerTest`) y de Arquitectura. Pendientes: `SimulatedSettlementGatewayAdapterTest` (referencia determinista y estado `approved`), pruebas explícitas de duplicados/concurrencia/estados fuera de orden y las pruebas de aceptación con los nombres `ce00X_…`. **[ACT-09] [ACT-11]**
+**Estado de las pruebas**: implementadas las pruebas unitarias, de persistencia (`RefundSettlementPersistenceIntegrationTest`), del listener (`SettlementCommandListenerTest`) y de Arquitectura. También existen `SimulatedSettlementGatewayAdapterTest` (referencia determinista y estado `approved`) y `Uc10AcceptanceTest` (`ce001_…` … `ce006_…`). **[ACT-09] [ACT-11]**
 
 - **`ce001_precision_financiera_100_casos`**: ≥100 casos para cancelaciones, estándar y depósito; exactitud `BigDecimal` y escala 4.
 - **`ce002_comision_por_alcance`**: cero comisión en cancelación/depósito; estándar usa la comisión de la versión referenciada por la reserva.

@@ -6,7 +6,7 @@ demuestra que la integración funciona contra Mercado Pago.
 
 | Modo | Propósito | Entorno | Cuándo se ejecuta | ¿Bloquea? |
 |---|---|---|---|---|
-| **A · Simulado** | Regresión de lógica, contratos, webhook, colas y errores sin red externa | JUnit + WireMock + simulador de QA + Testcontainers | En cada `.\mvnw.cmd clean verify` y en la ejecución funcional de los TC | Sí: el build debe quedar verde |
+| **A · Simulado** | Regresión de lógica, contratos, webhook, colas y errores sin red externa | JUnit + WireMock + Testcontainers | En cada `.\mvnw.cmd clean verify` y en la ejecución funcional de los TC | Sí: el build debe quedar verde |
 | **B · API real (sandbox)** | Verificar la integración real de cobro, webhook `payment` y reembolso | Mercado Pago **MCO sandbox** con credenciales `TEST-*` y usuarios de prueba | Antes de aprobar `release/0.1.0`; se ejecuta en las fases de integración real y E2E (F3/F4) | Sí: sin estas evidencias el release de pagos no se aprueba |
 
 **Alcance del modo B:** UC05 (cobro) y UC09 (reembolso). **UC10 no aplica**: su liquidación es un
@@ -17,7 +17,7 @@ persistidos y no contacta a la pasarela.
 
 - **UC05/UC09:** pruebas unitarias, de aplicación, de contrato con WireMock, de webhook con MockMvc,
   de persistencia con Testcontainers y de mensajería con RabbitMQ. Los TC de `docs/qa/test-cases/`
-  que indican «simulador» o «request journal del simulador» pertenecen a este modo.
+  no usan este modo: se ejecutan contra el sandbox real (runbook).
 - **UC10:** pruebas del libro interno, persistencia y conciliación; no hay HTTP ni journal de
   pasarela.
 - **Reglas:** no requiere credenciales, no sale a Internet y no debe fallar por indisponibilidad de
@@ -28,9 +28,9 @@ persistidos y no contacta a la pasarela.
 
 ### 2.1 Condiciones de ejecución
 
-- Aplicación arrancada con `.env` local (gitignored) y credenciales **TEST** de la app
-  **`SeaShareM3`** (App ID `2901490065617188`, site MCO). Nunca usar credenciales de producción ni
-  versionarlas.
+- Aplicación arrancada con `.env` local (gitignored) y credenciales **TEST** de
+  la aplicación de Mercado Pago del equipo (`<APP_ID>`, site MCO; cada equipo usa la suya). Nunca usar
+  credenciales de producción ni versionarlas.
 - `GATEWAY_WEBHOOK_SECRET` completo, copiado del panel de Mercado Pago. Sin él el webhook responde
   `401 UNAUTHENTICATED` y el modo B no es válido.
 - Callback público HTTPS registrado en Mercado Pago, topic `payment`. Si el túnel cambia, actualizar
@@ -80,14 +80,16 @@ Pago sandbox no está disponible, el resultado es «bloqueado», no «aprobado c
 
 ## 3. Estado actual y automatización
 
-- **Aplicación en Mercado Pago:** `SeaShareM3` (App ID `2901490065617188`), producto Checkout API /
-  API Payments, con credenciales `TEST-`. El **webhook aún no está configurado** y no hay
-  notificaciones entregadas: sin ese paso, B-03 y B-06 no pueden pasar.
+- **Aplicación en Mercado Pago:** la del equipo (`<APP_ID>`), producto Checkout API / API Payments,
+  con credenciales `TEST-`. **Antes de cada ejecución** hay que verificar en el panel de la aplicación
+  que el webhook del topic `payment` apunta al túnel HTTPS vigente (y reconfigurarlo si el túnel
+  cambió); sin entregas válidas, B-03 y B-06 no pueden pasar. Si el equipo dispone del MCP de Mercado
+  Pago, `notifications_history` muestra las entregas y sus códigos de respuesta (un `502` indica que el
+  túnel o la aplicación estaban caídos).
 - **Modo A:** implementado y verde en `.\mvnw.cmd clean verify` (WireMock para UC05/UC09, webhook
   MockMvc, persistencia Testcontainers y libro simulado de UC10).
 - **Modo B:** especificado en este documento; **pendiente de ejecución** en las fases F3/F4. Las
   pruebas reales no forman parte de `mvn verify` para no depender de Internet ni de credenciales.
-  Si en F3 se añade una suite Java *live*, debe ser opt-in (variable de entorno o perfil) y quedar
-  excluida por defecto del build.
-- Los TC de `docs/qa/test-cases/` siguen siendo válidos para el modo A. La aprobación de release
-  exige además este checklist B.
+- Los TC de `docs/qa/test-cases/` se ejecutan contra el sandbox real siguiendo el runbook. Lo que el
+  sandbox no puede producir (pago `expired`, `404` de consulta, `503`) lo cubre la suite automática
+  (runbook §11). La aprobación de release exige además este checklist B.

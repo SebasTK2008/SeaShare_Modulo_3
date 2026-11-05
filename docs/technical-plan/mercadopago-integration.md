@@ -6,7 +6,7 @@ los contratos: los indexa.
 
 | Campo | Valor |
 |---|---|
-| Aplicación | `SeaShareM3` (App ID `2901490065617188`) |
+| Aplicación | La aplicación de Mercado Pago del equipo (`<APP_ID>`): cada equipo usa la suya, no hay una compartida |
 | Producto | Checkout API |
 | API | Payments API (`/v1/payments`) |
 | Site | MCO (Colombia) |
@@ -49,7 +49,7 @@ Mercado Pago ──> POST /api/v1/webhook/gateway?data.id=<payment_id>&type=paym
 
 UC09 (cancelación/disputa) ──> refund_intent ──> POST /v1/payments/{payment_id}/refunds
 
-UC07/UC08 ──> settlement_intent ──> libro interno (approved, sim-settlement-<operationKey>)
+UC07/UC08 ──> settlement_intent ──> libro interno (approved, sim-settlement-<idempotency_key>)
 ```
 
 Puntos clave:
@@ -156,11 +156,11 @@ Hay dos claves distintas y no se intercambian (general-plan D-37):
 ## 7. Brechas de código
 
 La documentación describe el comportamiento **objetivo**. El código se alineó con ella el
-**2026-11-04**; todas las brechas están cerradas.
+**2026-11-04**; una brecha se descartó y el resto está cerrada.
 
 | ID | Brecha | Evidencia | Severidad | Estado |
 |---|---|---|---|---|
-| **G-01** | No existía stub de pasarela para los TC que citan "request journal del simulador" | `wiremock/` solo contenía `mappings/fleet-base-rates.json`; ahora existe el servicio `gateway-stub` (`wiremock-gateway/`, §7.1) | Media | **Cerrada** (2026-11-04) |
+| **G-01** | No existe un stub de pasarela para los TC que citan "request journal del simulador" | `wiremock/` solo contiene `mappings/fleet-base-rates.json` | Media | **Descartada** (2026-11-05): no se construye un simulador de Mercado Pago. El modo A es la suite automática (WireMock embebido en JUnit) y los TC se ejecutan contra el sandbox real; los TC ya no citan el simulador |
 | **G-02** | `pending` no se mapeaba en UC05; se registraba `operational_failure` y la intención no avanzaba | `RegisterChargeResultService.toStatus` | Alta | **Cerrada** (2026-11-04) |
 | **G-03** | `refunded` / `charged_back` / `in_mediation` registraban `operational_failure` en lugar de ser no-op | `RegisterChargeResultService.IGNORED_STATUSES` | Media | **Cerrada** (2026-11-04) |
 | **G-04** | Reembolso sin intención local se ignoraba en silencio | `RefundWebhookHandler.handle` | Alta | **Cerrada** (2026-11-04) |
@@ -168,33 +168,6 @@ La documentación describe el comportamiento **objetivo**. El código se alineó
 | **G-06** | El webhook no validaba `Content-Type` | `GatewayWebhookController.isJson` | Baja | **Cerrada** (2026-11-04) |
 | **G-07** | `MercadoPagoPaymentResponse.refunds` se leía y no se usaba | `MercadoPagoPaymentResponse` | Baja | **Cerrada** (2026-11-04) |
 | **G-08** | Faltaban `reconciliation-interval` y `circuit-breaker.*` en la metadata de configuración | `additional-spring-configuration-metadata.json` | Baja | **Cerrada** (2026-11-04) |
-
-### 7.1 Simulador de la pasarela (`gateway-stub`)
-
-Cierra G-01. Es un WireMock (`wiremock/wiremock:3.13.2`) del `docker-compose.yml`, publicado en
-`http://localhost:${GATEWAY_STUB_PORT:-8082}` y calcado del `fleet-stub`. Es el «simulador con request
-journal» que citan los casos de prueba en Modo A; no requiere credenciales ni salida a Internet.
-
-- **Estado por defecto** (`wiremock-gateway/mappings/`, prioridad 10): cobro aprobado
-  (`POST /v1/payments`), consulta de pago aprobado (`GET /v1/payments/{id}`), reembolso aprobado
-  con `fee_details` (`POST /v1/payments/{id}/refunds`), lista de reembolsos
-  (`GET /v1/payments/{id}/refunds`) y detalle de un reembolso
-  (`GET /v1/payments/{id}/refunds/{refundId}`). Hay un solo mapping por ruta: el estado por
-  defecto no es ambiguo. El cobro y el reembolso devuelven el monto y la referencia externa recibidos.
-- **Escenarios** (`wiremock-gateway/scenarios/`, prioridad 1; no se cargan al arrancar): cobro
-  `rejected`, `expired`, `in_process`, `pending`, `400` (token inválido) y `503`; consulta de pago
-  `rejected`, `expired`, `in_process` y `404`; reembolso `400` y `503`; lista de reembolsos `404`
-  (G-05) y detalle de reembolso `404`. Un escenario activo gana sobre el estado por defecto en
-  toda su ruta hasta el `reset`.
-- **Control**: `scripts/gateway-stub.sh set <escenario>`, `reset`, `list`, `journal [METODO RUTA]` y
-  `clear-journal`. El `reset` también vacía el request journal: se consulta antes.
-- **Webhooks**: `scripts/sign-webhook.sh <payment_id>` envía a la app una notificación con
-  `x-signature` válida (mismo formato que `MercadoPagoSignatureVerifier`) usando
-  `GATEWAY_WEBHOOK_SECRET`; en Modo A el valor por defecto es `dev-webhook-secret`.
-- **Sin liquidación**: no hay mappings de liquidación; UC10 es un libro interno simulado sin HTTP
-  (D-UC10-18), también en producción.
-- Con `docker compose --profile app up` la app arranca con `GATEWAY_BASE_URL=http://gateway-stub:8080`
-  por defecto. Para Mercado Pago sandbox (Modo B) se define `GATEWAY_BASE_URL` en `.env`.
 
 ---
 

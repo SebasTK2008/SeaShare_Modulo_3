@@ -37,7 +37,7 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` marcada como apro
 
 ##### Preconditions & Default Setup
 * **Initial State** : reserva con `reservation_id = b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (UUID de ejemplo del contrato; sustituir por el de la reserva de prueba). `charge_intent` en `CAPTURED`, `amount` total `572.00` (ajustar a la versión vigente del entorno), `external_reference = "1234567890"`, `status_detail` informado por la Pasarela.
-* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`; simulador de la Pasarela con su request journal accesible.
+* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`; credenciales de prueba de Mercado Pago en `.env` (runbook).
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
 --------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` marcada como apro
 | 5 | Verificar los montos no informados | Leer `authorized_amount`, `captured_amount` y `released_amount` | N/A | Los tres en `null`: el cobro es directo, no hay reembolsos confirmados y la respuesta no afirma captura (RF-004; contrato UC06 §3 regla 4). | [ ] | |
 | 6 | Verificar el detalle | Leer `detail` | N/A | `detail` = `status_detail` registrado en la intención, o `null` si la Pasarela no lo informó (RF-003; D-UC06-04). | [ ] | |
 | 7 | Verificar que la consulta es de solo lectura | Comparar `charge_intent` y `charge_record` antes y después de dos consultas | N/A | Sin cambios de estado ni de montos y sin filas nuevas: la consulta no crea ni modifica registros (RF-002; caso extremo del SPEC). | [ ] | |
-| 8 | Verificar que no se contacta a la Pasarela | Request journal del simulador durante los pasos 2 a 7 | N/A | Cero llamadas nuevas (`GET /v1/payments/*` sin registros nuevos) (RF-006, CE-002). | [ ] | |
+| 8 | Verificar que no se contacta a la Pasarela | Logs de la app (`docker logs seashare-app`) durante los pasos 2 a 7 | N/A | Cero llamadas nuevas (`GET /v1/payments/*` sin registros nuevos) (RF-006, CE-002). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |

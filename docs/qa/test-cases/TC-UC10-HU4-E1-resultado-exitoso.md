@@ -49,9 +49,9 @@ Este caso de prueba verifica que, cuando el **libro interno simulado** devuelve 
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Confirmar la solicitud previa | `SELECT` sobre `settlement_intent` | `reservation_id = 0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | La intención existe en `PENDING_SEND`, con monto solicitado, desglose interno, `gateway_capability = STANDARD_SETTLEMENT` e `idempotency_key` UUID v4 (RF-009, RF-010). | [ ] | |
 | 2 | Procesar el comando interno | Esperar al worker de `finance.settlement-command.v1` o republicar el comando | `settlement_intent_id` de la intención | El worker invoca el libro interno simulado; no hay petición HTTP (D-UC10-18). | [ ] | |
-| 3 | Verificar el resultado del libro interno | `SELECT status, external_reference, status_detail FROM settlement_intent` | `0f1e2d3c-…` | Estado `COMPLETED`, `external_reference = sim-settlement-<operationKey>` y `status_detail = simulated internal settlement` (D-UC10-18). | [ ] | |
+| 3 | Verificar el resultado del libro interno | `SELECT status, external_reference, status_detail FROM settlement_intent` | `0f1e2d3c-…` | Estado `COMPLETED`, `external_reference = sim-settlement-<idempotency_key>` y `status_detail = simulated internal settlement` (D-UC10-18). | [ ] | |
 | 4 | Verificar el registro inmutable | `SELECT` sobre `settlement_record` filtrando por la intención | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | **Una** fila con monto confirmado `106.00`, referencia externa, `settlement_intent_id`, reserva, propietario, embarcación, alquiler bruto, seguro aplicado y depósito asociado, con `created_at` (RF-009A, RF-010, RF-015, RF-016). | [ ] | |
-| 5 | Verificar la indisponibilidad de duplicados | Republicar el comando o esperar un ciclo de conciliación | misma intención | La referencia determinista y el estado terminal evitan un segundo registro; no aparece una segunda fila en `settlement_record` (D-UC10-18). | [ ] | |
+| 5 | Verificar la indisponibilidad de duplicados | Republicar el comando o esperar un ciclo de conciliación | misma intención | El segundo comando con la misma `operation_key` devuelve la intención existente (`UNIQUE(reservation_id, operation_key)`, D-UC10-19); la referencia determinista y el estado terminal evitan un segundo registro: no aparece una segunda fila en `settlement_record` (D-UC10-18). | [ ] | |
 | 6 | Verificar la disponibilidad para consulta | `GET /api/v1/financial-records?reservation_id=0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` (o vista `v_financial_records`) | `0f1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f` | El registro confirmado aparece como registro financiero de la reserva, con su monto y referencia externa (RF-011, CE-003). | [ ] | También debe verse en el informe de UC13. |
 
 ##### Section 2: Errores y casos extremos de este escenario
@@ -64,7 +64,7 @@ Este caso de prueba verifica que, cuando el **libro interno simulado** devuelve 
 | 5 | Comando duplicado | Publicar dos veces el mismo `settlement_intent_id` | mismo id | El segundo mensaje no altera el estado ni duplica el registro (idempotencia por estado terminal y referencia). | [ ] | |
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : La referencia externa es determinista: `sim-settlement-<operationKey>`; un reintento produce el mismo valor (D-UC10-18).
+* **EC-001** : La referencia externa es determinista: `sim-settlement-<idempotency_key>`; un reintento produce el mismo valor (D-UC10-18).
 * **EC-002** : El libro interno devuelve el monto de la intención; no se acepta un monto distinto del calculado (RF-009A, RF-016).
 * **EC-003** : El depósito se conserva como componente del registro interno, aunque no exista transferencia real (RF-016; D-UC10-18).
 * **EC-004** : `BigDecimal` de 4 decimales internos → monto del registro y salidas REST redondeados `HALF_UP` a 2 decimales (RNF-002, README §3.1).

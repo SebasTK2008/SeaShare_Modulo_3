@@ -67,7 +67,7 @@ se calcula antes, en el dominio (`SettlementCalculator`), y se conserva en la in
 |---|---|---|---|
 | `status` | string | Siempre `approved` en el libro interno | `GatewaySettlementResult.status` |
 | `statusDetail` | string | `simulated internal settlement` | `GatewaySettlementResult.statusDetail` |
-| `externalId` | string | `sim-settlement-<operationKey>`; se persiste en `settlement_intent.external_reference` antes de registrar el resultado | `GatewaySettlementResult.externalId` |
+| `externalId` | string | `sim-settlement-<idempotency_key>`; se persiste en `settlement_intent.external_reference` antes de registrar el resultado | `GatewaySettlementResult.externalId` |
 | `amount` | decimal | Monto de la liquidación | `GatewaySettlementResult.amount` |
 
 ### Conciliación

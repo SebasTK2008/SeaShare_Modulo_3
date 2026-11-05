@@ -18,19 +18,16 @@ recibiendo webhooks reales. **No** se usan credenciales de producción.
 | Una cuenta de Mercado Pago de desarrollador | Acceso a [Tus integraciones](https://www.mercadopago.com/developers/panel/app) |
 | Un túnel HTTPS disponible | Cualquier herramienta que exponga `localhost:8080` por HTTPS público |
 
-> **Aviso:** el modo B usa el perfil **`sandbox`** (`SPRING_PROFILES_ACTIVE=dev,sandbox`), no `dev`.
-> El perfil `dev` y el `docker-compose.yml` apuntan por defecto al simulador local `gateway-stub`
-> (modo A); para hablar con Mercado Pago hay que definir `GATEWAY_BASE_URL=https://api.mercadopago.com`
-> y el perfil `sandbox` en `.env`. El archivo `.env` local no se versiona. Si tu `.env` define
+> **Aviso:** el archivo `.env` local no se versiona. Si tu `.env` define
 > `GATEWAY_BASE_URL=http://fleet-stub:8080`, **las llamadas irán al stub de Flota y no a Mercado
-> Pago**. Bórrala o ajústala.
+> Pago**. Bórrala o ajústala a `https://api.mercadopago.com`.
 
 ---
 
 ## 1. Aplicación y credenciales de prueba
 
 1. Entra en [Tus integraciones](https://www.mercadopago.com/developers/panel/app) y selecciona la
-   aplicación **`SeaShareM3`** (App ID `2901490065617188`). Si hay que recrearla: producto
+   aplicación del equipo (`<APP_ID>`; cada equipo usa su propia aplicación de Mercado Pago). Si hay que recrearla: producto
    **Checkout API**, API **Payments** (no Orders); el *site* lo toma Mercado Pago de tu cuenta (MCO).
 2. En la aplicación, abre **Credenciales de prueba** y copia:
    - **`access_token`** de prueba (prefijo `TEST-`) → `GATEWAY_ACCESS_TOKEN`.
@@ -53,8 +50,6 @@ recibiendo webhooks reales. **No** se usan credenciales de producción.
 Copia `.env.example` a `.env` y completa:
 
 ```dotenv
-# Perfil: dev aporta PostgreSQL, RabbitMQ y Flota; sandbox sobrescribe la pasarela
-SPRING_PROFILES_ACTIVE=dev,sandbox
 # Pasarela (sandbox)
 GATEWAY_BASE_URL=https://api.mercadopago.com
 GATEWAY_ACCESS_TOKEN=TEST-...
@@ -63,14 +58,9 @@ GATEWAY_SETTLEMENT_MODE=simulated
 ```
 
 Comprueba que NO quede `GATEWAY_BASE_URL=http://fleet-stub:8080`: esa URL es del stub de Flota y
-desviaría todos los cobros. Si dejas `GATEWAY_BASE_URL` sin definir, el compose usa el simulador
-(`http://gateway-stub:8080`) y **no es modo B**.
-
-Con el perfil `sandbox`, la aplicación **no arranca** si `GATEWAY_ACCESS_TOKEN` o
-`GATEWAY_WEBHOOK_SECRET` faltan o están vacíos (`seashare.gateway.credentials-required`); el log
-indica qué variable falta. Para confirmar que el modo B realmente apunta a Mercado Pago, el request
-journal del simulador (`http://localhost:8082/__admin/requests`) debe permanecer **vacío** durante la
-ejecución.
+desviaría todos los cobros. El perfil `dev` (por defecto) ya apunta a Mercado Pago; solo el access token
+de prueba y el secreto del webhook salen del `.env`. (El perfil `prod` no arranca si esas variables
+faltan o están vacías.)
 
 Levanta el stack:
 
@@ -95,6 +85,23 @@ Mercado Pago exige una URL **HTTPS pública**; `localhost` no sirve.
 
 La integración **no** envía `notification_url` en el pago: la recepción depende por completo de esta
 configuración de la aplicación (`pasarela-webhook-resultados.md` §2).
+
+### 3.1 Enviar un webhook firmado a mano
+
+Para ejercitar el endpoint sin esperar a Mercado Pago (por ejemplo en los TC de firma inválida o de
+reembolsos), se firma la notificación con el secreto del webhook, con el mismo esquema que valida la
+aplicación (`MercadoPagoSignatureVerifier`): HMAC-SHA256 de `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`.
+
+```bash
+ID=1234567890; REQ=$(openssl rand -hex 16); TS=$(date +%s)
+SIG=$(printf 'id:%s;request-id:%s;ts:%s;' "$ID" "$REQ" "$TS" | openssl dgst -sha256 -hmac "$GATEWAY_WEBHOOK_SECRET" | sed 's/^.* //')
+curl -i -X POST "http://localhost:8080/api/v1/webhook/gateway?data.id=$ID&type=payment" \
+  -H 'Content-Type: application/json' -H "x-request-id: $REQ" -H "x-signature: ts=$TS,v1=$SIG" \
+  -d '{"action":"payment.updated","type":"payment","data":{"id":"'"$ID"'"}}'
+```
+
+Responde `200` con la firma correcta y `401 UNAUTHENTICATED` con una incorrecta. Usa un `data.id` real
+(el `payment_id` del cobro) si quieres que el worker lo procese.
 
 ---
 
@@ -248,57 +255,17 @@ complementario.
 
 ---
 
-## 11. Modo A: simulador de la pasarela (`gateway-stub`)
+## 11. Modo A y casos que el sandbox no reproduce
 
-El modo A **no** usa Mercado Pago: la pasarela se simula con el servicio `gateway-stub` del
-`docker-compose.yml` (WireMock en `http://localhost:8082`), sin credenciales ni Internet. Es lo que
-llaman «request journal del simulador» los casos de prueba. La suite automática de `mvn verify`
-sigue usando además WireMock **embebido en JUnit** y MockMvc.
+El modo A **no** usa Mercado Pago ni un simulador: es la suite automática (`.\mvnw.cmd clean verify`), que
+levanta WireMock **embebido en JUnit** (`MercadoPagoChargeAdapterTest`, `MercadoPagoRefundAdapterTest`) y
+MockMvc para el webhook. Los casos de prueba de `docs/qa/test-cases/` se ejecutan contra el sandbox real
+(esta guía); lo que el sandbox no puede producir se cubre con la suite automática:
 
-**Arranque** (perfil `dev`, sin `SPRING_PROFILES_ACTIVE` ni credenciales en `.env`):
-
-```bash
-docker compose --profile app up --build -d      # gateway-stub incluido
-```
-
-**Estado por defecto**: cobros y reembolsos `approved`, consulta de pago `approved`
-(`wiremock-gateway/mappings/`). **Escenarios** (`wiremock-gateway/scenarios/`), que ganan sobre el
-estado por defecto hasta el `reset`:
-
-```bash
-bash scripts/gateway-stub.sh list                     # escenarios disponibles
-bash scripts/gateway-stub.sh set cobro-rejected       # el siguiente POST /v1/payments responde rejected
-bash scripts/gateway-stub.sh set cobro-bad-request    # 400 (token invalido; intencion REJECTED sin reintento)
-bash scripts/gateway-stub.sh set cobro-unavailable    # 503 (COMMUNICATION_ERROR y reintentos)
-bash scripts/gateway-stub.sh set reembolso-bad-request
-bash scripts/gateway-stub.sh set reembolsos-no-encontrado
-bash scripts/gateway-stub.sh reset                    # vuelve al estado por defecto
-```
-
-**Request journal** (verificación de lo que la app envió a la pasarela):
-
-```bash
-curl -s "http://localhost:8082/__admin/requests?limit=50"
-bash scripts/gateway-stub.sh journal POST /v1/payments       # filtrado por metodo y ruta
-bash scripts/gateway-stub.sh journal POST "/v1/payments/1234567890/refunds"
-bash scripts/gateway-stub.sh clear-journal
-```
-
-> `reset` también vacía el request journal: consúltalo **antes** de resetear.
-
-**Webhook firmado** (el stub no llama a la app; el webhook se envía con la firma de la
-pasarela):
-
-```bash
-GATEWAY_WEBHOOK_SECRET=<el mismo valor que usa la app> bash scripts/sign-webhook.sh 1234567890
-```
-
-El secreto por defecto de desarrollo es `dev-webhook-secret`. Si tu `.env` define otro
-`GATEWAY_WEBHOOK_SECRET`, exporta ese mismo valor al ejecutar el script; con uno distinto el
-webhook responde `401`.
-
-**Límites del modo A**: no valida el formato real de los tokens ni los estados que solo produce
-Mercado Pago, y no tiene mappings de liquidación (UC10 es un libro interno sin HTTP). Por eso el
-modo B sigue siendo obligatorio para la aprobación de `release/0.1.0`. Ver brecha G-01 (cerrada) y la
-mecánica del simulador en
-[`docs/technical-plan/mercadopago-integration.md`](../technical-plan/mercadopago-integration.md) §7.1.
+| Caso | Cómo se provoca | Cobertura |
+|---|---|---|
+| Pago rechazado | Titular `OTHE` al tokenizar (§4) | Sandbox |
+| Token inválido (`400`) | Un `payment_token_ref` falso | Sandbox |
+| Pasarela caída (`COMMUNICATION_ERROR`) | `GATEWAY_BASE_URL` apuntando a un puerto cerrado (por ejemplo `http://localhost:9`) y reinicio de la aplicación | Sandbox + app |
+| Pago `expired`, `404` de consulta, `503` | No se reproducen en el sandbox | Suite automática (`MercadoPago*AdapterTest`, `RegisterChargeResultServiceTest`) |
+| Liquidación (UC10) | No hay HTTP: es un libro interno simulado (D-UC10-18) | Suite automática y TC de UC10 |
