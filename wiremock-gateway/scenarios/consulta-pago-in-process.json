@@ -1,0 +1,11 @@
+{
+  "name": "Escenario - Consulta de pago en proceso",
+  "priority": 1,
+  "request": { "method": "GET", "urlPathPattern": "/v1/payments/[0-9]+" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":{{request.pathSegments.[2]}},\"status\":\"in_process\",\"status_detail\":\"pending_review_manual\"}",
+    "transformers": ["response-template"]
+  }
+}

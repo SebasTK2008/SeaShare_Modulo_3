@@ -1,0 +1,11 @@
+{
+  "name": "Escenario - Cobro en proceso (UC06 E3)",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/v1/payments" },
+  "response": {
+    "status": 201,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":1234567890,\"status\":\"in_process\",\"status_detail\":\"pending_review_manual\",\"transaction_amount\":{{jsonPath request.body '$.transaction_amount'}},\"external_reference\":\"{{jsonPath request.body '$.external_reference'}}\"}",
+    "transformers": ["response-template"]
+  }
+}

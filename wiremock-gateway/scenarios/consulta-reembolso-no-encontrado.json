@@ -1,0 +1,10 @@
+{
+  "name": "Escenario - Detalle de reembolso inexistente (404)",
+  "priority": 1,
+  "request": { "method": "GET", "urlPathPattern": "/v1/payments/[0-9]+/refunds/[0-9]+" },
+  "response": {
+    "status": 404,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "message": "Refund not found", "error": "not_found", "status": 404 }
+  }
+}

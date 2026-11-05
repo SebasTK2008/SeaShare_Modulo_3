@@ -1,0 +1,11 @@
+{
+  "name": "UC09 - Reembolso aprobado (estado por defecto) POST /v1/payments/{id}/refunds",
+  "priority": 10,
+  "request": { "method": "POST", "urlPathPattern": "/v1/payments/[0-9]+/refunds" },
+  "response": {
+    "status": 201,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"id\":555,\"payment_id\":{{request.pathSegments.[2]}},\"status\":\"approved\",\"amount\":{{jsonPath request.body '$.amount'}},\"fee_details\":[{\"type\":\"mercadopago_fee\",\"fee_payer\":\"collector\",\"amount\":1000.00}]}",
+    "transformers": ["response-template"]
+  }
+}

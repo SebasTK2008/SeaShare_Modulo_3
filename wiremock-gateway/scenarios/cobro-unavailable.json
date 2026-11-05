@@ -1,0 +1,10 @@
+{
+  "name": "Escenario - Pasarela no disponible en el cobro (503, COMMUNICATION_ERROR)",
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/v1/payments" },
+  "response": {
+    "status": 503,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "message": "service unavailable", "status": 503 }
+  }
+}
