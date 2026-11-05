@@ -195,7 +195,9 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
                 .slidingWindowSize(properties.getSlidingWindowSize())
                 .waitDurationInOpenState(properties.getWaitDurationInOpenState())
                 .permittedNumberOfCallsInHalfOpenState(properties.getPermittedNumberOfCallsInHalfOpenState())
-                .ignoreExceptions(GatewayBusinessRejectionException.class)
+                // Un 400 de negocio y un 404 (pago desconocido, p. ej. una notificacion de prueba del panel)
+                // son respuestas validas de la pasarela, no una caida: no deben abrir el breaker.
+                .ignoreExceptions(GatewayBusinessRejectionException.class, GatewayResourceNotFoundException.class)
                 .build();
         return CircuitBreaker.of(DEPENDENCY_NAME, config);
     }

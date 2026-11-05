@@ -132,6 +132,29 @@ class DepositOutcomeSingleIntentIntegrationTest {
         assertThat(count("refund_intent", reservation)).isZero();
     }
 
+    @Test
+    void aRefundThatEndedRejectedAllowsALegitimateRetryButACompletedOneDoesNot() {
+        ReservationInformation reservation = capturedReservation();
+        UUID reservationId = reservation.reservationId().value();
+        RefundRequestResult first = requestRefund.request(new RefundRequestCommand(reservationId,
+                RefundTrigger.DISPUTE_REJECTED, UUID.randomUUID(), "dispute-event-1"));
+
+        jdbcTemplate.update("update refund_intent set status = 'REJECTED' where id = ?", first.refundIntentId());
+        RefundRequestResult retry = requestRefund.request(new RefundRequestCommand(reservationId,
+                RefundTrigger.CANCELLED_STRICT, null, reservationId + ":retry"));
+
+        assertThat(retry.refundIntentId()).isNotNull().isNotEqualTo(first.refundIntentId());
+        assertThat(retry.status()).isEqualTo(RefundIntentStatus.PENDING_SEND);
+        assertThat(count("refund_intent", reservation)).isEqualTo(2);
+
+        jdbcTemplate.update("update refund_intent set status = 'COMPLETED' where id = ?", retry.refundIntentId());
+        RefundRequestResult blocked = requestRefund.request(new RefundRequestCommand(reservationId,
+                RefundTrigger.CANCELLED_STRICT, null, reservationId + ":again"));
+
+        assertThat(blocked.refundIntentId()).isEqualTo(retry.refundIntentId());
+        assertThat(count("refund_intent", reservation)).isEqualTo(2);
+    }
+
     private int count(String table, ReservationInformation reservation) {
         Integer count = jdbcTemplate.queryForObject("select count(*) from " + table + " where reservation_id = ?",
                 Integer.class, reservation.reservationId().value());

@@ -45,6 +45,16 @@ class MercadoPagoSignatureVerifierTest {
     }
 
     @Test
+    void usesTheLowercaseDataIdInTheManifestAsTheGatewayDocumentationRequires() {
+        // Mercado Pago firma con el data.id en minusculas aunque llegue en mayusculas en la URL.
+        String signedWithLowercase = signature("abc123xyz", REQUEST_ID, "1765000000");
+
+        assertThat(verifier.isValid("ABC123XYZ", REQUEST_ID, signedWithLowercase)).isTrue();
+        assertThat(verifier.isValid("abc123xyz", REQUEST_ID, signedWithLowercase)).isTrue();
+        assertThat(verifier.isValid("abc123xyZ-other", REQUEST_ID, signedWithLowercase)).isFalse();
+    }
+
+    @Test
     void rejectsAMissingSignature() {
         assertThat(verifier.isValid(DATA_ID, REQUEST_ID, null)).isFalse();
         assertThat(verifier.isValid(DATA_ID, REQUEST_ID, "  ")).isFalse();

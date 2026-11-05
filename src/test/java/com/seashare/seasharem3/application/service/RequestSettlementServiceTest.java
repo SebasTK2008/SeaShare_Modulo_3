@@ -210,6 +210,58 @@ class RequestSettlementServiceTest {
         verify(settlementIntentRepository, never()).save(any());
     }
 
+    @Test
+    void retriesTheDepositSettlementWhenThePreviousOneEndedWithoutSettling() {
+        for (SettlementStatus failed : new SettlementStatus[] {SettlementStatus.REJECTED,
+            SettlementStatus.CANCELLED, SettlementStatus.EXPIRED}) {
+            SettlementIntent previous = previousDepositSettlement().transitionTo(failed);
+            stubPreviousDepositSettlement(previous);
+
+            SettlementRequestResult result = service.request(new SettlementCommand(RESERVATION.reservationId(),
+                    SettlementTrigger.DISPUTE_COMPLETED, SettlementScope.DEPOSIT, UUID.randomUUID(),
+                    "retry-" + failed));
+
+            assertThat(result.settlementIntentId()).as("retry after %s", failed).isNotNull()
+                    .isNotEqualTo(previous.id());
+            assertThat(result.status()).isEqualTo(SettlementStatus.PENDING_SEND);
+            verify(settlementIntentRepository).save(any(SettlementIntent.class));
+            verify(settlementCommandPublisher).publish(any(UUID.class));
+        }
+    }
+
+    @Test
+    void doesNotRetryWhileThePreviousDepositSettlementIsInFlightOrCompleted() {
+        for (SettlementStatus ongoing : new SettlementStatus[] {SettlementStatus.PENDING_SEND,
+            SettlementStatus.IN_PROCESS, SettlementStatus.COMMUNICATION_ERROR, SettlementStatus.COMPLETED}) {
+            SettlementIntent previous = previousDepositSettlement().transitionTo(ongoing);
+            stubPreviousDepositSettlement(previous);
+
+            SettlementRequestResult result = service.request(new SettlementCommand(RESERVATION.reservationId(),
+                    SettlementTrigger.DISPUTE_COMPLETED, SettlementScope.DEPOSIT, UUID.randomUUID(),
+                    "again-" + ongoing));
+
+            assertThat(result.settlementIntentId()).as("no retry while %s", ongoing).isEqualTo(previous.id());
+            verify(settlementIntentRepository, never()).save(any());
+            verify(settlementCommandPublisher, never()).publish(any(UUID.class));
+        }
+    }
+
+    private void stubPreviousDepositSettlement(SettlementIntent previous) {
+        when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(RESERVATION.reservationId(),
+                DepositDispositionStatus.SETTLEMENT_REQUESTED, false, false));
+        when(settlementIntentRepository.findLatestByReservationIdAndScope(RESERVATION.reservationId(),
+                SettlementScope.DEPOSIT)).thenReturn(Optional.of(previous));
+        org.mockito.Mockito.clearInvocations(settlementIntentRepository, settlementCommandPublisher);
+    }
+
+    private SettlementIntent previousDepositSettlement() {
+        return SettlementIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
+                SettlementTrigger.DISPUTE_COMPLETED, SettlementScope.DEPOSIT, RESERVATION.depositAmount(), Money.ZERO,
+                RESERVATION.depositAmount(), charge.id(), "dispute-event-1",
+                new com.seashare.seasharem3.domain.valueobject.IdempotencyKey(UUID.randomUUID().toString()),
+                UUID.randomUUID(), NOW);
+    }
+
     private static void assertUuidV4(String value) {
         UUID key = UUID.fromString(value);
         assertThat(key.version()).isEqualTo(4);

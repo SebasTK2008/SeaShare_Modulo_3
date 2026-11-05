@@ -6,6 +6,7 @@ import com.seashare.seasharem3.application.port.in.ReconcileSettlementIntentsUse
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -28,6 +29,17 @@ class GatewayReconciliationJobTest {
         order.verify(charges).reconcile();
         order.verify(refunds).reconcile();
         order.verify(settlements).reconcile();
+    }
+
+    @Test
+    void theCycleReportsHowManyReconciliationsFailed() {
+        assertThat(job.runCycle()).isZero();
+
+        doThrow(new IllegalStateException("gateway down")).when(charges).reconcile();
+        assertThat(job.runCycle()).isEqualTo(1);
+
+        doThrow(new IllegalStateException("db down")).when(settlements).reconcile();
+        assertThat(job.runCycle()).isEqualTo(2);
     }
 
     @Test

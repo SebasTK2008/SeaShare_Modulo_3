@@ -47,11 +47,18 @@ public class RegisterChargeResultService implements RegisterChargeResultUseCase 
     private static final String USE_CASE = "UC05";
 
     /**
-     * Estados externos que no alteran la intencion de cobro y no son un fallo: el reembolso y el
-     * contracargo los resuelve UC09. Tratarlos como fallo contaminaria {@code operational_failure}
-     * en cada reembolso legitimo (contrato {@code pasarela-webhook-resultados.md} §3.4).
+     * Estado externo que no altera la intencion de cobro y no es un fallo: el reembolso lo resuelve UC09.
+     * Tratarlo como fallo contaminaria {@code operational_failure} en cada reembolso legitimo (contrato
+     * {@code pasarela-webhook-resultados.md} §3.4).
      */
-    private static final Set<String> IGNORED_STATUSES = Set.of("refunded", "charged_back", "in_mediation");
+    private static final Set<String> IGNORED_STATUSES = Set.of("refunded");
+
+    /**
+     * Disputas del medio de pago: tampoco alteran la intencion (no hay un flujo de contracargo), pero son
+     * raras y requieren a una persona, asi que dejan una fila en {@code operational_failure} para que no
+     * pasen desapercibidas.
+     */
+    private static final Set<String> DISPUTE_STATUSES = Set.of("charged_back", "in_mediation");
 
     private final ChargeIntentRepository chargeIntentRepository;
     private final ChargeRecordRepository chargeRecordRepository;
@@ -86,6 +93,11 @@ public class RegisterChargeResultService implements RegisterChargeResultUseCase 
 
         String externalStatus = normalize(result.status());
         if (IGNORED_STATUSES.contains(externalStatus)) {
+            return;
+        }
+        if (DISPUTE_STATUSES.contains(externalStatus)) {
+            failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
+                    payloadRef(result));
             return;
         }
         ChargeIntentStatus status = toStatus(externalStatus);

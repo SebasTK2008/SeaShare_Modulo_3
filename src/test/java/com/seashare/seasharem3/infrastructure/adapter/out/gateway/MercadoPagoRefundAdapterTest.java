@@ -119,6 +119,21 @@ class MercadoPagoRefundAdapterTest {
                 .isInstanceOf(GatewayResourceNotFoundException.class);
     }
 
+    @Test
+    void unknownPaymentsDoNotOpenTheCircuitBreaker() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/unknown/refunds")).willReturn(aResponse().withStatus(404)));
+        wireMock.stubFor(post(urlEqualTo("/v1/payments/mp-payment-1/refunds"))
+                .willReturn(okJson("{\"status\":\"approved\",\"id\":555,\"amount\":30000.00}")));
+
+        // Mas llamadas que el minimo del breaker (5): todas son 404 de la pasarela, que esta sana.
+        for (int call = 0; call < 8; call++) {
+            assertThatThrownBy(() -> adapter.fetchRefunds("unknown"))
+                    .isInstanceOf(GatewayResourceNotFoundException.class);
+        }
+
+        assertThat(adapter.send(request()).status()).isEqualTo("approved");
+    }
+
     private static RefundGatewayRequest request() {
         return new RefundGatewayRequest(RefundOperationType.REFUND, "mp-payment-1", UUID.randomUUID(),
                 new Money(new BigDecimal("30000.00")), "refund:CANCELLED_STRICT:op-1");

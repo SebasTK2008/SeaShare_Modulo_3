@@ -133,12 +133,16 @@ public class RequestRefundService implements RequestRefundUseCase {
         }
         if (!deposit.transitioned()) {
             // Otra operación (UC07/UC08 por otro camino) ya pidió el reembolso del depósito: no se crea una
-            // segunda intención. No es FAILED para no revertir al llamador (D-37).
-            failureRecorder.record(USE_CASE, reservationId.value(), ErrorCode.INTERNAL_ERROR.name(),
-                    "duplicate_deposit_outcome=REFUND_REQUESTED;operationKey=" + operationKey);
-            return refundIntentRepository.findLatestByReservationId(reservationId)
-                    .map(existing -> new RefundRequestResult(existing.id(), existing.status()))
-                    .orElseGet(() -> new RefundRequestResult(null, RefundIntentStatus.FAILED));
+            // segunda intención mientras la anterior siga en curso o se haya completado. Si terminó sin
+            // devolver dinero (rechazada, cancelada o expirada), esta solicitud es un reintento legítimo y
+            // sigue adelante. No es FAILED para no revertir al llamador (D-37).
+            Optional<RefundIntent> previous = refundIntentRepository.findLatestByReservationId(reservationId);
+            if (previous.isEmpty() || !endedWithoutRefund(previous.get().status())) {
+                failureRecorder.record(USE_CASE, reservationId.value(), ErrorCode.INTERNAL_ERROR.name(),
+                        "duplicate_deposit_outcome=REFUND_REQUESTED;operationKey=" + operationKey);
+                return previous.map(existing -> new RefundRequestResult(existing.id(), existing.status()))
+                        .orElseGet(() -> new RefundRequestResult(null, RefundIntentStatus.FAILED));
+            }
         }
 
         RefundIntent intent = RefundIntent.create(UUID.randomUUID(), reservationId, command.trigger(),
@@ -147,6 +151,12 @@ public class RequestRefundService implements RequestRefundUseCase {
         refundIntentRepository.save(intent);
         refundCommandPublisher.publish(intent.id());
         return new RefundRequestResult(intent.id(), intent.status());
+    }
+
+    /** Estados terminales en los que el reembolso no devolvió dinero: permiten un reintento. */
+    private static boolean endedWithoutRefund(RefundIntentStatus status) {
+        return status == RefundIntentStatus.REJECTED || status == RefundIntentStatus.CANCELLED
+                || status == RefundIntentStatus.EXPIRED;
     }
 
     /** Registra el motivo y responde con una solicitud no registrada (el llamador decide revertir). */

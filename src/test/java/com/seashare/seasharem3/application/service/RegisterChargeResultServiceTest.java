@@ -122,18 +122,37 @@ class RegisterChargeResultServiceTest {
     }
 
     @Test
-    void ignoresRefundedChargebackAndMediationStatesWithoutRecordingAFailure() {
+    void ignoresTheRefundedStateWithoutRecordingAFailure() {
         ReservationInformation reservation = registerCalculatedReservation();
         ChargeIntent intent = storeIntent(reservation);
 
-        for (String status : List.of("refunded", "charged_back", "in_mediation")) {
+        service.register(new ChargeGatewayResult("refunded", EXTERNAL_REFERENCE, "detail"));
+
+        assertThat(intents.findById(intent.id()).orElseThrow().status())
+                .isEqualTo(ChargeIntentStatus.PENDING_SEND);
+        assertThat(records.count()).isZero();
+        assertThat(failures.failures()).isEmpty();
+    }
+
+    @Test
+    void leavesATraceOfChargebackAndMediationWithoutChangingTheIntent() {
+        ReservationInformation reservation = registerCalculatedReservation();
+        ChargeIntent intent = storeIntent(reservation);
+
+        for (String status : List.of("charged_back", "in_mediation")) {
             service.register(new ChargeGatewayResult(status, EXTERNAL_REFERENCE, "detail"));
         }
 
         assertThat(intents.findById(intent.id()).orElseThrow().status())
                 .isEqualTo(ChargeIntentStatus.PENDING_SEND);
         assertThat(records.count()).isZero();
-        assertThat(failures.failures()).isEmpty();
+        assertThat(failures.failures()).hasSize(2)
+                .allSatisfy(failure -> {
+                    assertThat(failure.reservationId()).isEqualTo(reservation.reservationId().value());
+                    assertThat(failure.reason()).isEqualTo("INTERNAL_ERROR");
+                });
+        assertThat(failures.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::payloadRef)
+                .anyMatch(ref -> ref.contains("charged_back")).anyMatch(ref -> ref.contains("in_mediation"));
     }
 
     @Test

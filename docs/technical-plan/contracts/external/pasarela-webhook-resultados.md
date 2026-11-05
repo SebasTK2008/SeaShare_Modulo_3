@@ -151,7 +151,8 @@ se ignoran.
    | `rejected` | `REJECTED` | No |
    | `cancelled` | `CANCELLED` | No |
    | `expired` | `EXPIRED` | No |
-   | `refunded` / `charged_back` / `in_mediation` | Sin cambio (no-op): el reembolso lo resuelve UC09 | No |
+   | `refunded` | Sin cambio (no-op): el reembolso lo resuelve UC09 | No |
+   | `charged_back` / `in_mediation` | Sin cambio + registro en `operational_failure` (disputa: requiere revisión de una persona; no hay flujo de contracargo) | No |
    | Desconocido | Sin cambio + registro en `operational_failure` | No |
 
 5. **Deduplicación**: la notificación se asocia a la intención interna por el `external_reference`

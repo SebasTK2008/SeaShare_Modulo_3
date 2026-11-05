@@ -148,7 +148,8 @@ Hay dos claves distintas y no se intercambian (general-plan D-37):
 | `rejected` | `REJECTED` | `REJECTED` |
 | `cancelled` | `CANCELLED` | `CANCELLED` |
 | `expired` | `EXPIRED` | `EXPIRED` |
-| `refunded` / `charged_back` / `in_mediation` | Sin cambio (no-op) | — |
+| `refunded` | Sin cambio (no-op): el reembolso lo resuelve UC09 | — |
+| `charged_back` / `in_mediation` | Sin cambio + `operational_failure` (disputa: requiere revisión de una persona) | — |
 | Desconocido | Sin cambio + `operational_failure` | Sin cambio + `operational_failure` |
 
 ---
@@ -162,7 +163,7 @@ La documentación describe el comportamiento **objetivo**. El código se alineó
 |---|---|---|---|---|
 | **G-01** | No existe un stub de pasarela para los TC que citan "request journal del simulador" | `wiremock/` solo contiene `mappings/fleet-base-rates.json` | Media | **Descartada** (2026-11-05): no se construye un simulador de Mercado Pago. El modo A es la suite automática (WireMock embebido en JUnit) y los TC se ejecutan contra el sandbox real; los TC ya no citan el simulador |
 | **G-02** | `pending` no se mapeaba en UC05; se registraba `operational_failure` y la intención no avanzaba | `RegisterChargeResultService.toStatus` | Alta | **Cerrada** (2026-11-04) |
-| **G-03** | `refunded` / `charged_back` / `in_mediation` registraban `operational_failure` en lugar de ser no-op | `RegisterChargeResultService.IGNORED_STATUSES` | Media | **Cerrada** (2026-11-04) |
+| **G-03** | `refunded` / `charged_back` / `in_mediation` registraban `operational_failure` en cada reembolso legítimo | `RegisterChargeResultService.IGNORED_STATUSES` | Media | **Cerrada** (2026-11-04): `refunded` es no-op; `charged_back` e `in_mediation` se registran como aviso de disputa (2026-11-05) |
 | **G-04** | Reembolso sin intención local se ignoraba en silencio | `RefundWebhookHandler.handle` | Alta | **Cerrada** (2026-11-04) |
 | **G-05** | `404` de `GET /refunds` devolvía lista vacía sin registrar el evento | `MercadoPagoRefundAdapter.executeFetchRefunds` | Media | **Cerrada** (2026-11-04) |
 | **G-06** | El webhook no validaba `Content-Type` | `GatewayWebhookController.isJson` | Baja | **Cerrada** (2026-11-04) |

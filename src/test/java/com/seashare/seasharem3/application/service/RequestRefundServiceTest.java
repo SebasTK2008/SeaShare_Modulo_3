@@ -180,6 +180,53 @@ class RequestRefundServiceTest {
                 .containsExactly("INTERNAL_ERROR");
     }
 
+    @Test
+    void retriesWhenThePreviousDepositRefundEndedWithoutRefundingMoney() {
+        for (RefundIntentStatus failed : new RefundIntentStatus[] {RefundIntentStatus.REJECTED,
+            RefundIntentStatus.CANCELLED, RefundIntentStatus.EXPIRED}) {
+            RefundIntent previous = depositRefund("dispute-event-1").transitionTo(failed);
+            when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(
+                    RESERVATION.reservationId(), DepositDispositionStatus.REFUND_REQUESTED, false, false));
+            when(refundIntentRepository.findLatestByReservationId(RESERVATION.reservationId()))
+                    .thenReturn(Optional.of(previous));
+            org.mockito.Mockito.clearInvocations(refundIntentRepository, refundCommandPublisher);
+
+            RefundRequestResult result = service.request(command(RefundTrigger.CANCELLED_STRICT, "retry-" + failed));
+
+            assertThat(result.refundIntentId()).as("retry after %s", failed).isNotNull()
+                    .isNotEqualTo(previous.id());
+            assertThat(result.status()).isEqualTo(RefundIntentStatus.PENDING_SEND);
+            verify(refundIntentRepository).save(any(RefundIntent.class));
+            verify(refundCommandPublisher).publish(any(UUID.class));
+        }
+    }
+
+    @Test
+    void doesNotRetryWhileThePreviousDepositRefundIsInFlightOrCompleted() {
+        for (RefundIntentStatus ongoing : new RefundIntentStatus[] {RefundIntentStatus.PENDING_SEND,
+            RefundIntentStatus.IN_PROCESS, RefundIntentStatus.COMMUNICATION_ERROR, RefundIntentStatus.COMPLETED}) {
+            RefundIntent previous = depositRefund("dispute-event-1").transitionTo(ongoing);
+            when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(
+                    RESERVATION.reservationId(), DepositDispositionStatus.REFUND_REQUESTED, false, false));
+            when(refundIntentRepository.findLatestByReservationId(RESERVATION.reservationId()))
+                    .thenReturn(Optional.of(previous));
+            org.mockito.Mockito.clearInvocations(refundIntentRepository, refundCommandPublisher);
+
+            RefundRequestResult result = service.request(command(RefundTrigger.CANCELLED_STRICT, "again-" + ongoing));
+
+            assertThat(result.refundIntentId()).as("no retry while %s", ongoing).isEqualTo(previous.id());
+            verify(refundIntentRepository, never()).save(any());
+            verify(refundCommandPublisher, never()).publish(any(UUID.class));
+        }
+    }
+
+    private RefundIntent depositRefund(String operationKey) {
+        return RefundIntent.create(UUID.randomUUID(), RESERVATION.reservationId(), RefundTrigger.DISPUTE_REJECTED,
+                RefundScope.DEPOSIT_ONLY, RESERVATION.depositAmount(), charge.id(), operationKey,
+                new com.seashare.seasharem3.domain.valueobject.IdempotencyKey(UUID.randomUUID().toString()),
+                UUID.randomUUID(), NOW);
+    }
+
     private static RefundRequestCommand command(RefundTrigger trigger, String operationKey) {
         return new RefundRequestCommand(RESERVATION.reservationId().value(), trigger, null, operationKey);
     }

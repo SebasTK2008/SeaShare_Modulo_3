@@ -139,13 +139,18 @@ public class RequestSettlementService implements RequestSettlementUseCase {
             }
             if (!deposit.transitioned()) {
                 // Otra operación ya pidió la liquidación del depósito: no se crea una segunda intención
-                // (D-37). No es FAILED para no revertir al llamador.
-                failureRecorder.record(USE_CASE, command.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
-                        "duplicate_deposit_outcome=SETTLEMENT_REQUESTED;operationKey=" + operationKey);
-                return settlementIntentRepository
-                        .findLatestByReservationIdAndScope(command.reservationId(), command.scope())
-                        .map(existing -> new SettlementRequestResult(existing.id(), existing.status()))
-                        .orElseGet(() -> new SettlementRequestResult(null, SettlementStatus.FAILED));
+                // mientras la anterior siga en curso o se haya completado. Si terminó sin liquidar (rechazada,
+                // cancelada o expirada), esta solicitud es un reintento legítimo y sigue adelante. No es FAILED
+                // para no revertir al llamador (D-37).
+                Optional<SettlementIntent> previous = settlementIntentRepository
+                        .findLatestByReservationIdAndScope(command.reservationId(), command.scope());
+                if (previous.isEmpty() || !endedWithoutSettlement(previous.get().status())) {
+                    failureRecorder.record(USE_CASE, command.reservationId().value(),
+                            ErrorCode.INTERNAL_ERROR.name(),
+                            "duplicate_deposit_outcome=SETTLEMENT_REQUESTED;operationKey=" + operationKey);
+                    return previous.map(existing -> new SettlementRequestResult(existing.id(), existing.status()))
+                            .orElseGet(() -> new SettlementRequestResult(null, SettlementStatus.FAILED));
+                }
             }
         }
 
@@ -156,6 +161,12 @@ public class RequestSettlementService implements RequestSettlementUseCase {
         settlementIntentRepository.save(intent);
         settlementCommandPublisher.publish(intent.id());
         return new SettlementRequestResult(intent.id(), intent.status());
+    }
+
+    /** Estados terminales en los que la liquidación no se llevó a cabo: permiten un reintento. */
+    private static boolean endedWithoutSettlement(SettlementStatus status) {
+        return status == SettlementStatus.REJECTED || status == SettlementStatus.CANCELLED
+                || status == SettlementStatus.EXPIRED;
     }
 
     private Optional<Percentage> commissionPercentage(SettlementCommand command,

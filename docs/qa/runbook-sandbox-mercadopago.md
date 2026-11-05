@@ -202,9 +202,10 @@ Criterios de salud:
 - `charge_intent.status = CAPTURED` y **una sola** fila en `charge_record`.
 - `refund_intent.status = COMPLETED` y **una sola** fila en `refund_record`.
 - `outbox_message` con el mensaje `gateway.notification` por cada webhook.
-- `operational_failure` **vacía** en el camino feliz. Un `INTERNAL_ERROR` con un estado `pending`,
-  `refunded`, `charged_back` o `in_mediation` indicaría una regresión: esos estados ya no se
-  registran como fallo (G-02 y G-03 cerradas en
+- `operational_failure` **vacía** en el camino feliz. Un `INTERNAL_ERROR` con un estado `pending` o
+  `refunded` indicaría una regresión: esos estados no se registran como fallo. `charged_back` e
+  `in_mediation` sí dejan una fila (es una disputa y requiere revisión), pero no ocurren en el camino
+  feliz (G-02 y G-03 en
   [`docs/technical-plan/mercadopago-integration.md`](../technical-plan/mercadopago-integration.md)).
 
 ---
