@@ -43,6 +43,7 @@ public final class RefundIntent {
     private final RefundScope scope;
     private final Money amount;
     private final UUID chargeIntentId;
+    private final String operationKey;
     private final IdempotencyKey idempotencyKey;
     private final RefundIntentStatus status;
     private final String statusDetail;
@@ -51,7 +52,7 @@ public final class RefundIntent {
     private final Instant createdAt;
 
     private RefundIntent(UUID id, ReservationId reservationId, RefundTrigger trigger, RefundScope scope, Money amount,
-            UUID chargeIntentId, IdempotencyKey idempotencyKey, RefundIntentStatus status, String statusDetail,
+            UUID chargeIntentId, String operationKey, IdempotencyKey idempotencyKey, RefundIntentStatus status, String statusDetail,
             UUID disputeId, String externalReference, Instant createdAt) {
         this.id = Objects.requireNonNull(id, "id");
         this.reservationId = Objects.requireNonNull(reservationId, "reservationId");
@@ -59,6 +60,7 @@ public final class RefundIntent {
         this.scope = Objects.requireNonNull(scope, "scope");
         this.amount = Objects.requireNonNull(amount, "amount");
         this.chargeIntentId = Objects.requireNonNull(chargeIntentId, "chargeIntentId");
+        this.operationKey = requireOperationKey(operationKey);
         this.idempotencyKey = Objects.requireNonNull(idempotencyKey, "idempotencyKey");
         this.status = Objects.requireNonNull(status, "status");
         this.statusDetail = statusDetail;
@@ -69,15 +71,15 @@ public final class RefundIntent {
     }
 
     public static RefundIntent create(UUID id, ReservationId reservationId, RefundTrigger trigger, RefundScope scope,
-            Money amount, UUID chargeIntentId, IdempotencyKey idempotencyKey, UUID disputeId, Instant createdAt) {
-        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, idempotencyKey,
+            Money amount, UUID chargeIntentId, String operationKey, IdempotencyKey idempotencyKey, UUID disputeId, Instant createdAt) {
+        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, operationKey, idempotencyKey,
                 RefundIntentStatus.PENDING_SEND, null, disputeId, null, createdAt);
     }
 
     public static RefundIntent restore(UUID id, ReservationId reservationId, RefundTrigger trigger, RefundScope scope,
-            Money amount, UUID chargeIntentId, IdempotencyKey idempotencyKey, RefundIntentStatus status,
+            Money amount, UUID chargeIntentId, String operationKey, IdempotencyKey idempotencyKey, RefundIntentStatus status,
             String statusDetail, UUID disputeId, String externalReference, Instant createdAt) {
-        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, idempotencyKey, status,
+        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, operationKey, idempotencyKey, status,
                 statusDetail, disputeId, externalReference, createdAt);
     }
 
@@ -89,7 +91,7 @@ public final class RefundIntent {
         if (!ALLOWED_TRANSITIONS.get(status).contains(next)) {
             throw new DomainException("RefundIntent transition not allowed: " + status + " -> " + next);
         }
-        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, idempotencyKey, next,
+        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, operationKey, idempotencyKey, next,
                 statusDetail, disputeId, externalReference, createdAt);
     }
 
@@ -98,12 +100,12 @@ public final class RefundIntent {
         if (externalReference != null && !externalReference.equals(reference)) {
             throw new DomainException("RefundIntent already has an external_reference: " + externalReference);
         }
-        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, idempotencyKey, status,
+        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, operationKey, idempotencyKey, status,
                 statusDetail, disputeId, reference, createdAt);
     }
 
     public RefundIntent withStatusDetail(String detail) {
-        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, idempotencyKey, status,
+        return new RefundIntent(id, reservationId, trigger, scope, amount, chargeIntentId, operationKey, idempotencyKey, status,
                 detail, disputeId, externalReference, createdAt);
     }
 
@@ -140,6 +142,11 @@ public final class RefundIntent {
         return chargeIntentId;
     }
 
+    /** Identidad de negocio de la operación (D-37); deduplica internamente, no viaja a la pasarela. */
+    public String operationKey() {
+        return operationKey;
+    }
+
     public IdempotencyKey idempotencyKey() {
         return idempotencyKey;
     }
@@ -162,5 +169,13 @@ public final class RefundIntent {
 
     public Instant createdAt() {
         return createdAt;
+    }
+
+    private static String requireOperationKey(String operationKey) {
+        Objects.requireNonNull(operationKey, "operationKey");
+        if (operationKey.isBlank()) {
+            throw new DomainException("operationKey must not be blank");
+        }
+        return operationKey;
     }
 }

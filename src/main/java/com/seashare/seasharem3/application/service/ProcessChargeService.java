@@ -76,12 +76,15 @@ public class ProcessChargeService implements ProcessChargeUseCase {
         Objects.requireNonNull(command, "command");
         UUID reservationId = Objects.requireNonNull(command.reservationId(), "command.reservationId");
         String paymentTokenRef = requirePaymentToken(command.paymentTokenRef());
-        // La identidad de la operación la deduplica UC07; la pasarela recibe una clave UUID v4
+        // Deduplicación interna por identidad de negocio (D-37); la pasarela recibe una clave UUID v4
         // propia de este intento y la reutiliza en sus reintentos (D-UC05-15).
-        Objects.requireNonNull(command.operationKey(), "command.operationKey");
+        String operationKey = Objects.requireNonNull(command.operationKey(), "command.operationKey");
         IdempotencyKey idempotencyKey = new IdempotencyKey(UUID.randomUUID().toString());
         ReservationId reservation = new ReservationId(reservationId);
 
+        if (chargeIntentRepository.findByReservationIdAndOperationKey(reservation, operationKey).isPresent()) {
+            return;
+        }
         if (chargeIntentRepository.findApprovedByReservationId(reservation).isPresent()) {
             return;
         }
@@ -94,7 +97,7 @@ public class ProcessChargeService implements ProcessChargeUseCase {
                     "There is no calculated total amount for reservation " + reservationId + ".");
         }
 
-        ChargeIntent intent = ChargeIntent.create(UUID.randomUUID(), reservation, idempotencyKey,
+        ChargeIntent intent = ChargeIntent.create(UUID.randomUUID(), reservation, operationKey, idempotencyKey,
                 information.totalAmount(),
                 new PaymentMethodReference(paymentTokenRef, command.paymentMethodType(),
                         lastFour(command.paymentMetadata())),

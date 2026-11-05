@@ -1,6 +1,7 @@
 package com.seashare.seasharem3.integration;
 
 import com.seashare.seasharem3.TestcontainersConfiguration;
+import com.seashare.seasharem3.domain.exception.DuplicateRecordException;
 import com.seashare.seasharem3.domain.model.ChargeIntent;
 import com.seashare.seasharem3.domain.model.CommissionRecord;
 import com.seashare.seasharem3.domain.model.DepositDisposition;
@@ -38,12 +39,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Integracion de los adaptadores de UC09/UC10 y del CAS del deposito contra PostgreSQL real:
@@ -80,13 +84,16 @@ class RefundSettlementPersistenceIntegrationTest {
     @Autowired
     private FinancialParametersPersistenceAdapter parametersAdapter;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @Test
     void refundAndSettlementRecordsArePersistedAndReadable() {
         Fixture fixture = fixture();
 
         RefundIntent refund = RefundIntent.create(UUID.randomUUID(), fixture.reservation().reservationId(),
                 RefundTrigger.DISPUTE_REJECTED, RefundScope.DEPOSIT_ONLY, new Money(new BigDecimal("30000.00")),
-                fixture.charge().id(), new IdempotencyKey("refund:DISPUTE_REJECTED:op-1"), UUID.randomUUID(),
+                fixture.charge().id(), "refund:DISPUTE_REJECTED:op-1", new IdempotencyKey("refund:DISPUTE_REJECTED:op-1"), UUID.randomUUID(),
                 fixture.now());
         refundIntentAdapter.save(refund.transitionTo(RefundIntentStatus.IN_PROCESS)
                 .transitionTo(RefundIntentStatus.COMPLETED).withExternalReference("rf-1"));
@@ -107,7 +114,7 @@ class RefundSettlementPersistenceIntegrationTest {
                 fixture.reservation().reservationId(), SettlementTrigger.COMPLETED,
                 SettlementScope.STANDARD, new Money(new BigDecimal("660000.00")),
                 new Money(new BigDecimal("180000.00")), new Money(new BigDecimal("30000.00")),
-                fixture.charge().id(), new IdempotencyKey("settlement:COMPLETED:op-1"), null, fixture.now());
+                fixture.charge().id(), "settlement:COMPLETED:op-1", new IdempotencyKey("settlement:COMPLETED:op-1"), null, fixture.now());
         settlementAdapter.save(settlement.transitionTo(SettlementStatus.IN_PROCESS)
                 .transitionTo(SettlementStatus.COMPLETED).withExternalReference("st-1"));
         SettlementRecord settlementRecord = SettlementRecord.create(UUID.randomUUID(),
@@ -140,6 +147,100 @@ class RefundSettlementPersistenceIntegrationTest {
                         fixture.now(), null, null, DepositDispositionStatus.SETTLEMENT_REQUESTED))).isFalse();
     }
 
+    @Test
+    void refundIntentsAreDeduplicatedByReservationAndOperationKey() {
+        Fixture fixture = fixture();
+        var reservationId = fixture.reservation().reservationId();
+        RefundIntent first = refundIntent(fixture, "refund:op-A", fixture.now());
+        refundIntentAdapter.save(first);
+
+        assertThat(refundIntentAdapter.findByReservationIdAndOperationKey(reservationId, "refund:op-A"))
+                .hasValueSatisfying(found -> {
+                    assertThat(found.id()).isEqualTo(first.id());
+                    assertThat(found.operationKey()).isEqualTo("refund:op-A");
+                });
+        assertThat(refundIntentAdapter.findByReservationIdAndOperationKey(reservationId, "refund:op-B")).isEmpty();
+
+        assertThatThrownBy(() -> refundIntentAdapter.save(refundIntent(fixture, "refund:op-A", fixture.now())))
+                .isInstanceOf(DataAccessException.class);
+
+        RefundIntent other = refundIntentAdapter.save(refundIntent(fixture, "refund:op-B", fixture.now().plusSeconds(5)));
+        assertThat(refundIntentAdapter.findLatestByReservationId(reservationId))
+                .hasValueSatisfying(latest -> assertThat(latest.id()).isEqualTo(other.id()));
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM refund_intent WHERE reservation_id = ?",
+                Integer.class, reservationId.value())).isEqualTo(2);
+    }
+
+    @Test
+    void settlementIntentsAreDeduplicatedByReservationAndOperationKey() {
+        Fixture fixture = fixture();
+        var reservationId = fixture.reservation().reservationId();
+        SettlementIntent first = settlementIntent(fixture, "settlement:op-A", SettlementScope.STANDARD,
+                fixture.now());
+        settlementAdapter.save(first);
+
+        assertThat(settlementAdapter.findByReservationIdAndOperationKey(reservationId, "settlement:op-A"))
+                .hasValueSatisfying(found -> assertThat(found.id()).isEqualTo(first.id()));
+        assertThat(settlementAdapter.findByReservationIdAndOperationKey(reservationId, "settlement:op-B")).isEmpty();
+
+        assertThatThrownBy(() -> settlementAdapter.save(settlementIntent(fixture, "settlement:op-A",
+                SettlementScope.STANDARD, fixture.now()))).isInstanceOf(DataAccessException.class);
+
+        SettlementIntent deposit = settlementAdapter.save(settlementIntent(fixture, "settlement:op-B",
+                SettlementScope.DEPOSIT, fixture.now().plusSeconds(5)));
+        assertThat(settlementAdapter.findLatestByReservationIdAndScope(reservationId, SettlementScope.DEPOSIT))
+                .hasValueSatisfying(latest -> assertThat(latest.id()).isEqualTo(deposit.id()));
+        assertThat(settlementAdapter.findLatestByReservationIdAndScope(reservationId, SettlementScope.STANDARD))
+                .hasValueSatisfying(latest -> assertThat(latest.id()).isEqualTo(first.id()));
+    }
+
+    @Test
+    void settlementRecordsAreImmutableAndCarryASingleCommission() {
+        Fixture fixture = fixture();
+        SettlementIntent settlement = settlementIntent(fixture, "settlement:op-C", SettlementScope.STANDARD,
+                fixture.now()).transitionTo(SettlementStatus.IN_PROCESS).transitionTo(SettlementStatus.COMPLETED)
+                .withExternalReference("st-" + UUID.randomUUID());
+        settlementAdapter.save(settlement);
+        SettlementRecord record = SettlementRecord.create(UUID.randomUUID(), settlement,
+                fixture.reservation().ownerId(), fixture.reservation().boatId(),
+                new Money(new BigDecimal("660000.00")), "standard settlement",
+                new Money(new BigDecimal("900000.00")), new Money(new BigDecimal("60000.00")),
+                new Money(new BigDecimal("30000.00")), settlement.externalReference(), fixture.now());
+        settlementAdapter.save(record);
+        settlementAdapter.save(CommissionRecord.create(UUID.randomUUID(), record,
+                new Money(new BigDecimal("180000.00")), fixture.now()));
+
+        assertThatThrownBy(() -> settlementAdapter.save(SettlementRecord.create(UUID.randomUUID(), settlement,
+                fixture.reservation().ownerId(), fixture.reservation().boatId(),
+                new Money(new BigDecimal("660000.00")), "standard settlement",
+                new Money(new BigDecimal("900000.00")), new Money(new BigDecimal("60000.00")),
+                new Money(new BigDecimal("30000.00")), settlement.externalReference(), fixture.now())))
+                .isInstanceOf(DuplicateRecordException.class);
+        assertThatThrownBy(() -> settlementAdapter.save(CommissionRecord.create(UUID.randomUUID(), record,
+                new Money(new BigDecimal("180000.00")), fixture.now())))
+                .isInstanceOf(DuplicateRecordException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update("UPDATE settlement_record SET created_at = now() WHERE id = ?",
+                record.id())).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update("DELETE FROM commission_record WHERE settlement_record_id = ?",
+                record.id())).isInstanceOf(DataAccessException.class);
+    }
+
+    private RefundIntent refundIntent(Fixture fixture, String operationKey, java.time.Instant createdAt) {
+        return RefundIntent.create(UUID.randomUUID(), fixture.reservation().reservationId(),
+                RefundTrigger.CANCELLED_STRICT, RefundScope.DEPOSIT_ONLY, new Money(new BigDecimal("30000.00")),
+                fixture.charge().id(), operationKey, new IdempotencyKey(UUID.randomUUID().toString()), null,
+                createdAt);
+    }
+
+    private SettlementIntent settlementIntent(Fixture fixture, String operationKey, SettlementScope scope,
+            java.time.Instant createdAt) {
+        return SettlementIntent.create(UUID.randomUUID(), fixture.reservation().reservationId(),
+                scope == SettlementScope.STANDARD ? SettlementTrigger.COMPLETED : SettlementTrigger.DISPUTE_COMPLETED,
+                scope, new Money(new BigDecimal("660000.00")), new Money(new BigDecimal("180000.00")),
+                new Money(new BigDecimal("30000.00")), fixture.charge().id(), operationKey,
+                new IdempotencyKey(UUID.randomUUID().toString()), null, createdAt);
+    }
+
     private Fixture fixture() {
         ReservationInformation information = ChargeFixtures.calculatedReservation();
         long version = parametersAdapter.findCurrent().map(p -> p.versionNumber() + 1).orElse(1L);
@@ -154,7 +255,7 @@ class RefundSettlementPersistenceIntegrationTest {
                         new Money(new BigDecimal("30000.00")), new Money(new BigDecimal("990000.00"))),
                 parameters.id(), ChargeFixtures.CREATED_AT));
         ChargeIntent charge = ChargeIntent.create(UUID.randomUUID(), calculated.reservationId(),
-                new IdempotencyKey("charge:" + UUID.randomUUID()), calculated.totalAmount(),
+                "charge:" + UUID.randomUUID(), new IdempotencyKey("charge:" + UUID.randomUUID()), calculated.totalAmount(),
                 new PaymentMethodReference("token-123", "CREDIT_CARD", "4242"), ChargeFixtures.CREATED_AT)
                 .transitionTo(ChargeIntentStatus.IN_PROCESS)
                 .transitionTo(ChargeIntentStatus.CAPTURED)

@@ -71,7 +71,7 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, bearerToken())
-                    .header(IDEMPOTENCY_HEADER, request.operationKey())
+                    .header(IDEMPOTENCY_HEADER, request.idempotencyKey())
                     .body(mapper.writeValueAsString(body))
                     .retrieve()
                     .body(String.class);

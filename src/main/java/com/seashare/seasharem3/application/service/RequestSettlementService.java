@@ -1,5 +1,6 @@
 package com.seashare.seasharem3.application.service;
 
+import com.seashare.seasharem3.application.dto.DepositTrackingResult;
 import com.seashare.seasharem3.application.dto.OpenDepositTrackingCommand;
 import com.seashare.seasharem3.application.dto.SettlementCommand;
 import com.seashare.seasharem3.application.dto.SettlementRequestResult;
@@ -88,9 +89,15 @@ public class RequestSettlementService implements RequestSettlementUseCase {
     @Transactional
     public SettlementRequestResult request(SettlementCommand command) {
         Objects.requireNonNull(command, "command");
-        // La identidad de la operación la deduplica UC07; el libro interno recibe una clave
+        // Deduplicación interna por identidad de negocio (D-37). El libro interno recibe una clave
         // UUID v4 propia de este intento y la reutiliza en sus reintentos (D-UC10-10).
-        Objects.requireNonNull(command.operationKey(), "command.operationKey");
+        String operationKey = Objects.requireNonNull(command.operationKey(), "command.operationKey");
+        Optional<SettlementIntent> sameOperation = settlementIntentRepository
+                .findByReservationIdAndOperationKey(command.reservationId(), operationKey);
+        if (sameOperation.isPresent()) {
+            SettlementIntent existing = sameOperation.get();
+            return new SettlementRequestResult(existing.id(), existing.status());
+        }
         IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
 
         Optional<ChargeIntent> approvedCharge = chargeIntentRepository
@@ -125,14 +132,27 @@ public class RequestSettlementService implements RequestSettlementUseCase {
                     "The settlement amount must be greater than zero");
         }
 
-        if (command.trigger() == SettlementTrigger.DISPUTE_COMPLETED && !requestDepositDisposition(command)) {
-            return new SettlementRequestResult(null, SettlementStatus.FAILED);
+        if (command.trigger() == SettlementTrigger.DISPUTE_COMPLETED) {
+            DepositTrackingResult deposit = requestDepositDisposition(command);
+            if (deposit == null) {
+                return new SettlementRequestResult(null, SettlementStatus.FAILED);
+            }
+            if (!deposit.transitioned()) {
+                // Otra operación ya pidió la liquidación del depósito: no se crea una segunda intención
+                // (D-37). No es FAILED para no revertir al llamador.
+                failureRecorder.record(USE_CASE, command.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
+                        "duplicate_deposit_outcome=SETTLEMENT_REQUESTED;operationKey=" + operationKey);
+                return settlementIntentRepository
+                        .findLatestByReservationIdAndScope(command.reservationId(), command.scope())
+                        .map(existing -> new SettlementRequestResult(existing.id(), existing.status()))
+                        .orElseGet(() -> new SettlementRequestResult(null, SettlementStatus.FAILED));
+            }
         }
 
         SettlementIntent intent = SettlementIntent.create(UUID.randomUUID(), command.reservationId(),
                 command.trigger(), command.scope(), calculation.disbursedAmount(),
-                calculation.commissionAmount(), calculation.depositAmount(), charge.id(), key, command.disputeId(),
-                GATEWAY_CAPABILITY, clock.instant());
+                calculation.commissionAmount(), calculation.depositAmount(), charge.id(), operationKey, key,
+                command.disputeId(), GATEWAY_CAPABILITY, clock.instant());
         settlementIntentRepository.save(intent);
         settlementCommandPublisher.publish(intent.id());
         return new SettlementRequestResult(intent.id(), intent.status());
@@ -150,16 +170,17 @@ public class RequestSettlementService implements RequestSettlementUseCase {
                 .map(FinancialParameters::commissionPct);
     }
 
-    private boolean requestDepositDisposition(SettlementCommand command) {
+    /** Devuelve {@code null} si el depósito tiene otro desenlace (ya reembolsado, por ejemplo). */
+    private DepositTrackingResult requestDepositDisposition(SettlementCommand command) {
         var result = openDepositTracking.open(new OpenDepositTrackingCommand(command.reservationId(),
                 command.operationKey(), DepositDispositionStatus.SETTLEMENT_REQUESTED, command.disputeId(),
                 null, null));
         if (result.status() == DepositDispositionStatus.SETTLEMENT_REQUESTED) {
-            return true;
+            return result;
         }
         failureRecorder.record(USE_CASE, command.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
                 "deposit_disposition=" + result.status() + ";operationKey=" + command.operationKey());
-        return false;
+        return null;
     }
 
     private Optional<RefundBreakdown> loadBreakdown(ChargeIntent charge,

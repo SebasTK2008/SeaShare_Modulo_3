@@ -1,10 +1,10 @@
 # Implementation Plan: UC09 - Reembolsar Dinero a Arrendatario
 
 **Date**: 2026-10-09 (plan original)
-**Updated**: 2026-10-30 (ver [Actualizaciones del plan](#actualizaciones-del-plan))
+**Updated**: 2026-11-04 (ver [Actualizaciones del plan](#actualizaciones-del-plan))
 **Spec**: [spec.md](spec.md)
 
-> **Actualización del plan — 2026-10-30.** Este documento parte del plan original del **2026-10-09**, conservado en el historial de Git (commit `4e2377c`). La revisión previa a la implementación (2026-10-29) se conserva en `[ACT-01]`…`[ACT-07]`; el cierre oficial posterior a la implementación se registra en `[ACT-08]`, la revisión de firma posterior a UC07 en `[ACT-09]` y el cierre de las pruebas de aceptación en `[ACT-10]`. Las secciones afectadas están marcadas con `[ACT-xx]` y se detallan en [Actualizaciones del plan](#actualizaciones-del-plan). Salvo las líneas de versión y la sección «Actualizaciones del plan», el contenido sin marcador pertenece al plan original.
+> **Actualización del plan — 2026-10-30.** Este documento parte del plan original del **2026-10-09**, conservado en el historial de Git (commit `4e2377c`). La revisión previa a la implementación (2026-10-29) se conserva en `[ACT-01]`…`[ACT-07]`; el cierre oficial posterior a la implementación se registra en `[ACT-08]`, la revisión de firma posterior a UC07 en `[ACT-09]`, el cierre de las pruebas de aceptación en `[ACT-10]` y la deduplicación por identidad de negocio (general-plan D-37) en `[ACT-11]`. Las secciones afectadas están marcadas con `[ACT-xx]` y se detallan en [Actualizaciones del plan](#actualizaciones-del-plan). Salvo las líneas de versión y la sección «Actualizaciones del plan», el contenido sin marcador pertenece al plan original.
 
 ## Summary
 
@@ -55,6 +55,12 @@ Las tareas de prueba que seguían abiertas se adaptan a las pruebas que realment
 | ID | Sección(es) | Original (2026-10-30) → vigente (2026-10-30) | Motivo |
 |---|---|---|---|
 | **ACT-10** | `Implementation Phases` (T010, T014, T015, T017, T018, T024–T026, T029 y T030) | Tareas abiertas con nombres de prueba planificados (`ce00X_…`) o con piezas marcadas como «falta/falta prueba» → cada tarea se reescribe con la prueba real que cubre el comportamiento (`RefundCalculatorTest`, `RequestRefundServiceTest`, `RegisterRefundResultServiceTest`, `SendRefundToGatewayServiceTest`, `ReconcileRefundIntentsServiceTest`, `MercadoPagoRefundAdapterTest`, `RefundSettlementPersistenceIntegrationTest`, `FlywaySchemaTest`, `AmqpListenerRetryIntegrationTest`) y se marca `[x]`; la cobertura medida (dominio 100 %, aplicación 82,54 %) y el `clean verify` con 1470 tests respaldan T029 y T030 | Adaptar el seguimiento del plan a la implementación entregada, en lugar de renombrar pruebas ya escritas. Los duplicados de webhook y los estados fuera de orden no tienen prueba dedicada; su cobertura se apoya en `RegisterRefundResultServiceTest` (repetición sin segunda devolución) y en el bloqueo optimista de la intención. |
+
+### Actualización de deduplicación — 2026-11-04
+
+| ID | Sección(es) | Original (2026-10-30) → vigente (2026-11-04) | Motivo |
+|---|---|---|---|
+| **ACT-11** | `Reglas de negocio`, esquema (`refund_intent`), `RefundIntentRepository` y `RequestRefundService` | «UC09 no deduplica por clave de intento»; `UNIQUE(idempotency_key)` como único índice único → `refund_intent.operation_key` + `UNIQUE(reservation_id, operation_key)`; `findByReservationIdAndOperationKey` y `findLatestByReservationId` reemplazan a `findByIdempotencyKey`; el servicio solo crea la intención si su solicitud aplicó la transición del depósito (D-UC09-13) | Un UUID v4 aleatorio por intento no deduplica; UC07 y UC08 podían pedir el mismo reembolso del depósito con claves de operación distintas (general-plan D-37). |
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 
@@ -316,6 +322,7 @@ Ninguna de estas cinco pruebas de aceptación existe con ese nombre en el reposi
 | **D-UC09-10** | `RefundGatewayResult` no permitía registrar `status_detail` ni `transaction_cost`, y el contrato solo devuelve `status`, `id` y `amount` | SPEC 9 RF-007/RF-011 vs contrato vs DTO | Se amplían los DTOs con campos nullable (`statusDetail`, `transactionCost`, `operationType`, `reservationId`) y el ACL los mapea desde la respuesta o la consulta de detalle; si la pasarela no los informa quedan `NULL` | Aplicada |
 | **D-UC09-11** | El contrato original proponía un topic `type=refund`, pero la integración real de Payments API solo entrega el topic `payment`; además, un pago puede tener varios reembolsos | `pasarela-webhook-resultados.md` vs API real de Mercado Pago | UC09 registra un manejador `type=payment` que comparte el evento con UC05: consulta `GET /v1/payments/{data.id}/refunds`, asocia cada reembolso por `refund.id == refund_intent.external_reference` y registra solo los que tienen intención local. Los reembolsos sin intención local se registran en `operational_failure` y la notificación se confirma, sin reintento; ambos manejadores se ejecutan para el mismo tipo | **Aplicada** |
 | **D-UC09-12** | La clave `X-Idempotency-Key` se derivaba de datos de negocio (`refund:<trigger>:<operationKey>`) | general-plan D-33 vs implementación real | La identidad de negocio del intento se conserva, pero la clave enviada a Mercado Pago es un **UUID v4** generado una vez al crear la intención, persistido en `refund_intent.idempotency_key` y reutilizado en los reintentos. La deduplicación ya no busca por `findByIdempotencyKey`: la decide la identidad de operación | **Aplicada** |
+| **D-UC09-13** **[ACT-11]** | UC09 documentaba que «no deduplica por clave de intento»; una reentrega del mensaje o el mismo desenlace del depósito reclamado por UC07 y por UC08 podía generar un segundo reembolso | general-plan D-33/D-34 vs D-37; `OpenDepositTrackingService` trataba el desenlace ya aplicado como idempotente | `refund_intent.operation_key` con `UNIQUE(reservation_id, operation_key)`: si ya existe una intención de la misma operación, `RequestRefundService` devuelve `RefundRequestResult(existing.id(), existing.status())`. Como UC07 (`reservationId:status`) y UC08 (`event_key`) usan claves distintas, solo se crea la intención cuando esta solicitud aplicó la transición del depósito (`DepositTrackingResult.transitioned`); si otra operación ya la aplicó, se devuelve la intención más reciente de la reserva (no `FAILED`, para no revertir a UC07) y se registra `duplicate_deposit_outcome=REFUND_REQUESTED` en `operational_failure`. `findByIdempotencyKey` se elimina del puerto | **Aplicada** |
 
 ## Implementation Phases
 

@@ -144,14 +144,16 @@ class ProcessChargeServiceTest {
     }
 
     @Test
-    void assignsAFreshUuidV4IdempotencyKeyToEachIntent() {
+    void assignsADistinctUuidV4IdempotencyKeyToEachDistinctOperation() {
         UUID reservationId = registerCalculatedReservation();
 
         service.process(command(reservationId, OPERATION_KEY));
-        service.process(command(reservationId, OPERATION_KEY));
+        service.process(command(reservationId, OPERATION_KEY + "-retry"));
 
         List<ChargeIntent> pending = intents.findByStatusIn(List.of(ChargeIntentStatus.PENDING_SEND));
         assertThat(pending).hasSize(2);
+        assertThat(pending).extracting(ChargeIntent::operationKey)
+                .containsExactlyInAnyOrder(OPERATION_KEY, OPERATION_KEY + "-retry");
         assertThat(pending).extracting(intent -> intent.idempotencyKey().value())
                 .doesNotHaveDuplicates()
                 .allSatisfy(value -> {
@@ -160,6 +162,33 @@ class ProcessChargeServiceTest {
                     assertThat(key.variant()).isEqualTo(2);
                 });
         assertThat(publisher.publishedCount()).isEqualTo(2);
+    }
+
+    @Test
+    void theSameOperationKeyRepeatedProducesASingleIntentAndASingleCommand() {
+        UUID reservationId = registerCalculatedReservation();
+
+        service.process(command(reservationId, OPERATION_KEY));
+        service.process(command(reservationId, OPERATION_KEY));
+
+        List<ChargeIntent> pending = intents.findByStatusIn(List.of(ChargeIntentStatus.PENDING_SEND));
+        assertThat(pending).hasSize(1);
+        assertThat(pending.get(0).operationKey()).isEqualTo(OPERATION_KEY);
+        assertThat(publisher.publishedCount()).isEqualTo(1);
+    }
+
+    @Test
+    void theSameOperationKeyIsNotRepeatedEvenAfterTheIntentWasRejected() {
+        UUID reservationId = registerCalculatedReservation();
+        service.process(command(reservationId, OPERATION_KEY));
+        ChargeIntent rejected = intents.findByStatusIn(List.of(ChargeIntentStatus.PENDING_SEND)).get(0)
+                .transitionTo(ChargeIntentStatus.REJECTED);
+        intents.save(rejected);
+
+        service.process(command(reservationId, OPERATION_KEY));
+
+        assertThat(intents.findByStatusIn(List.of(ChargeIntentStatus.PENDING_SEND))).isEmpty();
+        assertThat(publisher.publishedCount()).isEqualTo(1);
     }
 
     @Test

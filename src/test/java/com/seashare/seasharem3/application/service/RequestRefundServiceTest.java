@@ -67,7 +67,7 @@ class RequestRefundServiceTest {
                 .thenReturn(Optional.of(charge));
         when(chargeRecordQueryPort.findByChargeIntentId(charge.id())).thenReturn(Optional.of(chargeRecord));
         when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(RESERVATION.reservationId(),
-                DepositDispositionStatus.REFUND_REQUESTED, false));
+                DepositDispositionStatus.REFUND_REQUESTED, false, true));
     }
 
     @Test
@@ -86,16 +86,72 @@ class RequestRefundServiceTest {
     }
 
     @Test
-    void assignsADistinctUuidV4KeyToEachRequest() {
+    void assignsADistinctUuidV4KeyToEachDistinctOperation() {
         service.request(command(RefundTrigger.CANCELLED_STRICT, "op-1"));
-        service.request(command(RefundTrigger.CANCELLED_STRICT, "op-1"));
+        service.request(command(RefundTrigger.CANCELLED_STRICT, "op-2"));
 
         var captor = org.mockito.ArgumentCaptor.forClass(RefundIntent.class);
         verify(refundIntentRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(RefundIntent::operationKey)
+                .containsExactly("op-1", "op-2");
         assertThat(captor.getAllValues()).extracting(intent -> intent.idempotencyKey().value())
                 .doesNotHaveDuplicates()
                 .allSatisfy(RequestRefundServiceTest::assertUuidV4);
         verify(refundCommandPublisher, org.mockito.Mockito.times(2)).publish(any(UUID.class));
+    }
+
+    @Test
+    void returnsTheExistingIntentWhenTheSameOperationArrivesAgain() {
+        RefundIntent existing = RefundIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
+                RefundTrigger.CANCELLED_STRICT, RefundScope.DEPOSIT_ONLY, RESERVATION.depositAmount(), charge.id(),
+                "op-1", new com.seashare.seasharem3.domain.valueobject.IdempotencyKey(UUID.randomUUID().toString()),
+                null, NOW);
+        when(refundIntentRepository.findByReservationIdAndOperationKey(RESERVATION.reservationId(), "op-1"))
+                .thenReturn(Optional.of(existing));
+
+        RefundRequestResult result = service.request(command(RefundTrigger.CANCELLED_STRICT, "op-1"));
+
+        assertThat(result.refundIntentId()).isEqualTo(existing.id());
+        assertThat(result.status()).isEqualTo(existing.status());
+        verify(refundIntentRepository, never()).save(any());
+        verify(refundCommandPublisher, never()).publish(any(UUID.class));
+        verify(openDepositTracking, never()).open(any());
+    }
+
+    @Test
+    void doesNotCreateASecondIntentWhenAnotherOperationAlreadyRequestedTheDepositRefund() {
+        RefundIntent first = RefundIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
+                RefundTrigger.DISPUTE_REJECTED, RefundScope.DEPOSIT_ONLY, RESERVATION.depositAmount(), charge.id(),
+                "dispute-event-1",
+                new com.seashare.seasharem3.domain.valueobject.IdempotencyKey(UUID.randomUUID().toString()),
+                UUID.randomUUID(), NOW);
+        when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(RESERVATION.reservationId(),
+                DepositDispositionStatus.REFUND_REQUESTED, false, false));
+        when(refundIntentRepository.findLatestByReservationId(RESERVATION.reservationId()))
+                .thenReturn(Optional.of(first));
+
+        RefundRequestResult result = service.request(command(RefundTrigger.CANCELLED_STRICT, "reservation:CANCELLED"));
+
+        assertThat(result.refundIntentId()).isEqualTo(first.id());
+        assertThat(result.status()).isNotEqualTo(RefundIntentStatus.FAILED);
+        verify(refundIntentRepository, never()).save(any());
+        verify(refundCommandPublisher, never()).publish(any(UUID.class));
+        assertThat(failureRecorder.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::reason)
+                .containsExactly("INTERNAL_ERROR");
+        assertThat(failureRecorder.failures().get(0).payloadRef()).contains("duplicate_deposit_outcome=REFUND_REQUESTED");
+    }
+
+    @Test
+    void failsWhenTheDepositRefundWasRequestedButThereIsNoIntentToReturn() {
+        when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(RESERVATION.reservationId(),
+                DepositDispositionStatus.REFUND_REQUESTED, false, false));
+        when(refundIntentRepository.findLatestByReservationId(RESERVATION.reservationId()))
+                .thenReturn(Optional.empty());
+
+        RefundRequestResult result = service.request(command(RefundTrigger.CANCELLED_STRICT, "op-9"));
+
+        assertThat(result.status()).isEqualTo(RefundIntentStatus.FAILED);
+        verify(refundIntentRepository, never()).save(any());
     }
 
     @Test
@@ -115,7 +171,7 @@ class RequestRefundServiceTest {
     @Test
     void doesNotRefundWhenTheDepositWasAlreadySettled() {
         when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(RESERVATION.reservationId(),
-                DepositDispositionStatus.SETTLEMENT_REQUESTED, false));
+                DepositDispositionStatus.SETTLEMENT_REQUESTED, false, false));
 
         service.request(command(RefundTrigger.CANCELLED_STRICT, "op-3"));
 

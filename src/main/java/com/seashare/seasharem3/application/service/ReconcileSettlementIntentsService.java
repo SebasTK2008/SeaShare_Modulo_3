@@ -13,7 +13,6 @@ import com.seashare.seasharem3.domain.valueobject.SettlementStatus;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * Concilia liquidaciones del libro interno simulado sin resultado definitivo.

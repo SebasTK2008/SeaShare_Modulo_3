@@ -11,5 +11,5 @@ import java.util.UUID;
  * {@code STANDARD_SETTLEMENT} y conserva la reserva, el monto neto y la clave idempotente del
  * intento (D-UC10-10). El mercado de pagos real queda como fase futura no implementada.</p>
  */
-public record GatewaySettlementRequest(UUID reservationId, Money amount, String operationKey) {
+public record GatewaySettlementRequest(UUID reservationId, Money amount, String idempotencyKey) {
 }

@@ -1,7 +1,8 @@
 package com.seashare.seasharem3.application.port.out;
 
 import com.seashare.seasharem3.domain.model.SettlementIntent;
-import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
+import com.seashare.seasharem3.domain.valueobject.ReservationId;
+import com.seashare.seasharem3.domain.valueobject.SettlementScope;
 import com.seashare.seasharem3.domain.valueobject.SettlementStatus;
 
 import java.util.Collection;
@@ -22,7 +23,11 @@ public interface SettlementIntentRepository {
 
     SettlementIntent save(SettlementIntent settlementIntent);
 
-    Optional<SettlementIntent> findByIdempotencyKey(IdempotencyKey idempotencyKey);
+    /** Intención de la misma identidad de operación (D-37); evita una segunda liquidación por redelivery. */
+    Optional<SettlementIntent> findByReservationIdAndOperationKey(ReservationId reservationId, String operationKey);
+
+    /** Intención más reciente de la reserva y alcance (resuelve la solicitud duplicada del depósito). */
+    Optional<SettlementIntent> findLatestByReservationIdAndScope(ReservationId reservationId, SettlementScope scope);
 
     Optional<SettlementIntent> findByExternalReference(String externalReference);
 

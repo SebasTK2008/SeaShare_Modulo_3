@@ -54,7 +54,7 @@ class SendSettlementToGatewayServiceTest {
         intent = SettlementIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
                 SettlementTrigger.COMPLETED, SettlementScope.STANDARD, new Money(new BigDecimal("660000.00")),
                 new Money(new BigDecimal("180000.00")), new Money(new BigDecimal("30000.00")), UUID.randomUUID(),
-                new IdempotencyKey("settlement:COMPLETED:op-1"), null, NOW);
+                "settlement:COMPLETED:op-1", new IdempotencyKey("settlement:COMPLETED:op-1"), null, NOW);
         when(settlementIntentRepository.findByIdForUpdate(intent.id())).thenReturn(Optional.of(intent));
         when(settlementIntentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
@@ -93,7 +93,7 @@ class SendSettlementToGatewayServiceTest {
         verify(settlementGatewayPort).send(captor.capture());
         assertThat(captor.getValue().reservationId()).isEqualTo(intent.reservationId().value());
         assertThat(captor.getValue().amount().amount()).isEqualByComparingTo("660000.00");
-        assertThat(captor.getValue().operationKey()).isEqualTo(intent.idempotencyKey().value());
+        assertThat(captor.getValue().idempotencyKey()).isEqualTo(intent.idempotencyKey().value());
     }
 
     @Test

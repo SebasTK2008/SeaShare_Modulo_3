@@ -3,7 +3,6 @@ package com.seashare.seasharem3.support;
 import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
 import com.seashare.seasharem3.domain.model.ChargeIntent;
 import com.seashare.seasharem3.domain.valueobject.ChargeIntentStatus;
-import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 
 import java.util.Collection;
@@ -19,7 +18,7 @@ import java.util.UUID;
  * intención, como el merge de JPA) y resuelve las consultas publicadas al núcleo.
  * {@code findApprovedByReservationId} devuelve la intención CAPTURED más reciente (el cobro aprobado que
  * consumen UC09/UC10). {@code save} rechaza una clave idempotente ya presente, como la constraint
- * {@code UNIQUE(idempotency_key)} del esquema. [CONV] núcleo compartido para las pruebas de
+ * {@code UNIQUE(idempotency_key)} y {@code UNIQUE(reservation_id, operation_key)} del esquema. [CONV] núcleo compartido para las pruebas de
  * UC05/UC06/UC09/UC10.
  */
 public class InMemoryChargeIntentRepository implements ChargeIntentRepository {
@@ -54,9 +53,11 @@ public class InMemoryChargeIntentRepository implements ChargeIntentRepository {
     }
 
     @Override
-    public Optional<ChargeIntent> findByIdempotencyKey(IdempotencyKey idempotencyKey) {
+    public Optional<ChargeIntent> findByReservationIdAndOperationKey(ReservationId reservationId,
+            String operationKey) {
         return intents.values().stream()
-                .filter(intent -> intent.idempotencyKey().equals(idempotencyKey))
+                .filter(intent -> intent.reservationId().equals(reservationId))
+                .filter(intent -> intent.operationKey().equals(operationKey))
                 .findFirst();
     }
 
@@ -75,6 +76,14 @@ public class InMemoryChargeIntentRepository implements ChargeIntentRepository {
         if (sameKeyInAnotherIntent) {
             throw new IllegalStateException(
                     "charge_intent.idempotency_key must be unique: " + chargeIntent.idempotencyKey().value());
+        }
+        boolean sameOperationInAnotherIntent = intents.values().stream()
+                .anyMatch(stored -> !stored.id().equals(chargeIntent.id())
+                        && stored.reservationId().equals(chargeIntent.reservationId())
+                        && stored.operationKey().equals(chargeIntent.operationKey()));
+        if (sameOperationInAnotherIntent) {
+            throw new IllegalStateException("charge_intent (reservation_id, operation_key) must be unique: "
+                    + chargeIntent.operationKey());
         }
         intents.put(chargeIntent.id(), chargeIntent);
         return chargeIntent;

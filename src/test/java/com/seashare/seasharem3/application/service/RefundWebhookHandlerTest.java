@@ -51,7 +51,7 @@ class RefundWebhookHandlerTest {
                 failureRecorder);
         intent = RefundIntent.create(UUID.randomUUID(), RESERVATION.reservationId(), RefundTrigger.CANCELLED_STRICT,
                 RefundScope.DEPOSIT_ONLY, new Money(new BigDecimal("30000.00")), UUID.randomUUID(),
-                new IdempotencyKey("refund:CANCELLED_STRICT:op-1"), null, NOW).withExternalReference("rf-1");
+                "refund:CANCELLED_STRICT:op-1", new IdempotencyKey("refund:CANCELLED_STRICT:op-1"), null, NOW).withExternalReference("rf-1");
         when(refundIntentRepository.findByExternalReference("rf-1")).thenReturn(Optional.of(intent));
     }
 

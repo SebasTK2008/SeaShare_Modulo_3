@@ -31,7 +31,7 @@ public final class ChargePersistenceMapper {
 
     public static ChargeIntent toDomain(ChargeIntentJpaEntity entity) {
         return ChargeIntent.restore(entity.getId(), new ReservationId(entity.getReservationId()),
-                new IdempotencyKey(entity.getIdempotencyKey()), entity.statusValue(),
+                entity.getOperationKey(), new IdempotencyKey(entity.getIdempotencyKey()), entity.statusValue(),
                 new Money(entity.getAmount()),
                 new PaymentMethodReference(entity.getPaymentTokenRef(), entity.getPaymentMethodType(),
                         entity.getLastFour()),

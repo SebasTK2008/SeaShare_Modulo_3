@@ -45,7 +45,8 @@ public final class ChargeFixtures {
     /** Intencion de cobro recien registrada, en {@code PENDING_SEND}. */
     public static ChargeIntent pendingIntent(ReservationInformation reservation) {
         return ChargeIntent.create(UUID.randomUUID(), reservation.reservationId(),
-                new IdempotencyKey("reservation|PENDING|2026-10-20T15:04:05Z"), reservation.totalAmount(),
+                "reservation|PENDING|2026-10-20T15:04:05Z", new IdempotencyKey(UUID.randomUUID().toString()),
+                reservation.totalAmount(),
                 new PaymentMethodReference("token-123", "CREDIT_CARD", "4242"), CREATED_AT);
     }
 
@@ -74,7 +75,7 @@ public final class ChargeFixtures {
     public static ChargeIntent intentWithStatus(ReservationInformation reservation, ChargeIntentStatus status,
             String externalReference, String statusDetail, Instant createdAt) {
         return ChargeIntent.restore(UUID.randomUUID(), reservation.reservationId(),
-                new IdempotencyKey("intent|" + status + "|" + createdAt), status, TOTAL,
+                "intent|" + status + "|" + createdAt, new IdempotencyKey(UUID.randomUUID().toString()), status, TOTAL,
                 new PaymentMethodReference("token-123", "CREDIT_CARD", "4242"), externalReference, statusDetail,
                 createdAt);
     }

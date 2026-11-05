@@ -78,7 +78,7 @@ class RequestSettlementServiceTest {
         when(financialParametersRepository.findById(RESERVATION.frozenParametersId()))
                 .thenReturn(Optional.of(financialParameters()));
         when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(RESERVATION.reservationId(),
-                DepositDispositionStatus.SETTLEMENT_REQUESTED, false));
+                DepositDispositionStatus.SETTLEMENT_REQUESTED, false, true));
     }
 
     @Test
@@ -137,18 +137,77 @@ class RequestSettlementServiceTest {
     }
 
     @Test
-    void assignsADistinctUuidV4KeyToEachRequest() {
-        SettlementCommand command = new SettlementCommand(RESERVATION.reservationId(),
-                SettlementTrigger.COMPLETED, SettlementScope.STANDARD, null, "op-5");
-
-        service.request(command);
-        service.request(command);
+    void assignsADistinctUuidV4KeyToEachDistinctOperation() {
+        service.request(new SettlementCommand(RESERVATION.reservationId(),
+                SettlementTrigger.COMPLETED, SettlementScope.STANDARD, null, "op-5"));
+        service.request(new SettlementCommand(RESERVATION.reservationId(),
+                SettlementTrigger.COMPLETED, SettlementScope.STANDARD, null, "op-6"));
 
         var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
         verify(settlementIntentRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(SettlementIntent::operationKey)
+                .containsExactly("op-5", "op-6");
         assertThat(captor.getAllValues()).extracting(intent -> intent.idempotencyKey().value())
                 .doesNotHaveDuplicates()
                 .allSatisfy(RequestSettlementServiceTest::assertUuidV4);
+        assertThat(captor.getAllValues()).extracting(SettlementIntent::capability)
+                .containsOnly(com.seashare.seasharem3.domain.valueobject.SettlementCapability.STANDARD_SETTLEMENT);
+    }
+
+    @Test
+    void returnsTheExistingIntentWhenTheSameOperationArrivesAgain() {
+        SettlementCommand command = new SettlementCommand(RESERVATION.reservationId(),
+                SettlementTrigger.COMPLETED, SettlementScope.STANDARD, null, "op-7");
+        service.request(command);
+        var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
+        verify(settlementIntentRepository).save(captor.capture());
+        SettlementIntent existing = captor.getValue();
+        when(settlementIntentRepository.findByReservationIdAndOperationKey(RESERVATION.reservationId(), "op-7"))
+                .thenReturn(Optional.of(existing));
+
+        SettlementRequestResult second = service.request(command);
+
+        assertThat(second.settlementIntentId()).isEqualTo(existing.id());
+        assertThat(second.status()).isEqualTo(existing.status());
+        verify(settlementIntentRepository, org.mockito.Mockito.times(1)).save(any());
+        verify(settlementCommandPublisher, org.mockito.Mockito.times(1)).publish(any(UUID.class));
+    }
+
+    @Test
+    void doesNotCreateASecondDepositSettlementWhenAnotherOperationAlreadyRequestedIt() {
+        service.request(new SettlementCommand(RESERVATION.reservationId(), SettlementTrigger.DISPUTE_COMPLETED,
+                SettlementScope.DEPOSIT, UUID.randomUUID(), "dispute-event-1"));
+        var captor = org.mockito.ArgumentCaptor.forClass(SettlementIntent.class);
+        verify(settlementIntentRepository).save(captor.capture());
+        SettlementIntent first = captor.getValue();
+        when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(RESERVATION.reservationId(),
+                DepositDispositionStatus.SETTLEMENT_REQUESTED, false, false));
+        when(settlementIntentRepository.findLatestByReservationIdAndScope(RESERVATION.reservationId(),
+                SettlementScope.DEPOSIT)).thenReturn(Optional.of(first));
+
+        SettlementRequestResult second = service.request(new SettlementCommand(RESERVATION.reservationId(),
+                SettlementTrigger.DISPUTE_COMPLETED, SettlementScope.DEPOSIT, UUID.randomUUID(), "other-event"));
+
+        assertThat(second.settlementIntentId()).isEqualTo(first.id());
+        assertThat(second.status()).isNotEqualTo(SettlementStatus.FAILED);
+        verify(settlementIntentRepository, org.mockito.Mockito.times(1)).save(any());
+        verify(settlementCommandPublisher, org.mockito.Mockito.times(1)).publish(any(UUID.class));
+        assertThat(failureRecorder.failures()).extracting(InMemoryFailureRecorder.RecordedFailure::reason)
+                .containsExactly("INTERNAL_ERROR");
+        assertThat(failureRecorder.failures().get(0).payloadRef())
+                .contains("duplicate_deposit_outcome=SETTLEMENT_REQUESTED");
+    }
+
+    @Test
+    void failsWhenTheDepositSettlementWasRequestedButThereIsNoIntentToReturn() {
+        when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(RESERVATION.reservationId(),
+                DepositDispositionStatus.SETTLEMENT_REQUESTED, false, false));
+
+        SettlementRequestResult result = service.request(new SettlementCommand(RESERVATION.reservationId(),
+                SettlementTrigger.DISPUTE_COMPLETED, SettlementScope.DEPOSIT, UUID.randomUUID(), "op-8"));
+
+        assertThat(result.status()).isEqualTo(SettlementStatus.FAILED);
+        verify(settlementIntentRepository, never()).save(any());
     }
 
     private static void assertUuidV4(String value) {

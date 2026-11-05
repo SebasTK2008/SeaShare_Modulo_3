@@ -77,10 +77,26 @@ Puntos clave:
 
 ## 4. Idempotencia y conciliación
 
-- **Clave enviada a Mercado Pago**: `X-Idempotency-Key` con **UUID v4** por intento, persistido en
-  `charge_intent.idempotency_key` / `refund_intent.idempotency_key` / `settlement_intent.idempotency_key`.
-- **Deduplicación de negocio**: la aplica **UC07/UC08** sobre su registro de eventos, no los
-  servicios de cobro o reembolso.
+Hay dos claves distintas y no se intercambian (general-plan D-37):
+
+- **`idempotency_key` (clave de la pasarela)**: `X-Idempotency-Key` con **UUID v4** por intento,
+  generado una vez al crear la intención, persistido en `charge_intent.idempotency_key` /
+  `refund_intent.idempotency_key` / `settlement_intent.idempotency_key` y reutilizado en los
+  reintentos del worker. Mercado Pago exige una clave nueva por intento de transacción (1 a 128
+  caracteres); reutilizarla con otro cuerpo devuelve `409 idempotency_key_already_used`. No es
+  la clave de deduplicación interna.
+- **`operation_key` (identidad de negocio)**: la clave de operación del comando (UC07:
+  `reservationId:status[:statusChangedAt]`; UC08: `event_key` de la disputa), persistida en las
+  tres intenciones con `UNIQUE(reservation_id, operation_key)`. Los servicios de cobro, reembolso y
+  liquidación la consultan antes de crear una intención: una reentrega del mismo mensaje no crea
+  una segunda. La constraint es la red de seguridad ante una carrera: el segundo hilo falla en su
+  transacción, el mensaje se reintenta y la consulta previa converge.
+- **Doble camino sobre el depósito**: UC07 y UC08 pueden reclamar el mismo desenlace del depósito
+  con `operation_key` distintos. Por eso UC09/UC10 solo crean la intención cuando su solicitud aplicó
+  la transición `HELD -> REFUND_REQUESTED/SETTLEMENT_REQUESTED`; si otra operación ya la aplicó,
+  devuelven la intención existente y registran `duplicate_deposit_outcome` en `operational_failure`.
+- **Deduplicación del evento de entrada**: la sigue aplicando **UC07/UC08** sobre su registro de
+  eventos (`reservation_status_log`, `dispute_event_log`).
 - **Webhook duplicado**: se asocia por `external_reference` y el registro ya creado no se altera.
 - **Conciliación**: `GatewayReconciliationJob` corre cada `seashare.gateway.reconciliation-interval`
   (5 min por defecto) y consulta el estado real de las intenciones abiertas.

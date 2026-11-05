@@ -92,7 +92,7 @@ class Uc10AcceptanceTest {
         SettlementIntent created = SettlementIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
                 SettlementTrigger.COMPLETED, scope, new Money(new BigDecimal("660000.00")),
                 new Money(new BigDecimal("180000.00")), Money.ZERO, charge.id(),
-                new IdempotencyKey("settlement:COMPLETED:op-1"), null, NOW);
+                "settlement:COMPLETED:op-1", new IdempotencyKey("settlement:COMPLETED:op-1"), null, NOW);
         return status == SettlementStatus.PENDING_SEND ? created : created.transitionTo(status);
     }
 

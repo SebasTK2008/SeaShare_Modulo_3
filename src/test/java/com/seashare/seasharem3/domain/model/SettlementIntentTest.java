@@ -30,7 +30,7 @@ class SettlementIntentTest {
         return SettlementIntent.create(UUID.randomUUID(), RESERVATION, SettlementTrigger.COMPLETED,
                 SettlementScope.STANDARD, new Money(new BigDecimal("870000.00")),
                 new Money(new BigDecimal("130000.00")), new Money(BigDecimal.ZERO), UUID.randomUUID(),
-                new IdempotencyKey("settlement:COMPLETED:op-1"), null, CREATED_AT);
+                "settlement:COMPLETED:op-1", new IdempotencyKey("settlement:COMPLETED:op-1"), null, CREATED_AT);
     }
 
     @Test
@@ -64,7 +64,7 @@ class SettlementIntentTest {
         SettlementIntent intent = SettlementIntent.create(UUID.randomUUID(), RESERVATION,
                 SettlementTrigger.COMPLETED, SettlementScope.STANDARD, new Money(new BigDecimal("100.00")),
                 Money.ZERO, Money.ZERO, UUID.randomUUID(),
-                new IdempotencyKey("settlement:COMPLETED:op-2"), null,
+                "settlement:COMPLETED:op-2", new IdempotencyKey("settlement:COMPLETED:op-2"), null,
                 SettlementCapability.STANDARD_SETTLEMENT, CREATED_AT);
 
         assertThat(intent.capability()).isEqualTo(SettlementCapability.STANDARD_SETTLEMENT);
@@ -91,7 +91,7 @@ class SettlementIntentTest {
     void rejectsANonPositiveAmount() {
         assertThatThrownBy(() -> SettlementIntent.create(UUID.randomUUID(), RESERVATION,
                 SettlementTrigger.COMPLETED, SettlementScope.STANDARD, Money.ZERO, Money.ZERO, Money.ZERO,
-                UUID.randomUUID(), new IdempotencyKey("settlement:key"), null, CREATED_AT))
+                UUID.randomUUID(), "settlement:key", new IdempotencyKey("settlement:key"), null, CREATED_AT))
                 .isInstanceOf(DomainException.class);
     }
 
@@ -99,5 +99,30 @@ class SettlementIntentTest {
     void hasNoSetters() {
         assertThat(SettlementIntent.class.getMethods())
                 .noneMatch(method -> method.getName().startsWith("set"));
+    }
+
+    @Test
+    void keepsTheOperationKeyAcrossTransitionsAndRestore() {
+        SettlementIntent original = intent().transitionTo(SettlementStatus.IN_PROCESS);
+
+        SettlementIntent restored = SettlementIntent.restore(original.id(), original.reservationId(),
+                original.trigger(), original.scope(), original.amount(), original.commissionAmount(),
+                original.depositAmount(), original.chargeIntentId(), original.operationKey(),
+                original.idempotencyKey(), original.status(), original.statusDetail(),
+                original.externalReference(), original.disputeId(), original.createdAt());
+
+        assertThat(original.operationKey()).isEqualTo("settlement:COMPLETED:op-1");
+        assertThat(restored.operationKey()).isEqualTo(original.operationKey());
+        assertThat(restored.idempotencyKey()).isEqualTo(original.idempotencyKey());
+        assertThat(restored.capability()).isEqualTo(SettlementCapability.STANDARD_SETTLEMENT);
+    }
+
+    @Test
+    void rejectsABlankOperationKey() {
+        assertThatThrownBy(() -> SettlementIntent.create(UUID.randomUUID(), RESERVATION,
+                SettlementTrigger.COMPLETED, SettlementScope.STANDARD, new Money(new BigDecimal("100.00")),
+                Money.ZERO, Money.ZERO, UUID.randomUUID(), "", new IdempotencyKey("settlement:key"), null,
+                CREATED_AT))
+                .isInstanceOf(DomainException.class);
     }
 }

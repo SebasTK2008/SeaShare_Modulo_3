@@ -1,5 +1,6 @@
 package com.seashare.seasharem3.application.service;
 
+import com.seashare.seasharem3.application.dto.DepositTrackingResult;
 import com.seashare.seasharem3.application.dto.OpenDepositTrackingCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestCommand;
 import com.seashare.seasharem3.application.dto.RefundRequestResult;
@@ -43,8 +44,10 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Cada intencion recibe un {@code IdempotencyKey} UUID v4 propio, que viaja como
  * {@code X-Idempotency-Key} al enviarse a Mercado Pago y se reutiliza en los reintentos del worker
- * (D-UC09-10). La identidad interna de la operacion la reclama UC07 en
- * {@code reservation_status_log}; UC09 no deduplica por clave de intento.</p>
+ * (D-UC09-10). La deduplicacion interna es por identidad de negocio: {@code UNIQUE(reservation_id,
+ * operation_key)} (D-37). Como UC07 y UC08 usan claves distintas, ademas solo se crea la intencion
+ * si esta solicitud fue la que aplico la transicion del deposito; si otra operacion ya la aplico, se
+ * devuelve la intencion existente y se registra el evento.</p>
  */
 public class RequestRefundService implements RequestRefundUseCase {
 
@@ -87,9 +90,15 @@ public class RequestRefundService implements RequestRefundUseCase {
         Objects.requireNonNull(command, "command");
         ReservationId reservationId = new ReservationId(
                 Objects.requireNonNull(command.reservationId(), "command.reservationId"));
-        // La identidad de la operación la deduplica UC07; la pasarela recibe una clave UUID v4
+        // Deduplicación interna por identidad de negocio (D-37). La pasarela recibe una clave UUID v4
         // propia de este intento y la reutiliza en sus reintentos (D-UC09-10).
-        Objects.requireNonNull(command.operationKey(), "command.operationKey");
+        String operationKey = Objects.requireNonNull(command.operationKey(), "command.operationKey");
+        Optional<RefundIntent> sameOperation = refundIntentRepository
+                .findByReservationIdAndOperationKey(reservationId, operationKey);
+        if (sameOperation.isPresent()) {
+            RefundIntent existing = sameOperation.get();
+            return new RefundRequestResult(existing.id(), existing.status());
+        }
         IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
 
         Optional<ChargeIntent> approvedCharge = chargeIntentRepository.findApprovedByReservationId(reservationId);
@@ -118,12 +127,22 @@ public class RequestRefundService implements RequestRefundUseCase {
                     "reservationId=" + reservationId.value() + ";reason=refund amount must be positive");
         }
 
-        if (!requestDepositDisposition(command, reservationId)) {
+        DepositTrackingResult deposit = requestDepositDisposition(command, reservationId);
+        if (deposit == null) {
             return new RefundRequestResult(null, RefundIntentStatus.FAILED);
+        }
+        if (!deposit.transitioned()) {
+            // Otra operación (UC07/UC08 por otro camino) ya pidió el reembolso del depósito: no se crea una
+            // segunda intención. No es FAILED para no revertir al llamador (D-37).
+            failureRecorder.record(USE_CASE, reservationId.value(), ErrorCode.INTERNAL_ERROR.name(),
+                    "duplicate_deposit_outcome=REFUND_REQUESTED;operationKey=" + operationKey);
+            return refundIntentRepository.findLatestByReservationId(reservationId)
+                    .map(existing -> new RefundRequestResult(existing.id(), existing.status()))
+                    .orElseGet(() -> new RefundRequestResult(null, RefundIntentStatus.FAILED));
         }
 
         RefundIntent intent = RefundIntent.create(UUID.randomUUID(), reservationId, command.trigger(),
-                calculation.scope(), calculation.amount(), charge.id(), key, command.disputeId(),
+                calculation.scope(), calculation.amount(), charge.id(), operationKey, key, command.disputeId(),
                 clock.instant());
         refundIntentRepository.save(intent);
         refundCommandPublisher.publish(intent.id());
@@ -136,16 +155,20 @@ public class RequestRefundService implements RequestRefundUseCase {
         return new RefundRequestResult(null, RefundIntentStatus.FAILED);
     }
 
-    /** Aplica el desenlace del deposito; si ya fue liquidado, se registra y no se reembolsa. */
-    private boolean requestDepositDisposition(RefundRequestCommand command, ReservationId reservationId) {
+    /**
+     * Aplica el desenlace del deposito. Devuelve {@code null} si el deposito tiene otro desenlace (por ejemplo
+     * ya liquidado): se registra y no se reembolsa.
+     */
+    private DepositTrackingResult requestDepositDisposition(RefundRequestCommand command,
+            ReservationId reservationId) {
         var result = openDepositTracking.open(new OpenDepositTrackingCommand(reservationId, command.operationKey(),
                 DepositDispositionStatus.REFUND_REQUESTED, command.disputeId(), null, null));
         if (result.status() == DepositDispositionStatus.REFUND_REQUESTED) {
-            return true;
+            return result;
         }
         failureRecorder.record(USE_CASE, reservationId.value(), ErrorCode.INTERNAL_ERROR.name(),
                 "deposit_disposition=" + result.status() + ";operationKey=" + command.operationKey());
-        return false;
+        return null;
     }
 
     private Optional<RefundBreakdown> loadBreakdown(ChargeIntent charge) {

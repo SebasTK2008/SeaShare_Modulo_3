@@ -72,8 +72,8 @@ class FinancialReportQueryAdapterIntegrationTest {
 
     private UUID insertChargeIntent(UUID reservation) {
         UUID id = UUID.randomUUID();
-        jdbc.update("INSERT INTO charge_intent (id, reservation_id, idempotency_key, status, amount,"
-                        + " payment_token_ref) VALUES (?, ?, ?, 'CAPTURED', 100, 'tok')",
+        jdbc.update("INSERT INTO charge_intent (id, reservation_id, operation_key, idempotency_key, status, amount,"
+                        + " payment_token_ref) VALUES (?, ?, 'op-' || gen_random_uuid()::text, ?, 'CAPTURED', 100, 'tok')",
                 id, reservation, UUID.randomUUID().toString());
         return id;
     }
@@ -90,7 +90,8 @@ class FinancialReportQueryAdapterIntegrationTest {
     private void insertRefundRecord(UUID reservation, UUID owner, String amount, Instant createdAt) {
         UUID intentId = UUID.randomUUID();
         jdbc.update("INSERT INTO refund_intent (id, reservation_id, trigger, scope, amount, charge_intent_id,"
-                        + " idempotency_key, status) VALUES (?, ?, 'CANCELLED_MODERATE', 'FULL', ?, ?, ?, 'COMPLETED')",
+                        + " operation_key, idempotency_key, status) VALUES (?, ?, 'CANCELLED_MODERATE', 'FULL', ?, ?,"
+                        + " 'op-' || gen_random_uuid()::text, ?, 'COMPLETED')",
                 intentId, reservation, new BigDecimal(amount), chargeIntentId, UUID.randomUUID().toString());
         BigDecimal numericAmount = new BigDecimal(amount);
         jdbc.update("INSERT INTO refund_record (id, refund_intent_id, reservation_id, owner_id, boat_id, amount,"
@@ -102,8 +103,8 @@ class FinancialReportQueryAdapterIntegrationTest {
     private void insertSettlementAndCommission(UUID reservation, UUID owner, String amount, Instant createdAt) {
         UUID intentId = UUID.randomUUID();
         jdbc.update("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount, commission_amount,"
-                        + " deposit_amount, charge_intent_id, idempotency_key, status, gateway_capability)"
-                        + " VALUES (?, ?, 'COMPLETED', 'STANDARD', ?, 10, 0, ?, ?, 'COMPLETED',"
+                        + " deposit_amount, charge_intent_id, operation_key, idempotency_key, status, gateway_capability)"
+                        + " VALUES (?, ?, 'COMPLETED', 'STANDARD', ?, 10, 0, ?, 'op-' || gen_random_uuid()::text, ?, 'COMPLETED',"
                         + " 'STANDARD_SETTLEMENT')",
                 intentId, reservation, new BigDecimal(amount), chargeIntentId, UUID.randomUUID().toString());
         UUID recordId = UUID.randomUUID();

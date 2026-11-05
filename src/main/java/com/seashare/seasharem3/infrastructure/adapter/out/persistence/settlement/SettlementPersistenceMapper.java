@@ -27,7 +27,7 @@ public final class SettlementPersistenceMapper {
                 SettlementTrigger.valueOf(entity.getTrigger()), SettlementScope.valueOf(entity.getScope()),
                 new Money(entity.getAmount()), new Money(entity.getCommissionAmount()),
                 new Money(entity.getDepositAmount()), entity.getChargeIntentId(),
-                new IdempotencyKey(entity.getIdempotencyKey()), entity.statusValue(), entity.getStatusDetail(),
+                entity.getOperationKey(), new IdempotencyKey(entity.getIdempotencyKey()), entity.statusValue(), entity.getStatusDetail(),
                 entity.getExternalReference(), entity.getDisputeId(),
                 SettlementCapability.valueOf(entity.getGatewayCapability()),
                 entity.getCreatedAt());

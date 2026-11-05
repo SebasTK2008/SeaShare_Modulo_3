@@ -17,7 +17,7 @@ public interface ChargeIntentJpaRepository extends JpaRepository<ChargeIntentJpa
 
     Optional<ChargeIntentJpaEntity> findFirstByExternalReference(String externalReference);
 
-    Optional<ChargeIntentJpaEntity> findFirstByIdempotencyKey(String idempotencyKey);
+    Optional<ChargeIntentJpaEntity> findFirstByReservationIdAndOperationKey(UUID reservationId, String operationKey);
 
     List<ChargeIntentJpaEntity> findByStatusIn(Collection<String> statuses);
 }

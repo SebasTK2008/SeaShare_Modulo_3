@@ -154,7 +154,8 @@ CREATE TABLE shedlock (
 CREATE TABLE charge_intent (
     id                  UUID          PRIMARY KEY,
     reservation_id      UUID          NOT NULL,
-    idempotency_key     VARCHAR(255)  NOT NULL,
+    operation_key       VARCHAR(512)  NOT NULL,  -- [D-37] identidad de negocio de la operación (deduplicación interna)
+    idempotency_key     VARCHAR(255)  NOT NULL,  -- UUID v4 del intento; solo para la cabecera X-Idempotency-Key
     status              VARCHAR(32)   NOT NULL,
     amount              NUMERIC(18,4) NOT NULL,
     payment_token_ref   TEXT          NOT NULL,
@@ -166,6 +167,7 @@ CREATE TABLE charge_intent (
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
     version             INTEGER       NOT NULL DEFAULT 0,
     CONSTRAINT uq_charge_intent_idempotency_key UNIQUE (idempotency_key),
+    CONSTRAINT uq_charge_intent_operation UNIQUE (reservation_id, operation_key),
     CONSTRAINT fk_charge_intent_reservation FOREIGN KEY (reservation_id) REFERENCES reservation_information (reservation_id),
     CONSTRAINT chk_charge_intent_status CHECK (
         status IN ('PENDING_SEND', 'IN_PROCESS', 'CAPTURED', 'REJECTED', 'CANCELLED', 'EXPIRED',
@@ -173,7 +175,8 @@ CREATE TABLE charge_intent (
     CONSTRAINT chk_charge_intent_amount CHECK (amount >= 0)
 );
 
--- Sin UNIQUE(reservation_id): se permiten múltiples intenciones por reserva (UC05 RF-004A).
+-- Sin UNIQUE(reservation_id) a secas: se permiten múltiples intenciones por reserva (UC05 RF-004A);
+-- la unicidad es por operación: UNIQUE(reservation_id, operation_key) (D-37).
 CREATE INDEX idx_charge_intent_reservation_created
     ON charge_intent (reservation_id, created_at DESC);
 
@@ -242,7 +245,8 @@ CREATE TABLE refund_intent (
     scope              VARCHAR(64)   NOT NULL,
     amount             NUMERIC(18,4) NOT NULL,
     charge_intent_id   UUID          NOT NULL,
-    idempotency_key    VARCHAR(255)  NOT NULL,
+    operation_key      VARCHAR(512)  NOT NULL,  -- [D-37] identidad de negocio de la operación (deduplicación interna)
+    idempotency_key    VARCHAR(255)  NOT NULL,  -- UUID v4 del intento; solo para la cabecera X-Idempotency-Key
     status             VARCHAR(32)   NOT NULL,
     status_detail      TEXT,         -- [D-UC09-02] detalle del estado externo
     dispute_id         UUID,         -- [D-UC09-02] nullable (solo trigger DISPUTE_REJECTED)
@@ -250,6 +254,7 @@ CREATE TABLE refund_intent (
     created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitido en general-plan §4
     version            INTEGER       NOT NULL DEFAULT 0,     -- [CONV] bloqueo optimista para webhook/worker
     CONSTRAINT uq_refund_intent_idempotency_key UNIQUE (idempotency_key),
+    CONSTRAINT uq_refund_intent_operation UNIQUE (reservation_id, operation_key),
     CONSTRAINT fk_refund_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id),
     CONSTRAINT chk_refund_intent_status CHECK (
         status IN ('PENDING_SEND', 'IN_PROCESS', 'COMPLETED', 'REJECTED', 'CANCELLED', 'EXPIRED',
@@ -316,7 +321,8 @@ CREATE TABLE settlement_intent (
     commission_amount NUMERIC(18,4) NOT NULL,
     deposit_amount    NUMERIC(18,4),
     charge_intent_id  UUID          NOT NULL,
-    idempotency_key   VARCHAR(255)  NOT NULL,
+    operation_key     VARCHAR(512)  NOT NULL,  -- [D-37] identidad de negocio de la operación (deduplicación interna)
+    idempotency_key   VARCHAR(255)  NOT NULL,  -- UUID v4 del intento; solo para la cabecera X-Idempotency-Key
     status            VARCHAR(32)   NOT NULL,
     status_detail     TEXT,         -- [CONV] detalle del estado externo (simétrico a charge/refund_intent)
     external_reference TEXT,        -- [CONV] referencia determinista del libro interno (UC10 plan T012a); omitida en general-plan §4
@@ -325,6 +331,7 @@ CREATE TABLE settlement_intent (
     created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),  -- [CONV] antigüedad para conciliación (general-plan §7.3); omitida en general-plan §4
     version           INTEGER       NOT NULL DEFAULT 0,     -- [CONV] bloqueo optimista para webhook/worker
     CONSTRAINT uq_settlement_intent_idempotency_key UNIQUE (idempotency_key),
+    CONSTRAINT uq_settlement_intent_operation UNIQUE (reservation_id, operation_key),
     CONSTRAINT fk_settlement_intent_charge FOREIGN KEY (charge_intent_id) REFERENCES charge_intent (id),
     CONSTRAINT chk_settlement_intent_capability CHECK (
         gateway_capability IN ('STANDARD_SETTLEMENT')),

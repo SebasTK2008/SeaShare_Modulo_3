@@ -78,21 +78,21 @@ public class MercadoPagoChargeAdapter implements ChargeGatewayPort {
                 request.externalReference());
 
         try {
-            Supplier<ChargeGatewayResult> call = () -> executeSend(body, request.operationKey());
+            Supplier<ChargeGatewayResult> call = () -> executeSend(body, request.idempotencyKey());
             return CircuitBreaker.decorateSupplier(circuitBreaker, call).get();
         } catch (CallNotPermittedException exception) {
             throw communicationFailure("The payment gateway circuit breaker is open", exception);
         }
     }
 
-    private ChargeGatewayResult executeSend(MercadoPagoPaymentRequest body, String operationKey) {
+    private ChargeGatewayResult executeSend(MercadoPagoPaymentRequest body, String idempotencyKey) {
         try {
             String response = restClient.post()
                     .uri(PAYMENTS_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, bearerToken())
-                    .header(IDEMPOTENCY_HEADER, operationKey)
+                    .header(IDEMPOTENCY_HEADER, idempotencyKey)
                     .body(mapper.writeValueAsString(body))
                     .retrieve()
                     .body(String.class);

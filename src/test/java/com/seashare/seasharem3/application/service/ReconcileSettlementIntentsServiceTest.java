@@ -135,7 +135,7 @@ class ReconcileSettlementIntentsServiceTest {
         return SettlementIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
                 SettlementTrigger.COMPLETED, SettlementScope.STANDARD, new Money(new BigDecimal("660000.00")),
                 new Money(new BigDecimal("180000.00")), new Money(new BigDecimal("30000.00")), UUID.randomUUID(),
-                new IdempotencyKey("settlement:COMPLETED:op-1"), null, NOW);
+                "settlement:COMPLETED:op-1", new IdempotencyKey("settlement:COMPLETED:op-1"), null, NOW);
     }
 
     private SettlementIntent completedIntent() {

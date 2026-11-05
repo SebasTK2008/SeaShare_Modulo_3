@@ -24,8 +24,8 @@ public class SimulatedSettlementGatewayAdapter implements SettlementGatewayPort 
     @Override
     public GatewaySettlementResult send(GatewaySettlementRequest request) {
         Objects.requireNonNull(request, "request");
-        Objects.requireNonNull(request.operationKey(), "request.operationKey");
-        String externalId = REFERENCE_PREFIX + request.operationKey();
+        Objects.requireNonNull(request.idempotencyKey(), "request.idempotencyKey");
+        String externalId = REFERENCE_PREFIX + request.idempotencyKey();
         return new GatewaySettlementResult(STATUS_APPROVED, externalId, STATUS_DETAIL, request.amount());
     }
 }
