@@ -1,6 +1,7 @@
 package com.seashare.seasharem3.infrastructure.config;
 
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -15,7 +16,7 @@ import java.time.Duration;
  */
 @Validated
 @ConfigurationProperties(prefix = "seashare.gateway")
-public class GatewayProperties {
+public class GatewayProperties implements InitializingBean {
 
     @NotBlank
     private String baseUrl;
@@ -29,6 +30,12 @@ public class GatewayProperties {
      * el mercado de pagos real no esta implementado (D-UC10-10).
      */
     private String settlementMode = "simulated";
+
+    /**
+     * Si es {@code true} el access token y el secreto del webhook son obligatorios: lo activan los
+     * perfiles {@code sandbox} y {@code prod}. En {@code dev} (simulador local) pueden ir vacios.
+     */
+    private boolean credentialsRequired = false;
 
     private Duration connectTimeout = Duration.ofSeconds(10);
 
@@ -66,6 +73,49 @@ public class GatewayProperties {
 
     public void setSettlementMode(String settlementMode) {
         this.settlementMode = settlementMode;
+    }
+
+    public boolean isCredentialsRequired() {
+        return credentialsRequired;
+    }
+
+    public void setCredentialsRequired(boolean credentialsRequired) {
+        this.credentialsRequired = credentialsRequired;
+    }
+
+    /**
+     * Falla el arranque, nombrando la propiedad y la variable de entorno, si una propiedad conserva un
+     * marcador sin resolver o si faltan credenciales requeridas.
+     *
+     * <p>Spring Boot enlaza un marcador sin resolver (por ejemplo {@code GATEWAY_ACCESS_TOKEN} entre
+     * llaves y precedido de dolar) como texto literal en lugar de fallar: sin esta comprobacion, un
+     * perfil {@code sandbox} o {@code prod} arrancaria con ese texto como token y solo fallaria al primer
+     * cobro. Se verifica en {@code GatewayProfilesTest}.</p>
+     */
+    @Override
+    public void afterPropertiesSet() {
+        requireResolved("seashare.gateway.base-url", baseUrl);
+        requireResolved("seashare.gateway.access-token", accessToken);
+        requireResolved("seashare.gateway.webhook-secret", webhookSecret);
+        requireResolved("seashare.gateway.settlement-mode", settlementMode);
+        if (credentialsRequired) {
+            requireText("seashare.gateway.access-token", "GATEWAY_ACCESS_TOKEN", accessToken);
+            requireText("seashare.gateway.webhook-secret", "GATEWAY_WEBHOOK_SECRET", webhookSecret);
+        }
+    }
+
+    private static void requireResolved(String property, String value) {
+        if (value != null && value.contains("${")) {
+            throw new IllegalStateException(property + " has an unresolved placeholder (" + value
+                    + "): define the environment variable it refers to");
+        }
+    }
+
+    private static void requireText(String property, String variable, String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(property + " is required in this profile (sandbox or prod): "
+                    + "define a non-empty " + variable);
+        }
     }
 
     public Duration getConnectTimeout() {

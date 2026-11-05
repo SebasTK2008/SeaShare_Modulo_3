@@ -12,15 +12,18 @@ recibiendo webhooks reales. **No** se usan credenciales de producción.
 
 | Requisito | Cómo se comprueba |
 |---|---|
-| Docker y JDK 21 | `docker --version`, `java -version` |
+| Docker y JDK 25 (`java.version` del `pom.xml`) | `docker --version`, `java -version` |
 | Repositorio en la rama de trabajo | `git branch --show-current` |
 | Suite automática en verde | `.\mvnw.cmd clean verify` |
 | Una cuenta de Mercado Pago de desarrollador | Acceso a [Tus integraciones](https://www.mercadopago.com/developers/panel/app) |
 | Un túnel HTTPS disponible | Cualquier herramienta que exponga `localhost:8080` por HTTPS público |
 
-> **Aviso:** el archivo `.env` local no se versiona. Si tu `.env` define
+> **Aviso:** el modo B usa el perfil **`sandbox`** (`SPRING_PROFILES_ACTIVE=dev,sandbox`), no `dev`.
+> El perfil `dev` y el `docker-compose.yml` apuntan por defecto al simulador local `gateway-stub`
+> (modo A); para hablar con Mercado Pago hay que definir `GATEWAY_BASE_URL=https://api.mercadopago.com`
+> y el perfil `sandbox` en `.env`. El archivo `.env` local no se versiona. Si tu `.env` define
 > `GATEWAY_BASE_URL=http://fleet-stub:8080`, **las llamadas irán al stub de Flota y no a Mercado
-> Pago**. Bórrala o ajústala a `https://api.mercadopago.com`.
+> Pago**. Bórrala o ajústala.
 
 ---
 
@@ -50,6 +53,8 @@ recibiendo webhooks reales. **No** se usan credenciales de producción.
 Copia `.env.example` a `.env` y completa:
 
 ```dotenv
+# Perfil: dev aporta PostgreSQL, RabbitMQ y Flota; sandbox sobrescribe la pasarela
+SPRING_PROFILES_ACTIVE=dev,sandbox
 # Pasarela (sandbox)
 GATEWAY_BASE_URL=https://api.mercadopago.com
 GATEWAY_ACCESS_TOKEN=TEST-...
@@ -58,7 +63,14 @@ GATEWAY_SETTLEMENT_MODE=simulated
 ```
 
 Comprueba que NO quede `GATEWAY_BASE_URL=http://fleet-stub:8080`: esa URL es del stub de Flota y
-desviaría todos los cobros.
+desviaría todos los cobros. Si dejas `GATEWAY_BASE_URL` sin definir, el compose usa el simulador
+(`http://gateway-stub:8080`) y **no es modo B**.
+
+Con el perfil `sandbox`, la aplicación **no arranca** si `GATEWAY_ACCESS_TOKEN` o
+`GATEWAY_WEBHOOK_SECRET` faltan o están vacíos (`seashare.gateway.credentials-required`); el log
+indica qué variable falta. Para confirmar que el modo B realmente apunta a Mercado Pago, el request
+journal del simulador (`http://localhost:8082/__admin/requests`) debe permanecer **vacío** durante la
+ejecución.
 
 Levanta el stack:
 
@@ -102,6 +114,29 @@ Para ejecutar el modo B necesitas:
 
 Selecciona **una tarjeta de prueba aprobada** y **una de rechazo** según la documentación de
 Mercado Pago para MCO. No versiones números de tarjeta ni tokens.
+
+El resultado del pago lo decide el **nombre del titular** que se escribe al tokenizar la tarjeta de
+prueba (documento `123456789` para `APRO` y `OTHE`), no la tarjeta:
+
+| Resultado deseado | Titular | Estado esperado del pago |
+|---|---|---|
+| Aprobado | `APRO` | `approved` |
+| Rechazo por error general | `OTHE` | `rejected` |
+| Pendiente de pago | `CONT` | `pending` / `in_process` |
+| Rechazo con validación para autorizar | `CALL` | `rejected` |
+| Rechazo por fondos insuficientes | `FUND` | `rejected` |
+| Rechazo por código de seguridad inválido | `SECU` | `rejected` |
+| Rechazo por fecha de vencimiento | `EXPI` | `rejected` |
+| Rechazo por error de formulario | `FORM` | `rejected` |
+
+> **No existe un titular que produzca `expired`.** `EXPI` genera un rechazo por fecha de vencimiento
+> de la tarjeta, no el estado `expired` de un pago. El escenario de pago expirado
+> (`TC-UC05-HU2-E3`) solo se reproduce en modo A.
+
+Los **reembolsos** exigen saldo disponible en la cuenta vendedora de prueba (de lo contrario
+Mercado Pago rechaza la operación). Si hace falta, acredita dinero de prueba al usuario vendedor
+desde el panel o con la herramienta `add_money_test_user` del MCP de Mercado Pago. El plazo de
+reembolso es de 180 días desde la aprobación del pago.
 
 ---
 
@@ -213,14 +248,57 @@ complementario.
 
 ---
 
-## 11. Nota sobre el modo A
+## 11. Modo A: simulador de la pasarela (`gateway-stub`)
 
-El modo A **no** usa Mercado Pago ni un simulador externo: la suite automática levanta WireMock
-**embebido en JUnit** (`MercadoPagoChargeAdapterTest`, `MercadoPagoRefundAdapterTest`) y MockMvc para
-el webhook.
+El modo A **no** usa Mercado Pago: la pasarela se simula con el servicio `gateway-stub` del
+`docker-compose.yml` (WireMock en `http://localhost:8082`), sin credenciales ni Internet. Es lo que
+llaman «request journal del simulador» los casos de prueba. La suite automática de `mvn verify`
+sigue usando además WireMock **embebido en JUnit** y MockMvc.
 
-Los TC que dicen "request journal del simulador" describen una ejecución funcional contra un stub de
-pasarela que **no está configurado en este repositorio**: `wiremock/` solo contiene
-`mappings/fleet-base-rates.json` (Flota). Esas verificaciones se cubren con la suite automática o,
-en su defecto, con el modo B. Ver brecha G-01 en
-[`docs/technical-plan/mercadopago-integration.md`](../technical-plan/mercadopago-integration.md).
+**Arranque** (perfil `dev`, sin `SPRING_PROFILES_ACTIVE` ni credenciales en `.env`):
+
+```bash
+docker compose --profile app up --build -d      # gateway-stub incluido
+```
+
+**Estado por defecto**: cobros y reembolsos `approved`, consulta de pago `approved`
+(`wiremock-gateway/mappings/`). **Escenarios** (`wiremock-gateway/scenarios/`), que ganan sobre el
+estado por defecto hasta el `reset`:
+
+```bash
+bash scripts/gateway-stub.sh list                     # escenarios disponibles
+bash scripts/gateway-stub.sh set cobro-rejected       # el siguiente POST /v1/payments responde rejected
+bash scripts/gateway-stub.sh set cobro-bad-request    # 400 (token invalido; intencion REJECTED sin reintento)
+bash scripts/gateway-stub.sh set cobro-unavailable    # 503 (COMMUNICATION_ERROR y reintentos)
+bash scripts/gateway-stub.sh set reembolso-bad-request
+bash scripts/gateway-stub.sh set reembolsos-no-encontrado
+bash scripts/gateway-stub.sh reset                    # vuelve al estado por defecto
+```
+
+**Request journal** (verificación de lo que la app envió a la pasarela):
+
+```bash
+curl -s "http://localhost:8082/__admin/requests?limit=50"
+bash scripts/gateway-stub.sh journal POST /v1/payments       # filtrado por metodo y ruta
+bash scripts/gateway-stub.sh journal POST "/v1/payments/1234567890/refunds"
+bash scripts/gateway-stub.sh clear-journal
+```
+
+> `reset` también vacía el request journal: consúltalo **antes** de resetear.
+
+**Webhook firmado** (el stub no llama a la app; el webhook se envía con la firma de la
+pasarela):
+
+```bash
+GATEWAY_WEBHOOK_SECRET=<el mismo valor que usa la app> bash scripts/sign-webhook.sh 1234567890
+```
+
+El secreto por defecto de desarrollo es `dev-webhook-secret`. Si tu `.env` define otro
+`GATEWAY_WEBHOOK_SECRET`, exporta ese mismo valor al ejecutar el script; con uno distinto el
+webhook responde `401`.
+
+**Límites del modo A**: no valida el formato real de los tokens ni los estados que solo produce
+Mercado Pago, y no tiene mappings de liquidación (UC10 es un libro interno sin HTTP). Por eso el
+modo B sigue siendo obligatorio para la aprobación de `release/0.1.0`. Ver brecha G-01 (cerrada) y la
+mecánica del simulador en
+[`docs/technical-plan/mercadopago-integration.md`](../technical-plan/mercadopago-integration.md) §7.1.

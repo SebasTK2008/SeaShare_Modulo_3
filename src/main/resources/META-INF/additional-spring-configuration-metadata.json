@@ -130,6 +130,12 @@
       "defaultValue": "simulated"
     },
     {
+      "name": "seashare.gateway.credentials-required",
+      "type": "java.lang.Boolean",
+      "description": "Exige access token y secreto del webhook no vacios. Lo activan los perfiles sandbox y prod; en dev (simulador local) es false.",
+      "defaultValue": false
+    },
+    {
       "name": "seashare.gateway.reconciliation-interval",
       "type": "java.time.Duration",
       "description": "Cadencia del job de conciliacion con la pasarela.",

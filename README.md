@@ -49,15 +49,24 @@ curl -fsS http://localhost:8080/actuator/health
 
 Los tests de integración usan Testcontainers: sin Docker se omiten automáticamente (los unitarios y ArchUnit siempre corren).
 
-**Pagos — dos modos obligatorios**: la suite automática usa WireMock y el simulador (**modo A**, gate de CI). La aprobación de `release/0.1.0` exige además probar cobro, webhook `payment` y reembolso contra **Mercado Pago sandbox** con credenciales `TEST-*` (**modo B**); el checklist y la evidencia están en [`docs/qa/pagos-api-real.md`](docs/qa/pagos-api-real.md). El modo B no corre en `mvn verify` y no se sustituye por el simulador. Procedimiento paso a paso: [`docs/qa/runbook-sandbox-mercadopago.md`](docs/qa/runbook-sandbox-mercadopago.md). Vista de la integración: [`docs/technical-plan/mercadopago-integration.md`](docs/technical-plan/mercadopago-integration.md).
+**Pagos — dos modos obligatorios**: la suite automática y el QA funcional usan el simulador de la pasarela, el servicio `gateway-stub` de `docker-compose.yml` (WireMock en `http://localhost:8082`, request journal en `/__admin/requests`) (**modo A**, gate de CI); no requiere credenciales ni Internet. La aprobación de `release/0.1.0` exige además probar cobro, webhook `payment` y reembolso contra **Mercado Pago sandbox** con credenciales `TEST-*` (**modo B**); el checklist y la evidencia están en [`docs/qa/pagos-api-real.md`](docs/qa/pagos-api-real.md). El modo B no corre en `mvn verify` y no se sustituye por el simulador. Procedimiento paso a paso: [`docs/qa/runbook-sandbox-mercadopago.md`](docs/qa/runbook-sandbox-mercadopago.md). Vista de la integración y mecánica del simulador: [`docs/technical-plan/mercadopago-integration.md`](docs/technical-plan/mercadopago-integration.md) (§7.1).
+
+**UC10 (liquidación) es un libro interno simulado en todos los entornos, incluido producción**: no existe una dispersión real en Mercado Pago (D-UC10-18). `GATEWAY_SETTLEMENT_MODE` solo admite `simulated` y la liquidación nunca hace HTTP.
 
 ## Configuración y entornos
 
-- **Perfiles de Spring**: `dev` (por defecto) y `prod`.
-  - `application-dev.properties`: defaults locales alineados con `docker-compose.yml`.
-  - `application-prod.properties`: **sin defaults** para credenciales, URLs de entorno ni secretos; se activa con `SPRING_PROFILES_ACTIVE=prod` y falla ruidosamente si falta una variable.
+Hay tres perfiles de Spring. Los tres hablan con la misma API de pasarela; cambia a quién le hablan y qué credenciales exigen:
+
+| Perfil | Activación | Pasarela | Credenciales |
+|---|---|---|---|
+| `dev` (por defecto) | `SPRING_PROFILES_ACTIVE=dev` o sin definir | Simulador local `gateway-stub` (`http://localhost:8082`; en el compose, `http://gateway-stub:8080`) | No necesita. El secreto del webhook por defecto es `dev-webhook-secret` |
+| `sandbox` | `SPRING_PROFILES_ACTIVE=dev,sandbox` | Mercado Pago real (`https://api.mercadopago.com`) con credenciales `TEST-*` | `GATEWAY_ACCESS_TOKEN` y `GATEWAY_WEBHOOK_SECRET` obligatorios; sin ellos la aplicación no arranca |
+| `prod` | `SPRING_PROFILES_ACTIVE=prod` | Mercado Pago de producción | Sin defaults: toda variable es obligatoria y la aplicación no arranca si falta o está vacía |
+
+- `sandbox` se suma a `dev` (que aporta PostgreSQL, RabbitMQ y Flota) y solo sobrescribe la pasarela.
+- `application-prod.properties`: **sin defaults** para credenciales, URLs de entorno ni secretos. Una variable ausente o vacía hace fallar el arranque (`seashare.gateway.credentials-required`).
 - **Secretos**: copia `.env.example` a `.env` (ignorado por git) para el stack local. En producción los valores se aportan por variables de entorno o Docker secrets; nunca se versionan valores reales.
-- **Credenciales de Mercado Pago (sandbox)**: crea la aplicación en [Tus integraciones](https://www.mercadopago.com/developers/panel/app) con producto **Checkout API** y API **Payments**; copia el *access token* de prueba (prefijo `TEST-`) en `GATEWAY_ACCESS_TOKEN`. En **Webhooks → Configurar notificaciones** registra la URL HTTPS pública de `POST /api/v1/webhook/gateway` para el topic `payment` y copia la **firma secreta** en `GATEWAY_WEBHOOK_SECRET`. Sin esa firma el webhook responde `401 UNAUTHENTICATED`. No se versiona ninguno de los dos valores.
+- **Credenciales de Mercado Pago (sandbox)**: crea la aplicación en [Tus integraciones](https://www.mercadopago.com/developers/panel/app) con producto **Checkout API** y API **Payments**; copia el *access token* de prueba (prefijo `TEST-`) en `GATEWAY_ACCESS_TOKEN`. En **Webhooks → Configurar notificaciones** registra la URL HTTPS pública de `POST /api/v1/webhook/gateway` para el topic `payment` y copia la **firma secreta** en `GATEWAY_WEBHOOK_SECRET`. Sin esa firma el webhook responde `401 UNAUTHENTICATED`. No se versiona ninguno de los dos valores. Con el compose, para usar Mercado Pago sandbox define también `GATEWAY_BASE_URL=https://api.mercadopago.com` y `SPRING_PROFILES_ACTIVE=dev,sandbox` en `.env`.
 - **Base local**: si ya habías aplicado una versión anterior de `V1__initial_schema.sql`, recrea el volumen antes de arrancar (`docker compose down -v`); Flyway valida el checksum de la migración inicial.
 
 | Variable | Uso | Default dev |
@@ -67,9 +76,10 @@ Los tests de integración usan Testcontainers: sin Docker se omiten automáticam
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` / `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | RabbitMQ | `localhost` / `5672` / `seashare` |
 | `SEASHARE_TIMEZONE` | Zona horaria de negocio | `America/Bogota` |
 | `FLEET_BASE_URL` | Sistema de Gestión de Flota | `http://localhost:8081` |
-| `GATEWAY_BASE_URL` | Pasarela de pago | `https://api.mercadopago.com` |
-| `GATEWAY_ACCESS_TOKEN` / `GATEWAY_WEBHOOK_SECRET` | Pasarela (secretos) | vacío en dev; obligatorio en prod |
+| `GATEWAY_BASE_URL` | Pasarela de pago | `http://localhost:8082` (simulador); en `sandbox` y `prod`, `https://api.mercadopago.com` |
+| `GATEWAY_ACCESS_TOKEN` / `GATEWAY_WEBHOOK_SECRET` | Pasarela (secretos) | vacío / `dev-webhook-secret` en dev; obligatorios en `sandbox` y `prod` |
 | `GATEWAY_SETTLEMENT_MODE` | Modo del libro interno de liquidaciones (UC10); solo `simulated` está implementado | `simulated`; obligatorio en prod |
+| `GATEWAY_STUB_PORT` | Puerto publicado del simulador de la pasarela (`gateway-stub`) | `8082` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Credenciales del contenedor PostgreSQL | `seashare` |
 | `APP_PORT` | Puerto publicado de la aplicación | `8080` |
 
