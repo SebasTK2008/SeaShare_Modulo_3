@@ -21,8 +21,8 @@ jobs:
           
           if [[ "$TARGET" == "develop" ]]; then
             # Hacia develop solo se permite feature/*, bugfix/* o hotfix/*
-            if [[ ! "$SOURCE" =~ ^(feature|bugfix|hotfix)/.*$ ]]; then
-              echo " ERROR: Los PRs hacia 'develop' solo pueden venir de ramas 'feature/*', 'bugfix/*' o 'hotfix/*'."
+            if [[ ! "$SOURCE" =~ ^(feature|bugfix|hotfix|release)/.*$ ]]; then
+              echo " ERROR: Los PRs hacia 'develop' solo pueden venir de ramas 'release/*,feature/*', 'bugfix/*' o 'hotfix/*'."
               exit 1
             fi
             echo " Validación exitosa para develop."
