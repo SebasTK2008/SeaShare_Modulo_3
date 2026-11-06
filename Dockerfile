@@ -13,7 +13,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && addgroup --system seashare \
     && adduser --system --ingroup seashare seashare
-COPY --from=build --chown=seashare:seashare /workspace/target/seashare-m3-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=build --chown=seashare:seashare /workspace/target/seashare-m3-*.jar app.jar
 USER seashare
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=40s --retries=12 \
