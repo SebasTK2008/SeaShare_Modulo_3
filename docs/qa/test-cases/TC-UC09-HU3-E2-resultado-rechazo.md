@@ -29,7 +29,7 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el rechazo 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela se **simula**; el webhook se dispara con una firma HMAC-SHA256 válida y el detalle se sirve desde el simulador.
+* El sandbox no produce reembolsos rechazados, cancelados ni expirados: la Section 1 se verifica con la suite automática (`RefundWebhookHandlerTest`, `RegisterRefundResultServiceTest`). La Section 2 (firma inválida, payload incompleto) sí se ejecuta contra la aplicación; el webhook se firma a mano (runbook §3.1).
 * El escenario cubre estados externos de rechazo/fallo; el fallo puramente técnico se valida en Section 2.
 
 ##### Dependencies & Assumptions
@@ -48,8 +48,8 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el rechazo 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Confirmar la solicitud en curso | `SELECT status, amount, external_reference FROM refund_intent WHERE reservation_id = '...'` | N/A | Existe la intención enviada, pendiente de resultado y asociada a la referencia externa (RF-006, RF-007). | [ ] | |
-| 2 | Simular la notificación de fallo | `POST /api/v1/webhook/gateway?data.id=<refund_id>&type=refund` | Body con `action` y `type` (obligatorios); headers `x-signature` válida y `x-request-id` | `200 OK` inmediato y notificación persistida en `outbox_message` (contrato webhook §3.2). | [ ] | |
-| 3 | Verificar la consulta de detalle | Request journal: `GET /v1/payments/{payment_id}/refunds/{data.id}` | N/A | El worker obtiene el estado externo definitivo del reembolso (contrato webhook §3.4). | [ ] | |
+| 2 | Simular la notificación de fallo | `POST /api/v1/webhook/gateway?data.id=<payment_id>&type=payment` | `payment_id` = `charge_intent.external_reference`; body con `action` y `type` (obligatorios); headers `x-signature` válida y `x-request-id` | `200 OK` inmediato y notificación persistida en `outbox_message` (D-UC09-11). | [ ] | |
+| 3 | Verificar la consulta de reembolsos | Logs de la app (consulta `GET /v1/payments/{payment_id}/refunds`) | N/A | El worker lista los reembolsos y obtiene el estado externo del que coincide con `refund_intent.external_reference` (D-UC09-11). | [ ] | |
 | 4 | Verificar la intención actualizada | `SELECT status, status_detail, external_reference FROM refund_intent` | N/A | Estado interno correspondiente al rechazo/fallo (`REJECTED`, `CANCELLED` o `EXPIRED`), con `status_detail` y referencia externa; **nunca** `COMPLETED` (RF-007, RF-009). | [ ] | |
 | 5 | Verificar la ausencia de registro inmutable | `SELECT count(*) FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | `0` filas: no se crea `RegistroDeReembolso` para un reembolso rechazado, cancelado o expirado (RF-009). | [ ] | |
 | 6 | Verificar que no se reporta como devuelto | `SELECT * FROM v_financial_records WHERE reservation_id = '...'` y consultar UC06 | N/A | No aparece un reembolso confirmado; `released_amount` no se incrementa (RF-008, RF-009). | [ ] | |
@@ -60,10 +60,10 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el rechazo 
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Firma inválida o ausente | Enviar el webhook con `x-signature` incorrecta | `data.id` y `type` válidos | `401 UNAUTHENTICATED`; no se actualiza la intención (contrato webhook §5). | [ ] | |
 | 2 | Payload incompleto | Enviar sin `action`, sin `data.id` o sin `type` | payload incompleto | `400 VALIDATION_ERROR`; no se procesa el resultado (contrato webhook §5). | [ ] | |
-| 3 | Falla técnica, no rechazo de negocio | Simular timeout o `5xx` en la consulta de detalle | N/A | Intención `COMMUNICATION_ERROR`, nunca `REJECTED`; reintentos de la cola (RNF-003; CE-004). | [ ] | |
-| 4 | La Pasarela no conoce el reembolso | Simular `404` en `GET .../refunds/{refund_id}` | N/A | La intención no se cierra y el evento queda en `operational_failure` (contrato webhook §3.6). | [ ] | |
+| 3 | Falla técnica, no rechazo de negocio | Simular timeout o `5xx` en la lista de reembolsos | N/A | La intención no se marca `REJECTED`; el mensaje se reintenta (5 intentos, *backoff* base 1 s) y, al agotarlos, se rechaza a la DLQ y se registra en `operational_failure` (RNF-003; CE-004). | [ ] | |
+| 4 | La Pasarela no conoce el pago | Simular `404` en `GET .../refunds` | N/A | La intención no se cierra y el evento queda en `operational_failure` (contrato webhook §3.6). | [ ] | |
 | 5 | Notificación repetida del mismo fallo | Reenviar el mismo webhook | mismo `data.id` | `200 OK`; no se altera el estado ya registrado ni se crea registro (contrato webhook §6). | [ ] | |
-| 6 | `data.id` sin intención asociada | Notificar un `refund_id` desconocido | `data.id` inexistente | `200 OK` y registro en `operational_failure`; sin cambios en intenciones (contrato webhook §3.6). | [ ] | |
+| 6 | Reembolso sin intención local | Notificar un pago cuyo reembolso no coincide con ninguna `refund_intent` | `refund.id` desconocido | `200 OK`; el reembolso se registra una vez en `operational_failure` y no se reintenta (contrato webhook §3.6). | [ ] | |
 | 7 | Falla al persistir la notificación | Simular BD no disponible antes del acuse | N/A | `500 INTERNAL_ERROR` para que la Pasarela reintente (contrato webhook §3.7). | [ ] | |
 
 ##### Edge Cases & Boundary Conditions

@@ -124,10 +124,52 @@
       "description": "Secreto de la firma x-signature del webhook de la pasarela; se aporta por entorno."
     },
     {
-      "name": "seashare.gateway.collector-id",
-      "type": "java.lang.Long",
-      "description": "Cuenta de Mercado Pago del Propietario usada como collector_id en las dispersiones de UC10.",
-      "defaultValue": 0
+      "name": "seashare.gateway.settlement-mode",
+      "type": "java.lang.String",
+      "description": "Modo del libro de liquidaciones de UC10. Solo 'simulated' es valido: el marketplace real no esta implementado (D-UC10-18).",
+      "defaultValue": "simulated"
+    },
+    {
+      "name": "seashare.gateway.credentials-required",
+      "type": "java.lang.Boolean",
+      "description": "Exige access token y secreto del webhook no vacios. Lo activa el perfil prod; en dev es false.",
+      "defaultValue": false
+    },
+    {
+      "name": "seashare.gateway.reconciliation-interval",
+      "type": "java.time.Duration",
+      "description": "Cadencia del job de conciliacion con la pasarela.",
+      "defaultValue": "5m"
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.failure-rate-threshold",
+      "type": "java.lang.Float",
+      "description": "Umbral de tasa de fallos (porcentaje) del circuit breaker de la pasarela.",
+      "defaultValue": 50.0
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.minimum-number-of-calls",
+      "type": "java.lang.Integer",
+      "description": "Numero minimo de llamadas antes de evaluar el circuit breaker de la pasarela.",
+      "defaultValue": 5
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.sliding-window-size",
+      "type": "java.lang.Integer",
+      "description": "Tamano de la ventana deslizante del circuit breaker de la pasarela.",
+      "defaultValue": 10
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.wait-duration-in-open-state",
+      "type": "java.time.Duration",
+      "description": "Tiempo que el circuit breaker de la pasarela permanece abierto.",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.permitted-number-of-calls-in-half-open-state",
+      "type": "java.lang.Integer",
+      "description": "Llamadas permitidas en estado semiabierto del circuit breaker de la pasarela.",
+      "defaultValue": 1
     }
   ]
 }

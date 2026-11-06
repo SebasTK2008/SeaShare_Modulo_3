@@ -31,6 +31,9 @@ public class ChargeIntentJpaEntity {
     @Column(name = "reservation_id", nullable = false)
     private UUID reservationId;
 
+    @Column(name = "operation_key", nullable = false)
+    private String operationKey;
+
     @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;
 
@@ -73,6 +76,7 @@ public class ChargeIntentJpaEntity {
         ChargeIntentJpaEntity entity = new ChargeIntentJpaEntity();
         entity.id = intent.id();
         entity.reservationId = intent.reservationId().value();
+        entity.operationKey = intent.operationKey();
         entity.idempotencyKey = intent.idempotencyKey().value();
         entity.amount = intent.amount().amount();
         entity.paymentTokenRef = intent.paymentMethod().paymentTokenRef();
@@ -101,6 +105,10 @@ public class ChargeIntentJpaEntity {
 
     UUID getReservationId() {
         return reservationId;
+    }
+
+    String getOperationKey() {
+        return operationKey;
     }
 
     String getIdempotencyKey() {

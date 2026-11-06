@@ -2,7 +2,7 @@ package com.seashare.seasharem3.infrastructure.adapter.out.persistence.refund;
 
 import com.seashare.seasharem3.application.port.out.RefundIntentRepository;
 import com.seashare.seasharem3.domain.model.RefundIntent;
-import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
+import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,8 +45,16 @@ public class RefundIntentPersistenceAdapter implements RefundIntentRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<RefundIntent> findByIdempotencyKey(IdempotencyKey idempotencyKey) {
-        return repository.findFirstByIdempotencyKey(idempotencyKey.value())
+    public Optional<RefundIntent> findByReservationIdAndOperationKey(ReservationId reservationId,
+            String operationKey) {
+        return repository.findFirstByReservationIdAndOperationKey(reservationId.value(), operationKey)
+                .map(RefundPersistenceMapper::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<RefundIntent> findLatestByReservationId(ReservationId reservationId) {
+        return repository.findFirstByReservationIdOrderByCreatedAtDescIdDesc(reservationId.value())
                 .map(RefundPersistenceMapper::toDomain);
     }
 

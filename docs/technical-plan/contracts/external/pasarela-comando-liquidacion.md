@@ -1,91 +1,96 @@
-# Pasarela: Comando de liquidación (Mercado Pago)
+# Libro interno de liquidación (simulado)
 
 | Campo | Valor |
 |---|---|
 | Caso de uso | UC10 Liquidar fondos de alquiler |
 | SPEC | `docs/features/010-liquidar-fondos-alquiler/spec.md` |
-| Dirección | Sistema (Worker) → Mercado Pago |
-| ¿Responde? | Sí (respuesta síncrona técnica o acuse de recibo) |
-| Responsable de implementarlo | Adaptador de Pasarela (ACL) |
+| Dirección | Worker de UC10 → libro interno simulado |
+| ¿Responde? | Sí (respuesta síncrona técnica) |
+| Responsable de implementarlo | `SimulatedSettlementGatewayAdapter` (adaptador de salida) |
 
 Leyenda y convenciones comunes: [`../README.md`](../README.md).
 
 ## 1. Propósito
 
-El sistema transfiere los fondos de una reserva completada a la cuenta de Mercado Pago vinculada del Propietario. Este proceso es la "liquidación" o "dispersión". Ocurre tras completarse la estadía sin incidentes, resolver disputas a favor del propietario, o al aplicar penalidades de cancelación [SPEC HU1, HU2, HU3].
+UC10 registra la liquidación de una reserva en un **libro interno simulado**. Esta entrega **no
+dispersa fondos reales en Mercado Pago**: el cobro y el reembolso usan la Payments API, pero la
+liquidación al Propietario se resuelve dentro del sistema para mantener el flujo de UC10 completo y
+auditable. El marketplace real de Mercado Pago (split de pagos y cuentas vinculadas de los
+Propietarios) queda como **fase futura no implementada** (D-UC10-18).
 
-En Mercado Pago, esto se gestiona mediante el esquema de **Marketplace** / **Split Payments**, dividiendo los fondos asociados al pago original.
+El registro que produce (`settlement_record` y, en la liquidación estándar, `commission_record`) es
+un **asiento contable interno**: acredita cuánto corresponde al Propietario, pero **no transfiere
+dinero** ni acredita fondos en su cuenta de Mercado Pago.
 
-## 2. Petición (Llamada a Mercado Pago)
+El puerto de aplicación es `SettlementGatewayPort.send(GatewaySettlementRequest)` y su única
+implementación es `SimulatedSettlementGatewayAdapter`. La capacidad persistida en
+`settlement_intent.gateway_capability` es siempre `STANDARD_SETTLEMENT`; la migración inicial
+`V1__initial_schema.sql` no admite la capacidad de dispersión, que no existe en la integración real.
 
-La dispersión se instrumenta con la sub-API de **Advanced Payments** de Mercado Pago, liberando el neto hacia la cuenta del vendedor:
+## 2. Petición (puerto de salida)
 
-`POST /v1/advanced_payments/{id}/disbursements`
-
-`{id}` es la **referencia externa del cobro original** (`charge_intent.external_reference`); el contrato original no definía su origen y esta es la interpretación `[CONV]` del ACL. Si la integración configurada no soporta este recurso, el ACL puede usar el endpoint equivalente documentado en su implementación, conservando el mismo payload y la misma clave idempotente.
-
-### Headers
-
-| Header | Obligatorio | Valor |
-|---|---|---|
-| `Authorization` | Sí | `Bearer <ACCESS_TOKEN>` (requisito de la integración con Mercado Pago; no es seguridad del proyecto — general-plan §7.1) |
-| `X-Idempotency-Key` | Sí | Clave única (ej. `dispersion-<reserva>-<estado>`) |
-
-### Body (Payload)
-
-El adaptador convierte la `SolicitudDispersiónPasarela` a la estructura del split de Mercado Pago.
+El worker invoca el puerto con el comando `GatewaySettlementRequest`:
 
 | Campo | Tipo | Oblig. | Descripción | Origen |
 |---|---|---|---|---|
-| `disbursements` | array | Sí | Arreglo con los montos a dispersar y destinatarios | [SPEC RF-008] |
-| `disbursements[].amount` | decimal | Sí | Monto neto a dispersar al Propietario | [SPEC RNF-002] |
-| `disbursements[].collector_id` | integer | Sí | ID de la cuenta de Mercado Pago del Propietario (Seller) | [SPEC RF-008] |
-| `disbursements[].external_reference` | string | Sí | Referencia de la reserva | [SPEC SolicitudDispersiónPasarela] |
+| `reservationId` | UUID | Sí | Reserva liquidada | `settlement_intent.reservation_id` |
+| `amount` | decimal (4 decimales internos) | Sí | Monto neto de la liquidación; el desglose queda en la intención y en el registro | `settlement_intent.amount` |
+| `operationKey` | string | Sí | Clave idempotente UUID v4 del intento, persistida en `settlement_intent.idempotency_key` | Generada una vez al crear la intención y reutilizada en los reintentos |
 
-```json
-{
-  "disbursements": [
-    {
-      "amount": 675000.00,
-      "collector_id": 123456789,
-      "external_reference": "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10"
-    }
-  ]
-}
-```
+No hay endpoint HTTP, headers, `Authorization` ni payload JSON: el adaptador simulado no contacta a
+Mercado Pago. Tampoco existen datos de cuenta destino ni de comisión dentro del comando; la comisión
+se calcula antes, en el dominio (`SettlementCalculator`), y se conserva en la intención.
 
 ## 3. Reglas de procesamiento
 
-1. **Independencia de comisiones**: El sistema asume que cobró inicialmente a una cuenta master (la de la plataforma) y ahora transfiere el neto al propietario. La liquidación estándar se calcula como **alquiler bruto − comisión − seguro náutico** (D-35); las cancelaciones y el depósito no aplican comisión ni seguro. El monto remanente tras la dispersión se queda en la cuenta de la plataforma [SPEC RF-005, RF-007].
-2. **Cuenta destino vinculada**: El `collector_id` del propietario debe estar previamente autorizado y vinculado a la aplicación de Marketplace del sistema en Mercado Pago; llega como **dato plano** de la configuración de la integración y el sistema lo envía tal cual, sin validar identidad [CONV].
-3. **Componente de depósito**: Si parte de la liquidación al propietario incluye dinero que venía del depósito de garantía retenido al cliente, el sistema unifica esto en el `amount` enviado a MP (para simplificar la transferencia) y maneja el detalle del concepto de forma interna [SPEC RF-016].
+1. **Referencia determinista**: el adaptador devuelve
+   `external_reference = "sim-settlement-" + operationKey`. Un reintento del worker con la misma
+   clave produce exactamente la misma referencia, de modo que `settlement_record` sigue siendo único
+   por intención y la conciliación puede reparar un registro incompleto sin duplicarlo.
+2. **Resultado síncrono**: el libro interno responde `approved` con el detalle
+   `simulated internal settlement`. No existe una pasarela remota que pueda dejar la operación en
+   `pending` ni un webhook de liquidación que la confirme después.
+3. **Sin dispersión real**: el adaptador no mueve dinero, no valida cuentas de Mercado Pago y no
+   usa credenciales de marketplace. La capacidad
+   `STANDARD_SETTLEMENT` describe el libro interno, no una operación de split payments.
+4. **Idempotencia**: la clave UUID v4 se persiste al crear la intención y no cambia en los
+   reintentos técnicos. La identidad de negocio que decide si se crea una intención nueva sigue
+   siendo `reservation_id` + `status` + tipo de operación + clave; un cambio de estado de la reserva
+   es un intento nuevo y recibe una clave nueva (D-UC10-10).
+5. **Modo único**: `seashare.gateway.settlement-mode` solo admite `simulated`. Cualquier otro valor
+   impide arrancar la aplicación (`SettlementConfiguration`); no hay un camino real que se pueda
+   activar por configuración en esta entrega.
 
-## 4. Respuesta exitosa (Técnica)
-
-Mercado Pago confirma la dispersión creada. El resultado final del movimiento puede llegar por webhook (ej. eventos de `merchant_order` o `payment`).
+## 4. Respuesta exitosa (técnica)
 
 | Campo | Tipo | Descripción | Origen |
 |---|---|---|---|
-| `status` | string | Estado inmediato (ej. `approved`, `pending`) | [SPEC RF-010] |
-| `status_detail` | string | Detalle del estado externo; el ACL lo mapea a `GatewaySettlementResult.statusDetail` y a `settlement_intent.status_detail`. Opcional | [SPEC RF-010] |
-| `id` | integer | Identificador único de la transferencia/dispersión en MP; se persiste como `settlement_intent.external_reference` | [SPEC RF-010] |
-| `amount` | decimal | Monto confirmado por la pasarela; el ACL lo mapea a `GatewaySettlementResult.amount`. Si no viene, el registro usa el monto de la intención | [SPEC RF-010; RF-016] |
+| `status` | string | Siempre `approved` en el libro interno | `GatewaySettlementResult.status` |
+| `statusDetail` | string | `simulated internal settlement` | `GatewaySettlementResult.statusDetail` |
+| `externalId` | string | `sim-settlement-<idempotency_key>`; se persiste en `settlement_intent.external_reference` antes de registrar el resultado | `GatewaySettlementResult.externalId` |
+| `amount` | decimal | Monto de la liquidación | `GatewaySettlementResult.amount` |
 
-### Consulta de detalle
+### Conciliación
 
-Para conciliación y para el webhook `type=merchant_order`, el ACL consulta la dispersión por su referencia externa:
+No existe una consulta remota. `ReconcileSettlementIntentsUseCase`:
 
-```text
-GET /v1/advanced_payments/{id}
-Authorization: Bearer <ACCESS_TOKEN>
-```
+- republica una intención `PENDING_SEND` sin referencia externa;
+- repara una intención con referencia externa reenviando el resultado simulado determinista a
+  `RegisterSettlementResultUseCase`;
+- registra una sola vez en `operational_failure` una intención sin referencia que ya avanzó de
+  estado, porque el libro interno no puede confirmarla.
 
-`{id}` es el `data.id` del webhook, que el sistema guardó como `settlement_intent.external_reference` al recibir la respuesta síncrona. La respuesta se mapea al mismo `GatewaySettlementResult`; un `404` no es un veredicto financiero y no cierra la intención.
+Una intención `COMPLETED` que ya tiene su `settlement_record` se omite.
 
-## 5. Manejo de Errores
+## 5. Manejo de errores
 
-Timeouts o errores HTTP `5xx` reintentan desde el worker con el mismo `X-Idempotency-Key`. Un `400` de validación del medio de pago (ej. `collector_id` no vinculado o fondos insuficientes) es fallo **no reintentable**: marca la `IntenciónDeDispersión` en estado fallido para resolución manual o re-vinculación de cuenta. El resto de `4xx` son fallo propio (E8) y se reintentan como un `5xx` [SPEC RNF-003, RF-012; README §4.4].
+El adaptador simulado no produce rechazos ni fallos de comunicación en esta entrega. El worker
+conserva igualmente la clasificación para una futura implementación real: un
+`GatewayBusinessRejectionException` deja la intención en `REJECTED` sin reintento y un
+`GatewayCommunicationException` la deja en `COMMUNICATION_ERROR` y relanza para que la cola
+reintente con la misma clave. Una respuesta sin `externalId` también se trata como fallo transitorio
+y no se registra.
 
 ## 6. Trazabilidad
 
-HU1 a HU3 · RF-005, RF-006, RF-008, RF-016 · RNF-001 a RNF-003.
+HU1 a HU3 · RF-005, RF-006, RF-008, RF-010, RF-016 · RNF-001 a RNF-003 · D-UC10-10, D-UC10-18.

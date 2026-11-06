@@ -156,6 +156,6 @@ class ReconcileRefundIntentsServiceTest {
     private RefundIntent pendingIntent() {
         return RefundIntent.create(UUID.randomUUID(), RESERVATION.reservationId(), RefundTrigger.DISPUTE_REJECTED,
                 RefundScope.DEPOSIT_ONLY, new Money(new BigDecimal("30000.00")), charge.id(),
-                new IdempotencyKey("refund:DISPUTE_REJECTED:op-1"), UUID.randomUUID(), NOW);
+                "refund:DISPUTE_REJECTED:op-1", new IdempotencyKey("refund:DISPUTE_REJECTED:op-1"), UUID.randomUUID(), NOW);
     }
 }

@@ -78,9 +78,9 @@ public class RefundConfiguration {
 
     @Bean
     public RefundWebhookHandler refundWebhookHandler(RefundIntentRepository refundIntentRepository,
-            ChargeIntentRepository chargeIntentRepository, RefundGatewayPort refundGatewayPort,
-            RegisterRefundResultService registerRefundResult, FailureRecorderPort failureRecorder) {
-        return new RefundWebhookHandler(refundIntentRepository, chargeIntentRepository, refundGatewayPort,
-                registerRefundResult, failureRecorder);
+            RefundGatewayPort refundGatewayPort, RegisterRefundResultService registerRefundResult,
+            FailureRecorderPort failureRecorder) {
+        return new RefundWebhookHandler(refundIntentRepository, refundGatewayPort, registerRefundResult,
+                failureRecorder);
     }
 }

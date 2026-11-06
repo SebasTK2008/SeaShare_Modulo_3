@@ -31,14 +31,19 @@ class GatewayNotificationListenerTest {
 
     private final InMemoryFailureRecorder failures = new InMemoryFailureRecorder();
     private final RecordingHandler handler = new RecordingHandler();
+    private JsonMapper jsonMapper;
     private GatewayNotificationListener listener;
 
     @BeforeEach
     void setUp() {
-        JsonMapper jsonMapper = JsonMapper.builder()
+        jsonMapper = JsonMapper.builder()
                 .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
                 .build();
-        listener = new GatewayNotificationListener(List.of(handler), new GatewayNotificationMessageMapper(),
+        listener = listenerWith(handler);
+    }
+
+    private GatewayNotificationListener listenerWith(GatewayWebhookHandler... handlers) {
+        return new GatewayNotificationListener(List.of(handlers), new GatewayNotificationMessageMapper(),
                 new AmqpListenerFailurePolicy(failures), jsonMapper);
     }
 
@@ -61,6 +66,30 @@ class GatewayNotificationListenerTest {
         assertThat(handler.notifications.get(0).type()).isEqualTo("payment");
         assertThat(handler.notifications.get(0).dataId()).isEqualTo("123456");
         assertThat(failures.failures()).isEmpty();
+    }
+
+    @Test
+    void dispatchesTheNotificationToEveryHandlerOfItsType() {
+        RecordingHandler second = new RecordingHandler();
+        listener = listenerWith(handler, second);
+
+        listener.onMessage(message(validBody(), MessageProperties.CONTENT_TYPE_JSON));
+
+        assertThat(handler.notifications).hasSize(1);
+        assertThat(second.notifications).hasSize(1);
+        assertThat(failures.failures()).isEmpty();
+    }
+
+    @Test
+    void keepsProcessingTheOtherHandlersAfterADomainFailure() {
+        RecordingHandler second = new RecordingHandler();
+        handler.failure = new DomainException("The payment intent no longer accepts results");
+        listener = listenerWith(handler, second);
+
+        listener.onMessage(message(validBody(), MessageProperties.CONTENT_TYPE_JSON));
+
+        assertThat(second.notifications).hasSize(1);
+        assertThat(failures.failures()).hasSize(1);
     }
 
     @Test
@@ -127,7 +156,20 @@ class GatewayNotificationListenerTest {
         assertThat(failures.failures()).isEmpty();
     }
 
-    /** Doble del manejador registrado por UC05 para el tipo {@code payment}. */
+    @Test
+    void givesTheOtherHandlersTheChanceToRunBeforePropagatingATransientFailure() {
+        RecordingHandler second = new RecordingHandler();
+        handler.failure = new GatewayCommunicationException("The payment gateway did not answer");
+        listener = listenerWith(handler, second);
+
+        assertThatExceptionOfType(GatewayCommunicationException.class)
+                .isThrownBy(() -> listener.onMessage(message(validBody(), MessageProperties.CONTENT_TYPE_JSON)));
+
+        assertThat(second.notifications).hasSize(1);
+        assertThat(failures.failures()).isEmpty();
+    }
+
+    /** Doble de un manejador registrado para el tipo {@code payment}. */
     private static final class RecordingHandler implements GatewayWebhookHandler {
 
         private final List<GatewayWebhookNotification> notifications = new ArrayList<>();

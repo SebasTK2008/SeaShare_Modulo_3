@@ -92,7 +92,7 @@ class HandleReservationStatusServiceTest {
         when(requestSettlement.request(any())).thenReturn(
                 new SettlementRequestResult(UUID.randomUUID(), SettlementStatus.PENDING_SEND));
         when(openDepositTracking.open(any())).thenReturn(
-                new DepositTrackingResult(reservationId, DepositDispositionStatus.HELD, true));
+                new DepositTrackingResult(reservationId, DepositDispositionStatus.HELD, true, true));
     }
 
     @Test
@@ -253,7 +253,7 @@ class HandleReservationStatusServiceTest {
     @Test
     void completedKeepsAnAlreadyResolvedDepositWithoutFailingTheSettlement() {
         when(openDepositTracking.open(any())).thenReturn(new DepositTrackingResult(reservationId,
-                DepositDispositionStatus.REFUND_REQUESTED, false));
+                DepositDispositionStatus.REFUND_REQUESTED, false, false));
 
         service.handle(command(ReservationStatus.COMPLETED));
 

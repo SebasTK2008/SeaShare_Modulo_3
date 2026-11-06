@@ -42,6 +42,9 @@ public class SettlementIntentJpaEntity {
     @Column(name = "charge_intent_id", nullable = false)
     private UUID chargeIntentId;
 
+    @Column(name = "operation_key", nullable = false)
+    private String operationKey;
+
     @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;
 
@@ -80,6 +83,7 @@ public class SettlementIntentJpaEntity {
         entity.commissionAmount = intent.commissionAmount().amount();
         entity.depositAmount = intent.depositAmount().amount();
         entity.chargeIntentId = intent.chargeIntentId();
+        entity.operationKey = intent.operationKey();
         entity.idempotencyKey = intent.idempotencyKey().value();
         entity.disputeId = intent.disputeId();
         entity.gatewayCapability = intent.capability().name();
@@ -125,6 +129,10 @@ public class SettlementIntentJpaEntity {
 
     UUID getChargeIntentId() {
         return chargeIntentId;
+    }
+
+    String getOperationKey() {
+        return operationKey;
     }
 
     String getIdempotencyKey() {

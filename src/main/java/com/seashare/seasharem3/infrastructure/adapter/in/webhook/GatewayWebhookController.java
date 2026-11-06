@@ -4,6 +4,7 @@ import com.seashare.seasharem3.application.dto.GatewayWebhookNotification;
 import com.seashare.seasharem3.application.exception.ContractException;
 import com.seashare.seasharem3.application.exception.ErrorCode;
 import com.seashare.seasharem3.application.port.in.DispatchGatewayNotificationUseCase;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -30,8 +32,8 @@ import java.util.Objects;
  * <ul>
  *   <li>{@code 200 OK} — notificacion aceptada, duplicada, con {@code data.id} o {@code type}
  *       desconocidos o con un tipo sin manejador (se registra en {@code operational_failure}).</li>
- *   <li>{@code 400 VALIDATION_ERROR} — payload mal formado o sin {@code action}, {@code data.id} o
- *       {@code type}.</li>
+ *   <li>{@code 400 VALIDATION_ERROR} — payload mal formado, sin {@code action}, {@code data.id} o
+ *       {@code type}, o con un {@code Content-Type} distinto de {@code application/json}.</li>
  *   <li>{@code 401 UNAUTHENTICATED} — la cabecera {@code x-signature} falta o no es valida.</li>
  *   <li>{@code 500 INTERNAL_ERROR} — la base de datos no esta disponible al persistir la
  *       notificacion: la pasarela reintentara.</li>
@@ -59,11 +61,16 @@ public class GatewayWebhookController {
             @RequestParam(name = "type", required = false) String type,
             @RequestHeader(name = "x-request-id", required = false) String requestId,
             @RequestHeader(name = "x-signature", required = false) String signature,
+            @RequestHeader(name = HttpHeaders.CONTENT_TYPE, required = false) String contentType,
             @RequestBody(required = false) String body) {
 
         if (!signatureVerifier.isValid(dataId, requestId, signature)) {
             throw new ContractException(ErrorCode.UNAUTHENTICATED,
                     "The gateway notification signature is missing or invalid.");
+        }
+        if (!isJson(contentType)) {
+            throw new ContractException(ErrorCode.VALIDATION_ERROR,
+                    "The gateway notification requires Content-Type application/json.");
         }
 
         String action = extractAction(body);
@@ -92,6 +99,16 @@ public class GatewayWebhookController {
         }
         JsonNode action = root.get("action");
         return action == null || !action.isString() ? null : action.stringValue();
+    }
+
+    /** El contrato exige {@code application/json}; se aceptan parametros como {@code charset}. */
+    private static boolean isJson(String contentType) {
+        if (contentType == null) {
+            return false;
+        }
+        String normalized = contentType.toLowerCase(Locale.ROOT).trim();
+        return normalized.equals(MediaType.APPLICATION_JSON_VALUE)
+                || normalized.startsWith(MediaType.APPLICATION_JSON_VALUE + ";");
     }
 
     private static boolean isBlank(String value) {

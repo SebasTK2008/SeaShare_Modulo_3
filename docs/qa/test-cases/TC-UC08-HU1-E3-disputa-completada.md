@@ -30,13 +30,13 @@ Este caso de prueba verifica que, al recibir `COMPLETED`, el sistema registra la
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**; la dispersión se verifica por el journal del simulador y por `settlement_intent`.
+* La liquidación usa un **libro interno simulado**: no hay journal de pasarela; se verifica por `settlement_intent` y `settlement_record`.
 * UC10 es el ejecutor de la liquidación: aquí solo se verifica la solicitud emitida como consecuencia de UC08.
 
 ##### Dependencies & Assumptions
 * **TC-UC08-HU1-E1 debe haber pasado** (ingesta de disputas operativa).
 * **TC-UC10-HU3-E1 debe haber pasado** (liquidación total del depósito disponible en UC10).
-* Cobro original `CAPTURED` con `charge_record` y `charge_intent.external_reference`; `deposit_disposition.disposition = 'HELD'`.
+* Cobro original `CAPTURED` con `charge_record`; `deposit_disposition.disposition = 'HELD'`.
 
 ##### Preconditions & Default Setup
 * **Initial State** : reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` con depósito cobrado de `30000.00` (ilustrativo; ajustar a la versión vigente del entorno), Propietario `owner_id` y embarcación `boat_id` registrados en `charge_record`.
@@ -54,8 +54,8 @@ Este caso de prueba verifica que, al recibir `COMPLETED`, el sistema registra la
 | 2 | Publicar la disputa `COMPLETED` | Publicar en `seashare.reservations` / `reservation.dispute.updated` | `{"reservation_id":"b7d0e2a1-…","dispute_id":"d8e1f2a3-…","status":"COMPLETED","status_changed_at":"2026-12-23T10:00:00Z","event_key":"v1.0-4a5b6c"}` | `ack`; el mensaje lleva solo los cinco campos del contrato (RF-001, RF-009). | [ ] | |
 | 3 | Verificar el registro de la resolución | `SELECT status, status_changed_at, processed_at FROM dispute_event_log;` | `event_key = 'v1.0-4a5b6c'` | Fila `COMPLETED` con `processed_at` no nulo (RF-002, RF-008). | [ ] | |
 | 4 | Verificar el desenlace del depósito | `SELECT reservation_id, disposition, dispute_id FROM deposit_disposition;` | `dispute_id = 'd8e1f2a3-…'` | `disposition = 'SETTLEMENT_REQUESTED'` aplicado una sola vez por *compare-and-set* (RF-006, RF-008). | [ ] | |
-| 5 | Verificar la intención de liquidación | `SELECT trigger, scope, amount, deposit_amount, charge_intent_id, dispute_id, status, idempotency_key FROM settlement_intent;` | `trigger = 'DISPUTE_COMPLETED'` | `scope = 'DEPOSIT'`, `amount = 30000.00` (100 % del depósito), `dispute_id` y `charge_intent_id` del cobro original; comisión y capacidad de pasarela según la regla de UC10 (ajustar a la versión vigente del entorno) (RF-006, CE-001). | [ ] | |
-| 6 | Verificar la entrega a la Pasarela | Inspeccionar `outbox_message` y el journal del simulador (`POST /v1/advanced_payments/{id}/disbursements`) | `amount = 30000.00` | `{id}` = `charge_intent.external_reference`; `disbursements[].amount` = depósito íntegro; `X-Idempotency-Key` de la intención (contrato de liquidación §2). | [ ] | |
+| 5 | Verificar la intención de liquidación | `SELECT trigger, scope, amount, deposit_amount, charge_intent_id, dispute_id, status, gateway_capability, idempotency_key FROM settlement_intent;` | `trigger = 'DISPUTE_COMPLETED'` | `scope = 'DEPOSIT'`, `amount = 30000.00` (100 % del depósito), `dispute_id` y `charge_intent_id` del cobro original; `gateway_capability = 'STANDARD_SETTLEMENT'` e `idempotency_key` UUID v4 (RF-006, CE-001). | [ ] | |
+| 6 | Verificar la entrega al libro interno | Inspeccionar `outbox_message` y `settlement_intent` tras el worker | `amount = 30000.00` | El comando interno referencia la intención; el libro simulado devuelve `sim-settlement-<idempotency_key>` y la intención pasa a `COMPLETED` (D-UC10-18). | [ ] | |
 | 7 | Verificar exclusión mutua | `SELECT count(*) FROM refund_intent;` y `SELECT count(*) FROM refund_record;` | N/A | Sin intención ni registro de reembolso para la reserva: el depósito no se devuelve y se liquida (RF-008, RF-010, CE-003). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
@@ -67,7 +67,7 @@ Este caso de prueba verifica que, al recibir `COMPLETED`, el sistema registra la
 | 4 | `REJECTED` después de `COMPLETED` | Publicar `REJECTED` tras la liquidación solicitada | `status = "REJECTED"` | No se reembolsa; se conserva `SETTLEMENT_REQUESTED` y se registra la inconsistencia (RF-008). | [ ] | |
 | 5 | Estado desconocido o sub-resultado | Publicar `status = "COMPLETED_PARTIAL"` | estado inválido | `ack` + `operational_failure`; cero operaciones monetarias (RF-002, RF-010, CE-001, CE-006). | [ ] | |
 | 6 | Mensaje con monto o instrucción de pasarela | Agregar `amount` y `gateway_instruction` al payload | campos extra | No se mapean ni persisten; la liquidación usa el depósito interno al 100 % (RF-007, CE-004). | [ ] | |
-| 7 | Falla de la Pasarela al dispersar | Simular `503`/timeout en el worker de liquidación | N/A | `settlement_intent` en `COMMUNICATION_ERROR`; no se asume resultado y se reintenta con la misma clave (RNF-003). | [ ] | Detalle de reintentos en UC10. |
+| 7 | Fallo al registrar la liquidación | Simular un fallo de persistencia al crear `settlement_record` | N/A | La intención no queda `COMPLETED`; el worker reintenta con la misma clave y, al agotar los intentos, DLQ y `operational_failure` (RNF-003). | [ ] | El libro interno no hace E/S externa (D-UC10-18). |
 
 ##### Edge Cases & Boundary Conditions
 * **EC-001** : `COMPLETED` es un tratamiento total del 100 % del depósito; no admite liberación o retención parcial (RF-010, CE-006).

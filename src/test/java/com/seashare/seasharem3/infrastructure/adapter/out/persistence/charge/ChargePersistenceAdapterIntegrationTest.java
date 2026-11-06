@@ -97,35 +97,67 @@ class ChargePersistenceAdapterIntegrationTest {
     }
 
     private ChargeIntent intent(UUID reservationId, String idempotencyKey) {
-        return ChargeIntent.create(UUID.randomUUID(), new ReservationId(reservationId),
+        return intent(reservationId, "op-" + idempotencyKey, idempotencyKey);
+    }
+
+    private ChargeIntent intent(UUID reservationId, String operationKey, String idempotencyKey) {
+        return ChargeIntent.create(UUID.randomUUID(), new ReservationId(reservationId), operationKey,
                 new IdempotencyKey(idempotencyKey), TOTAL,
                 new PaymentMethodReference("token-123", "CREDIT_CARD", "4242"), CREATED_AT);
     }
 
     @Test
-    void savesTheIntentAndReadsItBackByIdempotencyKey() {
+    void savesTheIntentAndReadsItBackByOperationKey() {
         UUID reservationId = registerReservation();
 
         ChargeIntent saved = intentAdapter.save(intent(reservationId, "key-" + UUID.randomUUID()));
 
-        assertThat(intentAdapter.findByIdempotencyKey(saved.idempotencyKey()))
+        assertThat(intentAdapter.findByReservationIdAndOperationKey(saved.reservationId(), saved.operationKey()))
                 .get()
                 .satisfies(found -> {
                     assertThat(found.id()).isEqualTo(saved.id());
+                    assertThat(found.operationKey()).isEqualTo(saved.operationKey());
+                    assertThat(found.idempotencyKey()).isEqualTo(saved.idempotencyKey());
                     assertThat(found.status()).isEqualTo(ChargeIntentStatus.PENDING_SEND);
                     assertThat(found.amount()).isEqualTo(TOTAL);
                     assertThat(found.paymentMethod().lastFour()).isEqualTo("4242");
                 });
+        assertThat(intentAdapter.findByReservationIdAndOperationKey(saved.reservationId(), "another-operation"))
+                .isEmpty();
     }
 
     @Test
     void rejectsASecondIntentWithTheSameIdempotencyKey() {
         UUID reservationId = registerReservation();
         String idempotencyKey = "key-" + UUID.randomUUID();
-        intentAdapter.save(intent(reservationId, idempotencyKey));
+        intentAdapter.save(intent(reservationId, "op-1", idempotencyKey));
 
-        assertThatThrownBy(() -> intentAdapter.save(intent(reservationId, idempotencyKey)))
+        assertThatThrownBy(() -> intentAdapter.save(intent(reservationId, "op-2", idempotencyKey)))
                 .isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    void rejectsASecondIntentOfTheSameBusinessOperation() {
+        UUID reservationId = registerReservation();
+        intentAdapter.save(intent(reservationId, "op-same", "key-" + UUID.randomUUID()));
+
+        assertThatThrownBy(() -> intentAdapter.save(intent(reservationId, "op-same", "key-" + UUID.randomUUID())))
+                .isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    void allowsTheSameOperationKeyInDifferentReservationsAndDifferentOperationsInOne() {
+        UUID first = registerReservation();
+        UUID second = registerReservation();
+
+        intentAdapter.save(intent(first, "op-shared", "key-" + UUID.randomUUID()));
+        intentAdapter.save(intent(second, "op-shared", "key-" + UUID.randomUUID()));
+        intentAdapter.save(intent(first, "op-other", "key-" + UUID.randomUUID()));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM charge_intent WHERE reservation_id = ?",
+                Integer.class, first)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM charge_intent WHERE operation_key = 'op-shared'",
+                Integer.class)).isEqualTo(2);
     }
 
     @Test

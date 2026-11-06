@@ -3,7 +3,6 @@ package com.seashare.seasharem3.infrastructure.adapter.out.persistence.charge;
 import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
 import com.seashare.seasharem3.domain.model.ChargeIntent;
 import com.seashare.seasharem3.domain.valueobject.ChargeIntentStatus;
-import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,8 +56,9 @@ public class ChargeIntentPersistenceAdapter implements ChargeIntentRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<ChargeIntent> findByIdempotencyKey(IdempotencyKey idempotencyKey) {
-        return repository.findFirstByIdempotencyKey(idempotencyKey.value())
+    public Optional<ChargeIntent> findByReservationIdAndOperationKey(ReservationId reservationId,
+            String operationKey) {
+        return repository.findFirstByReservationIdAndOperationKey(reservationId.value(), operationKey)
                 .map(ChargePersistenceMapper::toDomain);
     }
 

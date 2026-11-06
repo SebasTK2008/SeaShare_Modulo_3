@@ -7,7 +7,8 @@ import com.seashare.seasharem3.domain.exception.DuplicateRecordException;
 import com.seashare.seasharem3.domain.model.CommissionRecord;
 import com.seashare.seasharem3.domain.model.SettlementIntent;
 import com.seashare.seasharem3.domain.model.SettlementRecord;
-import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
+import com.seashare.seasharem3.domain.valueobject.ReservationId;
+import com.seashare.seasharem3.domain.valueobject.SettlementScope;
 import com.seashare.seasharem3.domain.valueobject.SettlementStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -57,8 +58,18 @@ public class SettlementPersistenceAdapter
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<SettlementIntent> findByIdempotencyKey(IdempotencyKey idempotencyKey) {
-        return intentRepository.findFirstByIdempotencyKey(idempotencyKey.value())
+    public Optional<SettlementIntent> findByReservationIdAndOperationKey(ReservationId reservationId,
+            String operationKey) {
+        return intentRepository.findFirstByReservationIdAndOperationKey(reservationId.value(), operationKey)
+                .map(SettlementPersistenceMapper::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SettlementIntent> findLatestByReservationIdAndScope(ReservationId reservationId,
+            SettlementScope scope) {
+        return intentRepository
+                .findFirstByReservationIdAndScopeOrderByCreatedAtDescIdDesc(reservationId.value(), scope.name())
                 .map(SettlementPersistenceMapper::toDomain);
     }
 

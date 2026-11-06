@@ -2,7 +2,6 @@ package com.seashare.seasharem3.application.port.out;
 
 import com.seashare.seasharem3.domain.model.ChargeIntent;
 import com.seashare.seasharem3.domain.valueobject.ChargeIntentStatus;
-import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 
 import java.util.Collection;
@@ -28,10 +27,11 @@ public interface ChargeIntentRepository {
     Optional<ChargeIntent> findByExternalReference(String externalReference);
 
     /**
-     * Busca la intención cuya clave idempotente coincide; es la consulta que evita crear un segundo
-     * intento para la misma identidad de operacion (RF-004A, general-plan D-33).
+     * Busca la intención de la misma identidad de operación (D-37): es la consulta que evita crear un
+     * segundo intento para la misma operación de negocio (RF-004A). La clave idempotente de la pasarela
+     * es otra cosa: un UUID v4 por intento, que ya no se consulta.
      */
-    Optional<ChargeIntent> findByIdempotencyKey(IdempotencyKey idempotencyKey);
+    Optional<ChargeIntent> findByReservationIdAndOperationKey(ReservationId reservationId, String operationKey);
 
     List<ChargeIntent> findByStatusIn(Collection<ChargeIntentStatus> statuses);
 

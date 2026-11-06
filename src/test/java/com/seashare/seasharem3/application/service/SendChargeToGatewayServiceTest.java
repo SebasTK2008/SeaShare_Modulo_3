@@ -43,7 +43,7 @@ class SendChargeToGatewayServiceTest {
 
         assertThat(gateway.requests()).hasSize(1);
         assertThat(gateway.lastRequest().transactionAmount()).isEqualTo(ChargeFixtures.TOTAL);
-        assertThat(gateway.lastRequest().operationKey()).isEqualTo(intent.idempotencyKey().value());
+        assertThat(gateway.lastRequest().idempotencyKey()).isEqualTo(intent.idempotencyKey().value());
         assertThat(gateway.lastRequest().token()).isEqualTo("token-123");
         assertThat(gateway.lastRequest().payerEmail()).isEqualTo(PAYER_EMAIL);
         assertThat(gateway.lastRequest().installments()).isEqualTo(1);

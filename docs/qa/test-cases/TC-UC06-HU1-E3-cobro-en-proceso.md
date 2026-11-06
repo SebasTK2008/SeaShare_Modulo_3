@@ -30,7 +30,7 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` todavía en curso
 
 ##### Test Case Limitations
 * No hay autenticación: la seguridad está fuera del alcance del proyecto y el contrato no valida al llamador (README §3.2).
-* La comprobación de "la Pasarela aún no reportó" se hace con el simulador detenido o con el worker pausado, para que no llegue el resultado durante la consulta.
+* La comprobación de "la Pasarela aún no reportó" se hace con el worker pausado (o con `GATEWAY_BASE_URL` apuntando a un puerto cerrado), para que no llegue el resultado durante la consulta.
 
 ##### Dependencies & Assumptions
 * **TC-UC05-HU1-E1 debe haber pasado** y la intención debe seguir sin resultado definitivo (`PENDING_SEND` o `IN_PROCESS`).
@@ -38,7 +38,7 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` todavía en curso
 
 ##### Preconditions & Default Setup
 * **Initial State** : reserva con `reservation_id = b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (UUID de ejemplo del contrato; sustituir por el de la reserva de prueba). `charge_intent` en `IN_PROCESS` con `amount = 572.00` (ajustar a la versión vigente del entorno) y `external_reference = "1234567890"`; ninguna fila en `charge_record`.
-* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`; simulador de la Pasarela con su request journal accesible.
+* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`; credenciales de prueba de Mercado Pago en `.env` (runbook).
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
 --------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` todavía en curso
 | 4 | Verificar la ausencia de resultado inventado | Leer `charged_amount` y el resto de montos | N/A | `charged_amount`, `authorized_amount`, `captured_amount` y `released_amount` en `null`; no hay importe cobrado (RF-003, RF-004). | [ ] | |
 | 5 | Verificar la referencia y el detalle disponibles | Leer `external_reference` y `detail` | N/A | `external_reference = "1234567890"` si la Pasarela ya la asignó; `null` si aún no existe. `detail` = `status_detail` vigente o `null` (RF-004). | [ ] | |
 | 6 | Verificar que la consulta es de solo lectura | Comparar `charge_intent` y `charge_record` antes y después de dos consultas | N/A | Sin cambios de estado ni de montos y sin filas nuevas; la intención no pasa a un estado terminal (RF-002; caso extremo del SPEC). | [ ] | |
-| 7 | Verificar que no se contacta a la Pasarela | Request journal del simulador durante los pasos 2 a 6 | N/A | Cero llamadas nuevas a la Pasarela: la consulta se resuelve con la intención ya existente (RF-006, CE-002). | [ ] | |
+| 7 | Verificar que no se contacta a la Pasarela | Logs de la app (`docker logs seashare-app`) durante los pasos 2 a 6 | N/A | Cero llamadas nuevas a la Pasarela: la consulta se resuelve con la intención ya existente (RF-006, CE-002). | [ ] | |
 | 8 | Consultar de nuevo tras el resultado | Registrar el resultado en la Pasarela (TC-UC05-HU2-E1/E2) y repetir el `GET` | N/A | La misma consulta devuelve el estado vigente actualizado (`APPROVED` o `REJECTED`) sin caché ni reinicio (RF-003; contrato UC06 §3 regla 6). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario

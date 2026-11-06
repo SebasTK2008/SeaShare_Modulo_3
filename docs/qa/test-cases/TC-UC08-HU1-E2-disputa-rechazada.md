@@ -30,7 +30,8 @@ Este caso de prueba verifica que, al recibir `REJECTED`, el sistema registra la 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula** (sin Mercado Pago real en QA); se verifica por el request journal del simulador y por las tablas internas.
+* **Modo A (suite automática):** el cuerpo y las cabeceras que el sistema envía a la Pasarela los verifican `MercadoPagoChargeAdapterTest` y `MercadoPagoRefundAdapterTest` (WireMock embebido); este TC verifica el efecto en la BD, las colas y la consulta real del reembolso.
+* **Modo B (release):** el reembolso del depósito debe repetirse contra la API real de Mercado Pago sandbox, incluido el webhook `payment`, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 
 ##### Dependencies & Assumptions
 * **TC-UC08-HU1-E1 debe haber pasado**: el mismo depósito ya está en seguimiento y la ingesta de disputas funciona.
@@ -54,7 +55,7 @@ Este caso de prueba verifica que, al recibir `REJECTED`, el sistema registra la 
 | 3 | Verificar el registro de la resolución | `SELECT status, status_changed_at, processed_at FROM dispute_event_log WHERE reservation_id = 'b7d0e2a1-…';` | `event_key = 'v1.0-4a5b6c'` | Fila `REJECTED` con `processed_at` no nulo y sin columna de motivo/origen (RF-003, RF-008). | [ ] | |
 | 4 | Verificar el desenlace del depósito | `SELECT reservation_id, disposition, dispute_id FROM deposit_disposition;` | `dispute_id = 'd8e1f2a3-…'` | `disposition = 'REFUND_REQUESTED'` aplicado una sola vez por *compare-and-set* (RF-005, RF-008). | [ ] | |
 | 5 | Verificar la intención de reembolso | `SELECT trigger, scope, amount, charge_intent_id, dispute_id, status, idempotency_key FROM refund_intent;` | `trigger = 'DISPUTE_REJECTED'` | `scope = 'DEPOSIT_ONLY'`, `amount = 30000.00` (100 % del depósito), `dispute_id` presente, `charge_intent_id` del cobro capturado y estado en curso (RF-005, CE-001). | [ ] | |
-| 6 | Verificar la entrega a la Pasarela | Inspeccionar `outbox_message` y el request journal del simulador (`POST /v1/payments/{id}/refunds`) | `amount = 30000.00` | `{id}` = `charge_intent.external_reference`; body con `amount` del depósito; `X-Idempotency-Key` = clave de la intención (contrato de reembolso §2, RF-012 de UC09). | [ ] | Sin descuento por costos transaccionales. |
+| 6 | Verificar la entrega a la Pasarela | Inspeccionar `outbox_message` y consultar el reembolso real: `GET /v1/payments/{id}/refunds` en Mercado Pago | `amount = 30000.00` | `{id}` = `charge_intent.external_reference`; body con `amount` del depósito; `X-Idempotency-Key` = clave de la intención (contrato de reembolso §2, RF-012 de UC09). | [ ] | Sin descuento por costos transaccionales. El header `X-Idempotency-Key` lo verifica `MercadoPagoRefundAdapterTest`; en la BD, `refund_intent.idempotency_key` es el UUID v4 que se envía. |
 | 7 | Verificar que no hay liquidación ni registro definitivo | `SELECT count(*) FROM settlement_intent;` y `SELECT count(*) FROM refund_record;` | N/A | Sin `settlement_intent`; sin `refund_record`, porque el resultado de la Pasarela aún no se confirmó (RF-005, RF-009). | [ ] | El resultado externo se cubre en UC09 HU3. |
 
 ##### Section 2: Errores y casos extremos de este escenario

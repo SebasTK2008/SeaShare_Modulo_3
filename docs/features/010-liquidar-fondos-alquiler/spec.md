@@ -39,7 +39,7 @@ Como el sistema, al ser invocado internamente por "Brindar el estado de la reser
 1. **Escenario**: Liquidación estándar por reserva completada.
    - **Dado** que existe un monto de alquiler y un monto de seguro náutico previamente registrados para una reserva.
    - **Cuando** "Brindar el estado de la reserva" invoca este caso de uso indicando el estado "completada".
-   - **Entonces** el sistema calcula el pago al Propietario como el monto de alquiler registrado menos la comisión de la plataforma menos el monto del seguro náutico registrado, mantiene el depósito asociado a la operación y solicita la captura y/o liquidación del monto correspondiente a la Pasarela de Pago. La liquidación queda pendiente hasta su confirmación externa.
+   - **Entonces** el sistema calcula el pago al Propietario como el monto de alquiler registrado menos la comisión de la plataforma menos el monto del seguro náutico registrado, mantiene el depósito asociado a la operación y registra la liquidación del monto correspondiente en el libro interno de liquidaciones. La liquidación queda pendiente hasta su confirmación.
 
 ---
 
@@ -60,24 +60,24 @@ Como el sistema, al recibir desde "Brindar información de disputa de garantía"
 
 ---
 
-### Historia de Usuario 4 - Registrar el resultado de la dispersión reportado por la Pasarela de Pago (Prioridad: P1)
+### Historia de Usuario 4 - Registrar el resultado de la dispersión (Prioridad: P1)
 
-Como el sistema, al recibir de la Pasarela de Pago el resultado de una operación de captura o liquidación previamente solicitada, quiero registrar su estado, monto confirmado, detalle y referencia externa, de manera que esta información quede disponible para "Consultar registros financieros" y "Consultar informe financiero".
+Como el sistema, al recibir del libro interno de liquidaciones el resultado de una operación de captura o liquidación previamente solicitada, quiero registrar su estado, monto confirmado, detalle y referencia externa, de manera que esta información quede disponible para "Consultar registros financieros" y "Consultar informe financiero".
 
-**Por qué esta prioridad**: El registro correcto y confiable del resultado de la dispersión garantiza la trazabilidad financiera de la plataforma frente al propietario y evita reportar como liquidados pagos que la Pasarela de Pago no ejecutó efectivamente.
+**Por qué esta prioridad**: El registro correcto y confiable del resultado de la dispersión garantiza la trazabilidad financiera de la plataforma frente al propietario y evita reportar como liquidados pagos que el libro interno no confirmó efectivamente.
 
-**Prueba Independiente**: Con una solicitud de captura o liquidación previamente enviada a la Pasarela de Pago, simular resultados completado, en proceso, rechazado, cancelado y expirado, y validar que el sistema registra cada estado sin marcar como completada una operación no confirmada.
+**Prueba Independiente**: Con una solicitud de captura o liquidación previamente registrada en el libro interno de liquidaciones, simular resultados completado, en proceso, rechazado, cancelado y expirado, y validar que el sistema registra cada estado sin marcar como completada una operación no confirmada.
 
 **Escenarios de Aceptación**:
 
-1. **Escenario**: La Pasarela de Pago reporta la dispersión como exitosa.
-   - **Dado** que existe una solicitud de dispersión previamente enviada a la Pasarela de Pago para una reserva.
-   - **Cuando** la Pasarela de Pago reporta al sistema que la transferencia fue exitosa.
+1. **Escenario**: El libro interno de liquidaciones reporta la dispersión como exitosa.
+   - **Dado** que existe una solicitud de dispersión previamente registrada en el libro interno para una reserva.
+   - **Cuando** el libro interno reporta al sistema que la operación fue exitosa.
    - **Entonces** el sistema registra la operación como completada, con el monto confirmado, el detalle y la referencia externa provista, dejándola disponible para "Consultar registros financieros" y "Consultar informe financiero".
 
-2. **Escenario**: La Pasarela de Pago reporta el rechazo o fallo de la dispersión.
-   - **Dado** que existe una solicitud de dispersión previamente enviada a la Pasarela de Pago para una reserva.
-   - **Cuando** la Pasarela de Pago reporta al sistema el rechazo o fallo de la transacción.
+2. **Escenario**: El libro interno de liquidaciones reporta el rechazo o fallo de la dispersión.
+   - **Dado** que existe una solicitud de dispersión previamente registrada en el libro interno para una reserva.
+   - **Cuando** el libro interno reporta al sistema el rechazo o fallo de la operación.
    - **Entonces** el sistema registra el estado externo y su detalle, sin marcar la liquidación como completada, dejando este resultado disponible internamente.
 
 ---
@@ -86,15 +86,15 @@ Como el sistema, al recibir de la Pasarela de Pago el resultado de una operació
 
 Como el sistema, al recibir la confirmación exitosa de la liquidación estándar de una reserva `completada`, quiero crear un `RegistroDeComisión` inmutable e independiente con el monto de comisión previamente calculado y conservado en la solicitud o intención de dispersión, de manera que la comisión quede disponible como una métrica financiera histórica sin recalcularla ni confundirla con la operación de pago al Propietario.
 
-**Por qué esta prioridad**: La comisión se calcula y se cobra como parte de la operación financiera de la reserva antes de resolver la liquidación del alquiler y del depósito. La solicitud o intención conserva el valor calculado como dato operativo no inmutable; el registro inmutable solo debe crearse cuando la Pasarela confirma la dispersión estándar.
+**Por qué esta prioridad**: La comisión se calcula y se cobra como parte de la operación financiera de la reserva antes de resolver la liquidación del alquiler y del depósito. La solicitud o intención conserva el valor calculado como dato operativo no inmutable; el registro inmutable solo debe crearse cuando el libro interno confirma la dispersión estándar.
 
-**Prueba Independiente**: Ejecutar una liquidación estándar con una comisión calculada en la `IntenciónDeDispersión`, simular una confirmación exitosa de la Pasarela y validar que se crean exactamente un `RegistroDeDispersión` y un `RegistroDeComisión` inmutables con el monto calculado, la reserva, el propietario y la embarcación asociados.
+**Prueba Independiente**: Ejecutar una liquidación estándar con una comisión calculada en la `IntenciónDeDispersión`, simular una confirmación exitosa del libro interno y validar que se crean exactamente un `RegistroDeDispersión` y un `RegistroDeComisión` inmutables con el monto calculado, la reserva, el propietario y la embarcación asociados.
 
 **Escenarios de Aceptación**:
 
 1. **Escenario**: Registro de la comisión aplicada en una liquidación estándar.
    - **Dado** que el sistema calculó la comisión de la plataforma como parte de una liquidación estándar por finalización de reserva.
-   - **Cuando** la Pasarela de Pago confirma exitosamente la liquidación estándar.
+   - **Cuando** el libro interno de liquidaciones confirma exitosamente la liquidación estándar.
    - **Entonces** el sistema crea de forma atómica un `RegistroDeDispersión` y un `RegistroDeComisión` por el monto de comisión calculado en la intención, ambos inmutables y relacionados con la reserva, el propietario, la embarcación y la operación de dispersión correspondiente.
 
 2. **Escenario**: Comisión registrada en cero para dispersiones por penalidad de cancelación.
@@ -105,10 +105,10 @@ Como el sistema, al recibir la confirmación exitosa de la liquidación estánda
 ### Casos Extremos (Edge Cases)
 
 - **¿Qué sucede si este caso de uso es invocado para una reserva que no cuenta con el monto de alquiler o el monto del seguro náutico previamente registrados?**
-   El sistema no ejecuta ningún cálculo parcial ni envía una solicitud a la Pasarela de Pago con un monto asumido; registra internamente un fallo, dado que la validación de existencia de dicha información corresponde previamente a "Brindar el estado de la reserva" o a "Brindar información de disputa de garantía".
+   El sistema no ejecuta ningún cálculo parcial ni registra una solicitud en el libro interno de liquidaciones con un monto asumido; registra internamente un fallo, dado que la validación de existencia de dicha información corresponde previamente a "Brindar el estado de la reserva" o a "Brindar información de disputa de garantía".
 
 - **¿Qué sucede si la disputa informa `COMPLETED` pero no existe un depósito cobrado y registrado internamente?**
-   El sistema trata la información como incompleta y registra el fallo sin enviar una solicitud a la Pasarela de Pago con un monto asumido.
+   El sistema trata la información como incompleta y registra el fallo sin enviar una solicitud al libro interno de liquidaciones con un monto asumido.
 
 - **¿Por qué la dispersión por penalidad de cancelación (moderada o tardía) no aplica el descuento de comisión de la plataforma ni de seguro náutico, a diferencia de la liquidación estándar?**
    La Matriz de Liquidación distingue "Penalidad por Cancelación" como un concepto propio, separado de "Pago al Propietario": el porcentaje correspondiente (50% o 100% del monto de alquiler) se dispersa íntegramente al propietario como compensación, sin pasar por el cálculo de comisión y seguro que sí aplica a la liquidación estándar de una reserva finalizada.
@@ -119,10 +119,10 @@ Como el sistema, al recibir la confirmación exitosa de la liquidación estánda
 - **¿Qué sucede si el porcentaje de comisión de la versión de parámetros financieros referenciada por la reserva no está disponible al momento de calcular la liquidación estándar?**
   Al no poder completar el cálculo de la comisión (la versión referenciada por la reserva —`frozen_parameters_id`— no existe o no tiene comisión %), el sistema considera la información necesaria para la liquidación como incompleta. No continúa el cálculo con un valor asumido o parcial; en su lugar, registra el fallo internamente, de la misma forma que ante la ausencia de monto de alquiler o de seguro náutico registrados.
 
-- **¿Qué sucede cuando la Pasarela de Pago está caída, agota el tiempo de espera (*timeout*) o es inalcanzable al momento de enviar la solicitud de dispersión?**
-  El sistema no asume ningún resultado; aplica un manejo de errores controlado, registra la solicitud de dispersión con un estado que refleje la falla de comunicación (sin marcarla como exitosa ni como rechazada por la Pasarela) y conserva dicha solicitud disponible para consulta posterior.
+- **¿Qué sucede cuando el libro interno de liquidaciones no está disponible al momento de enviar la solicitud de dispersión?**
+  El sistema no asume ningún resultado; aplica un manejo de errores controlado, registra la solicitud de dispersión con un estado que refleje la falla de comunicación (sin marcarla como exitosa ni como rechazada) y conserva dicha solicitud disponible para consulta posterior.
 
-- **¿Qué sucede si la Pasarela de Pago reporta más de una vez el resultado de la misma operación de liquidación?**
+- **¿Qué sucede si el libro interno de liquidaciones reporta más de una vez el resultado de la misma operación de liquidación?**
    El sistema utiliza la clave idempotente y la referencia externa para deduplicar la notificación. Una repetición no crea otra liquidación ni altera un resultado ya confirmado.
 
 - **¿Qué sucede si una confirmación exitosa, un reintento o una notificación duplicada intenta crear dos `RegistroDeComisión` para la misma liquidación estándar?**
@@ -143,14 +143,14 @@ Como el sistema, al recibir la confirmación exitosa de la liquidación estánda
 - **RF-003**: El sistema DEBE, cuando el estado sea cancelado tardíamente, solicitar el 100% del monto de alquiler previamente registrado como compensación al Propietario.
 - **RF-004**: El sistema DEBE conservar en la solicitud o intención de dispersión el monto de comisión calculado y cobrado previamente como parte de la operación de la reserva. Este valor es un dato operativo no inmutable y todavía no es un `RegistroDeComisión`.
 - **RF-005**: El sistema DEBE, cuando el estado de la reserva sea `completada`, calcular la liquidación estándar del alquiler al Propietario y solicitarla utilizando la comisión calculada en la `IntenciónDeDispersión`. La operación debe conservar y considerar el depósito de garantía asociado a la reserva, aunque el destino del depósito se resuelva posteriormente mediante reembolso o liquidación.
-- **RF-006**: El sistema DEBE, cuando reciba `COMPLETED` desde una disputa, recuperar internamente el depósito cobrado y registrado y solicitar su liquidación total al Propietario mediante una operación consolidada o relacionada según la capacidad de la Pasarela de Pago.
+- **RF-006**: El sistema DEBE, cuando reciba `COMPLETED` desde una disputa, recuperar internamente el depósito cobrado y registrado y solicitar su liquidación total al Propietario mediante una operación consolidada o relacionada según la capacidad del libro interno de liquidaciones.
 - **RF-007**: El sistema NO DEBE aplicar la comisión de la plataforma ni el descuento del monto de seguro náutico sobre los montos calculados por penalidad de cancelación (RF-002 y RF-003).
-- **RF-008**: El sistema DEBE enviar a la Pasarela de Pago la solicitud de captura y/o liquidación por el monto total calculado según el estado o resolución correspondiente, únicamente mediante una capacidad soportada por la integración configurada.
+- **RF-008**: El sistema DEBE registrar en el libro interno de liquidaciones la solicitud de captura y/o liquidación por el monto total calculado según el estado o resolución correspondiente. La operación no dispersa fondos reales en la Pasarela de Pago y el registro resultante es un asiento contable interno, no una transferencia al Propietario.
 - **RF-009**: El sistema DEBE registrar internamente la `IntenciónDeDispersión` en curso, indicando el estado o resolución que la desencadenó, el monto, el monto de comisión calculado y cobrado previamente cuando corresponda, el depósito de garantía asociado, el cobro original, la capacidad utilizada y una clave idempotente.
 - **RF-009A**: El `RegistroDeDispersión` DEBE conservar la referencia a la `IntenciónDeDispersión` que lo originó (`intencionDeDispersiónId`), garantizando trazabilidad directa y coherencia con el vínculo entre comisión e intención.
-- **RF-010**: El sistema DEBE recibir de la Pasarela de Pago el resultado de la operación y registrarlo (exitoso o fallido) actualizando siempre el estado en la `IntenciónDeDispersión`. Si la operación es exitosa, el sistema DEBE generar el `RegistroDeDispersión` inmutable de auditoría con su fecha y hora de creación (fechaHoraCreación), monto confirmado, detalle, referencia externa y depósito asociado. Cuando la operación confirmada sea la liquidación estándar, DEBE crear atómicamente el `RegistroDeComisión` inmutable a partir del monto de comisión calculado en la intención.
+- **RF-010**: El sistema DEBE recibir del libro interno de liquidaciones el resultado de la operación y registrarlo (exitoso o fallido) actualizando siempre el estado en la `IntenciónDeDispersión`. Si la operación es exitosa, el sistema DEBE generar el `RegistroDeDispersión` inmutable de auditoría con su fecha y hora de creación (fechaHoraCreación), monto confirmado, detalle, referencia externa y depósito asociado. Cuando la operación confirmada sea la liquidación estándar, DEBE crear atómicamente el `RegistroDeComisión` inmutable a partir del monto de comisión calculado en la intención.
 - **RF-011**: El sistema DEBE dejar disponible el `RegistroDeDispersión` inmutable creado para ser consultado internamente mediante "Consultar registros financieros" y "Consultar informe financiero".
-- **RF-012**: El sistema NO DEBE crear un `RegistroDeDispersión` para una dispersión cuya operación fue rechazada, cancelada, expirada o quedó en proceso según la Pasarela de Pago; en esos casos solo actualiza la `IntenciónDeDispersión`.
+- **RF-012**: El sistema NO DEBE crear un `RegistroDeDispersión` para una dispersión cuya operación fue rechazada, cancelada, expirada o quedó en proceso según el libro interno de liquidaciones; en esos casos solo actualiza la `IntenciónDeDispersión`.
 - **RF-013**: El sistema DEBE registrar internamente un fallo, sin ejecutar ningún cálculo parcial, cuando se invoque este caso de uso para una reserva sin el monto requerido en sus registros internos: alquiler, seguro o depósito cobrado y registrado, según el estado o resolución recibida.
 - **RF-014**: El sistema DEBE conservar el monto de comisión calculado en la `IntenciónDeDispersión` para la liquidación estándar y, únicamente tras su confirmación exitosa, debe crear el `RegistroDeComisión` inmutable correspondiente. El monto de comisión no se registra como atributo de `RegistroDeDispersión`. En cancelaciones y liquidación del depósito, la intención conserva `commission_amount = 0` y no se crea `RegistroDeComisión`.
 - **RF-015**: El sistema DEBE registrar, como parte del `RegistroDeDispersión` inmutable, la reserva, el propietario y la embarcación asociados, de manera que el registro pueda consultarse internamente en SPEC 12 y SPEC 13.
@@ -159,27 +159,27 @@ Como el sistema, al recibir la confirmación exitosa de la liquidación estánda
 
 ### Requisitos No Funcionales
 
-- **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con la Pasarela de Pago, tanto para la solicitud de dispersión como para el resultado recibido.
-- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el monto de alquiler, la comisión de la plataforma, el monto del seguro náutico, el monto del depósito de garantía retenido, el monto solicitado a la Pasarela de Pago y el monto transferido registrado, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia la pasarela o reportes.
-- **RNF-003**: El sistema DEBE implementar un manejo de errores robusto (*timeouts*, *fallbacks*) tanto para el envío de la solicitud de dispersión como para la recepción de su resultado, dado que "Consultar registros financieros" y "Consultar informe financiero" dependen del resultado registrado por este caso de uso.
+- **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con el libro interno de liquidaciones, tanto para la solicitud de dispersión como para el resultado recibido.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el monto de alquiler, la comisión de la plataforma, el monto del seguro náutico, el monto del depósito de garantía retenido, el monto solicitado al libro interno de liquidaciones y el monto registrado, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia el registro o los reportes.
+- **RNF-003**: El sistema DEBE implementar un manejo de errores robusto (*timeouts*, *fallbacks*) tanto en el envío de la solicitud de dispersión como en el registro de su resultado, dado que "Consultar registros financieros" y "Consultar informe financiero" dependen del resultado registrado por este caso de uso.
 
 ### Entidades Clave
 
 - **InformaciónDeReserva (Entidad, definida en SPEC 3 y actualizada en SPEC 4)**: En este caso de uso es únicamente consultada, para recuperar el monto de alquiler, el monto del seguro y el depósito fijo cobrado y registrado cuando la solicitud se desencadena por una resolución de disputa.
 - **IntenciónDeDispersión (Entidad)**: Estructura para representar la operación operativa en curso de captura o liquidación de fondos hacia el Propietario. Conserva el estado o resolución desencadenante, el monto solicitado, el cobro original, la capacidad utilizada, la clave idempotente y el estado actual de la solicitud (en curso, aprobado, fallido, etc.). Esta entidad es la fuente de la verdad para conocer el estado y resultado de la operación.
-- **RegistroDeComisión (Entidad Inmutable)**: Métrica financiera informativa e inmutable creada únicamente después de que la Pasarela de Pago confirma exitosamente la liquidación estándar. No participa en cálculos de cobro o pago y no sustituye la comisión calculada en la intención. Conserva la fecha y hora de creación, el monto de comisión calculado, la reserva, el propietario y la embarcación a los que se asocia el descuento, el identificador de la `IntenciónDeDispersión` y la relación directa con el `RegistroDeDispersión` confirmado que la originó.
-- **RegistroDeDispersión (Entidad Inmutable)**: Métrica financiera informativa e inmutable creada únicamente cuando la Pasarela de Pago confirma la captura o liquidación como exitosa. No participa en cálculos de cobro o pago; esos cálculos se realizan con la intención y las solicitudes internas. Conserva la fecha y hora de creación (fechaHoraCreación), el monto confirmado, la referencia externa, el monto bruto de alquiler, el monto de seguro náutico aplicado, el monto de depósito asociado, la reserva, el propietario, la embarcación relacionados y la referencia obligatoria a la intención que lo originó (`intencionDeDispersiónId`). Es consumida posteriormente por "Consultar registros financieros" y "Consultar informe financiero" (SPEC 13).
+- **RegistroDeComisión (Entidad Inmutable)**: Métrica financiera informativa e inmutable creada únicamente después de que el libro interno de liquidaciones confirma exitosamente la liquidación estándar. No participa en cálculos de cobro o pago y no sustituye la comisión calculada en la intención. Conserva la fecha y hora de creación, el monto de comisión calculado, la reserva, el propietario y la embarcación a los que se asocia el descuento, el identificador de la `IntenciónDeDispersión` y la relación directa con el `RegistroDeDispersión` confirmado que la originó.
+- **RegistroDeDispersión (Entidad Inmutable)**: Métrica financiera informativa e inmutable creada únicamente cuando el libro interno de liquidaciones confirma la captura o liquidación como exitosa. No participa en cálculos de cobro o pago; esos cálculos se realizan con la intención y las solicitudes internas. Conserva la fecha y hora de creación (fechaHoraCreación), el monto confirmado, la referencia externa, el monto bruto de alquiler, el monto de seguro náutico aplicado, el monto de depósito asociado, la reserva, el propietario, la embarcación relacionados y la referencia obligatoria a la intención que lo originó (`intencionDeDispersiónId`). Es consumida posteriormente por "Consultar registros financieros" y "Consultar informe financiero" (SPEC 13).
 - **SolicitudDispersión (DTO)**: Información recibida internamente desde "Brindar el estado de la reserva" o "Brindar información de disputa de garantía". Contiene el identificador de la reserva, el estado o resolución desencadenante, el monto de comisión calculado y cobrado previamente cuando corresponda y el depósito de garantía asociado. El monto de comisión de la solicitud es operativo y no constituye todavía un registro inmutable.
-- **SolicitudDispersiónPasarela (DTO)**: Información enviada a la Pasarela de Pago. Contiene el tipo de operación, el monto total, el componente de depósito de garantía asociado a la reserva, la referencia del cobro original, la referencia de la reserva y la clave idempotente.
-- **ResultadoDispersiónPasarela (DTO)**: Información recibida desde la Pasarela de Pago como resultado de una operación previamente iniciada. Contiene el estado externo, su detalle, el monto confirmado y la referencia externa asignada por la Pasarela de Pago.
+- **SolicitudDispersiónInterna (DTO)**: Información enviada al libro interno de liquidaciones. Contiene el tipo de operación, el monto total, el componente de depósito de garantía asociado a la reserva, la referencia del cobro original, la referencia de la reserva y la clave idempotente.
+- **ResultadoDispersiónInterno (DTO)**: Información recibida del libro interno de liquidaciones como resultado de una operación previamente iniciada. Contiene el estado externo, su detalle, el monto confirmado y la referencia externa asignada por el libro interno.
 
 ## Criterios de Éxito *(obligatorio)*
 
 ### Resultados Medibles
 
-- **CE-001**: Precisión Financiera, "100% de los montos de dispersión solicitados a la Pasarela de Pago corresponden exactamente al monto que corresponde según el estado o resolución (50%/100% del monto de alquiler para cancelaciones, liquidación estándar para estado completada o depósito completo para disputa completada), con cero (0) errores de cálculo detectados en pruebas automatizadas".
+- **CE-001**: Precisión Financiera, "100% de los montos de dispersión registrados en el libro interno de liquidaciones corresponden exactamente al monto que corresponde según el estado o resolución (50%/100% del monto de alquiler para cancelaciones, liquidación estándar para estado completada o depósito completo para disputa completada), con cero (0) errores de cálculo detectados en pruebas automatizadas".
 - **CE-002**: Cumplimiento Arquitectónico, "0 `RegistroDeComisión` creados para dispersiones por cancelación o liquidaciones de depósito, y 100% de las liquidaciones estándar por estado completada utilizan exactamente la comisión calculada y el seguro correspondientes".
-- **CE-003**: Trazabilidad, "100% de las solicitudes de liquidación enviadas a la Pasarela de Pago quedan registradas internamente, y 100% de los resultados recibidos actualizan dicho registro, dejándolo disponible para 'Consultar registros financieros' y 'Consultar informe financiero'". Verificar trazabilidad intención a registro (RegistroDeDispersión vincula intencionDeDispersiónId) y coherencia del vínculo entre comisión e intención.
-- **CE-004**: Resiliencia del Sistema, "100% de las fallas de comunicación simuladas con la Pasarela de Pago, tanto al enviar la solicitud de dispersión como al recibir su resultado, son manejadas mediante fallbacks controlados, sin dejar transacciones de dispersión en un estado indefinido".
-- **CE-005**: Integridad de la Dispersión, "0% de las transacciones rechazadas o fallidas reportadas por la Pasarela de Pago son registradas o reportadas como dispersiones exitosas".
+- **CE-003**: Trazabilidad, "100% de las solicitudes de liquidación quedan registradas internamente, y 100% de los resultados recibidos actualizan dicho registro, dejándolo disponible para 'Consultar registros financieros' y 'Consultar informe financiero'". Verificar trazabilidad intención a registro (RegistroDeDispersión vincula intencionDeDispersiónId) y coherencia del vínculo entre comisión e intención.
+- **CE-004**: Resiliencia del Sistema, "100% de las fallas simuladas en el envío de la solicitud de dispersión al libro interno y en el registro de su resultado son manejadas mediante fallbacks controlados, sin dejar transacciones de dispersión en un estado indefinido".
+- **CE-005**: Integridad de la Dispersión, "0% de las transacciones rechazadas o fallidas reportadas por el libro interno de liquidaciones son registradas o reportadas como dispersiones exitosas".
 - **CE-006**: Trazabilidad de Comisión, "100% de las liquidaciones estándar confirmadas crean exactamente un `RegistroDeComisión` inmutable relacionado con un único `RegistroDeDispersión`, la reserva, el propietario y la embarcación correspondientes, con un monto igual al calculado en la `IntenciónDeDispersión` y cero (0) duplicados detectados en pruebas automatizadas".

@@ -29,7 +29,7 @@ Este caso de prueba verifica que, al recibirse el estado `REJECTED` de una dispu
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**; se verifica por el request journal del simulador y por los logs de la app.
+* **Modo A (suite automática):** el cuerpo y las cabeceras que el sistema envía a la Pasarela los verifican `MercadoPagoChargeAdapterTest` y `MercadoPagoRefundAdapterTest` (WireMock embebido); este TC verifica el efecto en la BD, las colas y la consulta real del reembolso.
 
 ##### Dependencies & Assumptions
 * **TC-UC05-HU2-E1 debe haber pasado**: existe un cobro aprobado y su `charge_record` con el desglose (alquiler, seguro, depósito).
@@ -49,9 +49,9 @@ Este caso de prueba verifica que, al recibirse el estado `REJECTED` de una dispu
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Confirmar el depósito cobrado y registrado | `SELECT deposit_amount FROM charge_record WHERE reservation_id = '...'` y `SELECT disposition FROM deposit_disposition WHERE reservation_id = '...'` | reserva `b7d0e2a1-…` | Depósito `30000.00` registrado y en `HELD`; es la fuente autoritativa del monto, con respaldo en `reservation_information` (RF-001, RF-004). | [ ] | |
 | 2 | Notificar la disputa rechazada | Publicar en `seashare.reservations` con routing key `reservation.dispute.updated` | `{"reservation_id":"b7d0e2a1-…","dispute_id":"d8e1f2a3-…","status":"REJECTED","status_changed_at":"2026-12-23T10:00:00Z","event_key":"v1.0-4a5b6c"}` | El mensaje se confirma (ack); se invoca el reembolso sin atributo de origen financiero (RF-001). | [ ] | |
-| 3 | Verificar la intención registrada | `SELECT * FROM refund_intent WHERE reservation_id = '...'` | N/A | `trigger = DISPUTE_REJECTED`, `scope = DEPOSIT_ONLY`, `amount = 30000.00`, `dispute_id` y `charge_intent_id` informados, estado `PENDING_SEND` y clave `refund:DISPUTE_REJECTED:<operationKey>` (RF-004, RF-005, RF-006). | [ ] | Sin cálculo parcial. |
+| 3 | Verificar la intención registrada | `SELECT * FROM refund_intent WHERE reservation_id = '...'` | N/A | `trigger = DISPUTE_REJECTED`, `scope = DEPOSIT_ONLY`, `amount = 30000.00`, `dispute_id` y `charge_intent_id` informados, estado `PENDING_SEND` y clave UUID v4 (D-UC09-12) (RF-004, RF-005, RF-006). | [ ] | Sin cálculo parcial. |
 | 4 | Verificar el comando interno | Inspeccionar la cola `finance.refund-command.v1` y el *outbox* | N/A | Cuerpo `{"refund_intent_id":"..."}`; no viaja ningún monto ni atributo de origen desde Reservas (RF-001). | [ ] | |
-| 5 | Verificar la llamada a la Pasarela | Request journal del simulador: `POST /v1/payments/{charge_intent.external_reference}/refunds` | Body `{"amount": 30000.00}`; header `X-Idempotency-Key` = clave de la intención | Se solicita exactamente el **100 % del depósito** (CE-001), con la referencia del cobro original y la misma clave idempotente (RF-006). | [ ] | |
+| 5 | Verificar la llamada a la Pasarela | Consultar el reembolso real: `GET /v1/payments/{charge_intent.external_reference}/refunds` en Mercado Pago | Body `{"amount": 30000.00}`; header `X-Idempotency-Key` = clave de la intención | Se solicita exactamente el **100 % del depósito** (CE-001), con la referencia del cobro original y la misma clave idempotente (RF-006). | [ ] | El header `X-Idempotency-Key` lo verifica `MercadoPagoRefundAdapterTest`; en la BD, `refund_intent.idempotency_key` es el UUID v4 que se envía. |
 | 6 | Verificar la respuesta técnica | `SELECT status, status_detail, external_reference FROM refund_intent` | N/A | Se guarda el `id` externo del reembolso y el estado reportado por la Pasarela; aún **no** existe `refund_record` (RF-007). | [ ] | |
 | 7 | Verificar el desenlace único del depósito | `SELECT disposition FROM deposit_disposition WHERE reservation_id = '...'` | reserva `b7d0e2a1-…` | `disposition = REFUND_REQUESTED` por *compare-and-set*; no hay un segundo desenlace (D-34; caso extremo del UC09). | [ ] | |
 

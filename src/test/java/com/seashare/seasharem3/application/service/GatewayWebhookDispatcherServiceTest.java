@@ -30,7 +30,8 @@ class GatewayWebhookDispatcherServiceTest {
 
     @Test
     void recordsTheEventWhenThereIsNoHandlerForTheType() {
-        GatewayWebhookNotification notification = new GatewayWebhookNotification("refund", "refund.updated", "987654");
+        GatewayWebhookNotification notification = new GatewayWebhookNotification("chargeback", "chargeback.updated",
+                "987654");
 
         dispatcher.dispatch(notification);
 

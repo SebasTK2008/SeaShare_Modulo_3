@@ -12,7 +12,7 @@ Enfoque técnico: servicio backend Spring Boot con arquitectura hexagonal de tre
 
 Además, UC11 aloja el **núcleo compartido** del servicio: tablas `operational_failure` y `outbox_message`, puertos `FailureRecorderPort`, `OutboxPort`, `ReservationLockPort`, VOs comunes y `ClockPort`, sus adaptadores y el `OutboxRelayJob`. Los demás planes consumen estas piezas por sus firmas, sin coordinarse mediante tareas de UC11.
 
-El diagrama de casos de uso (`docs/diagrams/module3-v2.drawio.xml`) asocia "Configurar parámetros financieros globales" **únicamente** con el actor *Admin Financiero*, sin relaciones `<<include>>` ni `<<extend>>`.
+El diagrama de casos de uso (`docs/diagrams/Sea-Share module3-UC-diagram.xml`) asocia "Configurar parámetros financieros globales" **únicamente** con el actor *Admin Financiero*, sin relaciones `<<include>>` ni `<<extend>>`.
 
 ### Trazabilidad RF/RNF/CE/HU → componente / tarea
 

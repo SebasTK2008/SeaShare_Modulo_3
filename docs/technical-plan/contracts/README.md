@@ -47,14 +47,15 @@ Los ejemplos usan **valores ilustrativos**.
 | [`external/flota-consulta-tarifas-base.md`](external/flota-consulta-tarifas-base.md) | `POST /api/v1/fleet/base-rates` (contrato **requerido** a Flota) | Sistema → Flota | UC01, UC02, UC03 |
 | [`external/pasarela-comando-cobro.md`](external/pasarela-comando-cobro.md) | Comando de cobro | Sistema → Pasarela (Mercado Pago) | UC05 |
 | [`external/pasarela-comando-reembolso.md`](external/pasarela-comando-reembolso.md) | Comando de reembolso | Sistema → Pasarela (Mercado Pago) | UC09 |
-| [`external/pasarela-comando-liquidacion.md`](external/pasarela-comando-liquidacion.md) | Comando de liquidación | Sistema → Pasarela (Mercado Pago) | UC10 |
-| [`external/pasarela-webhook-resultados.md`](external/pasarela-webhook-resultados.md) | `POST /api/v1/webhook/gateway` | Pasarela (Mercado Pago) → sistema | UC05, UC09, UC10 |
+| [`external/pasarela-comando-liquidacion.md`](external/pasarela-comando-liquidacion.md) | Comando de liquidación | Sistema → libro interno de liquidaciones | UC10 |
+| [`external/pasarela-webhook-resultados.md`](external/pasarela-webhook-resultados.md) | `POST /api/v1/webhook/gateway` | Pasarela (Mercado Pago) → sistema | UC05, UC09 |
+| [`external/frontend-tokenizacion.md`](external/frontend-tokenizacion.md) | Frontera de tokenización (`card_token` de un solo uso) | Frontend (repositorio externo) → sistema | UC05, UC07 |
 
 Casos de uso **sin contrato propio**:
 
 - **UC02** (Brindar tarifa base): solo interno (RF-003); su única conexión externa es la consulta a Flota.
 - **UC05**: no tiene endpoint de negocio; lo dispara UC07 con el estado `PENDING` (UC07 RF-002A). Su único endpoint es el webhook compartido de la pasarela (`pasarela-webhook-resultados.md`).
-- **UC09 y UC10**: los invocan UC07, UC08 y los eventos automáticos; solo se comunican hacia afuera con la pasarela.
+- **UC09**: lo invocan UC07, UC08 y los eventos automáticos; se comunica hacia afuera únicamente con la pasarela. **UC10**: lo invocan UC07, UC08 y los eventos automáticos; su liquidación se registra en un libro interno, sin canal externo ni webhook propio.
 - **UC11 "Cancelar"**: no genera petición; descartar cambios no persistidos es una acción del cliente (UC11 RF-010).
 - **Cierres de UC08 por vencimiento de ventana** (24 h sin disputa; resolución de una disputa `PENDING`): el sistema no ejecuta temporizadores ni cron jobs; el Sistema de Reservas y Operaciones decide el cierre y lo notifica como estado final (`REJECTED`/`COMPLETED`) por la cola de UC08 [SPEC 008 RF-009, RF-009A].
 
@@ -167,7 +168,7 @@ Los contratos de `events/` y las colas internas de comando comparten:
 | Exchange de comandos | `seashare.finance.commands` (`direct`, durable) | [CONV] |
 | Colas internas de comando (UC05/09/10) | `finance.charge-command.v1`, `finance.refund-command.v1`, `finance.settlement-command.v1`; DLQ `<cola>.dlq` | [CONV] |
 | Enrutado del comando de cobro (UC05) | `charge.command`; cuerpo `{"charge_intent_id": "...", "payer_email": "..."}`. El token del medio de pago **no** viaja en el mensaje: el worker lo lee de `charge_intent` | [CONV] UC05 (D-UC05-10) |
-| Cola interna de notificaciones de la pasarela (UC05/09/10) | `finance.gateway-notification.v1`; DLQ `<cola>.dlq`; enrutado `gateway.notification`; cuerpo `{"type": "...", "action": "...", "data_id": "..."}` | [CONV] UC05 (paso 2 del webhook de resultados, D-UC05-12) |
+| Cola interna de notificaciones de la pasarela (UC05/09) | `finance.gateway-notification.v1`; DLQ `<cola>.dlq`; enrutado `gateway.notification`; cuerpo `{"type": "...", "action": "...", "data_id": "..."}` | [CONV] UC05 (paso 2 del webhook de resultados, D-UC05-12) |
 | Tipo de cola | *quorum* durable (las siete colas de trabajo) | [CONV] |
 | `content_type` | `application/json` | [CONV] |
 | `delivery_mode` | `2` (persistente) | [CONV] |
@@ -227,11 +228,11 @@ Los canales sin respuesta al productor no pueden usar HTTP. Se aplican las misma
 | Cola (todas: UC03, UC05, UC07, UC08, UC09, UC10) | Mensaje inválido, estado desconocido, reserva sin información previa, validación fallida (equivale a E2/E6) | `ack` y registro en `operational_failure`. Sin reintento ni DLQ: reintentar no cambia el resultado | [SPEC UC03 RNF-003, UC07 RF-010, UC08 RNF-003] |
 | Cola (todas) | Falla transitoria: BD, Flota o pasarela (equivale a E5/E8) | Reintentos con *backoff* exponencial base 1 s hasta **5 intentos** (1 inicial + 4 reintentos); al agotarlos se rechaza a la DLQ y se registra en `operational_failure` | [CONV]; plan general §7.2 |
 | Cola (UC07, UC08) | Mensaje repetido (misma clave idempotente) | `ack` sin operación monetaria adicional | [SPEC UC07 casos extremos, UC08 RF-008] |
-| Pasarela (comandos de cobro, reembolso y liquidación) | `400` de **validación del token o del medio de pago**: el dato enviado no es válido | Fallo **no reintentable**: la intención queda en estado de error con el detalle técnico de la pasarela y sin registro inmutable. El veredicto de negocio solo lo emite el estado `rejected` de la pasarela | [SPEC UC05 RF-013]; contratos `pasarela-comando-*` |
-| Pasarela (comandos de cobro, reembolso y liquidación) | Otro `4xx` (credenciales, petición irrecuperable) o `5xx`: fallo propio (equivale a E8) | **Reintentable**: la intención queda en estado de error y el mensaje se reintenta con la misma clave idempotente; al agotarlo, DLQ y registro en `operational_failure` | [CONV] §4.2 E8 |
+| Pasarela (comandos de cobro y reembolso) | `400` de **validación del token o del medio de pago**: el dato enviado no es válido | Fallo **no reintentable**: la intención queda en estado de error con el detalle técnico de la pasarela y sin registro inmutable. El veredicto de negocio solo lo emite el estado `rejected` de la pasarela | [SPEC UC05 RF-013]; contratos `pasarela-comando-*` |
+| Pasarela (comandos de cobro y reembolso) | Otro `4xx` (credenciales, petición irrecuperable) o `5xx`: fallo propio (equivale a E8) | **Reintentable**: la intención queda en estado de error y el mensaje se reintenta con la misma clave idempotente; al agotarlo, DLQ y registro en `operational_failure` | [CONV] §4.2 E8 |
 | Webhook | Firma ausente o inválida | `401 UNAUTHENTICATED` | [CONV] — requisito de la integración con Mercado Pago, no control de acceso del sistema (general-plan §7.1) |
 | Webhook | Payload mal formado (E2) | `400 VALIDATION_ERROR` | [CONV] |
-| Webhook | Resultado ya registrado (duplicado) | `200 OK`, sin modificar el registro | [SPEC UC05 casos extremos, UC10 casos extremos] |
+| Webhook | Resultado ya registrado (duplicado) | `200 OK`, sin modificar el registro | [SPEC UC05 casos extremos] |
 | Webhook | Falla interna: la notificación no se puede persistir antes de acusar recibo (E8) | `500 INTERNAL_ERROR`, para que la Pasarela reintente | [CONV] |
 | Webhook | Falla en el paso 2 asíncrono (consulta a la Pasarela o registro del resultado) | El reintento lo aplica la cola interna `finance.gateway-notification.v1` (5 intentos, *backoff* exponencial base 1 s; DLQ y registro en `operational_failure` al agotarlos). La respuesta HTTP ya fue `200 OK` | [CONV] UC05 (D-UC05-12) |
 | Webhook | Resultado sin `IntenciónDe…` asociada (ningún `external_reference` coincide con el `data.id`) | `200 OK` y registro en `operational_failure` (evita reintentos infinitos de la Pasarela; el SPEC UC05 exige registrar el evento sin crear un registro de cobro) | [SPEC UC05 casos extremos] + [CONV] |

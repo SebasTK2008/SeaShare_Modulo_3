@@ -1,5 +1,6 @@
 package com.seashare.seasharem3.infrastructure.adapter.in.messaging;
 
+import com.seashare.seasharem3.application.dto.GatewayWebhookNotification;
 import com.seashare.seasharem3.application.port.in.GatewayWebhookHandler;
 import com.seashare.seasharem3.domain.exception.DomainException;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;
@@ -19,7 +20,6 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * Worker de las notificaciones del webhook de la pasarela: consume la cola interna
@@ -95,21 +95,32 @@ public class GatewayNotificationListener {
             return;
         }
 
-        Optional<GatewayWebhookHandler> handler = handlers.stream()
+        List<GatewayWebhookHandler> matching = handlers.stream()
                 .filter(candidate -> candidate.supportedType().equals(payload.type()))
-                .findFirst();
-        if (handler.isEmpty()) {
+                .toList();
+        if (matching.isEmpty()) {
             recordAndAcknowledge(new IllegalArgumentException(
                     "There is no handler for the gateway notification type " + payload.type()), payloadRef);
             return;
         }
 
-        try {
-            handler.get().handle(mapper.toNotification(payload));
-        } catch (GatewayCommunicationException exception) {
-            throw exception;
-        } catch (DomainException exception) {
-            recordAndAcknowledge(exception, payloadRef);
+        GatewayWebhookNotification notification = mapper.toNotification(payload);
+        GatewayCommunicationException transientFailure = null;
+        for (GatewayWebhookHandler handler : matching) {
+            try {
+                handler.handle(notification);
+            } catch (GatewayCommunicationException exception) {
+                // Un fallo transitorio debe reintentar el mensaje completo; se recuerda el primero
+                // y se da oportunidad a los demas manejadores del mismo tipo.
+                if (transientFailure == null) {
+                    transientFailure = exception;
+                }
+            } catch (DomainException exception) {
+                recordAndAcknowledge(exception, payloadRef);
+            }
+        }
+        if (transientFailure != null) {
+            throw transientFailure;
         }
     }
 

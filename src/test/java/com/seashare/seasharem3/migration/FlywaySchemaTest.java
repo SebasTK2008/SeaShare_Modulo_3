@@ -224,23 +224,73 @@ class FlywaySchemaTest {
 	void enforcesIntentIdempotencyKeyAndSettlementTraceability() throws SQLException {
 		Fixture fixture = new Fixture();
 		assertThatThrownBy(() -> execute(
-				"INSERT INTO charge_intent (id, reservation_id, idempotency_key, status, amount, payment_token_ref)"
-						+ " VALUES (?, ?, ?, 'PENDING_SEND', 100, 'tok')",
+				"INSERT INTO charge_intent (id, reservation_id, operation_key, idempotency_key, status, amount, payment_token_ref)"
+						+ " VALUES (?, ?, 'op-' || gen_random_uuid()::text, ?, 'PENDING_SEND', 100, 'tok')",
 				UUID.randomUUID(), fixture.reservationId, fixture.chargeIdempotencyKey))
 				.isInstanceOf(SQLException.class);
 
 		UUID settlementIntentId = UUID.randomUUID();
 		UUID disputeId = UUID.randomUUID();
 		execute("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount, commission_amount,"
-				+ " deposit_amount, charge_intent_id, idempotency_key, status, status_detail, external_reference,"
-				+ " dispute_id, gateway_capability) VALUES (?, ?, 'DISPUTE_COMPLETED', 'DEPOSIT', 90, 10, 80, ?, ?, 'PENDING_SEND',"
-				+ " 'detalle', ?, ?, 'ADVANCED_PAYMENTS_DISBURSEMENT')",
+				+ " deposit_amount, charge_intent_id, operation_key, idempotency_key, status, status_detail, external_reference,"
+				+ " dispute_id, gateway_capability) VALUES (?, ?, 'DISPUTE_COMPLETED', 'DEPOSIT', 90, 10, 80, ?,"
+				+ " 'op-' || gen_random_uuid()::text, ?, 'PENDING_SEND',"
+				+ " 'detalle', ?, ?, 'STANDARD_SETTLEMENT')",
 				settlementIntentId, fixture.reservationId, fixture.chargeIntentId, UUID.randomUUID().toString(),
 				"9001", disputeId);
 		assertThat(queryStrings("SELECT external_reference FROM settlement_intent WHERE id = ?", settlementIntentId))
 				.containsExactly("9001");
 		assertThat(queryStrings("SELECT dispute_id::text FROM settlement_intent WHERE id = ?", settlementIntentId))
 				.containsExactly(disputeId.toString());
+	}
+
+	@Test
+	void enforcesOneBusinessOperationPerReservationInEachIntentTable() throws SQLException {
+		assertThat(columnNames("charge_intent")).contains("operation_key");
+		assertThat(columnNames("refund_intent")).contains("operation_key");
+		assertThat(columnNames("settlement_intent")).contains("operation_key");
+
+		Fixture fixture = new Fixture();
+		String chargeOperation = queryStrings("SELECT operation_key FROM charge_intent WHERE id = ?",
+				fixture.chargeIntentId).get(0);
+		String refundOperation = queryStrings("SELECT operation_key FROM refund_intent WHERE id = ?",
+				fixture.refundIntentId).get(0);
+		String settlementOperation = queryStrings("SELECT operation_key FROM settlement_intent WHERE id = ?",
+				fixture.settlementIntentId).get(0);
+
+		assertThatThrownBy(() -> execute(
+				"INSERT INTO charge_intent (id, reservation_id, operation_key, idempotency_key, status, amount,"
+						+ " payment_token_ref) VALUES (?, ?, ?, ?, 'PENDING_SEND', 100, 'tok')",
+				UUID.randomUUID(), fixture.reservationId, chargeOperation, UUID.randomUUID().toString()))
+				.isInstanceOf(SQLException.class);
+		assertThatThrownBy(() -> execute(
+				"INSERT INTO refund_intent (id, reservation_id, trigger, scope, amount, charge_intent_id,"
+						+ " operation_key, idempotency_key, status)"
+						+ " VALUES (?, ?, 'CANCELLED_MODERATE', 'FULL', 100, ?, ?, ?, 'PENDING_SEND')",
+				UUID.randomUUID(), fixture.reservationId, fixture.chargeIntentId, refundOperation,
+				UUID.randomUUID().toString())).isInstanceOf(SQLException.class);
+		assertThatThrownBy(() -> execute(
+				"INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount, commission_amount,"
+						+ " deposit_amount, charge_intent_id, operation_key, idempotency_key, status,"
+						+ " gateway_capability)"
+						+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, ?, ?, 'PENDING_SEND',"
+						+ " 'STANDARD_SETTLEMENT')",
+				UUID.randomUUID(), fixture.reservationId, fixture.chargeIntentId, settlementOperation,
+				UUID.randomUUID().toString())).isInstanceOf(SQLException.class);
+
+		// Otra operación sobre la misma reserva sí convive (UC05 RF-004A) y la misma clave en otra reserva también.
+		execute("INSERT INTO charge_intent (id, reservation_id, operation_key, idempotency_key, status, amount,"
+				+ " payment_token_ref) VALUES (?, ?, 'another-operation', ?, 'PENDING_SEND', 100, 'tok')",
+				UUID.randomUUID(), fixture.reservationId, UUID.randomUUID().toString());
+		Fixture otherReservation = new Fixture();
+		execute("INSERT INTO charge_intent (id, reservation_id, operation_key, idempotency_key, status, amount,"
+				+ " payment_token_ref) VALUES (?, ?, ?, ?, 'PENDING_SEND', 100, 'tok')",
+				UUID.randomUUID(), otherReservation.reservationId, chargeOperation, UUID.randomUUID().toString());
+		assertThatThrownBy(() -> execute(
+				"INSERT INTO charge_intent (id, reservation_id, operation_key, idempotency_key, status, amount,"
+						+ " payment_token_ref) VALUES (?, ?, NULL, ?, 'PENDING_SEND', 100, 'tok')",
+				UUID.randomUUID(), fixture.reservationId, UUID.randomUUID().toString()))
+				.isInstanceOf(SQLException.class);
 	}
 
 	@Test
@@ -374,18 +424,19 @@ class FlywaySchemaTest {
 					+ " end_date, passengers, owner_id, max_capacity)"
 					+ " VALUES (?, ?, 100, DATE '2026-10-01', DATE '2026-10-10', 2, ?, 4)",
 					reservationId, UUID.randomUUID(), UUID.randomUUID());
-			execute("INSERT INTO charge_intent (id, reservation_id, idempotency_key, status, amount,"
-					+ " payment_token_ref) VALUES (?, ?, ?, 'CAPTURED', 100, 'tok')",
+			execute("INSERT INTO charge_intent (id, reservation_id, operation_key, idempotency_key, status, amount,"
+					+ " payment_token_ref) VALUES (?, ?, 'op-' || gen_random_uuid()::text, ?, 'CAPTURED', 100, 'tok')",
 					chargeIntentId, reservationId, chargeIdempotencyKey);
 			execute("INSERT INTO refund_intent (id, reservation_id, trigger, scope, amount, charge_intent_id,"
-					+ " idempotency_key, status) VALUES (?, ?, 'CANCELLED_MODERATE', 'FULL', 100, ?, ?,"
+					+ " operation_key, idempotency_key, status) VALUES (?, ?, 'CANCELLED_MODERATE', 'FULL', 100, ?,"
+					+ " 'op-' || gen_random_uuid()::text, ?,"
 					+ " 'COMPLETED')",
 					refundIntentId, reservationId, chargeIntentId, UUID.randomUUID().toString());
 			execute("INSERT INTO settlement_intent (id, reservation_id, trigger, scope, amount,"
-					+ " commission_amount, deposit_amount, charge_intent_id, idempotency_key, status,"
+					+ " commission_amount, deposit_amount, charge_intent_id, operation_key, idempotency_key, status,"
 					+ " gateway_capability)"
-					+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, ?, 'COMPLETED',"
-					+ " 'ADVANCED_PAYMENTS_DISBURSEMENT')",
+					+ " VALUES (?, ?, 'COMPLETED', 'STANDARD', 90, 10, 10, ?, 'op-' || gen_random_uuid()::text, ?, 'COMPLETED',"
+					+ " 'STANDARD_SETTLEMENT')",
 					settlementIntentId, reservationId, chargeIntentId, UUID.randomUUID().toString());
 		}
 

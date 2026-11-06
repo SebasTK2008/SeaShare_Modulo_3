@@ -1,8 +1,8 @@
 package com.seashare.seasharem3.application.port.out;
 
 import com.seashare.seasharem3.domain.model.RefundIntent;
-import com.seashare.seasharem3.domain.valueobject.IdempotencyKey;
 import com.seashare.seasharem3.domain.valueobject.RefundIntentStatus;
+import com.seashare.seasharem3.domain.valueobject.ReservationId;
 
 import java.util.Collection;
 import java.util.List;
@@ -22,7 +22,11 @@ public interface RefundIntentRepository {
 
     RefundIntent save(RefundIntent refundIntent);
 
-    Optional<RefundIntent> findByIdempotencyKey(IdempotencyKey idempotencyKey);
+    /** Intención de la misma identidad de operación (D-37); evita un segundo reembolso por redelivery. */
+    Optional<RefundIntent> findByReservationIdAndOperationKey(ReservationId reservationId, String operationKey);
+
+    /** Intención de reembolso más reciente de la reserva (resuelve la solicitud duplicada del depósito). */
+    Optional<RefundIntent> findLatestByReservationId(ReservationId reservationId);
 
     Optional<RefundIntent> findByExternalReference(String externalReference);
 

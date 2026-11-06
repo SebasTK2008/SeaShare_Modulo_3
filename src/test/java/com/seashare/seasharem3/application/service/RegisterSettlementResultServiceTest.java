@@ -189,7 +189,7 @@ class RegisterSettlementResultServiceTest {
                 scope, new Money(new BigDecimal(scope == SettlementScope.STANDARD ? "660000.00" : "450000.00")),
                 scope == SettlementScope.STANDARD ? new Money(new BigDecimal("180000.00")) : Money.ZERO,
                 new Money(new BigDecimal("30000.00")), charge.id(),
-                new IdempotencyKey("settlement:test:" + UUID.randomUUID()), null, NOW);
+                "settlement:test:" + UUID.randomUUID(), new IdempotencyKey("settlement:test:" + UUID.randomUUID()), null, NOW);
         SettlementIntent withStatus = created.transitionTo(SettlementStatus.IN_PROCESS);
         return status == SettlementStatus.COMPLETED ? withStatus.transitionTo(SettlementStatus.COMPLETED)
                 .withExternalReference("st-1") : withStatus;
