@@ -9,18 +9,18 @@ import com.seashare.seasharem3.application.port.out.GatewayNotificationPublisher
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Despacha por {@code type} la notificacion del webhook de la pasarela.
  *
- * <p>Si hay un manejador para el tipo, la notificacion se persiste de forma durable (outbox) y el
- * procesamiento ocurre despues, en el worker de la cola interna: asi la pasarela recibe el acuse
- * de recibo sin esperar al resultado (contrato §3.2). Si no hay manejador para el tipo, el evento
- * se registra en {@code operational_failure} y se confirma la recepcion sin reintentos, para no
- * provocar reintentos infinitos de la pasarela (contrato §3.6).</p>
+ * <p>Si hay al menos un manejador para el tipo, la notificacion se persiste de forma durable
+ * (outbox) y el procesamiento ocurre despues, en el worker de la cola interna: asi la pasarela
+ * recibe el acuse de recibo sin esperar al resultado (contrato §3.2). Varios manejadores pueden
+ * compartir el tipo {@code payment} (UC05 y UC09); el worker los ejecuta todos. Si no hay manejador
+ * para el tipo, el evento se registra en {@code operational_failure} y se confirma la recepcion sin
+ * reintentos, para no provocar reintentos infinitos de la pasarela (contrato §3.6).</p>
  *
  * <p>El metodo es transaccional porque la escritura en el outbox es obligatoria dentro de la
  * transaccion del llamador: la notificacion solo se considera durable si el outbox confirma la
@@ -48,10 +48,9 @@ public class GatewayWebhookDispatcherService implements DispatchGatewayNotificat
     public void dispatch(GatewayWebhookNotification notification) {
         Objects.requireNonNull(notification, "notification");
 
-        Optional<GatewayWebhookHandler> handler = handlers.stream()
-                .filter(candidate -> candidate.supportedType().equals(notification.type()))
-                .findFirst();
-        if (handler.isEmpty()) {
+        boolean handled = handlers.stream()
+                .anyMatch(candidate -> candidate.supportedType().equals(notification.type()));
+        if (!handled) {
             failureRecorder.record(USE_CASE, null, ErrorCode.INTERNAL_ERROR.name(), payloadRef(notification));
             return;
         }

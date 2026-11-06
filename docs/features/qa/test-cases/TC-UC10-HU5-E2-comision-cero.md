@@ -14,26 +14,26 @@
 #### Objectives & Context *(mandatory)*
 
 ##### Test Objectives
-Este caso de prueba verifica que, en una dispersión por penalidad de cancelación (`CANCELLED_MODERATE` o `CANCELLED_STRICT`), la `IntenciónDeDispersión` conserva `commission_amount = 0` y, al confirmarse el resultado, se registra el `RegistroDeDispersión` con comisión y seguro en cero **sin** crear ningún `RegistroDeComisión`, aunque exista un porcentaje de comisión configurado.
+Este caso de prueba verifica que, en una liquidación por penalidad de cancelación (`CANCELLED_MODERATE` o `CANCELLED_STRICT`), la `IntenciónDeDispersión` conserva `commission_amount = 0` y, cuando el libro interno confirma el resultado, se registra el `RegistroDeDispersión` con comisión y seguro en cero **sin** crear ningún `RegistroDeComisión`, aunque exista un porcentaje de comisión configurado.
 
 ##### Document References
 | Reference Name | Type of Reference | Document Location / Link |
 | ------ | ------ | ------ |
-| Feature Spec UC10 | Specification Document | [spec.md](../../010-liquidar-fondos-alquiler/spec.md) |
-| Plan UC10 | Plan Document | [plan.md](../../010-liquidar-fondos-alquiler/plan.md) |
-| Contrato evento UC07 (disparador) | Events contract | [UC07-estado-reserva.md](../../../technical-plan/contracts/events/UC07-estado-reserva.md) |
-| Contrato webhook de resultados | External contract | [pasarela-webhook-resultados.md](../../../technical-plan/contracts/external/pasarela-webhook-resultados.md) |
-| Catálogo de errores y política de colas | Conventions | [contracts/README.md](../../../technical-plan/contracts/README.md) |
+| Feature Spec UC10 | Specification Document | [spec.md](../../../docs/features/010-liquidar-fondos-alquiler/spec.md) |
+| Plan UC10 (D-UC10-18, libro simulado) | Plan Document | [plan.md](../../../docs/features/010-liquidar-fondos-alquiler/plan.md) |
+| Contrato evento UC07 (disparador) | Events contract | [UC07-estado-reserva.md](../../../docs/technical-plan/contracts/events/UC07-estado-reserva.md) |
+| Contrato del libro interno de liquidación | Internal contract | [pasarela-comando-liquidacion.md](../../../docs/technical-plan/contracts/external/pasarela-comando-liquidacion.md) |
+| Catálogo de errores y política de colas | Conventions | [contracts/README.md](../../../docs/technical-plan/contracts/README.md) |
 
 --------------------------------------------------------------------------------
 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**; la dispersión se dispara publicando el evento de UC07 y la confirmación con la notificación `type=merchant_order`.
+* La liquidación usa un **libro interno simulado**: se dispara publicando el evento de UC07 y se confirma en el worker de `finance.settlement-command.v1`; no hay notificación externa.
 
 ##### Dependencies & Assumptions
-* **TC-UC10-HU1-E1 y TC-UC10-HU4-E1 deben haber pasado** (dispersión por cancelación y camino de confirmación operativos).
+* **TC-UC10-HU1-E1 debe haber pasado** (liquidación por cancelación operativa).
 * Existe configuración financiera vigente con porcentaje de comisión mayor que cero.
 
 ##### Preconditions & Default Setup
@@ -48,22 +48,22 @@ Este caso de prueba verifica que, en una dispersión por penalidad de cancelaci�
 ##### Section 1: Dispersión por cancelación moderada sin registro de comisión
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Disparar la dispersión por cancelación moderada | Publicar en `seashare.reservations` (`reservation.status.changed` → `finance.reservation-status.v1`) | `{"reservation_id":"1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d","status":"CANCELLED_MODERATE","status_changed_at":"2026-11-02T10:00:00Z"}` | El mensaje se confirma; UC10 registra la `IntenciónDeDispersión` con alcance `CANCELLATION_COMPENSATION` (RF-001, RF-009). | [x] | |
-| 2 | Verificar el cálculo de la compensación | `SELECT` sobre `settlement_intent` | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | Monto solicitado = `180.00` (50 % del alquiler registrado); `commission_amount = 0` y seguro no aplicado (RF-002, RF-007, RF-014). | [x] | |
-| 3 | Verificar el envío a la Pasarela | Request journal del simulador (`POST /v1/advanced_payments/{id}/disbursements`) | `amount = 180.00`, `collector_id` del propietario | El payload solo lleva `disbursements[].amount`, `collector_id` y `external_reference`, con `X-Idempotency-Key` de la intención (RF-008, contrato de liquidación). | [x] | |
-| 4 | Simular la confirmación exitosa | `POST /api/v1/webhook/gateway?data.id=<external_reference>&type=merchant_order` con `x-signature` válida | `status = approved` | `200 OK`; la intención pasa a `COMPLETED` y se crea **un** `RegistroDeDispersión` (RF-010). | [x] | |
-| 5 | Verificar los componentes del registro | `SELECT` sobre `settlement_record` | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | `rental_gross_amount = 360.00`, `insurance_amount = 0`, `deposit_amount = 12.00`, `settlement_intent_id` y monto confirmado `180.00` (RF-016, RF-009A). | [x] | |
-| 6 | Verificar la ausencia de registro de comisión | `SELECT` sobre `commission_record` por la intención y la reserva | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | **Cero** filas: no se genera `RegistroDeComisión` para penalidades de cancelación (RF-007, RF-014, CE-002). | [x] | |
+| 1 | Disparar la dispersión por cancelación moderada | Publicar en `seashare.reservations` (`reservation.status.changed` → `finance.reservation-status.v1`) | `{"reservation_id":"1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d","status":"CANCELLED_MODERATE","status_changed_at":"2026-11-02T10:00:00Z"}` | El mensaje se confirma; UC10 registra la `IntenciónDeDispersión` con alcance `CANCELLATION_COMPENSATION` (RF-001, RF-009). | [ ] | |
+| 2 | Verificar el cálculo de la compensación | `SELECT` sobre `settlement_intent` | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | Monto solicitado = `180.00` (50 % del alquiler registrado); `commission_amount = 0` y seguro no aplicado (RF-002, RF-007, RF-014). | [ ] | |
+| 3 | Verificar el registro en el libro interno | `SELECT status, external_reference FROM settlement_intent` tras el worker | `amount = 180.00`; `external_reference = sim-settlement-<idempotency_key>` | La intención pasa a `COMPLETED` y se anota el monto en el libro interno, sin transferencia real ni cuentas de marketplace (RF-008, D-UC10-18). | [ ] | |
+| 4 | Verificar el registro inmutable | `SELECT` sobre `settlement_record` | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | Se crea **un** `RegistroDeDispersión` con monto `180.00` (RF-010). | [ ] | |
+| 5 | Verificar los componentes del registro | `SELECT` sobre `settlement_record` | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | `rental_gross_amount = 360.00`, `insurance_amount = 0`, `deposit_amount = 12.00`, `settlement_intent_id` y monto confirmado `180.00` (RF-016, RF-009A). | [ ] | |
+| 6 | Verificar la ausencia de registro de comisión | `SELECT` sobre `commission_record` por la intención y la reserva | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | **Cero** filas: no se genera `RegistroDeComisión` para penalidades de cancelación (RF-007, RF-014, CE-002). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Cancelación tardía (100 % del alquiler) | Publicar el estado `CANCELLED_STRICT` para una reserva con alquiler registrado | `status = CANCELLED_STRICT` | Intención con monto `360.00`, `commission_amount = 0`; tras la confirmación, registro con seguro y comisión en cero y sin `commission_record` (RF-003, RF-007). | [x] | |
-| 2 | Liquidación del depósito por disputa | Publicar el evento de UC08 con `status = COMPLETED` | `dispute_id = <uuid>`, `status = COMPLETED` | Alcance `DEPOSIT`: monto = depósito completo (`12.00`), comisión y seguro en cero, sin `commission_record` (RF-006, RF-014). | [x] | |
-| 3 | Reserva sin alquiler registrado | Disparar la cancelación para una reserva sin monto de alquiler interno | reserva sin alquiler | Se registra el fallo interno sin cálculo parcial y **sin** llamada a la Pasarela (RF-013). | [x] | |
-| 4 | Confirmación repetida | Reprocesar la misma notificación exitosa | mismo `data.id` | No se duplica el `settlement_record` ni aparece un `commission_record` (idempotencia, caso extremo UC10). | [x] | |
-| 5 | Resultado rechazado | Simular la confirmación con estado rechazado | `status = rejected` | Solo se actualiza la intención a `REJECTED`; sin registros exitosos ni comisión (RF-012). | [x] | |
-| 6 | Intento de crear comisión desde la operación de penalidad | Buscar cualquier vínculo de comisión generado por la intención | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | `commission_record` continúa vacío aunque el porcentaje global vigente sea mayor que cero (RF-007, CE-002). | [x] | |
+| 1 | Cancelación tardía (100 % del alquiler) | Publicar el estado `CANCELLED_STRICT` para una reserva con alquiler registrado | `status = CANCELLED_STRICT` | Intención con monto `360.00`, `commission_amount = 0`; tras la confirmación, registro con seguro y comisión en cero y sin `commission_record` (RF-003, RF-007). | [ ] | |
+| 2 | Liquidación del depósito por disputa | Publicar el evento de UC08 con `status = COMPLETED` | `dispute_id = <uuid>`, `status = COMPLETED` | Alcance `DEPOSIT`: monto = depósito completo (`12.00`), comisión y seguro en cero, sin `commission_record` (RF-006, RF-014). | [ ] | |
+| 3 | Reserva sin alquiler registrado | Disparar la cancelación para una reserva sin monto de alquiler interno | reserva sin alquiler | Se registra el fallo interno sin cálculo parcial y **sin** llamada a la Pasarela (RF-013). | [ ] | |
+| 4 | Confirmación repetida | Reprocesar el mismo comando de liquidación | misma intención | No se duplica el `settlement_record` ni aparece un `commission_record` (idempotencia, caso extremo UC10). | [ ] | |
+| 5 | Resultado rechazado | Provocar `GatewayBusinessRejectionException` con un doble de prueba | N/A | Solo se actualiza la intención a `REJECTED`; sin registros exitosos ni comisión (RF-012). | [ ] | El adaptador simulado real no rechaza. |
+| 6 | Intento de crear comisión desde la operación de penalidad | Buscar cualquier vínculo de comisión generado por la intención | `1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d` | `commission_record` continúa vacío aunque el porcentaje global vigente sea mayor que cero (RF-007, CE-002). | [ ] | |
 
 ##### Edge Cases & Boundary Conditions
 * **EC-001** : El depósito se conserva asociado en el registro de la penalidad aunque no forme parte del monto dispersado (RF-016).

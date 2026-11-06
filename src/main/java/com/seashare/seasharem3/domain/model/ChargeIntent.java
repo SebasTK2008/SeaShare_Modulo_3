@@ -46,6 +46,7 @@ public final class ChargeIntent {
 
     private final UUID id;
     private final ReservationId reservationId;
+    private final String operationKey;
     private final IdempotencyKey idempotencyKey;
     private final ChargeIntentStatus status;
     private final Money amount;
@@ -55,11 +56,12 @@ public final class ChargeIntent {
     private final String statusDetail;
     private final Instant createdAt;
 
-    private ChargeIntent(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
+    private ChargeIntent(UUID id, ReservationId reservationId, String operationKey, IdempotencyKey idempotencyKey,
             ChargeIntentStatus status, Money amount, PaymentMethodReference paymentMethod, String externalReference,
             String statusDetail, String payerEmail, Instant createdAt) {
         this.id = Objects.requireNonNull(id, "id");
         this.reservationId = Objects.requireNonNull(reservationId, "reservationId");
+        this.operationKey = requireOperationKey(operationKey);
         this.idempotencyKey = Objects.requireNonNull(idempotencyKey, "idempotencyKey");
         this.status = Objects.requireNonNull(status, "status");
         this.amount = Objects.requireNonNull(amount, "amount");
@@ -75,14 +77,16 @@ public final class ChargeIntent {
      * Crea la intención en {@code PENDING_SEND} (estado inicial al persistir el comando de UC07).
      * Fuente: UC05 plan §Reglas 4 y T003.
      */
-    public static ChargeIntent create(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
+    public static ChargeIntent create(UUID id, ReservationId reservationId, String operationKey,
+            IdempotencyKey idempotencyKey,
             Money amount, PaymentMethodReference paymentMethod, Instant createdAt) {
-        return create(id, reservationId, idempotencyKey, amount, paymentMethod, null, createdAt);
+        return create(id, reservationId, operationKey, idempotencyKey, amount, paymentMethod, null, createdAt);
     }
 
-    public static ChargeIntent create(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
+    public static ChargeIntent create(UUID id, ReservationId reservationId, String operationKey,
+            IdempotencyKey idempotencyKey,
             Money amount, PaymentMethodReference paymentMethod, String payerEmail, Instant createdAt) {
-        return new ChargeIntent(id, reservationId, idempotencyKey, ChargeIntentStatus.PENDING_SEND, amount,
+        return new ChargeIntent(id, reservationId, operationKey, idempotencyKey, ChargeIntentStatus.PENDING_SEND, amount,
                 paymentMethod, null, null, payerEmail, createdAt);
     }
 
@@ -91,17 +95,19 @@ public final class ChargeIntent {
      * almacenado proviene de la base de datos, que es la fuente de verdad.
      * Fuente: UC05 plan T009 (persistencia).
      */
-    public static ChargeIntent restore(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
+    public static ChargeIntent restore(UUID id, ReservationId reservationId, String operationKey,
+            IdempotencyKey idempotencyKey,
             ChargeIntentStatus status, Money amount, PaymentMethodReference paymentMethod, String externalReference,
             String statusDetail, Instant createdAt) {
-        return restore(id, reservationId, idempotencyKey, status, amount, paymentMethod, externalReference,
+        return restore(id, reservationId, operationKey, idempotencyKey, status, amount, paymentMethod, externalReference,
                 statusDetail, null, createdAt);
     }
 
-    public static ChargeIntent restore(UUID id, ReservationId reservationId, IdempotencyKey idempotencyKey,
+    public static ChargeIntent restore(UUID id, ReservationId reservationId, String operationKey,
+            IdempotencyKey idempotencyKey,
             ChargeIntentStatus status, Money amount, PaymentMethodReference paymentMethod, String externalReference,
             String statusDetail, String payerEmail, Instant createdAt) {
-        return new ChargeIntent(id, reservationId, idempotencyKey, status, amount, paymentMethod, externalReference,
+        return new ChargeIntent(id, reservationId, operationKey, idempotencyKey, status, amount, paymentMethod, externalReference,
                 statusDetail, payerEmail, createdAt);
     }
 
@@ -117,7 +123,7 @@ public final class ChargeIntent {
         if (!ALLOWED_TRANSITIONS.get(status).contains(next)) {
             throw new DomainException("ChargeIntent transition not allowed: " + status + " → " + next);
         }
-        return new ChargeIntent(id, reservationId, idempotencyKey, next, amount, paymentMethod, externalReference,
+        return new ChargeIntent(id, reservationId, operationKey, idempotencyKey, next, amount, paymentMethod, externalReference,
                 statusDetail, payerEmail, createdAt);
     }
 
@@ -130,13 +136,13 @@ public final class ChargeIntent {
         if (externalReference != null && !externalReference.equals(reference)) {
             throw new DomainException("ChargeIntent already has an external_reference: " + externalReference);
         }
-        return new ChargeIntent(id, reservationId, idempotencyKey, status, amount, paymentMethod, reference,
+        return new ChargeIntent(id, reservationId, operationKey, idempotencyKey, status, amount, paymentMethod, reference,
                 statusDetail, payerEmail, createdAt);
     }
 
     /** Detalle técnico del estado externo publicado por UC05 (lo consume UC06). Fuente: D-UC05-02. */
     public ChargeIntent withStatusDetail(String detail) {
-        return new ChargeIntent(id, reservationId, idempotencyKey, status, amount, paymentMethod, externalReference,
+        return new ChargeIntent(id, reservationId, operationKey, idempotencyKey, status, amount, paymentMethod, externalReference,
                 detail, payerEmail, createdAt);
     }
 
@@ -157,6 +163,11 @@ public final class ChargeIntent {
 
     public ReservationId reservationId() {
         return reservationId;
+    }
+
+    /** Identidad de negocio de la operación (D-37); deduplica internamente, no viaja a la pasarela. */
+    public String operationKey() {
+        return operationKey;
     }
 
     public IdempotencyKey idempotencyKey() {
@@ -200,7 +211,7 @@ public final class ChargeIntent {
         if (!(other instanceof ChargeIntent that)) {
             return false;
         }
-        return id.equals(that.id) && reservationId.equals(that.reservationId)
+        return id.equals(that.id) && reservationId.equals(that.reservationId) && operationKey.equals(that.operationKey)
                 && idempotencyKey.equals(that.idempotencyKey) && status == that.status && amount.equals(that.amount)
                 && paymentMethod.equals(that.paymentMethod)
                 && Objects.equals(externalReference, that.externalReference)
@@ -209,12 +220,20 @@ public final class ChargeIntent {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, reservationId, idempotencyKey, status, amount, paymentMethod, externalReference,
+        return Objects.hash(id, reservationId, operationKey, idempotencyKey, status, amount, paymentMethod, externalReference,
                 statusDetail, createdAt);
     }
 
     @Override
     public String toString() {
         return "ChargeIntent[id=" + id + ", reservationId=" + reservationId + ", status=" + status + "]";
+    }
+
+    private static String requireOperationKey(String operationKey) {
+        Objects.requireNonNull(operationKey, "operationKey");
+        if (operationKey.isBlank()) {
+            throw new DomainException("operationKey must not be blank");
+        }
+        return operationKey;
     }
 }

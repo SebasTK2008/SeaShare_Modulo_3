@@ -75,8 +75,8 @@ class Uc10AcceptanceTest {
         registerResult = new RegisterSettlementResultService(settlementIntentRepository, settlementRecordRepository,
                 commissionRecordRepository, chargeIntentRepository, chargeRecordQueryPort,
                 reservationInformationRepository, failures, Clock.fixed(NOW, ZoneOffset.UTC));
-        sendSettlement = new SendSettlementToGatewayService(settlementIntentRepository, chargeIntentRepository,
-                settlementGatewayPort, registerResult, failures, 123456789L);
+        sendSettlement = new SendSettlementToGatewayService(settlementIntentRepository,
+                settlementGatewayPort, registerResult, failures);
         charge = ChargeFixtures.capturedIntent(RESERVATION, "mp-payment-1");
         ChargeRecord chargeRecord = ChargeRecord.create(UUID.randomUUID(), charge, RESERVATION, NOW);
         when(settlementIntentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -92,7 +92,7 @@ class Uc10AcceptanceTest {
         SettlementIntent created = SettlementIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
                 SettlementTrigger.COMPLETED, scope, new Money(new BigDecimal("660000.00")),
                 new Money(new BigDecimal("180000.00")), Money.ZERO, charge.id(),
-                new IdempotencyKey("settlement:COMPLETED:op-1"), null, NOW);
+                "settlement:COMPLETED:op-1", new IdempotencyKey("settlement:COMPLETED:op-1"), null, NOW);
         return status == SettlementStatus.PENDING_SEND ? created : created.transitionTo(status);
     }
 

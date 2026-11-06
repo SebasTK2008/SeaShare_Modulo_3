@@ -15,17 +15,23 @@ import com.seashare.seasharem3.application.service.ReconcileSettlementIntentsSer
 import com.seashare.seasharem3.application.service.RegisterSettlementResultService;
 import com.seashare.seasharem3.application.service.RequestSettlementService;
 import com.seashare.seasharem3.application.service.SendSettlementToGatewayService;
-import com.seashare.seasharem3.application.service.SettlementWebhookHandler;
 import com.seashare.seasharem3.domain.service.SettlementCalculator;
-import com.seashare.seasharem3.infrastructure.adapter.out.gateway.MercadoPagoSettlementAdapter;
+import com.seashare.seasharem3.infrastructure.adapter.out.gateway.SimulatedSettlementGatewayAdapter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
 
-/** Ensambla UC10 manteniendo la capa de aplicacion libre de Spring. */
+/**
+ * Ensambla UC10 manteniendo la capa de aplicacion libre de Spring.
+ *
+ * <p>La liquidacion usa el libro interno simulado: {@code seashare.gateway.settlement-mode} solo
+ * admite {@code simulated} en esta entrega y cualquier otro valor impide arrancar (D-UC10-10).</p>
+ */
 @Configuration(proxyBeanMethods = false)
 public class SettlementConfiguration {
+
+    private static final String SIMULATED_MODE = "simulated";
 
     @Bean
     public SettlementCalculator settlementCalculator() {
@@ -34,7 +40,12 @@ public class SettlementConfiguration {
 
     @Bean
     public SettlementGatewayPort settlementGatewayPort(GatewayProperties properties) {
-        return new MercadoPagoSettlementAdapter(properties);
+        String mode = properties.getSettlementMode();
+        if (mode == null || !SIMULATED_MODE.equalsIgnoreCase(mode.trim())) {
+            throw new IllegalStateException("seashare.gateway.settlement-mode must be '" + SIMULATED_MODE
+                    + "': the real marketplace settlement is not implemented in this delivery");
+        }
+        return new SimulatedSettlementGatewayAdapter();
     }
 
     @Bean
@@ -64,30 +75,20 @@ public class SettlementConfiguration {
 
     @Bean
     public SendSettlementToGatewayService sendSettlementToGatewayService(
-            SettlementIntentRepository settlementIntentRepository, ChargeIntentRepository chargeIntentRepository,
+            SettlementIntentRepository settlementIntentRepository,
             SettlementGatewayPort settlementGatewayPort,
-            RegisterSettlementResultService registerSettlementResult, FailureRecorderPort failureRecorder,
-            GatewayProperties gatewayProperties) {
-        return new SendSettlementToGatewayService(settlementIntentRepository, chargeIntentRepository,
-                settlementGatewayPort, registerSettlementResult, failureRecorder,
-                gatewayProperties.getCollectorId());
+            RegisterSettlementResultService registerSettlementResult, FailureRecorderPort failureRecorder) {
+        return new SendSettlementToGatewayService(settlementIntentRepository, settlementGatewayPort,
+                registerSettlementResult, failureRecorder);
     }
 
     @Bean
     public ReconcileSettlementIntentsService reconcileSettlementIntentsService(
             SettlementIntentRepository settlementIntentRepository,
-            SettlementRecordRepository settlementRecordRepository, SettlementGatewayPort settlementGatewayPort,
+            SettlementRecordRepository settlementRecordRepository,
             RegisterSettlementResultService registerSettlementResult, FailureRecorderPort failureRecorder,
             SettlementCommandPublisher settlementCommandPublisher) {
         return new ReconcileSettlementIntentsService(settlementIntentRepository, settlementRecordRepository,
-                settlementGatewayPort, registerSettlementResult, failureRecorder, settlementCommandPublisher);
-    }
-
-    @Bean
-    public SettlementWebhookHandler settlementWebhookHandler(
-            SettlementIntentRepository settlementIntentRepository, SettlementGatewayPort settlementGatewayPort,
-            RegisterSettlementResultService registerSettlementResult, FailureRecorderPort failureRecorder) {
-        return new SettlementWebhookHandler(settlementIntentRepository, settlementGatewayPort,
-                registerSettlementResult, failureRecorder);
+                registerSettlementResult, failureRecorder, settlementCommandPublisher);
     }
 }

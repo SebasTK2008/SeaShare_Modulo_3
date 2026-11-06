@@ -30,11 +30,12 @@ Este caso de prueba verifica que, ante el rechazo reportado por la Pasarela para
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**; el rechazo se provoca con el estado del pago en el simulador y su notificación `payment.updated`.
+* **Modo A (suite automática):** el cuerpo y las cabeceras que el sistema envía a la Pasarela los verifican `MercadoPagoChargeAdapterTest` y `MercadoPagoRefundAdapterTest` (WireMock embebido); este TC verifica el efecto en la BD, las colas y la consulta real del pago.
+* **Modo B (release):** debe provocarse un rechazo real con tarjeta/caso de prueba de Mercado Pago sandbox y verificar la ausencia de `charge_record`, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 
 ##### Dependencies & Assumptions
 * **TC-UC05-HU1-E1 debe haber pasado** (existe la intención de la reserva, sin resultado definitivo).
-* El simulador permite fijar el estado del pago en `rejected` y su `status_detail`.
+* El rechazo se provoca tokenizando la tarjeta de prueba con el titular `OTHE` (runbook §4).
 
 ##### Preconditions & Default Setup
 * **Initial State** : reserva de prueba con valor total registrado (alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`; ajustar a la versión vigente del entorno). Intención en `PENDING_SEND`/`IN_PROCESS` con `external_reference = 1234567890`, `payer_email` y `payment_method_type = CREDIT_CARD`; ninguna fila en `charge_record`. La reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10`.
@@ -48,14 +49,14 @@ Este caso de prueba verifica que, ante el rechazo reportado por la Pasarela para
 ##### Section 1: Rechazo reportado por la Pasarela
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar el punto de partida | `psql -c "SELECT status, amount, external_reference FROM charge_intent WHERE external_reference = '1234567890';"` | N/A | Intención sin resultado definitivo y sin `charge_record` (RF-004). | [x] | |
-| 2 | Simular el rechazo en la Pasarela | Fijar en el simulador el pago `1234567890` como `rejected` | `status=rejected`, `status_detail=cc_rejected_bad_filled_other` (ejemplo del contrato §4) | El simulador devuelve `rejected` al consultar el pago. | [x] | |
-| 3 | Notificar el resultado | `POST http://localhost:8080/api/v1/webhook/gateway?data.id=1234567890&type=payment` con firma válida | body `{"action":"payment.updated","type":"payment"}`; `x-signature` del contrato; `x-request-id: <uuid>` | `200 OK` con `{"status":"received"}`; notificación persistida en `outbox_message` (RF-005). | [x] | |
-| 4 | Verificar la consulta del worker y el mensaje interno | Request journal del simulador y consola RabbitMQ → `finance.gateway-notification.v1` | N/A | `GET /v1/payments/1234567890` y mensaje `{"type":"payment","action":"payment.updated","data_id":"1234567890"}`. | [x] | |
-| 5 | Verificar el estado fallido registrado | `psql -c "SELECT status, status_detail, amount, external_reference FROM charge_intent WHERE external_reference = '1234567890';"` | N/A | Intención en `REJECTED` con el `status_detail` de la Pasarela; el monto solicitado y la referencia externa se conservan (RF-006). | [x] | |
-| 6 | Verificar que no se genera registro de cobro | `psql -c "SELECT count(*) FROM charge_record WHERE charge_intent_id = '<id de la intención>';"` | N/A | `count = 0`: ninguna transacción rechazada genera `RegistroDeCobro` (RF-008, CE-004). | [x] | |
-| 7 | Verificar la disponibilidad para UC06 | `curl -s http://localhost:8080/api/v1/reservations/<UUID>/payment-confirmation` | N/A | `200 OK`: `status = REJECTED`, `detail` con el detalle de la Pasarela, `charged_amount = null` y `external_reference` informada (RF-007; contrato UC06 §4). | [x] | |
-| 8 | Confirmar que la reserva no queda cobrada | Revisar `charge_record` y la respuesta del paso 7 | N/A | No existe registro financiero del cobro y la respuesta nunca es `APPROVED` (RF-008, CE-004). | [x] | |
+| 1 | Confirmar el punto de partida | `psql -c "SELECT status, amount, external_reference FROM charge_intent WHERE external_reference = '1234567890';"` | N/A | Intención sin resultado definitivo y sin `charge_record` (RF-004). | [ ] | |
+| 2 | Provocar el rechazo en la Pasarela | Tokenizar la tarjeta de prueba con titular `OTHE` y publicar el estado `PENDING` | `status=rejected`, `status_detail` informado por Mercado Pago (por ejemplo `cc_rejected_other_reason`) | La Pasarela devuelve `rejected` al consultar el pago. | [ ] | |
+| 3 | Notificar el resultado | `POST http://localhost:8080/api/v1/webhook/gateway?data.id=1234567890&type=payment` con firma válida | body `{"action":"payment.updated","type":"payment"}`; `x-signature` del contrato; `x-request-id: <uuid>` | `200 OK` con `{"status":"received"}`; notificación persistida en `outbox_message` (RF-005). | [ ] | |
+| 4 | Verificar la consulta del worker y el mensaje interno | Logs de la app y consola RabbitMQ → `finance.gateway-notification.v1` | N/A | `GET /v1/payments/1234567890` y mensaje `{"type":"payment","action":"payment.updated","data_id":"1234567890"}`. | [ ] | |
+| 5 | Verificar el estado fallido registrado | `psql -c "SELECT status, status_detail, amount, external_reference FROM charge_intent WHERE external_reference = '1234567890';"` | N/A | Intención en `REJECTED` con el `status_detail` de la Pasarela; el monto solicitado y la referencia externa se conservan (RF-006). | [ ] | |
+| 6 | Verificar que no se genera registro de cobro | `psql -c "SELECT count(*) FROM charge_record WHERE charge_intent_id = '<id de la intención>';"` | N/A | `count = 0`: ninguna transacción rechazada genera `RegistroDeCobro` (RF-008, CE-004). | [ ] | |
+| 7 | Verificar la disponibilidad para UC06 | `curl -s http://localhost:8080/api/v1/reservations/<UUID>/payment-confirmation` | N/A | `200 OK`: `status = REJECTED`, `detail` con el detalle de la Pasarela, `charged_amount = null` y `external_reference` informada (RF-007; contrato UC06 §4). | [ ] | |
+| 8 | Confirmar que la reserva no queda cobrada | Revisar `charge_record` y la respuesta del paso 7 | N/A | No existe registro financiero del cobro y la respuesta nunca es `APPROVED` (RF-008, CE-004). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |

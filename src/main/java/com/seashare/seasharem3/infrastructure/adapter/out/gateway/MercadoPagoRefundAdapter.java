@@ -5,6 +5,7 @@ import com.seashare.seasharem3.application.dto.RefundGatewayResult;
 import com.seashare.seasharem3.application.port.out.RefundGatewayPort;
 import com.seashare.seasharem3.domain.exception.GatewayBusinessRejectionException;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;
+import com.seashare.seasharem3.domain.exception.GatewayResourceNotFoundException;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.infrastructure.config.GatewayProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -17,9 +18,10 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.core.JacksonException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -69,7 +71,7 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, bearerToken())
-                    .header(IDEMPOTENCY_HEADER, request.operationKey())
+                    .header(IDEMPOTENCY_HEADER, request.idempotencyKey())
                     .body(mapper.writeValueAsString(body))
                     .retrieve()
                     .body(String.class);
@@ -120,6 +122,41 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
         }
     }
 
+    @Override
+    public List<RefundGatewayResult> fetchRefunds(String chargeReference) {
+        Objects.requireNonNull(chargeReference, "chargeReference");
+        try {
+            Supplier<List<RefundGatewayResult>> call = () -> executeFetchRefunds(chargeReference);
+            return CircuitBreaker.decorateSupplier(circuitBreaker, call).get();
+        } catch (CallNotPermittedException exception) {
+            throw communicationFailure("The payment gateway circuit breaker is open", exception);
+        }
+    }
+
+    private List<RefundGatewayResult> executeFetchRefunds(String chargeReference) {
+        try {
+            String response = restClient.get()
+                    .uri(PAYMENTS_PATH + "/" + chargeReference + "/refunds")
+                    .accept(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                    .retrieve()
+                    .body(String.class);
+            List<MercadoPagoRefundResponse> refunds = mapper.readValue(response,
+                    new TypeReference<List<MercadoPagoRefundResponse>>() {
+                    });
+            return refunds == null ? List.of() : refunds.stream().map(MercadoPagoRefundAdapter::toResult).toList();
+        } catch (JacksonException exception) {
+            throw communicationFailure("The payment gateway returned an invalid refund list", exception);
+        } catch (HttpClientErrorException.NotFound exception) {
+            throw new GatewayResourceNotFoundException(
+                    "The payment gateway does not know the payment " + chargeReference, exception);
+        } catch (RestClientResponseException exception) {
+            throw communicationFailure("The payment gateway did not answer the refund list query", exception);
+        } catch (RestClientException exception) {
+            throw communicationFailure("The payment gateway did not answer the refund list query", exception);
+        }
+    }
+
     private static RefundGatewayResult toResult(MercadoPagoRefundResponse response) {
         return new RefundGatewayResult(response.status(),
                 response.id() == null ? null : String.valueOf(response.id()),
@@ -158,7 +195,9 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
                 .slidingWindowSize(properties.getSlidingWindowSize())
                 .waitDurationInOpenState(properties.getWaitDurationInOpenState())
                 .permittedNumberOfCallsInHalfOpenState(properties.getPermittedNumberOfCallsInHalfOpenState())
-                .ignoreExceptions(GatewayBusinessRejectionException.class)
+                // Un 400 de negocio y un 404 (pago desconocido, p. ej. una notificacion de prueba del panel)
+                // son respuestas validas de la pasarela, no una caida: no deben abrir el breaker.
+                .ignoreExceptions(GatewayBusinessRejectionException.class, GatewayResourceNotFoundException.class)
                 .build();
         return CircuitBreaker.of(DEPENDENCY_NAME, config);
     }

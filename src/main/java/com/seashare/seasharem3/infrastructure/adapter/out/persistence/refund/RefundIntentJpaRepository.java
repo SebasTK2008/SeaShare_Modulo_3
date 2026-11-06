@@ -18,7 +18,9 @@ public interface RefundIntentJpaRepository extends JpaRepository<RefundIntentJpa
     @Query("select r from RefundIntentJpaEntity r where r.id = :id")
     Optional<RefundIntentJpaEntity> findByIdForUpdate(@Param("id") UUID id);
 
-    Optional<RefundIntentJpaEntity> findFirstByIdempotencyKey(String idempotencyKey);
+    Optional<RefundIntentJpaEntity> findFirstByReservationIdAndOperationKey(UUID reservationId, String operationKey);
+
+    Optional<RefundIntentJpaEntity> findFirstByReservationIdOrderByCreatedAtDescIdDesc(UUID reservationId);
 
     Optional<RefundIntentJpaEntity> findFirstByExternalReference(String externalReference);
 

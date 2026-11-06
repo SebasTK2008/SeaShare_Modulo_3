@@ -87,7 +87,7 @@ class PaymentConfirmationLatestIntentIntegrationTest {
 
     private static ChargeIntent intent(UUID reservationId, UUID intentId, Instant createdAt) {
         return ChargeIntent.create(intentId, new ReservationId(reservationId),
-                new IdempotencyKey("key-" + intentId), TOTAL,
+                "key-" + intentId, new IdempotencyKey("key-" + intentId), TOTAL,
                 new PaymentMethodReference("token-123", "CREDIT_CARD", "4242"), createdAt);
     }
 }

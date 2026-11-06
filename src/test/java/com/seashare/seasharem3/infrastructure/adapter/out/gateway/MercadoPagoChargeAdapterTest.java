@@ -66,8 +66,12 @@ class MercadoPagoChargeAdapterTest {
     }
 
     private static ChargeGatewayRequest request() {
+        return request("CREDIT_CARD");
+    }
+
+    private static ChargeGatewayRequest request(String paymentMethodId) {
         return new ChargeGatewayRequest(new Money(new BigDecimal("990000.00")), "token-123",
-                "Reserva " + RESERVATION_ID, 1, "CREDIT_CARD", "arrendatario@example.com", RESERVATION_ID,
+                "Reserva " + RESERVATION_ID, 1, paymentMethodId, "arrendatario@example.com", RESERVATION_ID,
                 OPERATION_KEY);
     }
 
@@ -87,9 +91,20 @@ class MercadoPagoChargeAdapterTest {
                 .withRequestBody(containing("\"transaction_amount\":990000.00"))
                 .withRequestBody(containing("\"token\":\"token-123\""))
                 .withRequestBody(containing("\"installments\":1"))
-                .withRequestBody(containing("\"payment_method_id\":\"credit_card\""))
                 .withRequestBody(containing("\"email\":\"arrendatario@example.com\""))
                 .withRequestBody(containing("\"external_reference\":\"" + RESERVATION_ID + "\"")));
+        assertThat(wireMock.findAll(postRequestedFor(urlEqualTo("/v1/payments"))).get(0).getBodyAsString())
+                .doesNotContain("\"payment_method_id\"");
+    }
+
+    @Test
+    void sendsTheCardBrandWhenUc07ProvidesIt() {
+        wireMock.stubFor(post(urlEqualTo("/v1/payments")).willReturn(okJson("{\"status\":\"approved\",\"id\":1}")));
+
+        adapter.send(request("VISA"));
+
+        wireMock.verify(postRequestedFor(urlEqualTo("/v1/payments"))
+                .withRequestBody(containing("\"payment_method_id\":\"visa\"")));
     }
 
     @Test
@@ -100,7 +115,7 @@ class MercadoPagoChargeAdapterTest {
 
         String body = wireMock.findAll(postRequestedFor(urlEqualTo("/v1/payments"))).get(0).getBodyAsString();
         assertThat(body).contains("\"transaction_amount\"", "\"token\"", "\"description\"", "\"installments\"",
-                "\"payment_method_id\"", "\"payer\"", "\"external_reference\"");
+                "\"payer\"", "\"external_reference\"");
         assertThat(body).doesNotContain("card_number", "cvv", "expiration", "\"pan\"");
     }
 

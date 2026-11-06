@@ -3,16 +3,15 @@ package com.seashare.seasharem3.application.port.out;
 import com.seashare.seasharem3.application.dto.GatewaySettlementRequest;
 import com.seashare.seasharem3.application.dto.GatewaySettlementResult;
 
-import java.util.Optional;
-
 /**
- * ACL de la pasarela de liquidacion (UC10).
+ * ACL del libro de liquidaciones (UC10).
  * Fuente: UC10 plan T006 y contrato external/pasarela-comando-liquidacion.md.
- * Firma publicada en el plan de UC10: envio y consulta del detalle para el webhook.
+ *
+ * <p>La implementacion de esta entrega es un libro interno simulado: no hay consulta remota ni
+ * dispersion real en Mercado Pago. El puerto solo conserva el envio que necesita el worker; la
+ * conciliacion es interna (D-UC10-10).</p>
  */
 public interface SettlementGatewayPort {
 
     GatewaySettlementResult send(GatewaySettlementRequest request);
-
-    Optional<GatewaySettlementResult> fetch(String externalReference);
 }

@@ -24,7 +24,7 @@ public final class RefundPersistenceMapper {
         return RefundIntent.restore(entity.getId(), new ReservationId(entity.getReservationId()),
                 RefundTrigger.valueOf(entity.getTrigger()), RefundScope.valueOf(entity.getScope()),
                 new Money(entity.getAmount()), entity.getChargeIntentId(),
-                new IdempotencyKey(entity.getIdempotencyKey()), entity.statusValue(), entity.getStatusDetail(),
+                entity.getOperationKey(), new IdempotencyKey(entity.getIdempotencyKey()), entity.statusValue(), entity.getStatusDetail(),
                 entity.getDisputeId(), entity.getExternalReference(), entity.getCreatedAt());
     }
 

@@ -18,7 +18,10 @@ public interface SettlementIntentJpaRepository extends JpaRepository<SettlementI
     @Query("select s from SettlementIntentJpaEntity s where s.id = :id")
     Optional<SettlementIntentJpaEntity> findByIdForUpdate(@Param("id") UUID id);
 
-    Optional<SettlementIntentJpaEntity> findFirstByIdempotencyKey(String idempotencyKey);
+    Optional<SettlementIntentJpaEntity> findFirstByReservationIdAndOperationKey(UUID reservationId, String operationKey);
+
+    Optional<SettlementIntentJpaEntity> findFirstByReservationIdAndScopeOrderByCreatedAtDescIdDesc(UUID reservationId,
+            String scope);
 
     Optional<SettlementIntentJpaEntity> findFirstByExternalReference(String externalReference);
 

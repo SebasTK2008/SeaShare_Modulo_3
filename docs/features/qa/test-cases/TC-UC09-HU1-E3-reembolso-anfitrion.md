@@ -30,7 +30,7 @@ Este caso de prueba verifica que, ante una cancelación por el anfitrión, el si
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**; se verifica el request journal del simulador y los registros internos.
+* **Modo A (suite automática):** el cuerpo y las cabeceras que el sistema envía a la Pasarela los verifican `MercadoPagoChargeAdapterTest` y `MercadoPagoRefundAdapterTest` (WireMock embebido); este TC verifica el efecto en la BD, las colas y la consulta real del reembolso.
 * El resultado externo del reembolso se cubre en UC09 HU3.
 
 ##### Dependencies & Assumptions
@@ -50,13 +50,13 @@ Este caso de prueba verifica que, ante una cancelación por el anfitrión, el si
 ##### Section 1: Reembolso del 100 % al Arrendatario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar el valor total registrado | `SELECT amount, rental_amount, insurance_amount, deposit_amount FROM charge_record WHERE reservation_id = 'b7d0e2a1-…';` | `990000.00` total | El valor total y su desglose están congelados en el registro del cobro (RF-002). | [x] | |
-| 2 | Publicar la cancelación por anfitrión | Publicar en `seashare.reservations` / `reservation.status.changed` | `{"reservation_id":"b7d0e2a1-…","status":"CANCELLED_BY_HOST","status_changed_at":"2026-12-21T09:00:00Z"}` | `ack`; UC07 delega el reembolso en UC09 (RF-001). | [x] | |
-| 3 | Verificar la intención de reembolso | `SELECT trigger, scope, amount, status, idempotency_key FROM refund_intent;` | `trigger = 'CANCELLED_BY_HOST'` | `scope = 'FULL'`, `amount = 990000.00`, clave `refund:CANCELLED_BY_HOST:<reservation_id>:CANCELLED_BY_HOST` (RF-002, RF-006). | [x] | |
-| 4 | Verificar que no se aplica penalización | Comparar el `amount` con el valor total pagado | `990000.00` | No hay reducción por cancelación del anfitrión ni retención del depósito (RF-002, CE-002). | [x] | |
-| 5 | Verificar el desenlace del depósito | `SELECT disposition FROM deposit_disposition;` | N/A | `disposition = 'REFUND_REQUESTED'`; el depósito se devuelve junto con el resto del valor (RF-002). | [x] | |
-| 6 | Verificar la llamada a la Pasarela | Journal del simulador (`POST /v1/payments/{id}/refunds`) | `amount = 990000.00` | Reembolso único sobre el cobro original, con `X-Idempotency-Key` de la intención (contrato §2). | [x] | |
-| 7 | Verificar estado pendiente | `SELECT status FROM refund_intent;` y `SELECT count(*) FROM refund_record;` | N/A | Intención en curso y sin `refund_record` hasta la confirmación externa (RF-006, RF-007). | [x] | |
+| 1 | Confirmar el valor total registrado | `SELECT amount, rental_amount, insurance_amount, deposit_amount FROM charge_record WHERE reservation_id = 'b7d0e2a1-…';` | `990000.00` total | El valor total y su desglose están congelados en el registro del cobro (RF-002). | [ ] | |
+| 2 | Publicar la cancelación por anfitrión | Publicar en `seashare.reservations` / `reservation.status.changed` | `{"reservation_id":"b7d0e2a1-…","status":"CANCELLED_BY_HOST","status_changed_at":"2026-12-21T09:00:00Z"}` | `ack`; UC07 delega el reembolso en UC09 (RF-001). | [ ] | |
+| 3 | Verificar la intención de reembolso | `SELECT trigger, scope, amount, status, idempotency_key FROM refund_intent;` | `trigger = 'CANCELLED_BY_HOST'` | `scope = 'FULL'`, `amount = 990000.00`, clave UUID v4 (D-UC09-12) (RF-002, RF-006). | [ ] | |
+| 4 | Verificar que no se aplica penalización | Comparar el `amount` con el valor total pagado | `990000.00` | No hay reducción por cancelación del anfitrión ni retención del depósito (RF-002, CE-002). | [ ] | |
+| 5 | Verificar el desenlace del depósito | `SELECT disposition FROM deposit_disposition;` | N/A | `disposition = 'REFUND_REQUESTED'`; el depósito se devuelve junto con el resto del valor (RF-002). | [ ] | |
+| 6 | Verificar la llamada a la Pasarela | Consultar el reembolso real: `GET /v1/payments/{id}/refunds` en Mercado Pago (o su panel) | `amount = 990000.00` | Reembolso único sobre el cobro original, con `X-Idempotency-Key` de la intención (contrato §2). | [ ] | El header `X-Idempotency-Key` lo verifica `MercadoPagoRefundAdapterTest`; en la BD, `refund_intent.idempotency_key` es el UUID v4 que se envía. |
+| 7 | Verificar estado pendiente | `SELECT status FROM refund_intent;` y `SELECT count(*) FROM refund_record;` | N/A | Intención en curso y sin `refund_record` hasta la confirmación externa (RF-006, RF-007). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |

@@ -33,7 +33,7 @@ class RefundRecordTest {
         return RefundIntent.create(UUID.randomUUID(), new ReservationId(UUID.randomUUID()),
                 RefundTrigger.DISPUTE_REJECTED, RefundScope.DEPOSIT_ONLY,
                 new Money(new BigDecimal("30000.00")), UUID.randomUUID(),
-                new IdempotencyKey("refund:DISPUTE_REJECTED:op-1"), disputeId, CREATED_AT)
+                "refund:DISPUTE_REJECTED:op-1", new IdempotencyKey("refund:DISPUTE_REJECTED:op-1"), disputeId, CREATED_AT)
                 .transitionTo(RefundIntentStatus.COMPLETED);
     }
 
@@ -68,7 +68,7 @@ class RefundRecordTest {
     void rejectsARecordForANonCompletedRefund() {
         RefundIntent pending = RefundIntent.create(UUID.randomUUID(), new ReservationId(UUID.randomUUID()),
                 RefundTrigger.CANCELLED_FLEXIBLE, RefundScope.FULL, new Money(new BigDecimal("30000.00")),
-                UUID.randomUUID(), new IdempotencyKey("refund:CANCELLED_FLEXIBLE:op-2"), null, CREATED_AT);
+                UUID.randomUUID(), "refund:CANCELLED_FLEXIBLE:op-2", new IdempotencyKey("refund:CANCELLED_FLEXIBLE:op-2"), null, CREATED_AT);
 
         assertThatThrownBy(() -> RefundRecord.create(UUID.randomUUID(), pending, OWNER, BOAT,
                 new Money(new BigDecimal("30000.00")), null, "Refund", "refund-1", CREATED_AT))

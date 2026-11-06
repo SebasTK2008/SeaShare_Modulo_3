@@ -29,7 +29,7 @@ class RefundIntentTest {
     private static RefundIntent intent() {
         return RefundIntent.create(UUID.randomUUID(), RESERVATION, RefundTrigger.CANCELLED_FLEXIBLE,
                 RefundScope.FULL, AMOUNT, UUID.randomUUID(),
-                new IdempotencyKey("refund:CANCELLED_FLEXIBLE:op-1"), null, CREATED_AT);
+                "refund:CANCELLED_FLEXIBLE:op-1", new IdempotencyKey("refund:CANCELLED_FLEXIBLE:op-1"), null, CREATED_AT);
     }
 
     @Test
@@ -93,7 +93,29 @@ class RefundIntentTest {
     void rejectsANonPositiveAmount() {
         assertThatThrownBy(() -> RefundIntent.create(UUID.randomUUID(), RESERVATION,
                 RefundTrigger.CANCELLED_FLEXIBLE, RefundScope.FULL, new Money(BigDecimal.ZERO),
-                UUID.randomUUID(), new IdempotencyKey("refund:key"), null, CREATED_AT))
+                UUID.randomUUID(), "refund:key", new IdempotencyKey("refund:key"), null, CREATED_AT))
+                .isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void keepsTheOperationKeyAcrossTransitionsAndRestore() {
+        RefundIntent original = intent().transitionTo(RefundIntentStatus.IN_PROCESS);
+
+        RefundIntent restored = RefundIntent.restore(original.id(), original.reservationId(), original.trigger(),
+                original.scope(), original.amount(), original.chargeIntentId(), original.operationKey(),
+                original.idempotencyKey(), original.status(), original.statusDetail(), original.disputeId(),
+                original.externalReference(), original.createdAt());
+
+        assertThat(original.operationKey()).isEqualTo("refund:CANCELLED_FLEXIBLE:op-1");
+        assertThat(restored.operationKey()).isEqualTo(original.operationKey());
+        assertThat(restored.idempotencyKey()).isEqualTo(original.idempotencyKey());
+    }
+
+    @Test
+    void rejectsABlankOperationKey() {
+        assertThatThrownBy(() -> RefundIntent.create(UUID.randomUUID(), RESERVATION,
+                RefundTrigger.CANCELLED_FLEXIBLE, RefundScope.FULL, AMOUNT, UUID.randomUUID(), " ",
+                new IdempotencyKey("refund:key"), null, CREATED_AT))
                 .isInstanceOf(DomainException.class);
     }
 }

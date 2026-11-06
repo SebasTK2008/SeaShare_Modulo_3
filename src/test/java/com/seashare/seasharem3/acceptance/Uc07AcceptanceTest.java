@@ -335,7 +335,7 @@ class Uc07AcceptanceTest {
         @Override
         public DepositTrackingResult open(OpenDepositTrackingCommand command) {
             commands.add(command);
-            return new DepositTrackingResult(command.reservationId(), resulting, true);
+            return new DepositTrackingResult(command.reservationId(), resulting, true, true);
         }
 
         void resolveAs(DepositDispositionStatus status) {

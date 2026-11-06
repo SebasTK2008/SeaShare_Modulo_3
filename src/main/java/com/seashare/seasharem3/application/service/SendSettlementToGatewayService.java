@@ -5,13 +5,11 @@ import com.seashare.seasharem3.application.dto.GatewaySettlementResult;
 import com.seashare.seasharem3.application.exception.ErrorCode;
 import com.seashare.seasharem3.application.port.in.RegisterSettlementResultUseCase;
 import com.seashare.seasharem3.application.port.in.SendSettlementToGatewayUseCase;
-import com.seashare.seasharem3.application.port.out.ChargeIntentRepository;
 import com.seashare.seasharem3.application.port.out.FailureRecorderPort;
 import com.seashare.seasharem3.application.port.out.SettlementGatewayPort;
 import com.seashare.seasharem3.application.port.out.SettlementIntentRepository;
 import com.seashare.seasharem3.domain.exception.GatewayBusinessRejectionException;
 import com.seashare.seasharem3.domain.exception.GatewayCommunicationException;
-import com.seashare.seasharem3.domain.model.ChargeIntent;
 import com.seashare.seasharem3.domain.model.SettlementIntent;
 import com.seashare.seasharem3.domain.valueobject.SettlementStatus;
 
@@ -19,29 +17,30 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Envia una dispersion a la pasarela desde el worker y registra su referencia externa. */
+/**
+ * Envia una liquidacion al libro interno simulado desde el worker y registra su referencia externa.
+ *
+ * <p>No depende del cobro original ni de una cuenta de vendedor: el libro interno no dispersa
+ * fondos en Mercado Pago (D-UC10-10). La clave idempotente de la intencion se reutiliza en los
+ * reintentos y produce la misma referencia simulada.</p>
+ */
 public class SendSettlementToGatewayService implements SendSettlementToGatewayUseCase {
 
     private static final String USE_CASE = "UC10";
 
     private final SettlementIntentRepository settlementIntentRepository;
-    private final ChargeIntentRepository chargeIntentRepository;
     private final SettlementGatewayPort settlementGatewayPort;
     private final RegisterSettlementResultUseCase registerSettlementResult;
     private final FailureRecorderPort failureRecorder;
-    private final long collectorId;
 
     public SendSettlementToGatewayService(SettlementIntentRepository settlementIntentRepository,
-            ChargeIntentRepository chargeIntentRepository, SettlementGatewayPort settlementGatewayPort,
-            RegisterSettlementResultUseCase registerSettlementResult, FailureRecorderPort failureRecorder,
-            long collectorId) {
+            SettlementGatewayPort settlementGatewayPort, RegisterSettlementResultUseCase registerSettlementResult,
+            FailureRecorderPort failureRecorder) {
         this.settlementIntentRepository = Objects.requireNonNull(settlementIntentRepository,
                 "settlementIntentRepository");
-        this.chargeIntentRepository = Objects.requireNonNull(chargeIntentRepository, "chargeIntentRepository");
         this.settlementGatewayPort = Objects.requireNonNull(settlementGatewayPort, "settlementGatewayPort");
         this.registerSettlementResult = Objects.requireNonNull(registerSettlementResult, "registerSettlementResult");
         this.failureRecorder = Objects.requireNonNull(failureRecorder, "failureRecorder");
-        this.collectorId = collectorId;
     }
 
     @Override
@@ -57,28 +56,10 @@ public class SendSettlementToGatewayService implements SendSettlementToGatewayUs
         if (intent.isTerminal()) {
             return;
         }
-        if (collectorId <= 0) {
-            String detail = "seashare.gateway.collector-id is not configured";
-            failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
-                    detail);
-            settlementIntentRepository.save(intent.transitionTo(SettlementStatus.COMMUNICATION_ERROR)
-                    .withStatusDetail(detail));
-            throw new GatewayCommunicationException(detail);
-        }
-
-        Optional<ChargeIntent> charge = chargeIntentRepository.findById(intent.chargeIntentId());
-        if (charge.isEmpty() || charge.get().externalReference() == null
-                || charge.get().externalReference().isBlank()) {
-            String detail = "The original charge has no external reference";
-            settlementIntentRepository.save(intent.transitionTo(SettlementStatus.COMMUNICATION_ERROR)
-                    .withStatusDetail(detail));
-            failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(), detail);
-            throw new GatewayCommunicationException(detail);
-        }
 
         GatewaySettlementResult result;
         try {
-            result = settlementGatewayPort.send(toRequest(intent, charge.get()));
+            result = settlementGatewayPort.send(toRequest(intent));
         } catch (GatewayBusinessRejectionException exception) {
             settlementIntentRepository.save(intent.transitionTo(SettlementStatus.REJECTED)
                     .withStatusDetail(exception.getMessage()));
@@ -91,7 +72,7 @@ public class SendSettlementToGatewayService implements SendSettlementToGatewayUs
 
         if (result.externalId() == null || result.externalId().isBlank()) {
             GatewayCommunicationException exception = new GatewayCommunicationException(
-                    "The payment gateway returned no external reference");
+                    "The settlement ledger returned no external reference");
             settlementIntentRepository.save(intent.transitionTo(SettlementStatus.COMMUNICATION_ERROR)
                     .withStatusDetail(exception.getMessage()));
             failureRecorder.record(USE_CASE, intent.reservationId().value(), ErrorCode.INTERNAL_ERROR.name(),
@@ -102,8 +83,8 @@ public class SendSettlementToGatewayService implements SendSettlementToGatewayUs
         registerSettlementResult.register(result);
     }
 
-    private GatewaySettlementRequest toRequest(SettlementIntent intent, ChargeIntent charge) {
-        return new GatewaySettlementRequest(collectorId, intent.reservationId().value(), intent.amount(),
-                charge.externalReference(), intent.idempotencyKey().value());
+    private static GatewaySettlementRequest toRequest(SettlementIntent intent) {
+        return new GatewaySettlementRequest(intent.reservationId().value(), intent.amount(),
+                intent.idempotencyKey().value());
     }
 }

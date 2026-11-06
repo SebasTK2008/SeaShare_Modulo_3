@@ -30,7 +30,7 @@ class CommissionRecordTest {
                 new ReservationId(UUID.randomUUID()), SettlementTrigger.COMPLETED, SettlementScope.STANDARD,
                 new Money(new BigDecimal("870000.00")), new Money(new BigDecimal("130000.00")),
                 new Money(BigDecimal.ZERO), UUID.randomUUID(),
-                new IdempotencyKey("settlement:COMPLETED:op-1"), null, CREATED_AT)
+                "settlement:COMPLETED:op-1", new IdempotencyKey("settlement:COMPLETED:op-1"), null, CREATED_AT)
                 .transitionTo(SettlementStatus.COMPLETED);
         return SettlementRecord.create(UUID.randomUUID(), completed, owner, new BoatId(UUID.randomUUID()),
                 completed.amount(), "Settlement confirmed", new Money(new BigDecimal("1000000.00")),

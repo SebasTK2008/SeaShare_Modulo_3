@@ -36,6 +36,9 @@ public class RefundIntentJpaEntity {
     @Column(name = "charge_intent_id", nullable = false)
     private UUID chargeIntentId;
 
+    @Column(name = "operation_key", nullable = false)
+    private String operationKey;
+
     @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;
 
@@ -69,6 +72,7 @@ public class RefundIntentJpaEntity {
         entity.scope = intent.scope().name();
         entity.amount = intent.amount().amount();
         entity.chargeIntentId = intent.chargeIntentId();
+        entity.operationKey = intent.operationKey();
         entity.idempotencyKey = intent.idempotencyKey().value();
         entity.disputeId = intent.disputeId();
         entity.createdAt = intent.createdAt();
@@ -105,6 +109,10 @@ public class RefundIntentJpaEntity {
 
     UUID getChargeIntentId() {
         return chargeIntentId;
+    }
+
+    String getOperationKey() {
+        return operationKey;
     }
 
     String getIdempotencyKey() {

@@ -29,8 +29,8 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el éxito d
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela se **simula**; el webhook se dispara con una firma HMAC-SHA256 válida del simulador.
-* La consulta de detalle (`GET /v1/payments/{payment_id}/refunds/{refund_id}`) también se sirve desde el simulador.
+* **Modo A (suite automática):** `RefundWebhookHandlerTest` y `RegisterRefundResultServiceTest` cubren el procesamiento del webhook y de la consulta de reembolsos. Este TC usa el webhook real que entrega Mercado Pago al túnel (runbook §3) o uno firmado a mano (runbook §3.1).
+* **Modo B (release):** el reembolso y su notificación `payment` deben verificarse contra la API real de Mercado Pago sandbox, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 
 ##### Dependencies & Assumptions
 * **TC-UC09-HU2-E1 debe haber pasado**: existe una solicitud de reembolso ya enviada y asociada a una referencia externa.
@@ -47,26 +47,26 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el éxito d
 ##### Section 1: Registro de un reembolso confirmado como exitoso
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar la intención en curso | `SELECT status, amount, external_reference FROM refund_intent WHERE reservation_id = '...'` | N/A | La solicitud previa existe y está pendiente, con su `external_reference` ya persistida (RF-006, RF-007). | [x] | |
-| 2 | Simular la notificación de la Pasarela | `POST /api/v1/webhook/gateway?data.id=<refund_id>&type=refund` | Body con `action` y `type` (obligatorios, no discriminan el resultado); headers `Content-Type: application/json`, `x-signature` válida, `x-request-id` | `200 OK` inmediato; la notificación queda persistida en `outbox_message` antes del acuse (contrato webhook §3.2). | [x] | |
-| 3 | Verificar la cola interna | Inspeccionar `finance.gateway-notification.v1` | `{"type":"refund","action":"<el enviado>","data_id":"<refund_id>"}` | El mensaje se publica con routing `gateway.notification` para el procesamiento asíncrono (contrato webhook §3.3). | [x] | |
-| 4 | Verificar la consulta de detalle | Request journal: `GET /v1/payments/{charge_intent.external_reference}/refunds/{data.id}` | N/A | El worker consulta el recurso y obtiene el estado definitivo; el cuerpo del webhook no se usa como veredicto (contrato webhook §3.4). | [x] | |
-| 5 | Verificar la intención actualizada | `SELECT status, status_detail, amount, external_reference FROM refund_intent` | N/A | Estado `COMPLETED`, con `status_detail`, monto confirmado y referencia externa (RF-007). | [x] | |
-| 6 | Verificar el registro inmutable | `SELECT * FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | Un único `refund_record` con `refund_intent_id NOT NULL`, `amount`, `released_amount`, `detail`, `external_reference`, reserva, propietario, embarcación, `dispute_id` cuando aplique y `created_at` (RF-007, RF-006A). | [x] | Creación atómica con la intención. |
-| 7 | Verificar el monto neto liberado | Comparar `amount`, `transaction_cost` y `released_amount` | costo reportado por el simulador | `released_amount = amount − transaction_cost` cuando la Pasarela informa costo; si no lo informa, `released_amount = amount` y `transaction_cost` queda `NULL` (RF-011). | [x] | |
-| 8 | Verificar disponibilidad para consulta | `SELECT * FROM v_financial_records WHERE record_id = '<refund_record.id>'` | N/A | El registro aparece para "Consultar registros financieros" (RF-008, CE-003). | [x] | |
-| 9 | Verificar inmutabilidad y no duplicación | `SELECT count(*) FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | Exactamente 1 fila; el registro no admite `UPDATE`/`DELETE` (RF-007; caso extremo del UC09). | [x] | |
+| 1 | Confirmar la intención en curso | `SELECT status, amount, external_reference FROM refund_intent WHERE reservation_id = '...'` | N/A | La solicitud previa existe y está pendiente, con su `external_reference` ya persistida (RF-006, RF-007). | [ ] | |
+| 2 | Simular la notificación de la Pasarela | `POST /api/v1/webhook/gateway?data.id=<payment_id>&type=payment` | `payment_id` = `charge_intent.external_reference` del cobro original; body con `action` y `type` (obligatorios, no discriminan el resultado); headers `Content-Type: application/json`, `x-signature` válida, `x-request-id` | `200 OK` inmediato; la notificación queda persistida en `outbox_message` antes del acuse (contrato webhook §3.2). | [ ] | |
+| 3 | Verificar la cola interna | Inspeccionar `finance.gateway-notification.v1` | `{"type":"payment","action":"<el enviado>","data_id":"<payment_id>"}` | El mensaje se publica con routing `gateway.notification` para el procesamiento asíncrono (contrato webhook §3.3). | [ ] | |
+| 4 | Verificar la consulta de reembolsos | Logs de la app y `GET /v1/payments/{data.id}/refunds` en Mercado Pago | `{data.id} = payment_id` | El worker lista los reembolsos del pago y asocia el que cumple `refund.id == refund_intent.external_reference`; el cuerpo del webhook no se usa como veredicto (D-UC09-11). | [ ] | |
+| 5 | Verificar la intención actualizada | `SELECT status, status_detail, amount, external_reference FROM refund_intent` | N/A | Estado `COMPLETED`, con `status_detail`, monto confirmado y referencia externa (RF-007). | [ ] | |
+| 6 | Verificar el registro inmutable | `SELECT * FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | Un único `refund_record` con `refund_intent_id NOT NULL`, `amount`, `released_amount`, `detail`, `external_reference`, reserva, propietario, embarcación, `dispute_id` cuando aplique y `created_at` (RF-007, RF-006A). | [ ] | Creación atómica con la intención. |
+| 7 | Verificar el monto neto liberado | Comparar `amount`, `transaction_cost` y `released_amount` | costo reportado por Mercado Pago (`fee_details`, si lo informa) | `released_amount = amount − transaction_cost` cuando la Pasarela informa costo; si no lo informa, `released_amount = amount` y `transaction_cost` queda `NULL` (RF-011). | [ ] | |
+| 8 | Verificar disponibilidad para consulta | `SELECT * FROM v_financial_records WHERE record_id = '<refund_record.id>'` | N/A | El registro aparece para "Consultar registros financieros" (RF-008, CE-003). | [ ] | |
+| 9 | Verificar inmutabilidad y no duplicación | `SELECT count(*) FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | Exactamente 1 fila; el registro no admite `UPDATE`/`DELETE` (RF-007; caso extremo del UC09). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Firma inválida o ausente | `POST /api/v1/webhook/gateway` con `x-signature` incorrecta | `data.id` y `type` válidos | `401 UNAUTHENTICATED`; no se procesa nada (contrato webhook §3.1 y §5). | [x] | |
-| 2 | Payload incompleto | Enviar sin `action`, sin `data.id` o sin `type` | payload incompleto | `400 VALIDATION_ERROR`; no se encola ni se registra el resultado (contrato webhook §5). | [x] | |
-| 3 | Notificación duplicada del mismo resultado | Reenviar el mismo webhook | mismo `data.id` | `200 OK` y el resultado ya registrado no se altera ni crea otro `refund_record` (contrato webhook §3.5 y §6). | [x] | |
-| 4 | La Pasarela no conoce el reembolso | Simular `404` en la consulta de detalle | N/A | La intención **no** se cierra; el evento se registra en `operational_failure` (contrato webhook §3.6). | [x] | |
-| 5 | `data.id` sin intención asociada | Notificar un `refund_id` desconocido | `data.id` inexistente | `200 OK` y registro en `operational_failure`, sin creación de registros (contrato webhook §3.6). | [x] | |
-| 6 | Falla al persistir la notificación | Simular BD no disponible antes del acuse | N/A | `500 INTERNAL_ERROR` para que la Pasarela reintente (contrato webhook §3.7). | [x] | |
-| 7 | Falla en el paso asíncrono | Simular error de la consulta o del registro tras el `200 OK` | N/A | Reintentos de la cola interna (5 intentos, *backoff* base 1 s); al agotarlos, DLQ y `operational_failure` (README §4.4). | [x] | |
+| 1 | Firma inválida o ausente | `POST /api/v1/webhook/gateway` con `x-signature` incorrecta | `data.id` y `type` válidos | `401 UNAUTHENTICATED`; no se procesa nada (contrato webhook §3.1 y §5). | [ ] | |
+| 2 | Payload incompleto | Enviar sin `action`, sin `data.id` o sin `type` | payload incompleto | `400 VALIDATION_ERROR`; no se encola ni se registra el resultado (contrato webhook §5). | [ ] | |
+| 3 | Notificación duplicada del mismo resultado | Reenviar el mismo webhook | mismo `data.id` | `200 OK` y el resultado ya registrado no se altera ni crea otro `refund_record` (contrato webhook §3.5 y §6). | [ ] | |
+| 4 | La Pasarela no conoce el pago | Simular `404` en la lista de reembolsos | N/A | La intención **no** se cierra; el evento se registra en `operational_failure` (contrato webhook §3.6). | [ ] | |
+| 5 | `data.id` sin reembolso local | Notificar un `payment_id` cuyos reembolsos no coinciden con ninguna `refund_intent` | `payment_id` sin coincidencia | `200 OK`; cada reembolso sin intención local se registra en `operational_failure`, sin creación de registros ni reintento (contrato webhook §3.6). | [ ] | |
+| 6 | Falla al persistir la notificación | Simular BD no disponible antes del acuse | N/A | `500 INTERNAL_ERROR` para que la Pasarela reintente (contrato webhook §3.7). | [ ] | |
+| 7 | Falla en el paso asíncrono | Simular error de la consulta o del registro tras el `200 OK` | N/A | Reintentos de la cola interna (5 intentos, *backoff* base 1 s); al agotarlos, DLQ y `operational_failure` (README §4.4). | [ ] | |
 
 ##### Edge Cases & Boundary Conditions
 * **EC-001** : Solo el estado exitoso crea `refund_record`; `rejected`, `cancelled`, `expired` o `in_process` actualizan únicamente la intención (RF-009).

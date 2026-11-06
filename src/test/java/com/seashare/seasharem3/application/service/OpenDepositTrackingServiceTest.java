@@ -48,6 +48,7 @@ class OpenDepositTrackingServiceTest {
         var result = service.open(command(DepositDispositionStatus.HELD));
 
         assertThat(result.created()).isTrue();
+        assertThat(result.transitioned()).isTrue();
         assertThat(result.status()).isEqualTo(DepositDispositionStatus.HELD);
         verify(repository).save(any(DepositDisposition.class));
     }
@@ -60,6 +61,7 @@ class OpenDepositTrackingServiceTest {
         var result = service.open(command(DepositDispositionStatus.REFUND_REQUESTED));
 
         assertThat(result.created()).isTrue();
+        assertThat(result.transitioned()).isTrue();
         assertThat(result.status()).isEqualTo(DepositDispositionStatus.REFUND_REQUESTED);
         verify(repository).save(any(DepositDisposition.class));
         verify(repository).compareAndSet(any(), any(), any());
@@ -73,6 +75,7 @@ class OpenDepositTrackingServiceTest {
         var result = service.open(command(DepositDispositionStatus.REFUND_REQUESTED));
 
         assertThat(result.created()).isFalse();
+        assertThat(result.transitioned()).isFalse();
         assertThat(result.status()).isEqualTo(DepositDispositionStatus.REFUND_REQUESTED);
         verify(repository, never()).compareAndSet(any(), any(), any());
     }
@@ -86,6 +89,7 @@ class OpenDepositTrackingServiceTest {
         var result = service.open(command(DepositDispositionStatus.REFUND_REQUESTED));
 
         assertThat(result.status()).isEqualTo(DepositDispositionStatus.REFUND_REQUESTED);
+        assertThat(result.transitioned()).isTrue();
         verify(repository).compareAndSet(any(), any(), any());
     }
 
@@ -97,8 +101,22 @@ class OpenDepositTrackingServiceTest {
         var result = service.open(command(DepositDispositionStatus.REFUND_REQUESTED));
 
         assertThat(result.status()).isEqualTo(DepositDispositionStatus.SETTLEMENT_REQUESTED);
+        assertThat(result.transitioned()).isFalse();
         assertThat(failureRecorder.failures()).hasSize(1);
         verify(repository, never()).compareAndSet(any(), any(), any());
+    }
+
+    @Test
+    void doesNotReportATransitionWhenAnotherCallerWinsTheCompareAndSet() {
+        when(repository.findByReservationId(RESERVATION))
+                .thenReturn(Optional.of(disposition(DepositDispositionStatus.HELD)))
+                .thenReturn(Optional.of(disposition(DepositDispositionStatus.REFUND_REQUESTED)));
+        when(repository.compareAndSet(any(), any(), any())).thenReturn(false);
+
+        var result = service.open(command(DepositDispositionStatus.REFUND_REQUESTED));
+
+        assertThat(result.status()).isEqualTo(DepositDispositionStatus.REFUND_REQUESTED);
+        assertThat(result.transitioned()).isFalse();
     }
 
     private static OpenDepositTrackingCommand command(DepositDispositionStatus target) {

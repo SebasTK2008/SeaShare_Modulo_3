@@ -37,7 +37,7 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` marcada como apro
 
 ##### Preconditions & Default Setup
 * **Initial State** : reserva con `reservation_id = b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (UUID de ejemplo del contrato; sustituir por el de la reserva de prueba). `charge_intent` en `CAPTURED`, `amount` total `572.00` (ajustar a la versión vigente del entorno), `external_reference = "1234567890"`, `status_detail` informado por la Pasarela.
-* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`; simulador de la Pasarela con su request journal accesible.
+* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`; credenciales de prueba de Mercado Pago en `.env` (runbook).
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
 --------------------------------------------------------------------------------
@@ -47,14 +47,14 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` marcada como apro
 ##### Section 1: Consulta de un cobro aprobado
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar el estado registrado por UC05 | `psql -c "SELECT status, amount, status_detail, external_reference FROM charge_intent WHERE reservation_id = 'b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10' ORDER BY created_at DESC, id DESC LIMIT 1;"` | N/A | La intención más reciente está en `CAPTURED` con el monto total y la referencia externa (RF-002). | [x] | |
-| 2 | Solicitar la confirmación de pago | `curl -s -H "Accept: application/json" http://localhost:8080/api/v1/reservations/b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10/payment-confirmation` | N/A | `200 OK` con `Content-Type: application/json` (RF-001; contrato §4). | [x] | |
-| 3 | Verificar el estado devuelto | Leer `status` del cuerpo | N/A | `status = APPROVED`, fiel al estado `CAPTURED` de la intención (RF-003, CE-001). | [x] | |
-| 4 | Verificar el monto cobrado y la referencia | Leer `charged_amount` y `external_reference` | N/A | `charged_amount = "572.00"` y `external_reference = "1234567890"` (RF-004; D-UC06-04). | [x] | |
-| 5 | Verificar los montos no informados | Leer `authorized_amount`, `captured_amount` y `released_amount` | N/A | Los tres en `null`: el cobro es directo, no hay reembolsos confirmados y la respuesta no afirma captura (RF-004; contrato UC06 §3 regla 4). | [x] | |
-| 6 | Verificar el detalle | Leer `detail` | N/A | `detail` = `status_detail` registrado en la intención, o `null` si la Pasarela no lo informó (RF-003; D-UC06-04). | [x] | |
-| 7 | Verificar que la consulta es de solo lectura | Comparar `charge_intent` y `charge_record` antes y después de dos consultas | N/A | Sin cambios de estado ni de montos y sin filas nuevas: la consulta no crea ni modifica registros (RF-002; caso extremo del SPEC). | [x] | |
-| 8 | Verificar que no se contacta a la Pasarela | Request journal del simulador durante los pasos 2 a 7 | N/A | Cero llamadas nuevas (`GET /v1/payments/*` sin registros nuevos) (RF-006, CE-002). | [x] | |
+| 1 | Confirmar el estado registrado por UC05 | `psql -c "SELECT status, amount, status_detail, external_reference FROM charge_intent WHERE reservation_id = 'b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10' ORDER BY created_at DESC, id DESC LIMIT 1;"` | N/A | La intención más reciente está en `CAPTURED` con el monto total y la referencia externa (RF-002). | [ ] | |
+| 2 | Solicitar la confirmación de pago | `curl -s -H "Accept: application/json" http://localhost:8080/api/v1/reservations/b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10/payment-confirmation` | N/A | `200 OK` con `Content-Type: application/json` (RF-001; contrato §4). | [ ] | |
+| 3 | Verificar el estado devuelto | Leer `status` del cuerpo | N/A | `status = APPROVED`, fiel al estado `CAPTURED` de la intención (RF-003, CE-001). | [ ] | |
+| 4 | Verificar el monto cobrado y la referencia | Leer `charged_amount` y `external_reference` | N/A | `charged_amount = "572.00"` y `external_reference = "1234567890"` (RF-004; D-UC06-04). | [ ] | |
+| 5 | Verificar los montos no informados | Leer `authorized_amount`, `captured_amount` y `released_amount` | N/A | Los tres en `null`: el cobro es directo, no hay reembolsos confirmados y la respuesta no afirma captura (RF-004; contrato UC06 §3 regla 4). | [ ] | |
+| 6 | Verificar el detalle | Leer `detail` | N/A | `detail` = `status_detail` registrado en la intención, o `null` si la Pasarela no lo informó (RF-003; D-UC06-04). | [ ] | |
+| 7 | Verificar que la consulta es de solo lectura | Comparar `charge_intent` y `charge_record` antes y después de dos consultas | N/A | Sin cambios de estado ni de montos y sin filas nuevas: la consulta no crea ni modifica registros (RF-002; caso extremo del SPEC). | [ ] | |
+| 8 | Verificar que no se contacta a la Pasarela | Logs de la app (`docker logs seashare-app`) durante los pasos 2 a 7 | N/A | Cero llamadas nuevas (`GET /v1/payments/*` sin registros nuevos) (RF-006, CE-002). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |

@@ -20,8 +20,10 @@ import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.core.JacksonException;
 
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -44,8 +46,8 @@ public class MercadoPagoChargeAdapter implements ChargeGatewayPort {
 
     private static final String PAYMENTS_PATH = "/v1/payments";
     private static final String IDEMPOTENCY_HEADER = "X-Idempotency-Key";
-    private static final String CREDIT_CARD = "CREDIT_CARD";
-    private static final String MERCADO_PAGO_CREDIT_CARD = "credit_card";
+    /** Tipos genericos que no son un {@code payment_method_id} valido para Mercado Pago. */
+    private static final Set<String> GENERIC_CARD_TYPES = Set.of("CREDIT_CARD", "DEBIT_CARD", "PREPAID_CARD");
     private static final int BAD_REQUEST = 400;
     private static final String DEPENDENCY_NAME = "paymentGateway";
 
@@ -76,21 +78,21 @@ public class MercadoPagoChargeAdapter implements ChargeGatewayPort {
                 request.externalReference());
 
         try {
-            Supplier<ChargeGatewayResult> call = () -> executeSend(body, request.operationKey());
+            Supplier<ChargeGatewayResult> call = () -> executeSend(body, request.idempotencyKey());
             return CircuitBreaker.decorateSupplier(circuitBreaker, call).get();
         } catch (CallNotPermittedException exception) {
             throw communicationFailure("The payment gateway circuit breaker is open", exception);
         }
     }
 
-    private ChargeGatewayResult executeSend(MercadoPagoPaymentRequest body, String operationKey) {
+    private ChargeGatewayResult executeSend(MercadoPagoPaymentRequest body, String idempotencyKey) {
         try {
             String response = restClient.post()
                     .uri(PAYMENTS_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, bearerToken())
-                    .header(IDEMPOTENCY_HEADER, operationKey)
+                    .header(IDEMPOTENCY_HEADER, idempotencyKey)
                     .body(mapper.writeValueAsString(body))
                     .retrieve()
                     .body(String.class);
@@ -141,14 +143,19 @@ public class MercadoPagoChargeAdapter implements ChargeGatewayPort {
     }
 
     /**
-     * Traduccion del tipo de medio: Mercado Pago exige {@code credit_card} y el mensaje de UC07
-     * transporta {@code CREDIT_CARD}; cualquier otro valor pasa tal cual.
+     * Traduccion del tipo de medio. UC07 puede informar un tipo generico
+     * ({@code CREDIT_CARD}, {@code DEBIT_CARD}, {@code PREPAID_CARD}) o una marca
+     * ({@code VISA}, {@code MASTER}). Mercado Pago rechaza los tipos genericos en
+     * {@code payment_method_id} (error 3028) y resuelve la marca desde el token; por eso se omite el
+     * campo para los tipos genericos y se envia en minusculas cuando UC07 ya aporta la marca
+     * (D-UC05-16).
      */
     private static String paymentMethodId(String paymentMethodType) {
-        if (paymentMethodType == null) {
+        if (paymentMethodType == null || paymentMethodType.isBlank()
+                || GENERIC_CARD_TYPES.contains(paymentMethodType.toUpperCase(Locale.ROOT))) {
             return null;
         }
-        return CREDIT_CARD.equals(paymentMethodType) ? MERCADO_PAGO_CREDIT_CARD : paymentMethodType;
+        return paymentMethodType.toLowerCase(Locale.ROOT);
     }
 
     private String bearerToken() {

@@ -41,7 +41,7 @@ class ChargeRecordTest {
 
     private static ChargeIntent capturedIntent(ReservationInformation reservation, Money amount) {
         return ChargeIntent.create(UUID.randomUUID(), reservation.reservationId(),
-                new IdempotencyKey("reservation|PENDING|2026-10-20T15:04:05Z"), amount,
+                "reservation|PENDING|2026-10-20T15:04:05Z", new IdempotencyKey("reservation|PENDING|2026-10-20T15:04:05Z"), amount,
                 new PaymentMethodReference("token-123", "credit_card", "4242"), CREATED_AT)
                 .transitionTo(ChargeIntentStatus.IN_PROCESS)
                 .transitionTo(ChargeIntentStatus.CAPTURED)
@@ -85,7 +85,7 @@ class ChargeRecordTest {
     void rejectsIntentThatIsNotCaptured() {
         ReservationInformation reservation = calculatedReservation();
         ChargeIntent pending = ChargeIntent.create(UUID.randomUUID(), reservation.reservationId(),
-                new IdempotencyKey("reservation|PENDING|2026-10-20T15:04:05Z"), TOTAL,
+                "reservation|PENDING|2026-10-20T15:04:05Z", new IdempotencyKey("reservation|PENDING|2026-10-20T15:04:05Z"), TOTAL,
                 new PaymentMethodReference("token-123", "credit_card", "4242"), CREATED_AT);
 
         assertThatExceptionOfType(DomainException.class)

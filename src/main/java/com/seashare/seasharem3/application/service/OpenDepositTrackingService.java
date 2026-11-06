@@ -58,12 +58,13 @@ public class OpenDepositTrackingService implements OpenDepositTrackingUseCase {
     private DepositTrackingResult applyToExisting(OpenDepositTrackingCommand command, DepositDisposition existing) {
         DepositDispositionStatus target = command.target();
         if (existing.disposition() == target) {
-            return result(existing.reservationId(), existing.disposition(), false);
+            // Ya aplicado por otra operación: idempotente, pero este llamador no hizo la transición (D-37).
+            return result(existing.reservationId(), existing.disposition(), false, false);
         }
         if (target == DepositDispositionStatus.HELD
                 || existing.disposition() != DepositDispositionStatus.HELD) {
             recordConflict(command, existing);
-            return result(existing.reservationId(), existing.disposition(), false);
+            return result(existing.reservationId(), existing.disposition(), false, false);
         }
 
         DepositDisposition next = DepositDisposition.create(existing.reservationId(),
@@ -74,12 +75,12 @@ public class OpenDepositTrackingService implements OpenDepositTrackingUseCase {
         if (!changed) {
             DepositDisposition current = repository.findByReservationId(command.reservationId()).orElse(existing);
             if (current.disposition() == target) {
-                return result(current.reservationId(), current.disposition(), false);
+                return result(current.reservationId(), current.disposition(), false, false);
             }
             recordConflict(command, current);
-            return result(current.reservationId(), current.disposition(), false);
+            return result(current.reservationId(), current.disposition(), false, false);
         }
-        return result(next.reservationId(), next.disposition(), false);
+        return result(next.reservationId(), next.disposition(), false, true);
     }
 
     private DepositTrackingResult create(OpenDepositTrackingCommand command) {
@@ -88,16 +89,16 @@ public class OpenDepositTrackingService implements OpenDepositTrackingUseCase {
                 command.disputeId(), command.disputeStatus(), DepositDispositionStatus.HELD);
         repository.save(held);
         if (command.target() == DepositDispositionStatus.HELD) {
-            return result(held.reservationId(), held.disposition(), true);
+            return result(held.reservationId(), held.disposition(), true, true);
         }
         DepositDisposition next = DepositDisposition.create(command.reservationId(), completedAt,
                 command.disputeId(), command.disputeStatus(), command.target());
         if (!repository.compareAndSet(command.reservationId(), DepositDispositionStatus.HELD, next)) {
             DepositDisposition current = repository.findByReservationId(command.reservationId()).orElse(held);
             recordConflict(command, current);
-            return result(current.reservationId(), current.disposition(), true);
+            return result(current.reservationId(), current.disposition(), true, false);
         }
-        return result(next.reservationId(), next.disposition(), true);
+        return result(next.reservationId(), next.disposition(), true, true);
     }
 
     private void recordConflict(OpenDepositTrackingCommand command, DepositDisposition existing) {
@@ -107,7 +108,7 @@ public class OpenDepositTrackingService implements OpenDepositTrackingUseCase {
     }
 
     private static DepositTrackingResult result(ReservationId reservationId, DepositDispositionStatus status,
-            boolean created) {
-        return new DepositTrackingResult(reservationId, status, created);
+            boolean created, boolean transitioned) {
+        return new DepositTrackingResult(reservationId, status, created, transitioned);
     }
 }

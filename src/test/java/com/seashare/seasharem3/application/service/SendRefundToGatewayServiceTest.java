@@ -55,7 +55,7 @@ class SendRefundToGatewayServiceTest {
         charge = ChargeFixtures.capturedIntent(RESERVATION, "mp-payment-1");
         intent = RefundIntent.create(UUID.randomUUID(), RESERVATION.reservationId(), RefundTrigger.CANCELLED_STRICT,
                 RefundScope.DEPOSIT_ONLY, new Money(new BigDecimal("30000.00")), charge.id(),
-                new IdempotencyKey("refund:CANCELLED_STRICT:op-1"), null, NOW);
+                "refund:CANCELLED_STRICT:op-1", new IdempotencyKey("refund:CANCELLED_STRICT:op-1"), null, NOW);
         when(refundIntentRepository.findByIdForUpdate(intent.id())).thenReturn(Optional.of(intent));
         when(refundIntentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(chargeIntentRepository.findById(charge.id())).thenReturn(Optional.of(charge));
@@ -113,7 +113,7 @@ class SendRefundToGatewayServiceTest {
     void aTerminalIntentIsNotSentAgain() {
         RefundIntent completed = RefundIntent.create(UUID.randomUUID(), RESERVATION.reservationId(),
                 RefundTrigger.CANCELLED_STRICT, RefundScope.DEPOSIT_ONLY, new Money(new BigDecimal("30000.00")),
-                charge.id(), new IdempotencyKey("refund:CANCELLED_STRICT:op-9"), null, NOW)
+                charge.id(), "refund:CANCELLED_STRICT:op-9", new IdempotencyKey("refund:CANCELLED_STRICT:op-9"), null, NOW)
                 .transitionTo(RefundIntentStatus.COMPLETED);
         when(refundIntentRepository.findByIdForUpdate(completed.id())).thenReturn(Optional.of(completed));
 

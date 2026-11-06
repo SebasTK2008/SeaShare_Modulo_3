@@ -30,14 +30,15 @@ Este caso de prueba verifica que, ante una solicitud de cobro previamente enviad
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela de pago se **simula**: el resultado se provoca con el webhook del simulador y se comprueba en su request journal y en los logs de la app.
+* **Modo A (suite automática):** el cuerpo y las cabeceras que el sistema envía a la Pasarela los verifican `MercadoPagoChargeAdapterTest` y `MercadoPagoRefundAdapterTest` (WireMock embebido); este TC verifica el efecto en la BD, las colas y la consulta real del pago.
+* **Modo B (release):** el resultado debe confirmarse con una notificación `payment` real de Mercado Pago sandbox y la consulta real del pago, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
 
 ##### Dependencies & Assumptions
 * **TC-UC05-HU1-E1 debe haber pasado**: existe una `IntenciónDeCobro` para la reserva, sin resultado definitivo.
 * RabbitMQ arriba, *outbox* activo y worker de `finance.charge-command.v1` operativo.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva de prueba con valor total registrado (alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`; ajustar a la versión vigente del entorno). Intención en `PENDING_SEND`/`IN_PROCESS`, con `external_reference = 1234567890` (id del pago en el simulador), `payer_email` y `payment_method_type = CREDIT_CARD`. La reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (UUID v4 que se usa en los comandos).
+* **Initial State** : reserva de prueba con valor total registrado (alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`; ajustar a la versión vigente del entorno). Intención en `PENDING_SEND`/`IN_PROCESS`, con `external_reference = 1234567890` (id del pago en Mercado Pago), `payer_email` y `payment_method_type = CREDIT_CARD`. La reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (UUID v4 que se usa en los comandos).
 * **Environment** : staging local (`docker compose --profile app up --build -d`), health en `http://localhost:8080/actuator/health`, consola RabbitMQ en `http://localhost:15672`.
 * **Test Accounts** : N/A (seguridad fuera de alcance).
 
@@ -48,13 +49,13 @@ Este caso de prueba verifica que, ante una solicitud de cobro previamente enviad
 ##### Section 1: Resultado exitoso reportado por la Pasarela
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar el punto de partida | `psql -c "SELECT id, status, amount, external_reference FROM charge_intent WHERE reservation_id = '<UUID>' ORDER BY created_at DESC;"` | reserva de prueba | Intención sin resultado definitivo y **sin** fila en `charge_record` (RF-004). | [x] | |
-| 2 | Simular el reporte de la Pasarela | `POST http://localhost:8080/api/v1/webhook/gateway?data.id=1234567890&type=payment` con firma del contrato | body `{"action":"payment.updated","type":"payment","data":{"id":"1234567890"}}`; `x-signature: ts=<ts>,v1=<HMAC-SHA256(secret_webhook, id:1234567890;request-id:<uuid>;ts:<ts>;)>`; `x-request-id: <uuid>` | `200 OK` con `{"status":"received"}`; la notificación queda persistida en `outbox_message` antes del acuse (RF-005). | [x] | Firma calculada con el secret del entorno. |
-| 3 | Verificar el mensaje interno | Consola RabbitMQ → `finance.gateway-notification.v1` → Get messages | N/A | Cuerpo `{"type":"payment","action":"payment.updated","data_id":"1234567890"}` (README §3.5). | [x] | |
-| 4 | Verificar la consulta del worker a la Pasarela | Request journal del simulador | N/A | `GET /v1/payments/1234567890`; el estado se toma de esa consulta, no del cuerpo del webhook (contrato de webhook, §3 regla 4). | [x] | |
-| 5 | Verificar el estado y el monto registrados | `psql -c "SELECT status, status_detail, amount, external_reference FROM charge_intent WHERE external_reference = '1234567890';"` | N/A | Intención en `CAPTURED`; `amount` conserva el total (`572.0000` de escala interna) y `status_detail` / `external_reference` reportados por la Pasarela (RF-006, RF-012). | [x] | |
-| 6 | Verificar el registro inmutable de auditoría | `psql -c "SELECT * FROM charge_record WHERE charge_intent_id = '<id de la intención>';"` | N/A | Una fila con `charge_intent_id`, desglose `rental_amount`/`insurance_amount`/`deposit_amount`, propietario y embarcación copiados, metadatos no sensibles y fecha de creación (RF-006, RF-010, RF-012, RF-004B). | [x] | |
-| 7 | Verificar la disponibilidad para UC06 | `curl -s http://localhost:8080/api/v1/reservations/<UUID>/payment-confirmation` | N/A | `200 OK`: `status = APPROVED`, `charged_amount = "572.00"`, `external_reference = "1234567890"`; `authorized_amount`, `captured_amount` y `released_amount` en `null` (RF-007; contrato UC06 §4). | [x] | |
+| 1 | Confirmar el punto de partida | `psql -c "SELECT id, status, amount, external_reference FROM charge_intent WHERE reservation_id = '<UUID>' ORDER BY created_at DESC;"` | reserva de prueba | Intención sin resultado definitivo y **sin** fila en `charge_record` (RF-004). | [ ] | |
+| 2 | Simular el reporte de la Pasarela | `POST http://localhost:8080/api/v1/webhook/gateway?data.id=1234567890&type=payment` con firma del contrato | body `{"action":"payment.updated","type":"payment","data":{"id":"1234567890"}}`; `x-signature: ts=<ts>,v1=<HMAC-SHA256(secret_webhook, id:1234567890;request-id:<uuid>;ts:<ts>;)>`; `x-request-id: <uuid>` | `200 OK` con `{"status":"received"}`; la notificación queda persistida en `outbox_message` antes del acuse (RF-005). | [ ] | Firma calculada con el secret del entorno. |
+| 3 | Verificar el mensaje interno | Consola RabbitMQ → `finance.gateway-notification.v1` → Get messages | N/A | Cuerpo `{"type":"payment","action":"payment.updated","data_id":"1234567890"}` (README §3.5). | [ ] | |
+| 4 | Verificar la consulta del worker a la Pasarela | Logs de la app (`docker logs seashare-app`) | N/A | La app consulta `GET /v1/payments/{id}` (ejemplo `1234567890`); el estado se toma de esa consulta, no del cuerpo del webhook (contrato de webhook, §3 regla 4). | [ ] | |
+| 5 | Verificar el estado y el monto registrados | `psql -c "SELECT status, status_detail, amount, external_reference FROM charge_intent WHERE external_reference = '1234567890';"` | N/A | Intención en `CAPTURED`; `amount` conserva el total (`572.0000` de escala interna) y `status_detail` / `external_reference` reportados por la Pasarela (RF-006, RF-012). | [ ] | |
+| 6 | Verificar el registro inmutable de auditoría | `psql -c "SELECT * FROM charge_record WHERE charge_intent_id = '<id de la intención>';"` | N/A | Una fila con `charge_intent_id`, desglose `rental_amount`/`insurance_amount`/`deposit_amount`, propietario y embarcación copiados, metadatos no sensibles y fecha de creación (RF-006, RF-010, RF-012, RF-004B). | [ ] | |
+| 7 | Verificar la disponibilidad para UC06 | `curl -s http://localhost:8080/api/v1/reservations/<UUID>/payment-confirmation` | N/A | `200 OK`: `status = APPROVED`, `charged_amount = "572.00"`, `external_reference = "1234567890"`; `authorized_amount`, `captured_amount` y `released_amount` en `null` (RF-007; contrato UC06 §4). | [ ] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |

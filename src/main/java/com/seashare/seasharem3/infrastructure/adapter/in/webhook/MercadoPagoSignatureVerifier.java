@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -56,7 +57,10 @@ public class MercadoPagoSignatureVerifier {
             log.warn("The gateway webhook secret is not configured; the notification cannot be verified");
             return false;
         }
-        return MessageDigest.isEqual(expectedHash(secret, dataId, requestId, timestamp)
+        // La documentacion de Mercado Pago pide pasar a minusculas un data.id alfanumerico antes de armar el
+        // manifiesto; en un id numerico (los pagos) no cambia nada.
+        String manifestId = dataId == null ? null : dataId.toLowerCase(Locale.ROOT);
+        return MessageDigest.isEqual(expectedHash(secret, manifestId, requestId, timestamp)
                 .getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8));
     }
 
