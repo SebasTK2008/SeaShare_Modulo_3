@@ -1,5 +1,5 @@
 ### Test Case Specification: Estado de la reserva · HU1 · E3 Estado "pendiente": continúa TTL y dispara el cobro
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/007-brindar-estado-de-la-reserva/spec.md](../../007-brindar-estado-de-la-reserva/spec.md)  **Status** : Approved  **Execution** : 2026-11-02 Â· release/0.1.0 Â· PASS (`docs/features/qa/matriz-qa.md`)
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/007-brindar-estado-de-la-reserva/spec.md](../../007-brindar-estado-de-la-reserva/spec.md)  **Status** : Draft  **Execution** : Pendiente para esta revisión
 
 #### Test Overview *(mandatory)*
 
@@ -30,51 +30,51 @@ Este caso de prueba verifica que, ante el estado `PENDING` con el token del medi
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La Pasarela se **simula**; el alcance de este TC termina en la delegación a UC05 y en la intención de cobro. El detalle del envío a la Pasarela se cubre en TC-UC05-HU1-E1.
+* **Modo B** para cobro y reembolso. Las comprobaciones controladas de modo A se identifican en la segunda sección.
 
 ##### Dependencies & Assumptions
-* **TC-UC03-HU1-E1** y **TC-UC04-HU1-E1** deben haber pasado (información y valor total calculados).
-* **TC-UC07-HU1-E2** debe haber pasado (el `INITIATED` previo no inicia operaciones).
-* RabbitMQ arriba; colas `finance.reservation-status.v1` y `finance.charge-command.v1` disponibles.
+* Seed de QA con versión vigente 7, seguro por pasajero `15000.0000` y comisión `15.0000`; stub de Flota con tarifa `350000.00` para la embarcación indicada.
+* Credenciales de prueba de Mercado Pago y secreto de webhook configurados; tokenización con la Public Key de la misma aplicación. Callback HTTPS registrado para `payment` cuando se comprueben entregas reales.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` con montos calculados (ilustrativos, ajustar al entorno): alquiler `900000.00`, seguro `60000.00`, depósito `30000.00`, total `990000.00`. Sin `charge_intent` previa ni filas de `reservation_status_log`.
-* **Environment** : staging local (`docker compose --profile app up --build -d`); health `http://localhost:8080/actuator/health`; consola RabbitMQ `http://localhost:15672`; PostgreSQL `localhost:5433`, base `seashare`. Publicación: `POST /api/exchanges/%2F/seashare.reservations/publish`, `routing_key=reservation.status.changed`, `content_type=application/json`, `message_id=<uuid v4>`.
-* **Test Accounts** : N/A.
+* **Initial State**. Reserva `c0a80100-0000-4000-8000-000000070103` ausente. Este caso prepara todos sus datos. Puede ejecutarse sobre volúmenes de QA recreados antes de repetirlo (`docker compose --profile app down -v`).
+* **Environment**. Compose con `dev,qa`; app `http://localhost:8080`, RabbitMQ `http://localhost:15672`, stub de Flota `http://localhost:8081` y BD `host=localhost port=5433 dbname=seashare user=seashare`.
+* **Test Accounts**. Comprador y vendedor de prueba MCO; vendedor con saldo disponible para reembolsos. Para este caso tokeniza la Visa crédito de prueba con titular `APRO`. Sustituye `<TOKEN_APRO>` por ese token nuevo y `<EMAIL_COMPRADOR>` por el email de prueba. Metadata de la Visa de ejemplo `VISA / 6260`.
+* **Mensajes AMQP**. Exchange `seashare.reservations`, `Content-Type: application/json` y `Message-Id` único en cada entrega. Los cuerpos completos figuran en las tablas.
+
+##### Preparación de los datos de este caso
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070103","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` | [ ] |  |
+| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000070103/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [ ] |  |
 
 --------------------------------------------------------------------------------
 
 #### Test Execution Flow *(mandatory)*
 
-##### Section 1: "Pendiente" dispara "Procesar cobro"
+##### Section 1: Delegación de PENDING a cobro
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar que no hay cobro previo | `psql` sobre `charge_intent` y `reservation_status_log` | misma reserva | Cero filas: el intento es nuevo. | [x] | |
-| 2 | Notificar `PENDING` con el medio de pago | Publicar `reservation.status.changed` | `{"reservation_id":"b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"tok_12345abcdef","payment_method_type":"CREDIT_CARD","payment_metadata":{"last_four":"4242","payer_email":"arrendatario@example.com"}}` | `ack`; la cola vuelve a 0 y no hay mensaje en la DLQ (RF-001, RF-002A). | [x] | |
-| 3 | Verificar la identidad de la operación | `SELECT status, operation_type, idempotency_key, status_changed_at, processed_at, outcome FROM reservation_status_log` | misma reserva | **Una** fila `PENDING` / `CHARGE` con clave `<reservation_id>:PENDING:2026-12-05T14:30:00Z`, `status_changed_at` igual al notificado y `processed_at`/`outcome` no nulos (RF-009A, plan §Reglas 7). | [x] | |
-| 4 | Verificar la delegación a UC05 | `SELECT status, amount, payment_token_ref, payment_method_type, payer_email FROM charge_intent` | misma reserva | Intención creada por UC05 con el token recibido, `CREDIT_CARD`, `payer_email` y monto total `990000.00`; UC07 no calcula montos (RF-002A, RNF-002). | [x] | |
-| 5 | Verificar el comando interno de cobro | Consola RabbitMQ u `outbox_message` (`finance.charge-command.v1`) | enrutado `charge.command` | Un mensaje con `charge_intent_id` y `payer_email`; **no** lleva el token (lo lee el worker de UC05, contratos/README §3.5). | [x] | |
-| 6 | Verificar que no hay reembolso ni liquidación | `SELECT count(*)` sobre `refund_intent` y `settlement_intent` | misma reserva | Cero filas: `PENDING` no dispara reembolso ni dispersión (RF-008). | [x] | |
-| 7 | Verificar que no se toca el depósito | `SELECT count(*)` sobre `deposit_disposition` | misma reserva | Cero filas: el seguimiento del depósito recién se abre con `COMPLETED` (RF-007, RF-008). | [x] | |
-| 8 | Verificar que el TTL no se reinicia | Comparar `status_changed_at` con la marca del `INITIATED` previo | `INITIATED = 14:15:00Z`, `PENDING = 14:30:00Z` | La marca original del TTL se conserva y UC07 no crea temporizadores ni reescribe el instante (RF-002A, CE-007). | [x] | |
-| 9 | Verificar la unidireccionalidad | Consola RabbitMQ: comprobar que no se publica respuesta | N/A | Sin respuesta al Sistema de Reservas y Operaciones (RF-009). | [x] | |
+| 1 | Notificar el estado inicial | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070103","status":"INITIATED","status_changed_at":"2026-12-05T14:15:00Z"}` | El evento se consume y no genera operaciones financieras ni filas en `reservation_status_log`. | [ ] |  |
+| 2 | Solicitar el cobro | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070103","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_APRO>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | UC07 delega a UC05. Intención en `CAPTURED` y una fila de cobro por `400000.00`. | [ ] |  |
+| 3 | Verificar identidad y delegación | `SELECT status, operation_type, idempotency_key, status_changed_at, processed_at, outcome FROM reservation_status_log WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` y `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` | Marca PENDING `2026-12-05T14:30:00Z` | Una fila `PENDING / CHARGE` procesada y una intención por `400000.00`. La marca recibida se conserva. | [ ] |  |
+| 4 | Verificar el comando | `SELECT o.routing_key, o.payload, o.published_at FROM outbox_message o JOIN charge_intent ci ON o.payload::jsonb->>'charge_intent_id' = ci.id::text WHERE ci.reservation_id = 'c0a80100-0000-4000-8000-000000070103' AND o.routing_key = 'charge.command';` | Intención de esta reserva | Un comando publicado con ID y email; sin token. | [ ] |  |
+| 5 | Verificar ausencia de efectos ajenos | `SELECT count(*) FROM refund_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';`; `SELECT count(*) FROM settlement_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';`; `SELECT count(*) FROM deposit_disposition WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` | Misma reserva | Los tres recuentos son cero. | [ ] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | `PENDING` sin token | Publicar sin `payment_token_ref` | payload sin token | `ack` y `operational_failure`; no se llama a UC05 ni se crea `charge_intent` (contrato §2, plan §Reglas 3). | [x] | |
-| 2 | Reserva sin montos calculados | Publicar `PENDING` para una `reservation_information` incompleta | reserva sin cálculo | `ack` y `operational_failure` (`RESERVATION_INFO_INCOMPLETE`); sin delegación ni cobro parcial (RNF-003, CE-004). | [x] | |
-| 3 | Reserva sin registro financiero | Publicar `PENDING` para un UUID no registrado por UC03 | UUID nuevo | `ack` y `operational_failure` (`RESERVATION_INFO_NOT_FOUND`); sin llamada a UC05 (equivale a E3/E6, README §4.4). | [x] | |
-| 4 | Entrega repetida de la misma transición | Republicar el mismo `PENDING` con la misma marca | mismo payload | `ack`; **una** sola fila de log y **una** sola `charge_intent` (RF-009A). | [x] | |
-| 5 | Nuevo intento con marca distinta | Marcar la `charge_intent` anterior como `REJECTED` y publicar otro `PENDING` con `status_changed_at` posterior | `2026-12-05T14:45:00Z` | Nueva fila de log y **nueva** `charge_intent`: un rechazo de pago habilita otro intento (clave por intento, D-UC07-11; UC05 RF-004A). | [x] | |
-| 6 | `payment_metadata` no es objeto | Publicar `payment_metadata` como texto | `"payment_metadata":"4242"` | `ack` y fallo lógico; no se crea intención (contrato §2). | [x] | |
-| 7 | Falla transitoria de base de datos | Detener PostgreSQL antes de publicar | N/A | `nack`; 5 intentos con backoff base 1 s; DLQ y `operational_failure` al agotarlos (equivale a E8). | [x] | |
+| 1 | PENDING repetido | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | Mismo cuerpo y marca, Message-Id diferente | Una fila PENDING en el log y una intención. | [ ] |  |
+| 2 | Datos incompletos | En escenarios limpios, omitir token y luego omitir el cálculo de UC04 | Variantes independientes del PENDING | Fallo controlado en `operational_failure` para cada reserva, sin intención ni cobro. | [ ] |  |
+| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=ReservationStatusListenerTest,ReservationStatusMessageMapperTest,HandleReservationStatusServiceTest,ReservationStatusEndToEndIntegrationTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [ ] |  |
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : El token no viaja en el log ni en el comando de la cola; solo se persiste en `charge_intent` (UC05, RNF-001 del UC05).
-* **EC-002** : El cobro es un monto único (alquiler + seguro + depósito) y no llamadas separadas por concepto (UC05 RF-015).
-* **EC-003** : `fechaHoraEstado` es el momento de la transición, no el de recepción; un reenvío idéntico produce la misma clave (RNF-001, contrato §3.7).
-* **EC-004** : La apertura del seguimiento del depósito no ocurre en `PENDING`; solo en `COMPLETED` y en estado `HELD` (RF-007).
+
+* **EC-001**. UC07 no persiste `INITIATED` porque no planifica acciones financieras. El TTL pertenece a Reservas y Operaciones; aquí se comprueban la marca temporal y los efectos de `PENDING`.
+* **EC-002**. La respuesta del worker es asíncrona. Consultar hasta alcanzar el resultado esperado y registrar el estado observado si no converge. PENDING_SEND puede resolverse antes de la primera consulta.
 
 --------------------------------------------------------------------------------
 

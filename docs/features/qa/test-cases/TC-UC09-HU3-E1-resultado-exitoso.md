@@ -1,5 +1,5 @@
 ### Test Case Specification: UC09 Reembolsos · HU3 · E1 La Pasarela de Pago reporta el reembolso como exitoso
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/009-reembolsar-dinero-arrendatario/spec.md](../../009-reembolsar-dinero-arrendatario/spec.md)  **Status** : Approved  **Execution** : 2026-11-02 Â· release/0.1.0 Â· PASS (`docs/features/qa/matriz-qa.md`)
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/009-reembolsar-dinero-arrendatario/spec.md](../../009-reembolsar-dinero-arrendatario/spec.md)  **Status** : Draft  **Execution** : Pendiente para esta revisión
 
 #### Test Overview *(mandatory)*
 
@@ -29,50 +29,56 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el éxito d
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* **Modo A (suite automática):** `RefundWebhookHandlerTest` y `RegisterRefundResultServiceTest` cubren el procesamiento del webhook y de la consulta de reembolsos. Este TC usa el webhook real que entrega Mercado Pago al túnel (runbook §3) o uno firmado a mano (runbook §3.1).
-* **Modo B (release):** el reembolso y su notificación `payment` deben verificarse contra la API real de Mercado Pago sandbox, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
+* **Modo B** para cobro y reembolso. Las comprobaciones controladas de modo A se identifican en la segunda sección.
 
 ##### Dependencies & Assumptions
-* **TC-UC09-HU2-E1 debe haber pasado**: existe una solicitud de reembolso ya enviada y asociada a una referencia externa.
-* `finance.gateway-notification.v1` y su worker activos.
+* Seed de QA con versión vigente 7, seguro por pasajero `15000.0000` y comisión `15.0000`; stub de Flota con tarifa `350000.00` para la embarcación indicada.
+* Credenciales de prueba de Mercado Pago y secreto de webhook configurados; tokenización con la Public Key de la misma aplicación. Callback HTTPS registrado para `payment` cuando se comprueben entregas reales.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10`; `refund_intent` en `PENDING_SEND`/`IN_PROCESS`, `amount = 30000.00` (100 % del depósito; ajustar a la versión vigente), `trigger = DISPUTE_REJECTED`, `external_reference` = `id` del reembolso devuelto por la Pasarela. `charge_intent.external_reference` = `payment_id` original.
-* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`.
+* **Initial State**. Reserva `c0a80100-0000-4000-8000-000000090301` ausente. Este caso prepara todos sus datos. Puede ejecutarse sobre volúmenes de QA recreados antes de repetirlo (`docker compose --profile app down -v`).
+* **Environment**. Compose con `dev,qa`; app `http://localhost:8080`, RabbitMQ `http://localhost:15672`, stub de Flota `http://localhost:8081` y BD `host=localhost port=5433 dbname=seashare user=seashare`.
+* **Test Accounts**. Comprador y vendedor de prueba MCO; vendedor con saldo disponible para reembolsos. Para este caso tokeniza la Visa crédito de prueba con titular `APRO`. Sustituye `<TOKEN_APRO>` por ese token nuevo y `<EMAIL_COMPRADOR>` por el email de prueba. Metadata de la Visa de ejemplo `VISA / 6260`.
+* **Mensajes AMQP**. Exchange `seashare.reservations`, `Content-Type: application/json` y `Message-Id` único en cada entrega. Los cuerpos completos figuran en las tablas.
+
+##### Preparación de los datos de este caso
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000090301","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090301';` | [ ] |  |
+| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000090301/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [ ] |  |
+| 3 | Preparar el cobro de esta reserva | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000090301","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_APRO>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | Intención en `CAPTURED` y una fila de cobro por `400000.00`. Verificar con `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090301';` y `SELECT id, charge_intent_id, amount, rental_amount, insurance_amount, deposit_amount FROM charge_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090301';`. | [ ] |  |
 
 --------------------------------------------------------------------------------
 
 #### Test Execution Flow *(mandatory)*
 
-##### Section 1: Registro de un reembolso confirmado como exitoso
+##### Section 1: Confirmación y registro del reembolso
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar la intención en curso | `SELECT status, amount, external_reference FROM refund_intent WHERE reservation_id = '...'` | N/A | La solicitud previa existe y está pendiente, con su `external_reference` ya persistida (RF-006, RF-007). | [ ] | |
-| 2 | Simular la notificación de la Pasarela | `POST /api/v1/webhook/gateway?data.id=<payment_id>&type=payment` | `payment_id` = `charge_intent.external_reference` del cobro original; body con `action` y `type` (obligatorios, no discriminan el resultado); headers `Content-Type: application/json`, `x-signature` válida, `x-request-id` | `200 OK` inmediato; la notificación queda persistida en `outbox_message` antes del acuse (contrato webhook §3.2). | [ ] | |
-| 3 | Verificar la cola interna | Inspeccionar `finance.gateway-notification.v1` | `{"type":"payment","action":"<el enviado>","data_id":"<payment_id>"}` | El mensaje se publica con routing `gateway.notification` para el procesamiento asíncrono (contrato webhook §3.3). | [ ] | |
-| 4 | Verificar la consulta de reembolsos | Logs de la app y `GET /v1/payments/{data.id}/refunds` en Mercado Pago | `{data.id} = payment_id` | El worker lista los reembolsos del pago y asocia el que cumple `refund.id == refund_intent.external_reference`; el cuerpo del webhook no se usa como veredicto (D-UC09-11). | [ ] | |
-| 5 | Verificar la intención actualizada | `SELECT status, status_detail, amount, external_reference FROM refund_intent` | N/A | Estado `COMPLETED`, con `status_detail`, monto confirmado y referencia externa (RF-007). | [ ] | |
-| 6 | Verificar el registro inmutable | `SELECT * FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | Un único `refund_record` con `refund_intent_id NOT NULL`, `amount`, `released_amount`, `detail`, `external_reference`, reserva, propietario, embarcación, `dispute_id` cuando aplique y `created_at` (RF-007, RF-006A). | [ ] | Creación atómica con la intención. |
-| 7 | Verificar el monto neto liberado | Comparar `amount`, `transaction_cost` y `released_amount` | costo reportado por Mercado Pago (`fee_details`, si lo informa) | `released_amount = amount − transaction_cost` cuando la Pasarela informa costo; si no lo informa, `released_amount = amount` y `transaction_cost` queda `NULL` (RF-011). | [ ] | |
-| 8 | Verificar disponibilidad para consulta | `SELECT * FROM v_financial_records WHERE record_id = '<refund_record.id>'` | N/A | El registro aparece para "Consultar registros financieros" (RF-008, CE-003). | [ ] | |
-| 9 | Verificar inmutabilidad y no duplicación | `SELECT count(*) FROM refund_record WHERE refund_intent_id = '<id>'` | N/A | Exactamente 1 fila; el registro no admite `UPDATE`/`DELETE` (RF-007; caso extremo del UC09). | [ ] | |
+| 1 | Notificar la cancelación | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000090301","status":"CANCELLED_STRICT","status_changed_at":"2026-12-05T15:00:00Z"}` | El evento se consume y UC07 delega en UC09. | [ ] |  |
+| 2 | Verificar intención y depósito | `SELECT id, trigger, scope, status, status_detail, amount, charge_intent_id, dispute_id, external_reference, idempotency_key FROM refund_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090301';` y `SELECT disposition, dispute_id FROM deposit_disposition WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090301';` | Trigger `CANCELLED_STRICT`, scope `DEPOSIT_ONLY` | Una intención de `35000.00`, clave UUID v4, referencia al cobro original y depósito en `REFUND_REQUESTED`. | [ ] |  |
+| 3 | Verificar el comando interno | `SELECT o.payload, o.published_at FROM outbox_message o JOIN refund_intent ri ON o.payload::jsonb->>'refund_intent_id' = ri.id::text WHERE ri.reservation_id = 'c0a80100-0000-4000-8000-000000090301' AND o.routing_key = 'refund.command';` | ID de la intención de reembolso | Un comando `refund.command` publicado con `refund_intent_id`. El monto se obtiene de los registros internos. | [ ] |  |
+| 4 | Verificar el reembolso del proveedor | Panel de Mercado Pago o `GET https://api.mercadopago.com/v1/payments/{payment_id}/refunds` | `payment_id = charge_intent.external_reference`; `refund_id = refund_intent.external_reference` | Un reembolso de `35000.00 COP` cuyo ID coincide con la intención. El POST saliente usa `{"amount":35000.00}` y la clave de la intención. | [ ] |  |
+| 5 | Verificar webhook posterior al reembolso | Historial de entregas de Mercado Pago y `SELECT o.created_at, o.payload, o.published_at FROM outbox_message o JOIN charge_intent ci ON o.payload::jsonb->>'data_id' = ci.external_reference WHERE ci.reservation_id = 'c0a80100-0000-4000-8000-000000090301' AND o.routing_key = 'gateway.notification' ORDER BY o.created_at;` | Entrega posterior a la solicitud, con el payment_id del cobro | HTTP 200 y notificación persistida. Correlacionar el GET del worker a `/v1/payments/{payment_id}/refunds` y la asociación por refund_id. | [ ] |  |
+| 6 | Verificar el resultado y el registro | `SELECT id, trigger, scope, status, status_detail, amount, charge_intent_id, dispute_id, external_reference, idempotency_key FROM refund_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090301';` y `SELECT id, refund_intent_id, amount, released_amount, transaction_cost, external_reference FROM refund_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090301';` | Importe `35000.00` | Tras `approved` del proveedor, intención `COMPLETED` y exactamente un `refund_record`. Si la respuesta inicial sigue en curso, esperar el resultado externo y volver a consultar. | [ ] |  |
+| 7 | Verificar el neto liberado | `SELECT id, refund_intent_id, amount, released_amount, transaction_cost, external_reference FROM refund_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090301';` | `amount`, `transaction_cost`, `released_amount` | `released_amount = amount - transaction_cost`. Si el costo es NULL, el neto coincide con amount. | [ ] |  |
+| 8 | Verificar lectura financiera | `SELECT record_id, record_type, amount, external_reference FROM v_financial_records WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090301';` | ID del refund_record | Una fila `REFUND` con ese ID y referencia. | [ ] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Firma inválida o ausente | `POST /api/v1/webhook/gateway` con `x-signature` incorrecta | `data.id` y `type` válidos | `401 UNAUTHENTICATED`; no se procesa nada (contrato webhook §3.1 y §5). | [ ] | |
-| 2 | Payload incompleto | Enviar sin `action`, sin `data.id` o sin `type` | payload incompleto | `400 VALIDATION_ERROR`; no se encola ni se registra el resultado (contrato webhook §5). | [ ] | |
-| 3 | Notificación duplicada del mismo resultado | Reenviar el mismo webhook | mismo `data.id` | `200 OK` y el resultado ya registrado no se altera ni crea otro `refund_record` (contrato webhook §3.5 y §6). | [ ] | |
-| 4 | La Pasarela no conoce el pago | Simular `404` en la lista de reembolsos | N/A | La intención **no** se cierra; el evento se registra en `operational_failure` (contrato webhook §3.6). | [ ] | |
-| 5 | `data.id` sin reembolso local | Notificar un `payment_id` cuyos reembolsos no coinciden con ninguna `refund_intent` | `payment_id` sin coincidencia | `200 OK`; cada reembolso sin intención local se registra en `operational_failure`, sin creación de registros ni reintento (contrato webhook §3.6). | [ ] | |
-| 6 | Falla al persistir la notificación | Simular BD no disponible antes del acuse | N/A | `500 INTERNAL_ERROR` para que la Pasarela reintente (contrato webhook §3.7). | [ ] | |
-| 7 | Falla en el paso asíncrono | Simular error de la consulta o del registro tras el `200 OK` | N/A | Reintentos de la cola interna (5 intentos, *backoff* base 1 s); al agotarlos, DLQ y `operational_failure` (README §4.4). | [ ] | |
+| 1 | Evento repetido | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | Republicar el mismo cuerpo, misma marca y misma event_key cuando aplique; Message-Id diferente | Misma intención, mismo refund_id, un registro de reembolso y desenlace único del depósito. | [ ] |  |
+| 2 | Idempotencia HTTP del reembolso (B-07) | Reenviar `POST https://api.mercadopago.com/v1/payments/{payment_id}/refunds` inmediatamente después del original | Body `{"amount":35000.00}`, misma `X-Idempotency-Key` de refund_intent y credencial TEST | El proveedor devuelve el mismo refund_id. BD conserva la misma intención y el mismo registro. | [ ] |  |
+| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=GatewayWebhookControllerTest,RefundWebhookHandlerTest,RegisterRefundResultServiceTest,RefundSettlementPersistenceIntegrationTest,MercadoPagoRefundAdapterTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [ ] |  |
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : Solo el estado exitoso crea `refund_record`; `rejected`, `cancelled`, `expired` o `in_process` actualizan únicamente la intención (RF-009).
-* **EC-002** : El monto confirmado por la Pasarela prevalece sobre el solicitado; `released_amount` se calcula sobre el confirmado (RF-007, RF-011).
-* **EC-003** : La repetición de la notificación no altera el registro existente; el sistema conserva el resultado ya registrado (caso extremo del UC09).
-* **EC-004** : `BigDecimal` con 4 decimales internos → `HALF_UP` a 2 decimales en el registro y en la vista de consulta (RNF-002).
+
+* **EC-001**. Se devuelve el depósito completo de `35000.00`. El mismo evento crea una liquidación interna de `350000.00` a favor del propietario.
+* **EC-002**. La confirmación puede quedar registrada por la respuesta del POST antes del webhook. Para acreditar B-06 conserva una entrega real posterior y la evidencia de consulta del worker; si no se puede observar, registra esa comprobación como bloqueada.
+* **EC-003**. La respuesta del worker es asíncrona. Consultar hasta alcanzar el resultado esperado y registrar el estado observado si no converge. PENDING_SEND puede resolverse antes de la primera consulta.
 
 --------------------------------------------------------------------------------
 

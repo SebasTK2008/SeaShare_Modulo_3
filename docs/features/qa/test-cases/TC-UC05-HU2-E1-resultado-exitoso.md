@@ -1,5 +1,5 @@
 ### Test Case Specification: Procesar cobro · HU2 · E1 La Pasarela reporta el cobro como exitoso
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/005-procesar-cobro/spec.md](../../005-procesar-cobro/spec.md)  **Status** : Approved  **Execution** : 2026-11-02 Â· release/0.1.0 Â· PASS (`docs/features/qa/matriz-qa.md`)
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/005-procesar-cobro/spec.md](../../005-procesar-cobro/spec.md)  **Status** : Draft  **Execution** : Pendiente para esta revisión
 
 #### Test Overview *(mandatory)*
 
@@ -30,49 +30,50 @@ Este caso de prueba verifica que, ante una solicitud de cobro previamente enviad
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* **Modo A (suite automática):** el cuerpo y las cabeceras que el sistema envía a la Pasarela los verifican `MercadoPagoChargeAdapterTest` y `MercadoPagoRefundAdapterTest` (WireMock embebido); este TC verifica el efecto en la BD, las colas y la consulta real del pago.
-* **Modo B (release):** el resultado debe confirmarse con una notificación `payment` real de Mercado Pago sandbox y la consulta real del pago, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
+* **Modo B** para cobro y reembolso. Las comprobaciones controladas de modo A se identifican en la segunda sección.
 
 ##### Dependencies & Assumptions
-* **TC-UC05-HU1-E1 debe haber pasado**: existe una `IntenciónDeCobro` para la reserva, sin resultado definitivo.
-* RabbitMQ arriba, *outbox* activo y worker de `finance.charge-command.v1` operativo.
+* Seed de QA con versión vigente 7, seguro por pasajero `15000.0000` y comisión `15.0000`; stub de Flota con tarifa `350000.00` para la embarcación indicada.
+* Credenciales de prueba de Mercado Pago y secreto de webhook configurados; tokenización con la Public Key de la misma aplicación. Callback HTTPS registrado para `payment` cuando se comprueben entregas reales.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva de prueba con valor total registrado (alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`; ajustar a la versión vigente del entorno). Intención en `PENDING_SEND`/`IN_PROCESS`, con `external_reference = 1234567890` (id del pago en Mercado Pago), `payer_email` y `payment_method_type = CREDIT_CARD`. La reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (UUID v4 que se usa en los comandos).
-* **Environment** : staging local (`docker compose --profile app up --build -d`), health en `http://localhost:8080/actuator/health`, consola RabbitMQ en `http://localhost:15672`.
-* **Test Accounts** : N/A (seguridad fuera de alcance).
+* **Initial State**. Reserva `c0a80100-0000-4000-8000-000000050201` ausente. Este caso prepara todos sus datos. Puede ejecutarse sobre volúmenes de QA recreados antes de repetirlo (`docker compose --profile app down -v`).
+* **Environment**. Compose con `dev,qa`; app `http://localhost:8080`, RabbitMQ `http://localhost:15672`, stub de Flota `http://localhost:8081` y BD `host=localhost port=5433 dbname=seashare user=seashare`.
+* **Test Accounts**. Comprador y vendedor de prueba MCO; vendedor con saldo disponible para reembolsos. Para este caso tokeniza la Visa crédito de prueba con titular `APRO`. Sustituye `<TOKEN_APRO>` por ese token nuevo y `<EMAIL_COMPRADOR>` por el email de prueba. Metadata de la Visa de ejemplo `VISA / 6260`.
+* **Mensajes AMQP**. Exchange `seashare.reservations`, `Content-Type: application/json` y `Message-Id` único en cada entrega. Los cuerpos completos figuran en las tablas.
+
+##### Preparación de los datos de este caso
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000050201","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050201';` | [ ] |  |
+| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000050201/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [ ] |  |
 
 --------------------------------------------------------------------------------
 
 #### Test Execution Flow *(mandatory)*
 
-##### Section 1: Resultado exitoso reportado por la Pasarela
+##### Section 1: Registro del cobro aprobado y webhook real
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar el punto de partida | `psql -c "SELECT id, status, amount, external_reference FROM charge_intent WHERE reservation_id = '<UUID>' ORDER BY created_at DESC;"` | reserva de prueba | Intención sin resultado definitivo y **sin** fila en `charge_record` (RF-004). | [ ] | |
-| 2 | Simular el reporte de la Pasarela | `POST http://localhost:8080/api/v1/webhook/gateway?data.id=1234567890&type=payment` con firma del contrato | body `{"action":"payment.updated","type":"payment","data":{"id":"1234567890"}}`; `x-signature: ts=<ts>,v1=<HMAC-SHA256(secret_webhook, id:1234567890;request-id:<uuid>;ts:<ts>;)>`; `x-request-id: <uuid>` | `200 OK` con `{"status":"received"}`; la notificación queda persistida en `outbox_message` antes del acuse (RF-005). | [ ] | Firma calculada con el secret del entorno. |
-| 3 | Verificar el mensaje interno | Consola RabbitMQ → `finance.gateway-notification.v1` → Get messages | N/A | Cuerpo `{"type":"payment","action":"payment.updated","data_id":"1234567890"}` (README §3.5). | [ ] | |
-| 4 | Verificar la consulta del worker a la Pasarela | Logs de la app (`docker logs seashare-app`) | N/A | La app consulta `GET /v1/payments/{id}` (ejemplo `1234567890`); el estado se toma de esa consulta, no del cuerpo del webhook (contrato de webhook, §3 regla 4). | [ ] | |
-| 5 | Verificar el estado y el monto registrados | `psql -c "SELECT status, status_detail, amount, external_reference FROM charge_intent WHERE external_reference = '1234567890';"` | N/A | Intención en `CAPTURED`; `amount` conserva el total (`572.0000` de escala interna) y `status_detail` / `external_reference` reportados por la Pasarela (RF-006, RF-012). | [ ] | |
-| 6 | Verificar el registro inmutable de auditoría | `psql -c "SELECT * FROM charge_record WHERE charge_intent_id = '<id de la intención>';"` | N/A | Una fila con `charge_intent_id`, desglose `rental_amount`/`insurance_amount`/`deposit_amount`, propietario y embarcación copiados, metadatos no sensibles y fecha de creación (RF-006, RF-010, RF-012, RF-004B). | [ ] | |
-| 7 | Verificar la disponibilidad para UC06 | `curl -s http://localhost:8080/api/v1/reservations/<UUID>/payment-confirmation` | N/A | `200 OK`: `status = APPROVED`, `charged_amount = "572.00"`, `external_reference = "1234567890"`; `authorized_amount`, `captured_amount` y `released_amount` en `null` (RF-007; contrato UC06 §4). | [ ] | |
+| 1 | Solicitar el cobro | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000050201","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_APRO>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | UC07 delega a UC05. Intención en `CAPTURED` y una fila de cobro por `400000.00`. | [ ] |  |
+| 2 | Verificar el resultado financiero | `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050201';` y `SELECT id, charge_intent_id, amount, rental_amount, insurance_amount, deposit_amount FROM charge_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050201';` | Cobro de `400000.00` | `CAPTURED`, un registro y desglose `350000.00 / 15000.00 / 35000.00`. La respuesta del POST puede registrar el resultado antes del webhook. | [ ] |  |
+| 3 | Verificar la entrega real del webhook | Historial de webhooks de Mercado Pago y `SELECT o.created_at, o.payload, o.published_at FROM outbox_message o JOIN charge_intent ci ON o.payload::jsonb->>'data_id' = ci.external_reference WHERE ci.reservation_id = 'c0a80100-0000-4000-8000-000000050201' AND o.routing_key = 'gateway.notification' ORDER BY o.created_at;` | `payment_id = charge_intent.external_reference` | Entrega real HTTP 200 y notificación `gateway.notification` con el mismo ID. Correlacionar el GET del worker al pago en la telemetría HTTP disponible. | [ ] |  |
+| 4 | Consultar el resultado publicado | `GET http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000050201/payment-confirmation` | Sin cuerpo | HTTP 200, `status = APPROVED`, `charged_amount = "400000.00"`, referencia y detalle iguales a BD. | [ ] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Firma ausente o inválida | Repetir el `POST` del paso 2 sin `x-signature` / con `v1` alterado | firma inválida | `401 UNAUTHENTICATED`; **no** se procesa nada y la intención no cambia (contrato §5; README §4.4). | [x] | |
-| 2 | Payload mal formado | Enviar sin `action` en el cuerpo, o sin `data.id`/`type` en la query | payload incompleto | `400 VALIDATION_ERROR`; la intención no cambia (E2 del catálogo). | [x] | |
-| 3 | `data.id` sin intención asociada | Webhook con un id que no coincide con ningún `external_reference` | `data.id=9999999999` | `200 OK` y registro del evento en `operational_failure`; **sin** `charge_record` (caso extremo del SPEC). | [x] | |
-| 4 | La Pasarela responde `404` al consultar el pago | Simular `404` en `GET /v1/payments/{id}` | N/A | Un `404` no es veredicto financiero: la intención conserva su estado y el evento queda en `operational_failure` (D-UC05-13). | [x] | |
-| 5 | Notificación duplicada del mismo resultado | Reenviar el mismo webhook dos veces | mismos datos | `200 OK`; el resultado ya registrado no se altera y no se duplica el `charge_record` (idempotencia; `UNIQUE(charge_intent_id)`). | [x] | |
-| 6 | La Pasarela reporta `in_process` y luego `approved` | Primera consulta `in_process`; segunda `approved` | dos webhooks | Intención `IN_PROCESS` y después `CAPTURED`; el registro de auditoría se crea **solo** al capturar (RF-006, RF-008). | [x] | |
-| 7 | BD no disponible al persistir la notificación | Detener PostgreSQL y reenviar el webhook | N/A | `500 INTERNAL_ERROR` para que la Pasarela reintente (contrato de webhook, §3 regla 7); no queda acuse sin registro. | [x] | |
+| 1 | Entrega repetida | Reenviar la entrega del proveedor desde su panel | Mismo pago | Mismo estado, mismo `charge_record.id` y exactamente una fila para esta reserva. | [ ] |  |
+| 2 | Webhook sin firma | `POST http://localhost:8080/api/v1/webhook/gateway?data.id=<payment_id>&type=payment` | Body `{"action":"payment.updated","type":"payment"}`, Content-Type JSON, sin `x-signature` | HTTP 401 `UNAUTHENTICATED`, sin cambios en la intención. | [ ] |  |
+| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=GatewayWebhookControllerTest,ChargePaymentWebhookHandlerTest,RegisterChargeResultServiceTest,MercadoPagoChargeAdapterTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [ ] |  |
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : La respuesta técnica `approved` de `POST /v1/payments` y el webhook convergen en el mismo servicio de registro; un segundo resultado igual es idempotente (D-UC05-08).
-* **EC-002** : `charge_record` no admite `UPDATE` (trigger anti-mutación) y `charge_intent_id` es único: un cobro confirmado deja exactamente un registro.
-* **EC-003** : El monto interno de 4 decimales se serializa `HALF_UP` a 2 decimales en la respuesta de UC06 (RNF-002; README §3.1).
-* **EC-004** : Un estado que no sea cobro confirmado (`rejected`, `expired`, `cancelled`, `in_process`) nunca crea `charge_record` ni se reporta como `APPROVED` (RF-008, CE-004).
+
+* **EC-001**. La evidencia del webhook incluye ID del pago, hora de entrega, HTTP 200 y outbox. Si el GET del worker no es observable, deja esa comprobación bloqueada. El estado financiero por sí solo no acredita el recorrido del webhook.
+* **EC-002**. La respuesta del worker es asíncrona. Consultar hasta alcanzar el resultado esperado y registrar el estado observado si no converge. PENDING_SEND puede resolverse antes de la primera consulta.
 
 --------------------------------------------------------------------------------
 
