@@ -47,15 +47,15 @@ Verifica que un resultado externo `expired` deja la intención en `EXPIRED` y di
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Consultar el pago expirado | Modo A · `MercadoPagoChargeAdapterTest#queriesTheExpiredPayment` | Fixture HTTP `status = expired` | El adaptador devuelve el resultado expirado y su referencia. | [ ] |  |
-| 2 | Registrar la expiración | Modo A · `RegisterChargeResultServiceTest#registersTheExpirationWithoutAssumingFunds` | Intención en curso del fixture | Estado `EXPIRED` y detalle conservados, sin registro de cobro. | [ ] |  |
-| 3 | Verificar mapeo y conciliación | Modo A · `PaymentConfirmationStatusTest`, `ChargePaymentWebhookHandlerTest`, `ReconcileChargeIntentsServiceTest` | Fixtures de estado, consulta y conciliación | UC06 mapea EXPIRED. Un 404 o fallo de consulta conserva el estado y registra la inconsistencia correspondiente. | [ ] |  |
+| 1 | Consultar el pago expirado | Modo A · `MercadoPagoChargeAdapterTest#queriesTheExpiredPayment` | Fixture HTTP `status = expired` | El adaptador devuelve el resultado expirado y su referencia. | [X] |  |
+| 2 | Registrar la expiración | Modo A · `RegisterChargeResultServiceTest#registersTheExpirationWithoutAssumingFunds` | Intención en curso del fixture | Estado `EXPIRED` y detalle conservados, sin registro de cobro. | [X] |  |
+| 3 | Verificar mapeo y conciliación | Modo A · `PaymentConfirmationStatusTest`, `ChargePaymentWebhookHandlerTest`, `ReconcileChargeIntentsServiceTest` | Fixtures de estado, consulta y conciliación | UC06 mapea EXPIRED. Un 404 o fallo de consulta conserva el estado y registra la inconsistencia correspondiente. | [X] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Ejecutar las comprobaciones del caso | `.\mvnw.cmd "-Dtest=MercadoPagoChargeAdapterTest#queriesTheExpiredPayment,RegisterChargeResultServiceTest#registersTheExpirationWithoutAssumingFunds,PaymentConfirmationStatusTest,ChargePaymentWebhookHandlerTest,ReconcileChargeIntentsServiceTest" test` | JDK 25, ejecutado desde la raíz del repo | Pruebas seleccionadas aprobadas; guardar el resultado de Surefire. | [ ] |  |
+| 1 | Ejecutar las comprobaciones del caso | `.\mvnw.cmd "-Dtest=MercadoPagoChargeAdapterTest#queriesTheExpiredPayment,RegisterChargeResultServiceTest#registersTheExpirationWithoutAssumingFunds,PaymentConfirmationStatusTest,ChargePaymentWebhookHandlerTest,ReconcileChargeIntentsServiceTest" test` | JDK 25, ejecutado desde la raíz del repo | Pruebas seleccionadas aprobadas; guardar el resultado de Surefire. | [X] |  |
 
 ##### Edge Cases & Boundary Conditions
 

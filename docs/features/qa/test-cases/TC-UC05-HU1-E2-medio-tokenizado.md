@@ -44,8 +44,8 @@ Este caso de prueba verifica que el sistema utiliza **únicamente** el token o r
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000050102","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050102';` | [ ] |  |
-| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000050102/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [ ] |  |
+| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000050102","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050102';` | [X] |  |
+| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000050102/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [X] |  |
 
 --------------------------------------------------------------------------------
 
@@ -55,18 +55,18 @@ Este caso de prueba verifica que el sistema utiliza **únicamente** el token o r
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Solicitar el cobro | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000050102","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_APRO>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | UC07 delega a UC05. Intención en `CAPTURED` y una fila de cobro por `400000.00`. | [ ] |  |
-| 2 | Verificar el almacenamiento permitido | `SELECT payment_token_ref IS NOT NULL AS tiene_token, payment_method_type, last_four FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050102';` y `SELECT payment_method_type, last_four FROM charge_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050102';` | `VISA`, `6260` | Token presente en la intención, marca y últimos cuatro disponibles. El registro de cobro conserva marca y últimos cuatro. | [ ] |  |
-| 3 | Verificar el comando interno | `SELECT o.routing_key, o.payload, o.published_at FROM outbox_message o JOIN charge_intent ci ON o.payload::jsonb->>'charge_intent_id' = ci.id::text WHERE ci.reservation_id = 'c0a80100-0000-4000-8000-000000050102' AND o.routing_key = 'charge.command';` | Comando de esta intención | Incluye `charge_intent_id` y `payer_email`; excluye el token y los datos completos de la tarjeta. | [ ] |  |
-| 4 | Revisar logs y contrato saliente | Logs de la aplicación durante este cobro y cobertura A de este TC | Token utilizado y datos de la tarjeta de prueba | Los logs excluyen el token, PAN, CVV y vencimiento. El adaptador envía el token y la metadata permitida. Guardar evidencia redactada. | [ ] |  |
+| 1 | Solicitar el cobro | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000050102","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_APRO>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | UC07 delega a UC05. Intención en `CAPTURED` y una fila de cobro por `400000.00`. | [X] |  |
+| 2 | Verificar el almacenamiento permitido | `SELECT payment_token_ref IS NOT NULL AS tiene_token, payment_method_type, last_four FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050102';` y `SELECT payment_method_type, last_four FROM charge_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050102';` | `VISA`, `6260` | Token presente en la intención, marca y últimos cuatro disponibles. El registro de cobro conserva marca y últimos cuatro. | [X] |  |
+| 3 | Verificar el comando interno | `SELECT o.routing_key, o.payload, o.published_at FROM outbox_message o JOIN charge_intent ci ON o.payload::jsonb->>'charge_intent_id' = ci.id::text WHERE ci.reservation_id = 'c0a80100-0000-4000-8000-000000050102' AND o.routing_key = 'charge.command';` | Comando de esta intención | Incluye `charge_intent_id` y `payer_email`; excluye el token y los datos completos de la tarjeta. | [X] |  |
+| 4 | Revisar logs y contrato saliente | Logs de la aplicación durante este cobro y cobertura A de este TC | Token utilizado y datos de la tarjeta de prueba | Los logs excluyen el token, PAN, CVV y vencimiento. El adaptador envía el token y la metadata permitida. Guardar evidencia redactada. | [X] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | PENDING sin token | Repetir en reserva limpia, omitiendo `payment_token_ref` | Mismo cuerpo PENDING, sin el campo | Se registra el fallo de validación y no se crea intención ni cobro. | [ ] |  |
-| 2 | PENDING repetido | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | Mismo cuerpo y marca temporal, Message-Id diferente | Un solo cobro y una sola intención. | [ ] |  |
-| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=MercadoPagoChargeAdapterTest,ReservationStatusMessageMapperTest,ProcessChargeServiceTest,ChargeIntentTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [ ] |  |
+| 1 | PENDING sin token | Repetir en reserva limpia, omitiendo `payment_token_ref` | Mismo cuerpo PENDING, sin el campo | Se registra el fallo de validación y no se crea intención ni cobro. | [X] |  |
+| 2 | PENDING repetido | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | Mismo cuerpo y marca temporal, Message-Id diferente | Un solo cobro y una sola intención. | [X] |  |
+| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=MercadoPagoChargeAdapterTest,ReservationStatusMessageMapperTest,ProcessChargeServiceTest,ChargeIntentTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [X] |  |
 
 ##### Edge Cases & Boundary Conditions
 
