@@ -1,5 +1,5 @@
 ### Test Case Specification: Solicitar confirmación de pago · HU1 · E3 Consulta de un cobro aún en proceso
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/006-solicitar-confirmacion-de-pago/spec.md](../../006-solicitar-confirmacion-de-pago/spec.md)  **Status** : Approved  **Execution** : 2026-11-12 Â· release/0.1.0 Â· PASS (docs/features/qa/matriz-qa.md)
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/006-solicitar-confirmacion-de-pago/spec.md](../../006-solicitar-confirmacion-de-pago/spec.md)  **Status** : Approved  **Execution** : 2026-11-14 · release/0.1.0 · PASS (docs/features/qa/matriz-qa.md)
 
 #### Test Overview *(mandatory)*
 
@@ -58,7 +58,7 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` todavía en curso
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Confirmar el estado de partida | `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000060103';` y `SELECT id, charge_intent_id, amount, rental_amount, insurance_amount, deposit_amount FROM charge_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000060103';` | Titular `CONT` | Intención en `IN_PROCESS` y cero filas de cobro. | [X] |  |
-| 2 | Consultar confirmación | `GET http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000060103/payment-confirmation` | Header `Accept: application/json` | HTTP 200, `Content-Type: application/json`, `status = IN_PROCESS`, `charged_amount = null`. `authorized_amount`, `captured_amount` y `released_amount` en `null` para este escenario sin reembolsos. | [ ] |  |
+| 2 | Consultar confirmación | `GET http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000060103/payment-confirmation` | Header `Accept: application/json` | HTTP 200, `Content-Type: application/json`, `status = IN_PROCESS`, `charged_amount = null`. `authorized_amount`, `captured_amount` y `released_amount` en `null` para este escenario sin reembolsos. | [X] |  |
 | 3 | Comparar detalle y referencia | Comparar respuesta REST con la intención de esta reserva | `detail` y `external_reference` | Coinciden con `status_detail` y `charge_intent.external_reference`; si BD muestra NULL, el JSON contiene `null`. | [X] |  |
 | 4 | Comprobar lectura sin cambios | Repetir el GET y comparar las consultas anteriores | Dos consultas consecutivas | Mismos IDs, montos y número de registros. La ruta UC06 resuelve desde BD. | [X] |  |
 

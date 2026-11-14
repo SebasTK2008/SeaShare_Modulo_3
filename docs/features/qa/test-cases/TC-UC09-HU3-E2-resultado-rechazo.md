@@ -1,5 +1,5 @@
 ### Test Case Specification: UC09 Reembolsos · HU3 · E2 La Pasarela de Pago reporta el rechazo o fallo del reembolso
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/009-reembolsar-dinero-arrendatario/spec.md](../../009-reembolsar-dinero-arrendatario/spec.md)  **Status** : Draft  **Execution** : Pendiente para esta revisión
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/009-reembolsar-dinero-arrendatario/spec.md](../../009-reembolsar-dinero-arrendatario/spec.md)  **Status** : Approved  **Execution** : 2026-11-14 · release/0.1.0 · PASS (docs/features/qa/matriz-qa.md)
 
 #### Test Overview *(mandatory)*
 
@@ -46,16 +46,16 @@ Este caso de prueba verifica que, cuando la Pasarela de Pago reporta el rechazo 
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Rechazo de negocio al enviar | Modo A · `SendRefundToGatewayServiceTest#businessRejectionStopsTheRetries` y `MercadoPagoRefundAdapterTest#badRequestIsANonRetryableBusinessRejection` | HTTP 400 simulado | Intención REJECTED, sin registro ni reintento técnico. | [ ] |  |
-| 2 | Resultado negativo del reembolso | Modo A · `RegisterRefundResultServiceTest#nonCompletedResultOnlyUpdatesTheIntent` y `#anExpiredResultClosesTheIntentWithoutRecord` | Fixtures `rejected` y `expired` | Se actualiza el estado de la intención y se crean cero registros de reembolso. | [ ] |  |
-| 3 | Error técnico y consulta sin coincidencia | Modo A · `SendRefundToGatewayServiceTest`, `RefundWebhookHandlerTest`, `MercadoPagoRefundAdapterTest` | Fixtures HTTP 5xx, 404 y reembolso ajeno | El fallo técnico no se toma como devolución confirmada; un reembolso ajeno no genera registro local. | [ ] |  |
-| 4 | Validación del webhook | Modo A · `GatewayWebhookControllerTest` | Firma inválida, cuerpo incompleto y fallo de persistencia | HTTP 401, 400 y 500 respectivamente, conforme al fixture. | [ ] |  |
+| 1 | Rechazo de negocio al enviar | Modo A · `SendRefundToGatewayServiceTest#businessRejectionStopsTheRetries` y `MercadoPagoRefundAdapterTest#badRequestIsANonRetryableBusinessRejection` | HTTP 400 simulado | Intención REJECTED, sin registro ni reintento técnico. | [X] |  |
+| 2 | Resultado negativo del reembolso | Modo A · `RegisterRefundResultServiceTest#nonCompletedResultOnlyUpdatesTheIntent` y `#anExpiredResultClosesTheIntentWithoutRecord` | Fixtures `rejected` y `expired` | Se actualiza el estado de la intención y se crean cero registros de reembolso. | [X] |  |
+| 3 | Error técnico y consulta sin coincidencia | Modo A · `SendRefundToGatewayServiceTest`, `RefundWebhookHandlerTest`, `MercadoPagoRefundAdapterTest` | Fixtures HTTP 5xx, 404 y reembolso ajeno | El fallo técnico no se toma como devolución confirmada; un reembolso ajeno no genera registro local. | [X] |  |
+| 4 | Validación del webhook | Modo A · `GatewayWebhookControllerTest` | Firma inválida, cuerpo incompleto y fallo de persistencia | HTTP 401, 400 y 500 respectivamente, conforme al fixture. | [X] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Ejecutar las comprobaciones del caso | `.\mvnw.cmd "-Dtest=MercadoPagoRefundAdapterTest,SendRefundToGatewayServiceTest,RegisterRefundResultServiceTest,RefundWebhookHandlerTest,GatewayWebhookControllerTest" test` | Fixtures incluidos en las clases | Pruebas seleccionadas aprobadas; guardar el resultado de Surefire. | [ ] |  |
+| 1 | Ejecutar las comprobaciones del caso | `.\mvnw.cmd "-Dtest=MercadoPagoRefundAdapterTest,SendRefundToGatewayServiceTest,RegisterRefundResultServiceTest,RefundWebhookHandlerTest,GatewayWebhookControllerTest" test` | Fixtures incluidos en las clases | Pruebas seleccionadas aprobadas; guardar el resultado de Surefire. | [X] |  |
 
 ##### Edge Cases & Boundary Conditions
 
