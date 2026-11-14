@@ -1,5 +1,5 @@
 ### Test Case Specification: Solicitar confirmación de pago · HU1 · E1 Confirmación de un cobro exitoso
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/006-solicitar-confirmacion-de-pago/spec.md](../../006-solicitar-confirmacion-de-pago/spec.md)  **Status** : Draft  **Execution** : Pendiente para esta revisión
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/006-solicitar-confirmacion-de-pago/spec.md](../../006-solicitar-confirmacion-de-pago/spec.md)  **Status** : Approved  **Execution** : 2026-11-12 Â· release/0.1.0 Â· PASS (docs/features/qa/matriz-qa.md)
 
 #### Test Overview *(mandatory)*
 

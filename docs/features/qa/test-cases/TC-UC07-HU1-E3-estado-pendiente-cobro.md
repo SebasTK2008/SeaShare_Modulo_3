@@ -1,5 +1,5 @@
 ### Test Case Specification: Estado de la reserva · HU1 · E3 Estado "pendiente": continúa TTL y dispara el cobro
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/007-brindar-estado-de-la-reserva/spec.md](../../007-brindar-estado-de-la-reserva/spec.md)  **Status** : Draft  **Execution** : Pendiente para esta revisión
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/007-brindar-estado-de-la-reserva/spec.md](../../007-brindar-estado-de-la-reserva/spec.md)  **Status** : Approved  **Execution** : 2026-11-02 Â· release/0.1.0 Â· PASS (docs/features/qa/matriz-qa.md)
 
 #### Test Overview *(mandatory)*
 
@@ -46,8 +46,8 @@ Este caso de prueba verifica que, ante el estado `PENDING` con el token del medi
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070103","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` | [ ] |  |
-| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000070103/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [ ] |  |
+| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070103","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` | [X] |  |
+| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000070103/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [X] |  |
 
 --------------------------------------------------------------------------------
 
@@ -57,19 +57,19 @@ Este caso de prueba verifica que, ante el estado `PENDING` con el token del medi
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Notificar el estado inicial | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070103","status":"INITIATED","status_changed_at":"2026-12-05T14:15:00Z"}` | El evento se consume y no genera operaciones financieras ni filas en `reservation_status_log`. | [ ] |  |
-| 2 | Solicitar el cobro | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070103","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_APRO>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | UC07 delega a UC05. Intención en `CAPTURED` y una fila de cobro por `400000.00`. | [ ] |  |
-| 3 | Verificar identidad y delegación | `SELECT status, operation_type, idempotency_key, status_changed_at, processed_at, outcome FROM reservation_status_log WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` y `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` | Marca PENDING `2026-12-05T14:30:00Z` | Una fila `PENDING / CHARGE` procesada y una intención por `400000.00`. La marca recibida se conserva. | [ ] |  |
-| 4 | Verificar el comando | `SELECT o.routing_key, o.payload, o.published_at FROM outbox_message o JOIN charge_intent ci ON o.payload::jsonb->>'charge_intent_id' = ci.id::text WHERE ci.reservation_id = 'c0a80100-0000-4000-8000-000000070103' AND o.routing_key = 'charge.command';` | Intención de esta reserva | Un comando publicado con ID y email; sin token. | [ ] |  |
-| 5 | Verificar ausencia de efectos ajenos | `SELECT count(*) FROM refund_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';`; `SELECT count(*) FROM settlement_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';`; `SELECT count(*) FROM deposit_disposition WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` | Misma reserva | Los tres recuentos son cero. | [ ] |  |
+| 1 | Notificar el estado inicial | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070103","status":"INITIATED","status_changed_at":"2026-12-05T14:15:00Z"}` | El evento se consume y no genera operaciones financieras ni filas en `reservation_status_log`. | [X] |  |
+| 2 | Solicitar el cobro | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070103","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_APRO>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | UC07 delega a UC05. Intención en `CAPTURED` y una fila de cobro por `400000.00`. | [X] |  |
+| 3 | Verificar identidad y delegación | `SELECT status, operation_type, idempotency_key, status_changed_at, processed_at, outcome FROM reservation_status_log WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` y `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` | Marca PENDING `2026-12-05T14:30:00Z` | Una fila `PENDING / CHARGE` procesada y una intención por `400000.00`. La marca recibida se conserva. | [X] |  |
+| 4 | Verificar el comando | `SELECT o.routing_key, o.payload, o.published_at FROM outbox_message o JOIN charge_intent ci ON o.payload::jsonb->>'charge_intent_id' = ci.id::text WHERE ci.reservation_id = 'c0a80100-0000-4000-8000-000000070103' AND o.routing_key = 'charge.command';` | Intención de esta reserva | Un comando publicado con ID y email; sin token. | [X] |  |
+| 5 | Verificar ausencia de efectos ajenos | `SELECT count(*) FROM refund_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';`; `SELECT count(*) FROM settlement_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';`; `SELECT count(*) FROM deposit_disposition WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070103';` | Misma reserva | Los tres recuentos son cero. | [X] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | PENDING repetido | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | Mismo cuerpo y marca, Message-Id diferente | Una fila PENDING en el log y una intención. | [ ] |  |
-| 2 | Datos incompletos | En escenarios limpios, omitir token y luego omitir el cálculo de UC04 | Variantes independientes del PENDING | Fallo controlado en `operational_failure` para cada reserva, sin intención ni cobro. | [ ] |  |
-| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=ReservationStatusListenerTest,ReservationStatusMessageMapperTest,HandleReservationStatusServiceTest,ReservationStatusEndToEndIntegrationTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [ ] |  |
+| 1 | PENDING repetido | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | Mismo cuerpo y marca, Message-Id diferente | Una fila PENDING en el log y una intención. | [X] |  |
+| 2 | Datos incompletos | En escenarios limpios, omitir token y luego omitir el cálculo de UC04 | Variantes independientes del PENDING | Fallo controlado en `operational_failure` para cada reserva, sin intención ni cobro. | [X] |  |
+| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=ReservationStatusListenerTest,ReservationStatusMessageMapperTest,HandleReservationStatusServiceTest,ReservationStatusEndToEndIntegrationTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [X] |  |
 
 ##### Edge Cases & Boundary Conditions
 

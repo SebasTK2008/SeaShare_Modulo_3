@@ -1,5 +1,5 @@
 ### Test Case Specification: Procesar cobro · HU1 · E1 Envío exitoso de la solicitud de cobro a la Pasarela de pago
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/005-procesar-cobro/spec.md](../../005-procesar-cobro/spec.md)  **Status** : Draft  **Execution** : Pendiente para esta revisión
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/005-procesar-cobro/spec.md](../../005-procesar-cobro/spec.md)  **Status** : Approved  **Execution** : 2026-11-12 Â· release/0.1.0 Â· PASS (docs/features/qa/matriz-qa.md)
 
 #### Test Overview *(mandatory)*
 
