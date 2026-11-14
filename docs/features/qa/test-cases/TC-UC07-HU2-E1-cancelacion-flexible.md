@@ -95,14 +95,7 @@ Las reservas auxiliares siguientes deben estar ausentes antes de prepararlas y n
 | 6 | Fallas transitorias y agotamiento de reintentos (modo A) | `.\mvnw.cmd "-Dtest=AmqpListenerRetryIntegrationTest,AmqpListenerFailurePolicyTest,OperationalFailureMessageRecovererTest" test` | Fixtures y sonda transitoria de las clases indicadas; no detener la BD del recorrido B | Pruebas aprobadas de la política compartida: 5 intentos totales, backoff, rechazo a DLQ y registro del fallo cuando la persistencia está disponible. Esta evidencia controlada se registra por separado de las operaciones reales. | [X] |  |
 | 7 | Contrato, delegación y resultados controlados (modo A) | `.\mvnw.cmd "-Dtest=ReservationStatusPolicyTest,ReservationStatusListenerTest,ReservationStatusMessageMapperTest,HandleReservationStatusServiceTest,RefundCalculatorTest,RequestRefundServiceTest,SendRefundToGatewayServiceTest,RegisterRefundResultServiceTest,MercadoPagoRefundAdapterTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas, incluida la delegación sin liquidación, reversión ante `FAILED`, registro solo tras confirmación y contrato HTTP del reembolso. El adaptador envía `{"amount":400000.00}` para el importe de este recorrido y la clave UUID v4 de la intención como `X-Idempotency-Key`; cuerpo y cabecera se verifican en modo A, no se deducen del GET al proveedor. | [X] |  |
 
-Para cada variante negativa de la sección 2 (pasos 1, 2, 3 y 5), sustituir `<UUID_VARIANTE>` por el UUID completo de su fila y comprobar además que los cuatro recuentos siguientes son cero:
-
-```sql
-SELECT count(*) FROM reservation_status_log WHERE reservation_id = '<UUID_VARIANTE>';
-SELECT count(*) FROM refund_intent WHERE reservation_id = '<UUID_VARIANTE>';
-SELECT count(*) FROM refund_record WHERE reservation_id = '<UUID_VARIANTE>';
-SELECT count(*) FROM settlement_intent WHERE reservation_id = '<UUID_VARIANTE>';
-```
+En los negativos 1, 2, 3 y 5, comprobar por el UUID de su fila que no hay logs, intenciones ni registros financieros; las consultas y el fallo esperado se indican en cada paso.
 
 ##### Edge Cases & Boundary Conditions
 
