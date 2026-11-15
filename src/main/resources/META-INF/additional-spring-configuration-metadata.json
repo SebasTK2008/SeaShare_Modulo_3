@@ -1,0 +1,175 @@
+{
+  "properties": [
+    {
+      "name": "seashare.timezone",
+      "type": "java.lang.String",
+      "description": "Zona horaria de negocio para fechas y períodos (general-plan §7.4, D-12).",
+      "defaultValue": "America/Bogota"
+    },
+    {
+      "name": "seashare.estimates.max-batch-size",
+      "type": "java.lang.Integer",
+      "description": "Máximo de identificadores por lote de UC01; superarlo devuelve 400 BATCH_SIZE_EXCEEDED (general-plan §7.4, D-22).",
+      "defaultValue": 50
+    },
+    {
+      "name": "seashare.reporting.max-page-size",
+      "type": "java.lang.Integer",
+      "description": "Máximo de registros por página en UC12 (general-plan §7.4, D-22).",
+      "defaultValue": 100
+    },
+    {
+      "name": "seashare.outbox.relay-interval",
+      "type": "java.time.Duration",
+      "description": "Intervalo entre ciclos del relay del outbox.",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "seashare.outbox.batch-size",
+      "type": "java.lang.Integer",
+      "description": "Máximo de mensajes publicados por ciclo del relay del outbox.",
+      "defaultValue": 100
+    },
+    {
+      "name": "seashare.outbox.publish-confirm-timeout",
+      "type": "java.time.Duration",
+      "description": "Espera máxima del publisher confirm de RabbitMQ antes de fallar la publicación.",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "seashare.fleet.base-url",
+      "type": "java.lang.String",
+      "description": "URL base del Sistema de Gestión de Flota (UC02). Dev usa un default local; prod exige FLEET_BASE_URL sin default."
+    },
+    {
+      "name": "seashare.fleet.connect-timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout de conexión hacia Flota.",
+      "defaultValue": "1s"
+    },
+    {
+      "name": "seashare.fleet.read-timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout de lectura hacia Flota (SLA de UC01 RNF-003).",
+      "defaultValue": "1s"
+    },
+    {
+      "name": "seashare.fleet.retry.max-attempts",
+      "type": "java.lang.Integer",
+      "description": "Número total de intentos hacia Flota (1 inicial + reintentos).",
+      "defaultValue": 2
+    },
+    {
+      "name": "seashare.fleet.retry.wait-duration",
+      "type": "java.time.Duration",
+      "description": "Espera corta entre reintentos hacia Flota.",
+      "defaultValue": "100ms"
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.failure-rate-threshold",
+      "type": "java.lang.Float",
+      "description": "Porcentaje de fallos que abre el circuit breaker de Flota.",
+      "defaultValue": 50.0
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.minimum-number-of-calls",
+      "type": "java.lang.Integer",
+      "description": "Llamadas mínimas antes de evaluar el circuit breaker de Flota.",
+      "defaultValue": 5
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.sliding-window-size",
+      "type": "java.lang.Integer",
+      "description": "Tamaño de la ventana deslizante del circuit breaker de Flota.",
+      "defaultValue": 10
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.wait-duration-in-open-state",
+      "type": "java.time.Duration",
+      "description": "Tiempo que el circuit breaker de Flota permanece abierto.",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "seashare.fleet.circuit-breaker.permitted-number-of-calls-in-half-open-state",
+      "type": "java.lang.Integer",
+      "description": "Llamadas permitidas en estado semiabierto del circuit breaker de Flota.",
+      "defaultValue": 1
+    },
+    {
+      "name": "seashare.gateway.base-url",
+      "type": "java.lang.String",
+      "description": "URL base de la pasarela de pago (Mercado Pago).",
+      "defaultValue": "https://api.mercadopago.com"
+    },
+    {
+      "name": "seashare.gateway.access-token",
+      "type": "java.lang.String",
+      "description": "Token de acceso de la pasarela (Authorization: Bearer); se aporta por entorno."
+    },
+    {
+      "name": "seashare.gateway.read-timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout de lectura hacia la pasarela.",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "seashare.gateway.connect-timeout",
+      "type": "java.time.Duration",
+      "description": "Timeout de conexión hacia la pasarela.",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "seashare.gateway.webhook-secret",
+      "type": "java.lang.String",
+      "description": "Secreto de la firma x-signature del webhook de la pasarela; se aporta por entorno."
+    },
+    {
+      "name": "seashare.gateway.settlement-mode",
+      "type": "java.lang.String",
+      "description": "Modo del libro de liquidaciones de UC10. Solo 'simulated' es valido: el marketplace real no esta implementado (D-UC10-18).",
+      "defaultValue": "simulated"
+    },
+    {
+      "name": "seashare.gateway.credentials-required",
+      "type": "java.lang.Boolean",
+      "description": "Exige access token y secreto del webhook no vacios. Lo activa el perfil prod; en dev es false.",
+      "defaultValue": false
+    },
+    {
+      "name": "seashare.gateway.reconciliation-interval",
+      "type": "java.time.Duration",
+      "description": "Cadencia del job de conciliacion con la pasarela.",
+      "defaultValue": "5m"
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.failure-rate-threshold",
+      "type": "java.lang.Float",
+      "description": "Umbral de tasa de fallos (porcentaje) del circuit breaker de la pasarela.",
+      "defaultValue": 50.0
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.minimum-number-of-calls",
+      "type": "java.lang.Integer",
+      "description": "Numero minimo de llamadas antes de evaluar el circuit breaker de la pasarela.",
+      "defaultValue": 5
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.sliding-window-size",
+      "type": "java.lang.Integer",
+      "description": "Tamano de la ventana deslizante del circuit breaker de la pasarela.",
+      "defaultValue": 10
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.wait-duration-in-open-state",
+      "type": "java.time.Duration",
+      "description": "Tiempo que el circuit breaker de la pasarela permanece abierto.",
+      "defaultValue": "10s"
+    },
+    {
+      "name": "seashare.gateway.circuit-breaker.permitted-number-of-calls-in-half-open-state",
+      "type": "java.lang.Integer",
+      "description": "Llamadas permitidas en estado semiabierto del circuit breaker de la pasarela.",
+      "defaultValue": 1
+    }
+  ]
+}

@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.1</version>
+        <version>4.1.2</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.seashare</groupId>
     <artifactId>seashare-m3</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0</version>
     <name/>
     <description/>
     <url/>
@@ -29,13 +29,70 @@
     <properties>
         <java.version>25</java.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <resilience4j.version>2.4.0</resilience4j.version>
+        <shedlock.version>7.10.1</shedlock.version>
+        <archunit.version>1.5.1</archunit.version>
+        <wiremock.version>3.13.2</wiremock.version>
+        <commons-csv.version>1.14.1</commons-csv.version>
+        <jacoco.version>0.8.15</jacoco.version>
     </properties>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
-
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-restclient</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot4</artifactId>
+            <version>${resilience4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons-csv.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-spring</artifactId>
+            <version>${shedlock.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-jdbc-template</artifactId>
+            <version>${shedlock.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -47,11 +104,19 @@
             <version>${mapstruct.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok-mapstruct-binding</artifactId>
-            <version>0.2.0</version>
-            <optional>true</optional>
-            <scope>provided</scope>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp-test</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -71,6 +136,23 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-rabbitmq</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>${wiremock.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -98,15 +180,6 @@
                                     <artifactId>mapstruct-processor</artifactId>
                                     <version>${mapstruct.version}</version>
                                 </path>
-                                <path>
-                                    <groupId>org.projectlombok</groupId>
-                                    <artifactId>lombok</artifactId>
-                                </path>
-                                <path>
-                                    <groupId>org.projectlombok</groupId>
-                                    <artifactId>lombok-mapstruct-binding</artifactId>
-                                    <version>0.2.0</version>
-                                </path>
                             </annotationProcessorPaths>
                         </configuration>
                     </execution>
@@ -123,16 +196,104 @@
                                     <artifactId>mapstruct-processor</artifactId>
                                     <version>${mapstruct.version}</version>
                                 </path>
-                                <path>
-                                    <groupId>org.projectlombok</groupId>
-                                    <artifactId>lombok</artifactId>
-                                </path>
-                                <path>
-                                    <groupId>org.projectlombok</groupId>
-                                    <artifactId>lombok-mapstruct-binding</artifactId>
-                                    <version>0.2.0</version>
-                                </path>
                             </annotationProcessorPaths>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com/seashare/seasharem3/domain/service/*</include>
+                                        <include>com/seashare/seasharem3/domain/model/FinancialParameters</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/BaseRate</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/BoatId</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/HighSeasonWindow*</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/Money</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/PaymentConfirmationStatus</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/Percentage</include>
+                                        <include>com/seashare/seasharem3/domain/valueobject/ReservationValue</include>
+                                        <include>com/seashare/seasharem3/domain/exception/BaseRateException*</include>
+                                        <include>com/seashare/seasharem3/domain/model/ChargeIntent</include>
+                                        <include>com/seashare/seasharem3/domain/model/ChargeRecord</include>
+                                        <include>com/seashare/seasharem3/domain/model/RefundIntent</include>
+                                        <include>com/seashare/seasharem3/domain/model/SettlementIntent</include>
+                                        <include>com/seashare/seasharem3/domain/model/FinancialRecord</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com/seashare/seasharem3/application/service/ProvideBaseRateService</include>
+                                        <include>com/seashare/seasharem3/application/service/EstimateBatchService</include>
+                                        <include>com/seashare/seasharem3/application/service/EstimateSingleService</include>
+                                        <include>com/seashare/seasharem3/application/service/FinancialParametersService</include>
+                                        <include>com/seashare/seasharem3/application/service/CalculateReservationValueService</include>
+                                        <include>com/seashare/seasharem3/application/service/GetPaymentConfirmationService</include>
+                                        <include>com/seashare/seasharem3/application/service/HandleReservationStatusService</include>
+                                        <include>com/seashare/seasharem3/application/dto/ProvideBaseRateCommand</include>
+                                        <include>com/seashare/seasharem3/application/dto/BaseRateResult</include>
+                                        <include>com/seashare/seasharem3/application/dto/ReservationStatusCommand</include>
+                                        <include>com/seashare/seasharem3/application/service/RegisterReservationInformationService</include>
+                                        <include>com/seashare/seasharem3/application/service/ProcessChargeService</include>
+                                        <include>com/seashare/seasharem3/application/service/SendChargeToGatewayService</include>
+                                        <include>com/seashare/seasharem3/application/service/RegisterChargeResultService</include>
+                                        <include>com/seashare/seasharem3/application/service/ReconcileChargeIntentsService</include>
+                                        <include>com/seashare/seasharem3/application/service/DisputeInformationService</include>
+                                        <include>com/seashare/seasharem3/application/service/OpenDepositTrackingService</include>
+                                        <include>com/seashare/seasharem3/application/service/RequestRefundService</include>
+                                        <include>com/seashare/seasharem3/application/service/SendRefundToGatewayService</include>
+                                        <include>com/seashare/seasharem3/application/service/RegisterRefundResultService</include>
+                                        <include>com/seashare/seasharem3/application/service/ReconcileRefundIntentsService</include>
+                                        <include>com/seashare/seasharem3/application/service/RequestSettlementService</include>
+                                        <include>com/seashare/seasharem3/application/service/SendSettlementToGatewayService</include>
+                                        <include>com/seashare/seasharem3/application/service/RegisterSettlementResultService</include>
+                                        <include>com/seashare/seasharem3/application/service/ReconcileSettlementIntentsService</include>
+                                        <include>com/seashare/seasharem3/application/service/FinancialRecordsQueryService</include>
+                                        <include>com/seashare/seasharem3/application/service/FinancialReportService</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
                         </configuration>
                     </execution>
                 </executions>

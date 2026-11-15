@@ -1,0 +1,72 @@
+# Especificación de Funcionalidad: UC04 - Solicitar el Valor Calculado de la Reserva
+
+**Creado**: 2026-09-06 
+
+## Escenarios de Usuario y Pruebas *(obligatorio)*
+
+### Historia de Usuario 1 - Calcular y devolver el desglose completo del valor de una reserva registrada (Prioridad: P1)
+
+Como el sistema, al recibir del Sistema de Reservas y Operaciones una solicitud del valor calculado de una reserva específica (identificada por su identificador de reserva), quiero recuperar la información previamente registrada para esa reserva (tarifa base, fecha de inicio, fecha de fin y número de pasajeros) y calcular sobre ella el monto de alquiler, el monto del seguro náutico y el depósito de garantía. En este caso de uso, el **monto de alquiler** es el precio bruto de uso de la embarcación: tarifa base diaria vigente multiplicada por la cantidad de días inclusiva entre la fecha de inicio y la fecha de fin. No incluye seguro, depósito ni comisión. El depósito de garantía se define como el 10% de la tarifa base diaria de la embarcación, de manera que pueda devolver el desglose completo junto con el **valor total de la reserva** y dejar los importes disponibles internamente para el proceso de cobro posterior.
+
+**Por qué esta prioridad**: Este caso de uso produce el valor financiero definitivo de la reserva —a diferencia de la estimación preliminar de "Solicitar estimación para reserva", que excluye explícitamente el depósito de garantía—, por lo que es el paso indispensable antes de que pueda ejecutarse cualquier cobro real al arrendatario.
+
+**Prueba Independiente**: Registrar previamente la información de una reserva mediante "Brindar información de reserva" y luego enviar, desde el Sistema de Reservas y Operaciones, una solicitud del valor calculado para esa misma reserva, validando que el sistema recupera la información registrada, calcula correctamente el monto de alquiler, el seguro náutico y el depósito de garantía, y devuelve el desglose completo junto con el valor total.
+
+**Escenarios de Aceptación**:
+
+1. **Escenario**: Cálculo exitoso del desglose completo de una reserva con información previamente registrada.
+   - **Dado** que existe información previamente registrada para una reserva específica (tarifa base vigente, fecha de inicio, fecha de fin y número de pasajeros).
+   - **Cuando** el Sistema de Reservas y Operaciones solicita al sistema el valor calculado de esa reserva mediante su identificador.
+  - **Entonces** el sistema calcula el monto de alquiler (tarifa base por la cantidad de días calculada a partir de las fechas), el monto del seguro náutico (tarifa de seguro por el número de pasajeros) y el depósito de garantía, y devuelve el desglose completo junto con el valor total de la reserva.
+
+### Casos Extremos (Edge Cases)
+
+- **¿Qué sucede cuando el Sistema de Reservas y Operaciones solicita el valor calculado de una reserva para la cual no existe información previamente registrada por "Brindar información de reserva" (por ejemplo, porque dicho registro nunca se completó o falló)?**
+  El sistema no intenta calcular ningún monto parcial. De acuerdo con RF-009, responde al Sistema de Reservas y Operaciones con un error controlado que indica que no existe información registrada para el identificador de reserva recibido.
+
+- **¿Qué sucede si el Sistema de Reservas y Operaciones solicita el valor calculado de la misma reserva más de una vez?**
+  Dado que el cálculo (RF-003 a RF-006) se realiza siempre a partir de la misma información registrada para esa reserva y de la versión de parámetros congelada (referencia a la versión usada, de la que se resuelven la comisión % y la tarifa de seguro por pasajero), el resultado es determinístico incluso si se crea una nueva versión de los parámetros financieros globales: el sistema devuelve el mismo desglose. La actualización de la información interna (RF-008) es igualmente idempotente, ya que reescribe los montos y la referencia con valores equivalentes.
+
+- **¿Cómo debe comportarse el sistema si la tarifa base necesaria para calcular el depósito no está disponible?**
+  El sistema considera la información necesaria incompleta. No calcula un depósito asumido o parcial; registra el fallo y responde con un error controlado.
+
+- **¿Qué sucede si la información registrada para la reserva está incompleta (por ejemplo, sin tarifa base) debido a una falla previa durante "Brindar información de reserva"?**
+  Se trata igualmente de un caso de información incompleta cubierto por RNF-003: el sistema no debe ejecutar un cálculo parcial (por ejemplo, omitiendo el monto de alquiler). Debe tratar la solicitud como no calculable y responder con un error controlado al Sistema de Reservas y Operaciones, equivalente al tratamiento definido en RF-009.
+
+- **¿Qué sucede si no existe una versión vigente de los parámetros financieros globales (o la tarifa del seguro náutico no está configurada) al momento de calcular el valor de la reserva?**
+  El sistema considera la información necesaria incompleta. No calcula el monto del seguro náutico ni un valor total parcial; registra el fallo y responde con un error controlado al Sistema de Reservas y Operaciones.
+
+## Requisitos *(obligatorio)*
+
+### Requisitos Funcionales
+
+- **RF-001**: El sistema DEBE recibir del Sistema de Reservas y Operaciones una solicitud del valor calculado de una reserva específica, identificada mediante su identificador de reserva.
+- **RF-002**: El sistema DEBE recuperar la información previamente registrada para dicha reserva (tarifa base vigente, fecha de inicio, fecha de fin y número de pasajeros), registrada mediante "Brindar información de reserva".
+- **RF-003**: El sistema DEBE calcular el monto de alquiler multiplicando la tarifa base registrada —obtenida para la fecha de inicio de la reserva mediante "Brindar información de reserva"— por la cantidad de días inclusiva entre las fechas registradas: una reserva cuya fecha de inicio y fecha de fin coinciden comprende un día, y una reserva del día 10 al día 12 comprende tres días.
+- **RF-004**: El sistema DEBE calcular el monto del seguro náutico multiplicando la tarifa de seguro establecida por el número de pasajeros registrado.
+- **RF-005**: El sistema DEBE calcular el depósito de garantía conforme a la regla definida en este caso de uso, sin multiplicarlo por la duración, el número de pasajeros o el daño reportado.
+- **RF-006**: El sistema DEBE calcular el valor total de la reserva como la suma del monto de alquiler, el monto del seguro náutico y el monto del depósito de garantía. Este valor total es el monto que se cobra al Arrendatario en "Procesar cobro".
+- **RF-007**: El sistema DEBE devolver al Sistema de Reservas y Operaciones el desglose completo del valor de la reserva, compuesto por el monto de alquiler, el monto del seguro náutico, el monto del depósito de garantía y el valor total.
+- **RF-008**: El sistema DEBE congelar los parámetros usados al calcular el valor de la reserva, registrando la **referencia a la versión** de los parámetros financieros globales empleada en el cálculo (la comisión % y la tarifa de seguro por pasajero aplicadas se resuelven de esa versión, sin copiarlas en la reserva); dichos valores no son retroactivos. El sistema DEBE actualizar la información interna previamente registrada de la reserva, incorporando los montos calculados junto con la referencia de versión, dejándola disponible para "Procesar cobro". Si los datos de la reserva cambian posteriormente, los montos calculados y la referencia de versión deben invalidarse y recalcularse antes de un nuevo cobro.
+- **RF-009**: El sistema DEBE responder con un error controlado al Sistema de Reservas y Operaciones cuando se solicita el valor calculado de una reserva para la cual no existe información previamente registrada.
+
+### Requisitos No Funcionales
+
+- **RNF-001**: El sistema DEBE utilizar DTOs para la comunicación con el Sistema de Reservas y Operaciones, tanto para recibir la solicitud como para devolver el desglose del valor.
+- **RNF-002**: El sistema DEBE utilizar `BigDecimal` para el monto de alquiler, el monto del seguro náutico, el monto del depósito de garantía y el valor total, garantizando una precisión interna de 4 decimales antes de cualquier redondeo final hacia la pasarela o reportes.
+- **RNF-003**: El sistema DEBE implementar un manejo de errores robusto para los casos en que la información previamente registrada de la reserva no exista o esté incompleta, o en que la tarifa del seguro náutico no esté configurada, evitando cálculos parciales o inconsistentes.
+
+### Entidades Clave
+
+- **InformaciónDeReserva (Entidad, definida en SPEC 3)**: En este caso de uso es consultada y actualizada, incorporando la tarifa base usada, el monto de alquiler, el monto del seguro náutico, el depósito de garantía, el valor total y la referencia a la versión de parámetros usada (de la que se resuelven la comisión % y el seguro por pasajero aplicados), de manera que quede disponible para "Procesar cobro" y para su posterior reembolso o liquidación.
+- **SolicitudValorReserva (DTO)**: Información recibida desde el Sistema de Reservas y Operaciones para esta operación. Contiene el identificador de la reserva cuyo valor calculado se solicita.
+- **DesgloseValorReserva (DTO)**: Resultado que el sistema devuelve al Sistema de Reservas y Operaciones. Contiene el identificador de la reserva, el monto de alquiler bruto, el monto del seguro náutico, el monto del depósito de garantía y el valor total cobrado de la reserva. No representa una entidad persistida, sino el valor de retorno de esta operación.
+
+## Criterios de Éxito *(obligatorio)*
+
+### Resultados Medibles
+
+- **CE-001**: Precisión Financiera, "100% de los valores totales calculados corresponden exactamente a la suma del monto de alquiler, el monto del seguro náutico y el monto del depósito de garantía, con cero (0) errores de redondeo detectados en pruebas automatizadas, validando la correcta implementación de BigDecimal".
+- **CE-002**: Cumplimiento Arquitectónico, "100% de los cálculos de valor de reserva se basan exclusivamente en la información previamente registrada por 'Brindar información de reserva', sin recalcular ni volver a consultar la tarifa dinámica ni la tarifa base".
+- **CE-003**: Resiliencia del Sistema, "100% de las solicitudes de valor calculado para reservas sin información previamente registrada son respondidas mediante un error controlado, sin provocar fallos ni respuestas inconsistentes al Sistema de Reservas y Operaciones".
+- **CE-004**: Continuidad del Flujo Financiero, "100% de las reservas con valor calculado exitosamente quedan con el desglose disponible internamente, permitiendo que 'Procesar cobro' se ejecute sin necesidad de recalcular los montos".

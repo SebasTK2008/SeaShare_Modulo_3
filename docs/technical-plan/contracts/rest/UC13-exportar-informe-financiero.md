@@ -1,0 +1,98 @@
+# UC13 — Exportar informe financiero
+
+| Campo | Valor |
+|---|---|
+| Caso de uso | UC13 Consultar informe financiero — **Exportar** (HU3) |
+| SPEC | `docs/features/013-consultar-informe-financiero/spec.md` |
+| Dirección | Propietario / Administrador Financiero → sistema |
+| ¿Responde? | Sí (síncrono) |
+| Quién puede llamarlo | Solo Propietario o Administrador Financiero (usuarios esperados; el sistema no valida el llamador — seguridad fuera de alcance, general-plan §7.1) [SPEC RF-012] |
+| Efectos secundarios | Ninguno (solo lectura) [SPEC RF-013] |
+
+Leyenda y convenciones comunes: [`../README.md`](../README.md).
+
+## 1. Propósito
+
+Genera un archivo `.csv` con los mismos datos agregados del informe financiero consultado en la UI, garantizando idéntico alcance (`scope` y `owner_id` declarados como **datos planos**, sin validar identidad), cálculo y período, para que el usuario pueda descargarlo y conservarlo [SPEC HU3].
+
+## 2. Petición
+
+`GET /api/v1/financial-report/export` **[CONV]**
+
+### Headers
+
+| Header | Obligatorio | Valor |
+|---|---|---|
+| `Accept` | No | `text/csv` |
+| `X-Correlation-Id` | No | Cadena libre |
+
+### Parámetros de consulta (Query Parameters)
+
+| Parámetro | Tipo | Oblig. | Descripción | Origen |
+|---|---|---|---|---|
+| `scope` | string | Sí | Alcance declarado: `OWNER` (Propietario) o `PLATFORM` (Administrador Financiero) | [CONV] — dato plano; el sistema aplica lo declarado sin validar identidad (seguridad fuera de alcance) |
+| `owner_id` | UUID | Sí si `scope=OWNER` | Identidad declarada del Propietario cuyos registros se exportan; el sistema no valida pertenencia | [SPEC RF-006] |
+| `periodicity` | string | Sí | `SEMI_MONTHLY`, `MONTHLY`, `QUARTERLY` | [SPEC RF-013] |
+| `period` | string | Sí | Identificador explícito del período a exportar, en el formato canónico según periodicidad (ver tabla) | [SPEC RF-013] |
+
+**Formato canónico de `period` según `periodicity`** (idéntico al contrato de consulta):
+
+| `periodicity` | Formato | Ejemplos |
+|---|---|---|
+| `SEMI_MONTHLY` | `YYYY-MM-H1` (días 1-15) / `YYYY-MM-H2` (días 16-fin) | `2026-10-H1`, `2026-10-H2` |
+| `MONTHLY` | `YYYY-MM` | `2026-10` |
+| `QUARTERLY` | `YYYY-Q1` (Ene-Mar) / `YYYY-Q2` (Abr-Jun) / `YYYY-Q3` (Jul-Sep) / `YYYY-Q4` (Oct-Dic) | `2026-Q4` |
+
+Un valor de `period` que no coincida con el formato de `periodicity` recibido devuelve `400 INVALID_PERIOD` [SPEC RF-004, casos extremos].
+
+## 3. Reglas de procesamiento
+
+1. **Igualdad de cálculo**: Utiliza internamente el mismo flujo que `GET /api/v1/financial-report` para determinar el alcance declarado (`scope`/`owner_id`, datos planos) y realizar las agregaciones [SPEC RNF-004].
+2. **Formato CSV**: Transforma el resultado en un archivo de texto plano delimitado por comas [SPEC RF-012].
+3. **Contenido**: El CSV debe incluir métricas agregadas (neto/ganancia, totales por tipo), período, periodicidad, el alcance declarado y la fecha y hora de la generación [SPEC HU3 escenarios 1 y 2, RF-013].
+
+## 4. Respuesta exitosa
+
+`200 OK` — `Content-Type: text/csv`
+Header sugerido: `Content-Disposition: attachment; filename="informe_financiero_2026-10.csv"`
+
+Columnas, en este orden (las métricas agregadas son las mismas del `GET /api/v1/financial-report`, [SPEC HU3, RF-010]):
+
+| # | Columna | Origen |
+|---|---|---|
+| 1 | `Fecha de Generacion` | instante de la exportación |
+| 2 | `Alcance` | `scope` declarado |
+| 3 | `Periodicidad` | `periodicity` |
+| 4 | `Periodo` | `period` |
+| 5 | `Neto Generado` | métrica agregada |
+| 6 | `Total Cobros` | métrica agregada |
+| 7 | `Total Reembolsos` | métrica agregada |
+| 8 | `Total Dispersiones` | métrica agregada |
+| 9 | `Total Comisiones` | métrica agregada |
+| 10-13 | `Count Charge`, `Count Refund`, `Count Settlement`, `Count Commission` | conteos por tipo |
+| 14 | `Periodo Anterior` | período de comparación |
+| 15 | `Variacion Absoluta` | [SPEC RF-010] |
+| 16 | `Variacion Porcentual` | [SPEC RF-010]; vacío si el período anterior es cero |
+
+```csv
+Fecha de Generacion,Alcance,Periodicidad,Periodo,Neto Generado,Total Cobros,Total Reembolsos,Total Dispersiones,Total Comisiones,Count Charge,Count Refund,Count Settlement,Count Commission,Periodo Anterior,Variacion Absoluta,Variacion Porcentual
+2026-11-01T10:00:00Z,PLATFORM,MONTHLY,2026-10,150000.00,1150000.00,100000.00,900000.00,135000.00,1,1,1,1,2026-09,20000.00,15.38
+```
+
+## 5. Respuestas de error
+
+Los errores se devuelven preferiblemente como JSON (`application/problem+json`), dependiendo del soporte del cliente que hace la descarga:
+
+| HTTP | `code` | Cuándo | `retryable` | Origen |
+|---|---|---|---|---|
+| 400 | `INVALID_PERIOD` | Periodicidad no soportada o período con formato inválido | No | [SPEC RF-004, casos extremos] |
+| 400 | `VALIDATION_ERROR` | Falta `periodicity`, `period` o `scope`, u otro parámetro con tipo o formato incorrecto | No | [CONV] |
+| 500 | `INTERNAL_ERROR` | Error no previsto al generar el CSV | Sí | [CONV] |
+
+## 6. Idempotencia y reintentos
+
+Solo lectura; seguro reintentar.
+
+## 7. Trazabilidad
+
+HU3 · RF-012, RF-013, RF-015 · RNF-001, RNF-004 · CE-006.

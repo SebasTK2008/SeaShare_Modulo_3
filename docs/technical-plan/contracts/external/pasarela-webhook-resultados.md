@@ -1,0 +1,206 @@
+# Pasarela: Webhook de resultados (Mercado Pago)
+
+| Campo | Valor |
+|---|---|
+| Casos de uso | UC05, UC09 |
+| SPECs | 005 (Cobro), 009 (Reembolso) |
+| Dirección | Mercado Pago → sistema |
+| ¿Responde? | Sí (`200 OK` o `204 No Content` para confirmar recepción) |
+| Quién puede llamarlo | Solo Mercado Pago (verificado criptográficamente con `x-signature`: requisito de la integración con Mercado Pago, no control de acceso del sistema; general-plan §7.1) |
+
+Leyenda y convenciones comunes: [`../README.md`](../README.md).
+
+## 1. Propósito
+
+Mercado Pago notifica de forma asíncrona los cambios de un **pago**. El sistema asocia el resultado
+a la intención original mediante la referencia externa que guardó al crear la operación y actualiza
+sus registros, generando los registros inmutables de auditoría cuando corresponde.
+
+La integración se suscribe únicamente al topic real `payment`; UC09 reutiliza ese mismo evento para
+converger en el resultado de los reembolsos del pago (D-UC09-11). No se consumen topics de
+reembolsos ni de órdenes de marketplace, porque Mercado Pago no los expone como eventos de esta
+integración en la Payments API.
+
+La documentación vigente de Mercado Pago etiqueta el topic `payment` como **legacy** para Checkout
+API y promueve `orders`. Esta integración usa **Payments API** (`POST /v1/payments`), para la cual
+`payment` es el topic correcto y el único que se consume.
+
+1. **Notificación entrante**: MP hace `POST` al endpoint del sistema con un payload mínimo y query
+   params identificadores. El sistema responde `200 OK` inmediatamente para acusar recibo.
+2. **Consulta activa a la API de MP**: el sistema usa el `data.id` recibido —el identificador del
+   pago— para consultar la API de Mercado Pago y obtener el estado y detalle completo, y actualiza
+   sus registros internos.
+
+Este contrato describe únicamente el paso 1 (el endpoint que el sistema expone a MP). El paso 2 se
+describe en los contratos de comando de cobro y reembolso, y se ejecuta **de forma asíncrona** en el
+worker de la cola interna `finance.gateway-notification.v1` (§3.3).
+
+## 2. Petición (Webhook entrante de Mercado Pago)
+
+`POST /api/v1/webhook/gateway`
+
+La URL se registra en el panel de Mercado Pago **a nivel de aplicación** (topic `payment`). Esta
+integración no envía `notification_url` en cada pago, de modo que la recepción de notificaciones
+depende de esa configuración de la aplicación.
+
+### Query Parameters (enviados por Mercado Pago en la URL)
+
+| Parámetro | Tipo | Oblig. | Descripción |
+|---|---|---|---|
+| `data.id` | string | Sí | Identificador del pago notificado en MP |
+| `type` | string | Sí | Tipo de evento. La integración configurada usa `payment`; un tipo sin manejador se registra y se confirma para evitar reintentos infinitos |
+
+Ejemplo de URL que llega al sistema:
+```
+POST /api/v1/webhook/gateway?data.id=1234567890&type=payment
+```
+
+### Headers
+
+| Header | Obligatorio | Valor |
+|---|---|---|
+| `Content-Type` | Sí | `application/json` |
+| `x-signature` | Sí | Firma HMAC-SHA256 para validar autenticidad. Formato: `ts=<timestamp>,v1=<hash>` |
+| `x-request-id` | Sí | UUID único del request enviado por MP, usado en la verificación de la firma |
+
+#### Verificación de la firma `x-signature`
+
+MP firma cada notificación con HMAC-SHA256 usando el **secret del webhook** configurado en el panel
+de MP. El sistema DEBE verificar la firma antes de procesar el payload:
+
+1. Extraer `ts` y `v1` del header `x-signature`.
+2. Construir el mensaje: `id:<data.id del query param>;request-id:<x-request-id>;ts:<ts>;`
+3. Calcular `HMAC-SHA256(secret_webhook, mensaje)`.
+4. Comparar el resultado con `v1`. Si no coincide → `401 UNAUTHENTICATED`.
+
+### Body
+
+| Campo | Tipo | Oblig. | Descripción |
+|---|---|---|---|
+| `action` | string | Sí | Acción que disparó el evento. Ej: `payment.created`, `payment.updated`. El sistema lo toma del cuerpo de la petición |
+| `api_version` | string | No | Versión de la API de MP que envió la notificación (ej. `v1`) |
+| `data` | object | No | Objeto con el `id` del recurso notificado. El sistema toma el identificador del **query param** `data.id`, no del cuerpo |
+| `data.id` | string | No | ID del pago en MP; el sistema lo toma del **query param** `data.id` |
+| `date_created` | datetime | No | Fecha y hora de creación del evento en MP |
+| `id` | integer | No | ID único de la notificación en MP |
+| `live_mode` | boolean | No | `true` en producción, `false` en sandbox |
+| `type` | string | Sí | Tipo de recurso: `payment`; el sistema lo toma del **query param** `type` |
+| `user_id` | string | No | ID de la cuenta de MP del vendedor |
+
+Los campos que el sistema **exige** son `action` (cuerpo), `data.id` y `type` (query params): si
+falta alguno, la respuesta es `400 VALIDATION_ERROR` (§5). Los demás campos del cuerpo se aceptan y
+se ignoran.
+
+```json
+{
+  "action": "payment.updated",
+  "api_version": "v1",
+  "data": {
+    "id": "1234567890"
+  },
+  "date_created": "2026-10-08T15:30:00Z",
+  "id": 987654321,
+  "live_mode": true,
+  "type": "payment",
+  "user_id": "987654"
+}
+```
+
+## 3. Reglas de procesamiento
+
+1. **Verificación de autenticidad (paso previo obligatorio)**: se verifica la firma `x-signature`
+   usando el HMAC-SHA256 y el secret del webhook configurado en el panel de Mercado Pago. Si la
+   firma es inválida o ausente → `401 UNAUTHENTICATED`. **Sin este paso no se procesa nada.**
+   Requisito de la integración con Mercado Pago (no es seguridad del proyecto; general-plan §7.1).
+
+2. **Acuse de recibo inmediato**: el sistema responde `200 OK` a MP sin esperar al resultado del
+   procesamiento interno. MP considera la notificación fallida si no recibe respuesta en tiempo.
+   Antes de acusar recibo, el sistema **persiste la notificación de forma durable** en su *outbox*
+   (`outbox_message`); si esa escritura falla, la respuesta es `500 INTERNAL_ERROR` (§3.7) y MP
+   reintenta la notificación.
+
+3. **Procesamiento asíncrono (paso 2 — fuera de este contrato)**: la notificación persistida se
+   publica en la cola interna `finance.gateway-notification.v1` (enrutado `gateway.notification`,
+   cuerpo `{"type": "...", "action": "...", "data_id": "..."}`). Su worker ejecuta **todos** los
+   manejadores registrados para el tipo y consulta la API de MP para obtener el detalle completo:
+   `type=payment` → `GET /v1/payments/{data.id}` para UC05 y
+   `GET /v1/payments/{data.id}/refunds` para UC09. El paso 2 **no** condiciona la respuesta HTTP: su
+   reintento lo aplica la política de colas (README §4.4) [CONV] (UC05 plan T019/T020,
+   D-UC05-12).
+
+4. **Mapeo de tipo de evento a operación interna** (el estado se toma de la **consulta a la
+   pasarela**, no del cuerpo de la notificación):
+   - `type=payment` → operación de cobro (UC05) → actualiza `IntenciónDeCobro` según la tabla de
+     estados de abajo y, con el estado `approved`, genera `RegistroDeCobro` inmutable
+     [SPEC 5 RF-006]. Se atiende cualquier `action` del tipo (`payment.created`,
+     `payment.updated`…); el `action` no discrimina el resultado.
+   - `type=payment` → operación de reembolso (UC09) → el mismo `data.id` identifica el pago; UC09
+     consulta la lista de reembolsos y asocia cada uno con `refund_intent.external_reference` por
+     `refund.id`. Un reembolso sin intención local se registra en `operational_failure` y la
+     notificación se confirma; con estado exitoso se genera `RegistroDeReembolso` inmutable
+     [SPEC 9 RF-007; D-UC09-11].
+   - Un tipo distinto de `payment` no tiene manejador en esta entrega: se registra en
+     `operational_failure` y se confirma la recepción.
+
+   **Tabla de estados del pago (UC05)**
+
+   | Estado en Mercado Pago | `IntenciónDeCobro` | Registro inmutable |
+   |---|---|---|
+   | `approved` | `CAPTURED` | `RegistroDeCobro` |
+   | `in_process` / `pending` | `IN_PROCESS` | No |
+   | `rejected` | `REJECTED` | No |
+   | `cancelled` | `CANCELLED` | No |
+   | `expired` | `EXPIRED` | No |
+   | `refunded` | Sin cambio (no-op): el reembolso lo resuelve UC09 | No |
+   | `charged_back` / `in_mediation` | Sin cambio + registro en `operational_failure` (disputa: requiere revisión de una persona; no hay flujo de contracargo) | No |
+   | Desconocido | Sin cambio + registro en `operational_failure` | No |
+
+5. **Deduplicación**: la notificación se asocia a la intención interna por el `external_reference`
+   de la intención —el `data.id` del pago que la pasarela devolvió al crear la operación y que el
+   sistema guardó—, de modo que dos notificaciones de la misma operación no se procesan dos veces.
+
+6. **`data.id` o `type` desconocidos**: si el ID o el tipo no pueden asociarse a ninguna intención
+   interna, el sistema responde `200 OK` (para evitar reintentos infinitos de MP) y registra el
+   evento en `operational_failure` para revisión manual [CONV]. La misma regla aplica a un
+   reembolso individual sin `refund_intent` asociada: se registra una vez y no se reintenta. Un
+   `5xx` o un *timeout* al consultar el pago o la lista de reembolsos **no** es un veredicto
+   financiero: el mensaje se reintenta por la política de la cola (§3.7) y, al agotar los intentos,
+   se rechaza a la DLQ y se registra en `operational_failure`. Un `404` al consultar el pago
+   tampoco cierra la intención en `REJECTED`: la intención conserva su estado y el evento queda
+   registrado [CONV] (UC05 plan D-UC05-13).
+
+7. **Resiliencia**: si el sistema no puede persistir la notificación (base de datos no disponible),
+   responde `500 INTERNAL_ERROR` para que MP reintente la notificación. Si el fallo ocurre en el
+   paso 2 asíncrono, la respuesta ya fue `200 OK` y el reintento lo aplica la cola interna (5
+   intentos, *backoff* exponencial base 1 s, DLQ y registro en `operational_failure` al agotarlos)
+   [CONV] (README §4.4). Un fallo lógico de un manejador se registra y no impide que los demás
+   manejadores del mismo tipo se ejecuten.
+
+## 4. Respuesta exitosa
+
+`200 OK` — Sin cuerpo o con un cuerpo JSON mínimo. Confirma a Mercado Pago que la notificación fue
+recibida.
+
+```json
+{ "status": "received" }
+```
+
+## 5. Respuestas de error
+
+| HTTP | `code` | Cuándo | `retryable` | Origen |
+|---|---|---|---|---|
+| 401 | `UNAUTHENTICATED` | Firma `x-signature` ausente o no válida | No | [CONV] §4.4 |
+| 400 | `VALIDATION_ERROR` | Payload mal formado o campos obligatorios ausentes (`action` en el cuerpo; `data.id` y `type` en la query) | No | [CONV] §4.4 |
+| 500 | `INTERNAL_ERROR` | Error del sistema al persistir la notificación antes de acusar recibo (base de datos no disponible). MP reintentará | Sí | [CONV] §4.4 |
+
+El `500` cubre el **inicio** del paso 2 (la persistencia durable de la notificación). Un fallo en la
+ejecución del paso 2 ya no puede alterar la respuesta HTTP: se reintenta en la cola interna (§3.3 y
+README §4.4).
+
+## 6. Idempotencia y reintentos
+
+Mercado Pago reintenta la notificación si no recibe `200 OK` o `204 No Content`. El sistema garantiza
+idempotencia en el paso 2 asociando la notificación por el `external_reference` de la intención (el
+`data.id` de MP) y tratando el resultado ya registrado como duplicado. La persistencia de la
+notificación en el *outbox* y la entrega por la cola interna son *at-least-once*: el mensaje puede
+repetirse y el sistema no altera lo ya registrado.

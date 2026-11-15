@@ -1,0 +1,1719 @@
+{
+    "_type":  "export",
+    "__export_format":  4,
+    "__export_date":  "2026-11-03T01:31:28.633Z",
+    "__export_source":  "insomnia.desktop.app",
+    "resources":  [
+                      {
+                          "scope":  "collection",
+                          "name":  "SeaShare M3 QA · release/0.1.0",
+                          "_id":  "wrk_seashare_m3_qa",
+                          "description":  "QA funcional del Módulo 3 (Finanzas): REST, eventos RabbitMQ y webhook firmado.",
+                          "_type":  "workspace",
+                          "parentId":  null
+                      },
+                      {
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "name":  "Local",
+                          "_type":  "environment",
+                          "data":  {
+                                       "base_url":  "http://localhost:8080",
+                                       "rabbit_url":  "http://localhost:15672",
+                                       "rabbit_user":  "seashare",
+                                       "rabbit_pass":  "seashare",
+                                       "owner_id":  "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+                                       "boat_id":  "00000000-0000-4000-8000-000000000001",
+                                       "reservation_id":  "c0a80101-1111-4a2b-9c3d-00000000e201",
+                                       "gateway_secret":  "dev-secret-local",
+                                       "charge_id":  "1234567890"
+                                   },
+                          "_id":  "env_local"
+                      },
+                      {
+                          "metaSortKey":  -1,
+                          "name":  "00 · Health",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_1"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_2",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -2,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Health",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_1",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/actuator/health"
+                      },
+                      {
+                          "metaSortKey":  -3,
+                          "name":  "01 · UC11 Parámetros",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_3"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_4",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -4,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Obtener parámetros",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_3",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-parameters"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"platform_commission_percentage\": \"18.00\",\n  \"insurance_fee_per_passenger\": \"18000.00\",\n  \"weekend_increase_percentage\": \"15.00\",\n  \"high_season_increase_percentage\": \"30.00\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_5",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -5,
+                          "isPrivate":  false,
+                          "method":  "PUT",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Guardar parámetros",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_3",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-parameters"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"platform_commission_percentage\": \"150.00\",\n  \"insurance_fee_per_passenger\": \"18000.00\",\n  \"weekend_increase_percentage\": \"15.00\",\n  \"high_season_increase_percentage\": \"30.00\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_6",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -6,
+                          "isPrivate":  false,
+                          "method":  "PUT",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Guardar inválido (400)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_3",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-parameters"
+                      },
+                      {
+                          "metaSortKey":  -7,
+                          "name":  "02 · UC01 Estimaciones",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_7"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\"boat_ids\":[\"00000000-0000-4000-8000-000000000001\",\"00000000-0000-4000-8000-000000000002\",\"00000000-0000-4000-8000-000000000003\",\"00000000-0000-4000-8000-000000000004\",\"00000000-0000-4000-8000-000000000005\",\"00000000-0000-4000-8000-000000000006\",\"00000000-0000-4000-8000-000000000007\",\"00000000-0000-4000-8000-000000000008\",\"00000000-0000-4000-8000-000000000009\",\"00000000-0000-4000-8000-000000000010\"]}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_8",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -8,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Lote de 10",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_7",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/estimates/batch"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\"boat_ids\":[]}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_9",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -9,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Lote vacío",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_7",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/estimates/batch"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\"boat_ids\":[\"00000000-0000-4000-8000-000000000001\",\"00000000-0000-4000-8000-000000000002\",\"00000000-0000-4000-8000-000000000003\",\"00000000-0000-4000-8000-000000000004\",\"00000000-0000-4000-8000-000000000005\",\"00000000-0000-4000-8000-000000000006\",\"00000000-0000-4000-8000-000000000007\",\"00000000-0000-4000-8000-000000000008\",\"00000000-0000-4000-8000-000000000009\",\"00000000-0000-4000-8000-000000000010\",\"00000000-0000-4000-8000-000000000011\",\"00000000-0000-4000-8000-000000000012\",\"00000000-0000-4000-8000-000000000013\",\"00000000-0000-4000-8000-000000000014\",\"00000000-0000-4000-8000-000000000015\",\"00000000-0000-4000-8000-000000000016\",\"00000000-0000-4000-8000-000000000017\",\"00000000-0000-4000-8000-000000000018\",\"00000000-0000-4000-8000-000000000019\",\"00000000-0000-4000-8000-000000000020\",\"00000000-0000-4000-8000-000000000021\",\"00000000-0000-4000-8000-000000000022\",\"00000000-0000-4000-8000-000000000023\",\"00000000-0000-4000-8000-000000000024\",\"00000000-0000-4000-8000-000000000025\",\"00000000-0000-4000-8000-000000000026\",\"00000000-0000-4000-8000-000000000027\",\"00000000-0000-4000-8000-000000000028\",\"00000000-0000-4000-8000-000000000029\",\"00000000-0000-4000-8000-000000000030\",\"00000000-0000-4000-8000-000000000031\",\"00000000-0000-4000-8000-000000000032\",\"00000000-0000-4000-8000-000000000033\",\"00000000-0000-4000-8000-000000000034\",\"00000000-0000-4000-8000-000000000035\",\"00000000-0000-4000-8000-000000000036\",\"00000000-0000-4000-8000-000000000037\",\"00000000-0000-4000-8000-000000000038\",\"00000000-0000-4000-8000-000000000039\",\"00000000-0000-4000-8000-000000000040\",\"00000000-0000-4000-8000-000000000041\",\"00000000-0000-4000-8000-000000000042\",\"00000000-0000-4000-8000-000000000043\",\"00000000-0000-4000-8000-000000000044\",\"00000000-0000-4000-8000-000000000045\",\"00000000-0000-4000-8000-000000000046\",\"00000000-0000-4000-8000-000000000047\",\"00000000-0000-4000-8000-000000000048\",\"00000000-0000-4000-8000-000000000049\",\"00000000-0000-4000-8000-000000000050\",\"00000000-0000-4000-8000-000000000051\"]}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_10",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -10,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Lote de 51 (400)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_7",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/estimates/batch"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\"boat_ids\":[\"00000000-0000-4000-8000-000000000001\"],\"start_date\":\"2027-04-10\"}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_11",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -11,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Lote con campo extra (400)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_7",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/estimates/batch"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"boat_id\": \"{{ _.boat_id }}\",\n  \"start_date\": \"2027-04-10\",\n  \"end_date\": \"2027-04-12\",\n  \"passengers\": 2\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_12",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -12,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Individual 3 días",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_7",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/estimates/individual"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"boat_id\": \"{{ _.boat_id }}\",\n  \"start_date\": \"2027-04-10\",\n  \"end_date\": \"2027-04-10\",\n  \"passengers\": 1\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_13",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -13,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Individual mismo día",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_7",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/estimates/individual"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"boat_id\": \"{{ _.boat_id }}\",\n  \"start_date\": \"2027-04-12\",\n  \"end_date\": \"2027-04-10\",\n  \"passengers\": 2\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_14",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -14,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Individual rango inválido (400)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_7",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/estimates/individual"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"boat_id\": \"ffffffff-ffff-4fff-8fff-ffffffffffff\",\n  \"start_date\": \"2027-04-10\",\n  \"end_date\": \"2027-04-12\",\n  \"passengers\": 2\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_15",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -15,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Individual sin tarifa (422)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_7",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/estimates/individual"
+                      },
+                      {
+                          "metaSortKey":  -16,
+                          "name":  "03 · UC03 Reserva (evento)",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_16"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2, \"message_id\": \"{{ _.reservation_id }}-info\" },\n  \"routing_key\": \"reservation.info.provided\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"boat_id\\\":\\\"{{ _.boat_id }}\\\",\\\"start_date\\\":\\\"2027-04-10\\\",\\\"end_date\\\":\\\"2027-04-12\\\",\\\"passengers\\\":2,\\\"owner_id\\\":\\\"{{ _.owner_id }}\\\",\\\"max_capacity\\\":6}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_17",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -17,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar reservation.info.provided",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_16",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "metaSortKey":  -18,
+                          "name":  "04 · UC04 Valor calculado",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_18"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_19",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -19,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Calcular valor",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_18",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/reservations/{{ _.reservation_id }}/calculated-value"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_20",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -20,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Reserva inexistente (404)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_18",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/reservations/ffffffff-ffff-4fff-8fff-ffffffffffff/calculated-value"
+                      },
+                      {
+                          "metaSortKey":  -21,
+                          "name":  "05 · UC05/UC06 Cobro",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_21"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.status.changed\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"status\\\":\\\"PENDING\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:00:00Z\\\",\\\"payment_token_ref\\\":\\\"mp_tok_QA_01\\\",\\\"payment_method_type\\\":\\\"CREDIT_CARD\\\",\\\"payment_metadata\\\":{\\\"payer_email\\\":\\\"arrendatario@qa.com\\\"}}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_22",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -22,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar PENDING",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_21",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_23",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -23,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Confirmación de pago",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_21",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/reservations/{{ _.reservation_id }}/payment-confirmation"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_24",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -24,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Confirmación inexistente (404)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_21",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/reservations/ffffffff-ffff-4fff-8fff-ffffffffffff/payment-confirmation"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/xml",
+                                              "name":  "Accept"
+                                          }
+                                      ],
+                          "_id":  "req_25",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -25,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Accept XML (406)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_21",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/reservations/{{ _.reservation_id }}/payment-confirmation"
+                      },
+                      {
+                          "metaSortKey":  -26,
+                          "name":  "06 · UC07 Estados",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_26"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.status.changed\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"status\\\":\\\"CANCELLED_FLEXIBLE\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:10:00Z\\\"}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_27",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -27,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar CANCELLED_FLEXIBLE",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_26",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.status.changed\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"status\\\":\\\"CANCELLED_MODERATE\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:10:00Z\\\"}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_28",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -28,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar CANCELLED_MODERATE",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_26",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.status.changed\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"status\\\":\\\"CANCELLED_STRICT\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:10:00Z\\\"}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_29",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -29,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar CANCELLED_STRICT",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_26",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.status.changed\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"status\\\":\\\"CANCELLED_BY_HOST\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:10:00Z\\\"}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_30",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -30,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar CANCELLED_BY_HOST",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_26",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.status.changed\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"status\\\":\\\"COMPLETED\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:10:00Z\\\"}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_31",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -31,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar COMPLETED",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_26",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.status.changed\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"status\\\":\\\"AVAILABLE\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:10:00Z\\\"}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_32",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -32,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar AVAILABLE",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_26",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "metaSortKey":  -33,
+                          "name":  "07 · UC08 Disputa",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_33"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.dispute.updated\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"dispute_id\\\":\\\"d0000009-0000-4000-8000-000000000009\\\",\\\"status\\\":\\\"PENDING\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:20:00Z\\\",\\\"event_key\\\":\\\"v1\\\"}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_34",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -34,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar disputa PENDING",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_33",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.dispute.updated\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"dispute_id\\\":\\\"d0000009-0000-4000-8000-000000000009\\\",\\\"status\\\":\\\"REJECTED\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:20:00Z\\\",\\\"event_key\\\":\\\"v1\\\"}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_35",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -35,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar disputa REJECTED",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_33",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{\n  \"properties\": { \"content_type\": \"application/json\", \"delivery_mode\": 2 },\n  \"routing_key\": \"reservation.dispute.updated\",\n  \"payload\": \"{\\\"reservation_id\\\":\\\"{{ _.reservation_id }}\\\",\\\"dispute_id\\\":\\\"d0000009-0000-4000-8000-000000000009\\\",\\\"status\\\":\\\"COMPLETED\\\",\\\"status_changed_at\\\":\\\"2026-11-03T12:20:00Z\\\",\\\"event_key\\\":\\\"v1\\\"}\",\n  \"payload_encoding\": \"string\"\n}"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          }
+                                      ],
+                          "_id":  "req_36",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -36,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Publicar disputa COMPLETED",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_33",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/exchanges/%2F/seashare.reservations/publish"
+                      },
+                      {
+                          "metaSortKey":  -37,
+                          "name":  "08 · UC12 Registros financieros",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_37"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "OWNER",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "{{ _.owner_id }}",
+                                                 "name":  "owner_id"
+                                             },
+                                             {
+                                                 "value":  "1",
+                                                 "name":  "page"
+                                             }
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_38",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -38,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "OWNER página 1",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_37",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-records"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "PLATFORM",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "1",
+                                                 "name":  "page"
+                                             }
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_39",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -39,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "PLATFORM página 1",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_37",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-records"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "PLATFORM",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "1",
+                                                 "name":  "page"
+                                             },
+                                             {
+                                                 "value":  "CHARGE",
+                                                 "name":  "transaction_type"
+                                             },
+                                             {
+                                                 "value":  "{{ _.boat_id }}",
+                                                 "name":  "boat_id"
+                                             }
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_40",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -40,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Filtro CHARGE + boat",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_37",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-records"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "PLATFORM",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "0",
+                                                 "name":  "page"
+                                             }
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_41",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -41,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "page=0 (400)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_37",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-records"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "PLATFORM",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "999",
+                                                 "name":  "page"
+                                             }
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_42",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -42,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "page=999 (404)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_37",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-records"
+                      },
+                      {
+                          "metaSortKey":  -43,
+                          "name":  "09 · UC13 Informe financiero",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_43"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "PLATFORM",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "MONTHLY",
+                                                 "name":  "periodicity"
+                                             },
+                                             {
+                                                 "value":  "2026-11",
+                                                 "name":  "period"
+                                             }
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_44",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -44,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "PLATFORM 2026-11",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_43",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-report"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "OWNER",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "{{ _.owner_id }}",
+                                                 "name":  "owner_id"
+                                             },
+                                             {
+                                                 "value":  "MONTHLY",
+                                                 "name":  "periodicity"
+                                             },
+                                             {
+                                                 "value":  "2026-11",
+                                                 "name":  "period"
+                                             }
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_45",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -45,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "OWNER 2026-11",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_43",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-report"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "PLATFORM",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "MONTHLY",
+                                                 "name":  "periodicity"
+                                             },
+                                             {
+                                                 "value":  "2026-10",
+                                                 "name":  "period"
+                                             }
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_46",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -46,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Período anterior 2026-10",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_43",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-report"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "PLATFORM",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "MONTHLY",
+                                                 "name":  "periodicity"
+                                             },
+                                             {
+                                                 "value":  "2026-99",
+                                                 "name":  "period"
+                                             }
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_47",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -47,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Período inválido (400)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_43",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-report"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "PLATFORM",
+                                                 "name":  "scope"
+                                             },
+                                             {
+                                                 "value":  "MONTHLY",
+                                                 "name":  "periodicity"
+                                             },
+                                             {
+                                                 "value":  "2026-11",
+                                                 "name":  "period"
+                                             }
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "text/csv",
+                                              "name":  "Accept"
+                                          }
+                                      ],
+                          "_id":  "req_48",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -48,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Export CSV",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_43",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/financial-report/export"
+                      },
+                      {
+                          "metaSortKey":  -49,
+                          "name":  "10 · Webhook Mercado Pago",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_49"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{ \"action\": \"payment.updated\", \"api_version\": \"v1\", \"data\": { \"id\": \"1234567890\" }, \"type\": \"payment\" }"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "1234567890",
+                                                 "name":  "data.id"
+                                             },
+                                             {
+                                                 "value":  "payment",
+                                                 "name":  "type"
+                                             }
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          },
+                                          {
+                                              "value":  "11111111-1111-4111-8111-111111111111",
+                                              "name":  "x-request-id"
+                                          }
+                                      ],
+                          "_id":  "req_50",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -50,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Sin firma (401)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_49",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/webhook/gateway"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{ \"action\": \"payment.updated\", \"api_version\": \"v1\", \"data\": { \"id\": \"1234567890\" }, \"type\": \"payment\" }"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "1234567890",
+                                                 "name":  "data.id"
+                                             },
+                                             {
+                                                 "value":  "payment",
+                                                 "name":  "type"
+                                             }
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          },
+                                          {
+                                              "value":  "11111111-1111-4111-8111-111111111111",
+                                              "name":  "x-request-id"
+                                          },
+                                          {
+                                              "value":  "ts=123,v1=deadbeef",
+                                              "name":  "x-signature"
+                                          }
+                                      ],
+                          "_id":  "req_51",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -51,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Firma inválida (401)",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_49",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/webhook/gateway"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  "{ \"action\": \"payment.updated\", \"api_version\": \"v1\", \"data\": { \"id\": \"1234567890\" }, \"type\": \"payment\" }"
+                                   },
+                          "description":  "",
+                          "parameters":  [
+                                             {
+                                                 "value":  "1234567890",
+                                                 "name":  "data.id"
+                                             },
+                                             {
+                                                 "value":  "payment",
+                                                 "name":  "type"
+                                             }
+                                         ],
+                          "headers":  [
+                                          {
+                                              "value":  "application/json",
+                                              "name":  "Content-Type"
+                                          },
+                                          {
+                                              "value":  "{{ _.x_request_id }}",
+                                              "name":  "x-request-id"
+                                          },
+                                          {
+                                              "value":  "{{ _.x_signature }}",
+                                              "name":  "x-signature"
+                                          }
+                                      ],
+                          "_id":  "req_52",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -52,
+                          "isPrivate":  false,
+                          "method":  "POST",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Firma válida (200)",
+                          "settingFollowRedirects":  "global",
+                          "preRequestScript":  "const crypto = require(\u0027crypto\u0027);\nconst dataId = \u00271234567890\u0027;\nconst requestId = \u002711111111-1111-4111-8111-111111111111\u0027;\nconst ts = Math.floor(Date.now() / 1000).toString();\nconst msg = `id:${dataId};request-id:${requestId};ts:${ts};`;\nconst v1 = crypto.createHmac(\u0027sha256\u0027, \u0027dev-secret-local\u0027).update(msg).digest(\u0027hex\u0027);\ninsomnia.environment.set(\u0027x_request_id\u0027, requestId);\ninsomnia.environment.set(\u0027x_signature\u0027, `ts=${ts},v1=${v1}`);",
+                          "parentId":  "fld_49",
+                          "_type":  "request",
+                          "url":  "{{ _.base_url }}/api/v1/webhook/gateway"
+                      },
+                      {
+                          "metaSortKey":  -53,
+                          "name":  "11 · RabbitMQ (inspección)",
+                          "environment":  {
+
+                                          },
+                          "description":  "",
+                          "environmentPropertyOrder":  null,
+                          "parentId":  "wrk_seashare_m3_qa",
+                          "_type":  "request_group",
+                          "_id":  "fld_53"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_54",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -54,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "Listar colas",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_53",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/queues/%2F"
+                      },
+                      {
+                          "settingRebuildPath":  true,
+                          "settingSendCookies":  true,
+                          "authentication":  {
+                                                 "username":  "{{ _.rabbit_user }}",
+                                                 "password":  "{{ _.rabbit_pass }}",
+                                                 "type":  "basic"
+                                             },
+                          "body":  {
+                                       "mimeType":  "application/json",
+                                       "text":  ""
+                                   },
+                          "description":  "",
+                          "parameters":  [
+
+                                         ],
+                          "headers":  [
+
+                                      ],
+                          "_id":  "req_55",
+                          "settingStoreCookies":  true,
+                          "metaSortKey":  -55,
+                          "isPrivate":  false,
+                          "method":  "GET",
+                          "settingDisableRenderRequestBody":  false,
+                          "settingEncodeUrl":  true,
+                          "name":  "DLQ charge-command",
+                          "settingFollowRedirects":  "global",
+                          "parentId":  "fld_53",
+                          "_type":  "request",
+                          "url":  "{{ _.rabbit_url }}/api/queues/%2F/finance.charge-command.v1.dlq"
+                      }
+                  ]
+}

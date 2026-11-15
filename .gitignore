@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Archivos de VS Code que si deben ser incluidos ###
+!.vscode/mcp.json
+
+### Entorno local (valores reales fuera de git) ###
+.env

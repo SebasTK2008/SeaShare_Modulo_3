@@ -1,0 +1,703 @@
+# Implementation Plan: Sistema Financiero de SEA-SHARE (Módulo 3 — "el sistema")
+
+**Date**: 2026-10-08
+**Spec**: `docs/features/001-…` a `docs/features/013-…` (UC01–UC13). **Única fuente de verdad.**
+**Contratos**: [`contracts/`](contracts/README.md) — un archivo `.md` por contrato (REST, colas de eventos e integraciones externas).
+
+---
+
+## Summary
+
+El sistema es el componente financiero de SEA-SHARE: tarifa (incluida la tarifa dinámica), calcula el valor de cada reserva, cobra mediante una pasarela externa, reembolsa, liquida al Propietario, gestiona el depósito de garantía y expone registros e informes financieros. Se construye como **un único servicio Spring Boot con arquitectura hexagonal (Clean Architecture) de tres capas únicas: un `domain`, un `application` y un `infrastructure`**, con **PostgreSQL**, **RabbitMQ** (mensajería con Reservas y desacople de las llamadas a la pasarela) y **Docker**.
+
+Este documento define el orden **general** del proyecto: arquitectura, tecnologías, estructura, modelo de datos, conexiones, índice de contratos y hoja de ruta. De él se derivará un plan **específico** por SPEC en `docs/features/<NNN>-<nombre>/plan.md` (ver §10).
+
+---
+
+## Technical Context
+
+**Language/Version**: Java 25 (`java.version` del `pom.xml`)
+  
+**Primary Dependencies**: Spring Boot 4.1.2 (parent del `pom.xml`). Spring Web MVC, Validation, Data JPA (Hibernate), AMQP, Actuator, Flyway, MapStruct, Resilience4j, ShedLock (opcional, §5.3), Micrometer (+ Prometheus), ArchUnit
+  
+**Storage**: PostgreSQL 16+ (`NUMERIC` para dinero, `timestamptz` para instantes)
+**Messaging**: RabbitMQ 3.13+ (colas *quorum*, confirmaciones de publicador, DLQ)
+  
+**Testing**: JUnit 5, AssertJ, Mockito, Testcontainers (PostgreSQL + RabbitMQ), WireMock (Flota y pasarela), Awaitility, ArchUnit  
+
+**Target Platform**: Contenedores Docker (Linux); desarrollo local con Docker Compose
+**Project Type**: Servicio backend único (hexagonal), sin frontend propio
+
+**Constraints**: `BigDecimal` en todo cálculo monetario, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de varios UC]**; sin datos sensibles de medios de pago **[SPEC UC05 RNF-004]**; registros financieros inmutables y trazables a su intención; parámetros financieros congelados por reserva (referencia a la versión usada) **[SPEC UC04 RF-008]**; manejo controlado de fallas externas **[SPEC RNF-003 de varios UC]**
+**Scale/Scope**: 13 casos de uso; sistemas externos: Reservas, Flota, Pasarela; clientes Administrador Financiero y Propietario. El SPEC no define volumen: el diseño es *stateless* y escala horizontalmente.
+
+
+---
+
+## 1. Alcance y trazabilidad SPEC → componentes
+
+| UC | SPEC | Quién lo invoca | Canal | ¿Responde? | Contrato |
+|---|---|---|---|---|---|
+| UC01 Solicitar estimación para reserva | 001 | Reservas | REST | Sí | [lote](contracts/rest/UC01-estimacion-lote.md), [individual](contracts/rest/UC01-estimacion-individual.md) |
+| UC02 Brindar tarifa base | 002 | Interno (`include` de UC01 y UC03) | Puerto interno | Sí (interno) | Consulta a Flota: [flota-consulta-tarifas-base](contracts/external/flota-consulta-tarifas-base.md) |
+| UC03 Brindar información de reserva | 003 | Reservas | **AMQP** | **No** (unidireccional, RF-006) | [UC03](contracts/events/UC03-informacion-reserva.md) |
+| UC04 Solicitar el valor calculado de la reserva | 004 | Reservas | REST | Sí | [UC04](contracts/rest/UC04-valor-calculado-reserva.md) |
+| UC05 Procesar cobro | 005 | Interno (desde UC07 `PENDING`) + Pasarela (resultado) | Puerto interno + Webhook | No público | [comando](contracts/external/pasarela-comando-cobro.md), [webhook](contracts/external/pasarela-webhook-resultados.md) |
+| UC06 Solicitar confirmación de pago | 006 | Reservas | REST | Sí | [UC06](contracts/rest/UC06-confirmacion-pago.md) |
+| UC07 Brindar el estado de la reserva | 007 | Reservas | **AMQP** | **No** (RF-009) | [UC07](contracts/events/UC07-estado-reserva.md) |
+| UC08 Brindar información de disputa de garantía | 008 | Reservas | **AMQP** | **No** (unidireccional) | [UC08](contracts/events/UC08-disputa-garantia.md) |
+| UC09 Reembolsar dinero a arrendatario | 009 | Interno (UC07, UC08) + Pasarela | Puerto interno + Webhook | No público | [comando](contracts/external/pasarela-comando-reembolso.md), [webhook](contracts/external/pasarela-webhook-resultados.md) |
+| UC10 Liquidar fondos de alquiler | 010 | Interno (UC07, UC08) + libro interno de liquidaciones | Puerto interno | No público | [comando](contracts/external/pasarela-comando-liquidacion.md) |
+| UC11 Configurar parámetros financieros globales | 011 | Administrador Financiero | REST | Sí | [obtener](contracts/rest/UC11-obtener-parametros-financieros.md), [guardar](contracts/rest/UC11-guardar-parametros-financieros.md) |
+| UC12 Consultar registros financieros | 012 | Propietario, Administrador Financiero | REST | Sí | [UC12](contracts/rest/UC12-consultar-registros-financieros.md) |
+| UC13 Consultar informe financiero (+ exportar `.csv`) | 013 | Propietario, Administrador Financiero | REST | Sí | [consultar](contracts/rest/UC13-consultar-informe-financiero.md), [exportar](contracts/rest/UC13-exportar-informe-financiero.md) |
+
+**Relaciones del diagrama UML respetadas** (`docs/diagrams/Sea-Share module3-UC-diagram.xml`): `include`: UC01→UC02, UC03→UC02. `extend`: UC08→UC09 y UC08→UC10 (consecuencia financiera de la disputa). UC07 dispara UC05, UC09 y UC10. UC05 consume la salida de UC04; UC06 consulta lo que UC05 registra.
+
+---
+
+## 2. Principios rectores (derivados de los SPEC)
+
+1. **El sistema es dueño del cálculo financiero**: la tarifa dinámica vive solo en UC02 (RF-005); Reservas y Flota no calculan precios (UC01 CE-002).
+2. **Flota es la única fuente de la tarifa base** (UC02 RF-004); nunca se asume ni se cachea una tarifa.
+3. **Unidireccional significa unidireccional**: UC03, UC07 y UC08 no devuelven nada a Reservas (UC03 RF-006, UC07 RF-009, UC08 RF-009). Los fallos se registran internamente.
+4. **Nunca cálculos parciales ni valores asumidos**: ante información incompleta se registra o se responde con error controlado.
+5. **Montos solo desde registros internos**: Reservas jamás envía montos (UC08 RF-007, UC10 RF-001).
+6. **El sistema no gestiona TTL, ventanas de cancelación ni disputas**: eso es de Reservas; el sistema solo reacciona al estado recibido (UC07, UC08).
+7. **Registros inmutables y trazables**: `RegistroDeCobro`, `RegistroDeReembolso`, `RegistroDeDispersión` y `RegistroDeComisión` se crean solo con confirmación externa exitosa y nunca se modifican. Cada uno conserva la referencia obligatoria a la intención que lo originó (`intencionDeCobroId`, `intencionDeReembolsoId`, `intencionDeDispersiónId`); el `RegistroDeComisión` además se relaciona directamente con el `RegistroDeDispersión` confirmado (UC05 RF-004B, UC09 RF-006A, UC10 RF-009A y RF-014).
+8. **Un timeout no es un fallo** (UC05 RNF-003): se concilia, no se asume. **La idempotencia se define por intento**: cada intención lleva su propia clave idempotente, una misma reserva puede tener varias intenciones de cobro (reintentos tras rechazo o expiración) y la prevención del cobro doble no recae en la unicidad de la intención por reserva (UC05 RF-004A) sino en la identidad de negocio de la operación (`operation_key`, `UNIQUE(reservation_id, operation_key)`, D-37); la clave idempotente de cada intento (UUID v4) solo viaja como `X-Idempotency-Key` hacia la pasarela y cada desenlace del depósito solo crea una intención en la solicitud que aplica su transición (D-34, D-37).
+9. **Los parámetros financieros se congelan por reserva**: al calcular el valor de la reserva (UC04) se registra la **referencia a la versión vigente** de los parámetros; la comisión (%) y la tarifa de seguro por pasajero aplicadas se resuelven de esa versión (no se copian); no son retroactivas. Un cambio posterior en UC11 solo afecta cálculos posteriores y nunca los valores ya registrados (UC04 RF-008, UC11 RF-007).
+
+---
+
+## 3. Arquitectura
+
+### 3.1 Vista de contexto
+
+```mermaid
+flowchart LR
+  subgraph EXT["Actores y sistemas externos"]
+    M2["Sistema de Reservas y Operaciones"]
+    M1["Sistema de Gestión de Flota"]
+    PG["Pasarela de Pago (Mercado Pago)"]
+    ADM["Administrador Financiero"]
+    PRO["Propietario"]
+  end
+
+  MQ{{"RabbitMQ"}}
+  DB[("PostgreSQL")]
+
+  subgraph SYS["El sistema (un servicio Spring Boot)"]
+    INF["infrastructure: adaptadores de entrada (REST, listeners AMQP, webhook, scheduler) y de salida (JPA, cliente Flota, ACL pasarela, outbox)"]
+    APP["application: casos de uso y puertos"]
+    DOM["domain: entidades, value objects y reglas"]
+    INF --> APP --> DOM
+  end
+
+  M2 -- "REST: UC01, UC04, UC06" --> INF
+  M2 -- "AMQP: UC03, UC07, UC08" --> MQ
+  MQ --> INF
+  ADM -- "REST: UC11, UC12, UC13" --> INF
+  PRO -- "REST: UC12, UC13" --> INF
+  INF -- "REST: tarifas base" --> M1
+  INF -- "comandos de cobro, reembolso, liquidación" --> PG
+  PG -- "webhook de resultados" --> INF
+  INF --> DB
+  INF -- "comandos a la pasarela (outbox → cola interna)" --> MQ
+```
+
+### 3.2 Decisión de módulos: un dominio, una aplicación, una infraestructura
+
+**Decisión**: tres capas únicas dentro de **un solo módulo Maven y un solo despliegue**:
+
+| Capa | Paquete | Responsabilidad |
+|---|---|---|
+| Dominio | `com.seashare.seasharem3.domain` | Entidades, value objects, políticas y cálculos puros (sin Spring, JPA ni Jackson) |
+| Aplicación | `com.seashare.seasharem3.application` | Puertos de entrada (un caso de uso por interfaz), servicios que los implementan y puertos de salida |
+| Infraestructura | `com.seashare.seasharem3.infrastructure` | Adaptadores de entrada y salida, persistencia, mensajería, configuración |
+
+
+| Concepto compartido | Casos de uso que lo tocan |
+|---|---|
+| `InformaciónDeReserva` (incluye montos calculados y la referencia a la versión de parámetros congelada) | UC03 la crea (y al reenviarse invalida los montos y la referencia de versión); UC04 la actualiza (montos y `frozen_parameters_id`); UC05, UC07, UC08, UC09 y UC10 la leen |
+| `ParámetrosFinancierosGlobales` | UC11 la escribe; UC01, UC02 y UC04 la leen (UC04 registra en la reserva la referencia a la versión usada, de la que se obtienen la comisión % y el seguro por pasajero) |
+| `IntenciónDeCobro` (varias por reserva, una clave idempotente por intento) / `RegistroDeCobro` (con `intencionDeCobroId`) | UC05 los crea; UC06 consulta la intención; UC08, UC09 y UC10 usan el cobro original; UC12 y UC13 leen el registro |
+| `IntenciónDeReembolso` / `RegistroDeReembolso` (con `intencionDeReembolsoId`) | UC09 los crea; UC12 y UC13 leen el registro |
+| `IntenciónDeDispersión` (conserva la comisión calculada) / `RegistroDeDispersión` (con `intencionDeDispersiónId`) / `RegistroDeComisión` (con `intencionDeDispersiónId` y relación al `RegistroDeDispersión`) | UC10 los crea; UC12 y UC13 leen los registros |
+| Depósito de garantía (un único desenlace: reembolso **o** liquidación) | UC04 lo calcula; UC05 lo cobra; UC08, UC09 y UC10 lo resuelven |
+| Registros inmutables | UC05, UC09 y UC10 los crean; UC12 y UC13 los leen |
+| Política de tarifa (UC02) | La consumen UC01 y UC03 mediante `include` |
+
+*NOTA:* dentro de cada capa los elementos se agrupan por tema (`pricing`, `reservation`, `payment`, `refund`, `settlement`, `guarantee`, `parameters`, `reporting`) **solo como subpaquetes por legibilidad**; no son fronteras ni tienen reglas de dependencia entre sí.
+
+### 3.3 Estructura del proyecto
+
+```text
+seashare-m3/
+├── docs/
+│   ├── technical-plan/
+│   │   ├── general-plan.md                 # Este documento
+│   │   └── contracts/                      # Un .md por contrato
+│   │       ├── README.md                   # Índice, leyenda y convenciones comunes
+│   │       ├── rest/                       # UC01 ×2, UC04, UC06, UC11 ×2, UC12, UC13 ×2
+│   │       ├── events/                     # UC03, UC07, UC08
+│   │       └── external/                   # Flota y Pasarela
+│   ├── templates/ context/ diagrams/ features/NNN-<uc>/{spec.md, plan.md}
+├── src/main/java/com/seashare/seasharem3/
+│   ├── SeashareM3Application.java
+│   ├── domain/
+│   │   ├── model/            # ReservationInformation, ChargeIntent, ChargeRecord, RefundIntent, RefundRecord,
+│   │   │                     # SettlementIntent, SettlementRecord, CommissionRecord, FinancialParameters, DepositDisposition
+│   │   ├── valueobject/      # Money, Percentage, ReservationId, BoatId, OwnerId, IdempotencyKey, FrozenParameters,
+│   │   │                     # ReportPeriod, enums de estado
+│   │   ├── service/          # DynamicRatePolicy, HighSeasonCalendar, EasterCalculator (Meeus/Jones/Butcher),
+│   │   │                     # PricingCalculator, ReservationValueCalculator, RefundCalculator, SettlementCalculator
+│   │   └── exception/        # DomainException y derivadas
+│   ├── application/
+│   │   ├── port/in/          # Un caso de uso por interfaz (§3.5)
+│   │   ├── port/out/         # Persistencia, Flota, pasarela, outbox, registro de fallos, reloj
+│   │   ├── service/          # Implementación de los casos de uso
+│   │   └── dto/              # Commands y results de aplicación
+│   └── infrastructure/
+│       ├── adapter/in/{web,messaging,webhook,scheduler}/   # Controllers + DTOs HTTP, listeners AMQP, webhook, jobs
+│       ├── adapter/out/{persistence,fleet,gateway,messaging}/  # JPA + mappers, cliente Flota, ACL pasarela, outbox
+│       └── config/           # Spring, AMQP, Problem Details, observabilidad
+├── src/main/resources/{application.properties, db/migration/V1__initial_schema.sql}  # migración inicial única; V2+ solo ante cambios posteriores (D-31)
+├── src/test/java/…           # espejo de paquetes + arch/ (ArchUnit) + contract/
+├── Dockerfile
+├── docker-compose.yml
+└── pom.xml
+```
+
+### 3.4 Reglas de dependencia (verificadas con ArchUnit en CI)
+
+1. `..domain..` no depende de Spring, JPA, Jackson, AMQP ni de `..application..` / `..infrastructure..`.
+2. `..application..` solo depende de `..domain..` (se permite `@Transactional` como excepción pragmática documentada).
+3. `..infrastructure.adapter.in..` solo invoca `application.port.in`; `..infrastructure.adapter.out..` solo implementa `application.port.out`.
+4. Un caso de uso que necesite a otro (UC01→UC02, UC07→UC05/UC09/UC10) lo invoca **únicamente por su `port.in`**, nunca por el servicio concreto.
+5. Ningún controller, listener, webhook o job accede a un repositorio.
+6. Las entidades JPA no salen de `infrastructure.adapter.out.persistence`.
+7. Los DTOs HTTP/AMQP **[SPEC RNF-001 de varios UC]** viven en `infrastructure.adapter.in`; `application` trabaja con `command`/`result`.
+
+### 3.5 Mapa SPEC → componentes (semilla de los planes específicos)
+
+| UC | Puertos de entrada (`application.port.in`) | Puertos de salida principales (`port.out`) | Adaptador de entrada | Persistencia | Invariantes clave |
+|---|---|---|---|---|---|
+| UC01 | `EstimateBatchUseCase`, `EstimateSingleUseCase` | `FleetRatePort` (vía UC02), `FinancialParametersRepository` | `web` | — | `tarifa×días + seguro×pasajeros`; en lote siempre 1 día / 1 pasajero / fecha actual (RF-002); días inclusivos; límite de lote; el lote rechaza todo atributo distinto de `boat_ids` (RF-007); advertencia obligatoria en individual |
+| UC02 | `ProvideBaseRateUseCase` (solo interno) | `FleetRatePort`, `FinancialParametersRepository` | — | — | Calendario exacto (RF-006); `max(fin de semana, temporada alta)`; sin tipo/categoría de embarcación |
+| UC03 | `RegisterReservationInformationUseCase` | `ReservationInformationRepository`, `FailureRecorderPort` | `messaging` | `reservation_information` | *Upsert*; `1 ≤ pasajeros ≤ capacidad`; `fin ≥ inicio`; no persiste incompletos; conserva versión válida previa; **al sobrescribir una reserva ya calculada, invalida los montos calculados y la referencia de versión congelada** y UC04 debe recalcularlos antes de un nuevo cobro |
+| UC04 | `CalculateReservationValueUseCase` | `ReservationInformationRepository`, `FinancialParametersRepository` | `web` | `reservation_information` (montos y referencia a la versión de parámetros usada) | Depósito = 10 % de la tarifa diaria vigente registrada (la misma del alquiler, con la tarifa dinámica ya resuelta; D-29); total = alquiler + seguro + depósito; **congela la versión usada al calcular (`frozen_parameters_id`): los valores aplicados (comisión % y seguro por pasajero) se leen de esa versión** y no son retroactivos; el recálculo repetido usa la versión referenciada (D-17) |
+| UC05 | `ProcessChargeUseCase`, `RegisterChargeResultUseCase` | `ChargeGatewayPort`, `ReservationInformationRepository`, `OutboxPort` | invocado por UC07; `webhook`; `scheduler` | `charge_intent`, `charge_record` | Un solo monto (alquiler + seguro + depósito); solo token; cobro directo con captura automática (D-32); **varias `ChargeIntent` por reserva, cada una con su clave idempotente** (reintento tras rechazo = nueva intención); `RegistroDeCobro` solo con el cobro confirmado y con `charge_intent_id` obligatorio |
+| UC06 | `GetPaymentConfirmationUseCase` | `ChargeIntentRepository`, `RefundRecordQueryPort` | `web` | lectura de `charge_intent` y `refund_record` | Solo lectura; no contacta la pasarela (RF-006); `released_amount` = suma de `refund_record.released_amount` confirmados por reserva |
+| UC07 | `HandleReservationStatusUseCase` | `ProcessChargeUseCase`, `RequestRefundUseCase`, `RequestSettlementUseCase`, `OpenDepositTrackingUseCase` (por `port.in`) | `messaging` | `reservation_status_log` | 10 estados; estado desconocido = inconsistencia registrada; sin respuesta; **identidad de operación = reserva + estado notificado + tipo de operación financiera + clave idempotente** (RF-009A); exclusión mutua del depósito (RF-009B) |
+| UC08 | `HandleDisputeNotificationUseCase`, `OpenDepositTrackingUseCase` | `RequestRefundUseCase`, `RequestSettlementUseCase` (por `port.in`) | `messaging` | `deposit_disposition`, `dispute_event_log` | Solo `PENDING/REJECTED/COMPLETED`; 100 % del depósito; un único desenlace por depósito; refuerza exclusión mutua y coherencia con los flujos de UC07, UC09 y UC10 (RF-008) |
+| UC09 | `RequestRefundUseCase`, `SendRefundToGatewayUseCase`, `RegisterRefundResultUseCase`, `ReconcileRefundIntentsUseCase` | `RefundGatewayPort`, `ChargeIntentRepository`, `ChargeRecordQueryPort`, `ReservationInformationRepository`, `RefundCommandPublisher` | invocado por UC07/UC08; `webhook`; `scheduler` | `refund_intent`, `refund_record` | Montos por estado; "liberar o reembolsar según el estado del cobro original"; sin descuentos transaccionales propios (RF-012); intención con `X-Idempotency-Key` UUID v4 por intento y vínculo al cobro original; `RegistroDeReembolso` solo con éxito confirmado, con `refund_intent_id` obligatorio y `released_amount` neto; consume `OpenDepositTrackingUseCase` (UC08) por `port.in`; coherencia con la identidad de operación de UC07 (RF-013) |
+| UC10 | `RequestSettlementUseCase`, `SendSettlementToGatewayUseCase`, `RegisterSettlementResultUseCase`, `ReconcileSettlementIntentsUseCase` | `SettlementGatewayPort`, `ChargeIntentRepository`, `ChargeRecordQueryPort`, `ReservationInformationRepository`, `FinancialParametersRepository`, `SettlementCommandPublisher` | invocado por UC07/UC08; `scheduler` | `settlement_intent`, `settlement_record`, `commission_record` | Liquidación estándar `alquiler bruto − comisión − seguro` (D-35, reemplaza a D-30); la comisión se calcula y se conserva en la `IntenciónDeDispersión` (RF-004, RF-014) con el % de la **versión referenciada por `frozen_parameters_id`** en la reserva (UC04 RF-008) y no se recalcula con parámetros actuales; penalidades sin comisión ni seguro; `RegistroDeDispersión` (con `settlement_intent_id` obligatorio) + `RegistroDeComisión` atómicos y sin duplicados; la comisión no es atributo de `RegistroDeDispersión`; consume `OpenDepositTrackingUseCase` (UC08) por `port.in`; coherencia con la identidad de operación de UC07 (RF-016) |
+| UC11 | `LoadFinancialParametersUseCase`, `SaveFinancialParametersUseCase` | `FinancialParametersRepository` | `web` | `financial_parameters` | Guardado atómico de los 4 valores creando una **versión nueva** (historial inmutable; vigente = más reciente); rangos 0–100 % y seguro ≥ 0; **no retroactivo: las referencias de versión en reservas calculadas no cambian y los valores aplicados se leen de su versión referenciada** (RF-007); usuario esperado: Administrador Financiero (sin validación; seguridad fuera de alcance) |
+| UC12 | `QueryFinancialRecordsUseCase` | `FinancialRecordQueryPort` | `web` | vista `v_financial_records` | Alcance declarado (`OWNER`/`PLATFORM`, dato plano) antes de filtros; paginación sin omitir ni duplicar; solo registros inmutables |
+| UC13 | `GetFinancialReportUseCase`, `ExportFinancialReportUseCase` | `FinancialReportQueryPort` | `web` | agregación sobre las 4 tablas inmutables | Períodos fijos; neto sin doble contabilizar la comisión; variación porcentual no calculable si el anterior es 0 |
+
+
+### 3.6 Núcleo compartido entre planes **[TÉC]**
+
+Piezas transversales de la fase **Foundational**: VOs `Money` y `Percentage`, identificadores (`ReservationId`, `BoatId`, `OwnerId`), `ClockPort` (zona `America/Bogota`), excepciones base, `FailureRecorderPort`, `OutboxPort` y `ReservationLockPort` (bloqueo asesor por reserva, D-15).
+
+Contratos internos que un plan define y los demás consumen **por nombre**, sin coordinación entre tareas de otros planes (§3.4, regla 4):
+
+| Contrato interno | Plan dueño | Consumidores |
+|---|---|---|
+| `ProvideBaseRateUseCase` (UC02) | UC02 | UC01, UC03 |
+| `FinancialParameters` y `FinancialParametersRepository` (vigente = mayor `version_number`) | UC11 | UC01, UC02, UC04 |
+| `ReservationInformationRepository` (*upsert* con invalidación de montos y referencia, D-17) | UC03 | UC04, UC05, UC07, UC08, UC09, UC10 |
+| `ProcessChargeUseCase` | UC05 | UC07 |
+| `RequestRefundUseCase` | UC09 | UC07, UC08 |
+| `RequestSettlementUseCase` | UC10 | UC07, UC08 |
+| `OpenDepositTrackingUseCase` (*compare-and-set* de `deposit_disposition`, D-16 y D-34) | UC08 | UC07, UC09, UC10 |
+| `RefundRecordQueryPort` (lectura de `refund_record` para `released_amount`) | UC09 | UC06 |
+
+## 4. Modelo de datos (PostgreSQL)
+
+Convenciones: `NUMERIC(18,4)` para dinero y porcentajes, con precisión interna de 4 decimales antes de cualquier redondeo final **[SPEC RNF-002 de los UC 02, 03, 04, 05, 09, 10, 11, 12 y 13]**, `timestamptz` para instantes, UUID v4 como identificadores (`financial_parameters` agrega además un `version_number` secuencial), **migración inicial única `V1__initial_schema.sql`** con todo este §4 (§4.2 y D-31); los cambios posteriores se añaden como versiones cronológicas `V2__…` (Flyway).
+
+| Tabla | Tipo | Propósito / columnas relevantes | Restricciones |
+|---|---|---|---|
+| `financial_parameters` | **Versionada (append-only)** | `id` (UUID v4), `version_number` (secuencial), `commission_pct`, `insurance_fee_per_passenger`, `weekend_increase_pct`, `high_season_increase_pct`, `created_at`, `created_by` (dato plano, opcional) | `UNIQUE(version_number)`; `CHECK` de rangos (UC11 RF-013); cada guardado **inserta una versión nueva** y ninguna versión se modifica; la **vigente** es la de mayor `version_number` (UC11) |
+| `reservation_information` | Entidad (UC03/UC04) | `reservation_id` PK, `boat_id`, `base_rate`, **`base_rate_parameters_id`** (FK a la versión usada por la tarifa dinámica, UC02/UC03), `start_date`, `end_date`, `passengers`, `owner_id`, `max_capacity`, `rental_amount`, `insurance_amount`, `deposit_amount`, `total_amount`, **`frozen_parameters_id`** (FK a la versión usada por UC04; única fuente de los parámetros aplicados), `calculated_at` | `CHECK (end_date >= start_date)`; `CHECK (passengers BETWEEN 1 AND max_capacity)`; montos y `frozen_parameters_id` `NULL` hasta UC04 y escritos juntos; **los valores congelados no se copian: se resuelven de la versión referenciada** (D-27); `base_rate_parameters_id` se escribe con UC03 (`NULL` si la fecha era regular y el cálculo no usó parámetros); el *upsert* de UC03 sobre una reserva ya calculada deja los montos calculados, `frozen_parameters_id` y `calculated_at` en `NULL` (invalidación); UC11 nunca modifica estas columnas; el FK impide eliminar versiones referenciadas (sin purga de `financial_parameters` mientras existan reservas) |
+| `charge_intent` | Entidad (UC05) | `id`, `reservation_id`, `operation_key` (identidad de negocio de la operación, D-37), `idempotency_key` (UUID v4 del intento; solo cabecera `X-Idempotency-Key`), `status`, `amount` (monto solicitado del intento; el cobro es único y por el total), `payment_token_ref`, `payment_method_type`, `last_four`, `payer_email`, `external_reference`, `status_detail` (detalle del estado externo publicado por la pasarela, lo consume UC06), `created_at`, `version` | `UNIQUE(idempotency_key)` (integridad estructural); **`UNIQUE(reservation_id, operation_key)`** (deduplicación de la operación, D-37); **sin** `UNIQUE(reservation_id)` a secas: se permiten múltiples intenciones por reserva (UC05 RF-004A); índice `(reservation_id, created_at DESC)` |
+| `charge_record` | **Inmutable** | `id`, **`charge_intent_id`**, `reservation_id`, `owner_id`, `boat_id`, `amount`, `rental_amount`, `insurance_amount`, `deposit_amount`, `payment_method_type`, `last_four`, `external_reference`, `created_at` | `charge_intent_id NOT NULL` con `FOREIGN KEY` a `charge_intent(id)` (UC05 RF-004B); trigger anti-`UPDATE/DELETE` |
+| `refund_intent` | Entidad (UC09) | `id`, `reservation_id`, `trigger` (estado/evento), `scope`, `amount`, `charge_intent_id`, `operation_key` (D-37), `idempotency_key` (UUID v4 del intento), `status`, `status_detail`, `dispute_id` (nullable), `external_reference`, `created_at`, `version` | `UNIQUE(idempotency_key)`; **`UNIQUE(reservation_id, operation_key)`** (D-37); índice `(reservation_id)` |
+| `refund_record` | **Inmutable** | `id`, **`refund_intent_id`**, `reservation_id`, `owner_id`, `boat_id`, `dispute_id` (nullable), `amount`, **`released_amount`** (monto neto liberado = `amount − transaction_cost`, o `amount` si no hay costo), `detail`, `transaction_cost` (nullable), `external_reference`, `created_at` | `refund_intent_id NOT NULL` con `FOREIGN KEY` a `refund_intent(id)` (UC09 RF-006A); `released_amount NOT NULL`; trigger anti-mutación; UC06 lo consulta agregado por reserva |
+| `settlement_intent` | Entidad (UC10) | `id`, `reservation_id`, `trigger`, `scope` (`STANDARD`, `CANCELLATION_COMPENSATION`, `DEPOSIT`), `amount`, `commission_amount` (calculado y conservado aquí, UC10 RF-004/RF-014), `deposit_amount`, `charge_intent_id`, `operation_key` (D-37), `idempotency_key` (UUID v4 del intento), `status`, `status_detail`, `external_reference`, `dispute_id` (nullable), `gateway_capability` (capacidad de liquidación utilizada, UC10 RF-009) | `UNIQUE(idempotency_key)`; **`UNIQUE(reservation_id, operation_key)`** (D-37); índice `(reservation_id)` |
+| `settlement_record` | **Inmutable** | `id`, **`settlement_intent_id`**, `reservation_id`, `owner_id`, `boat_id`, `amount`, `detail`, `rental_gross_amount`, `insurance_amount`, `deposit_amount`, `external_reference`, `created_at` | `settlement_intent_id NOT NULL` con `FOREIGN KEY` a `settlement_intent(id)` (UC10 RF-009A); trigger anti-mutación |
+| `commission_record` | **Inmutable** | `id`, `settlement_record_id`, `settlement_intent_id`, `reservation_id`, `owner_id`, `boat_id`, `amount`, `created_at` | `settlement_record_id` y `settlement_intent_id` `NOT NULL` con `FOREIGN KEY`; `UNIQUE(settlement_record_id)` (una comisión por liquidación estándar, UC10 CE-006); creación atómica con su `settlement_record` |
+| `deposit_disposition` | Entidad (UC08) | `reservation_id` PK, `completed_at` (de `fechaHoraEstado` de `COMPLETED`), `dispute_id`, `dispute_status`, `disposition` (`HELD`, `REFUND_REQUESTED`, `SETTLEMENT_REQUESTED`) | Cambio de `disposition` por *compare-and-set* |
+| `dispute_event_log` | Técnica (UC08) | `reservation_id`, `dispute_id`, `event_key`, `status`, `status_changed_at`, `processed_at` | `UNIQUE(reservation_id, dispute_id, event_key)` (UC08 RF-008) |
+| `reservation_status_log` | Técnica (UC07) | `reservation_id`, `status`, `operation_type`, `idempotency_key`, `status_changed_at`, `processed_at`, `outcome` | `UNIQUE(reservation_id, status, operation_type, idempotency_key)` para los estados que disparan operaciones monetarias (`PENDING`, cancelaciones y `COMPLETED`), conforme a la identidad de operación de UC07 RF-009A; `operation_type` ∈ {`CHARGE`, `REFUND`, `SETTLEMENT`} y `outcome` es un texto corto sin catálogo fijado [CONV, D-UC07-11] |
+| `operational_failure` | Técnica | `use_case`, `reservation_id`, `reason`, `payload_ref`, `created_at`, `resolved` | Destino de todo "registra el fallo internamente" |
+| `outbox_message` | Técnica | `id`, `exchange`, `routing_key`, `payload`, `created_at`, `published_at` | Índice parcial `published_at IS NULL` |
+| `shedlock` | Técnica (opcional) | Bloqueo de jobs programados | — |
+
+**Relación intención → registro inmutable** (SPEC 05 RF-004B, SPEC 09 RF-006A, SPEC 10 RF-009A y RF-014):
+
+| Intención (operativa, mutable) | Registro inmutable | Referencia | Se crea cuando |
+|---|---|---|---|
+| `charge_intent` (N por reserva) | `charge_record` | `charge_intent_id` | La pasarela confirma cobro o captura exitosa |
+| `refund_intent` | `refund_record` | `refund_intent_id` | La pasarela confirma el reembolso o liberación exitosa |
+| `settlement_intent` | `settlement_record` | `settlement_intent_id` | El libro interno confirma la liquidación como exitosa |
+| `settlement_intent` (solo liquidación estándar) | `commission_record` | `settlement_intent_id` + `settlement_record_id` | En la misma transacción que el `settlement_record` de la liquidación estándar |
+
+Una intención que no alcanza éxito confirmado (rechazada, cancelada, expirada, en proceso, falla de comunicación) solo actualiza su estado y **no** genera registro.
+
+**Vista de lectura (UC12/UC13)**: `v_financial_records` = `UNION ALL` de las cuatro tablas inmutables con columnas comunes (`record_type`, `reservation_id`, `owner_id`, `boat_id`, `amount`, `created_at`, `external_reference`). Índices por `(owner_id, created_at DESC)`, `(boat_id)` y `(reservation_id)` en cada tabla.
+
+**Inmutabilidad**: además de no exponer *setters* en el dominio, las cuatro tablas `*_record` y `financial_parameters` tienen triggers que rechazan `UPDATE`, `DELETE` y `TRUNCATE`. Los privilegios por rol son específicos del entorno y no forman parte de la migración.
+
+### 4.1 Diagrama Entidad-Relación
+
+```mermaid
+%%{init: {"theme": "dark"}}%%
+erDiagram
+    financial_parameters {
+        uuid id PK
+        bigint version_number
+        numeric commission_pct
+        numeric insurance_fee_per_passenger
+        numeric weekend_increase_pct
+        numeric high_season_increase_pct
+        datetime created_at
+        string created_by
+    }
+
+    reservation_information {
+        uuid reservation_id PK
+        uuid boat_id
+        numeric base_rate
+        uuid base_rate_parameters_id FK
+        datetime start_date
+        datetime end_date
+        int passengers
+        uuid owner_id
+        int max_capacity
+        numeric rental_amount
+        numeric insurance_amount
+        numeric deposit_amount
+        numeric total_amount
+        uuid frozen_parameters_id FK
+        datetime calculated_at
+    }
+
+    operational_failure {
+        uuid id PK
+        string use_case
+        uuid reservation_id FK
+        string reason
+        string payload_ref
+        datetime created_at
+        boolean resolved
+    }
+
+    deposit_disposition {
+        uuid reservation_id PK, FK
+        datetime completed_at
+        string dispute_id
+        string dispute_status
+        string disposition
+    }
+
+    dispute_event_log {
+        uuid id PK
+        uuid reservation_id FK
+        string dispute_id
+        string event_key
+        string status
+        datetime status_changed_at
+        datetime processed_at
+    }
+
+    reservation_status_log {
+        uuid id PK
+        uuid reservation_id FK
+        string status
+        string operation_type
+        string idempotency_key
+        datetime status_changed_at
+        datetime processed_at
+        string outcome
+    }
+
+    charge_intent {
+        uuid id PK
+        uuid reservation_id FK
+        string idempotency_key
+        string status
+        numeric amount
+        string payment_token_ref
+        string payment_method_type
+        string last_four
+        string external_reference
+        datetime created_at
+        int version
+    }
+
+    charge_record {
+        uuid id PK
+        uuid charge_intent_id FK
+        uuid reservation_id FK
+        uuid owner_id
+        uuid boat_id
+        numeric amount
+        numeric rental_amount
+        numeric insurance_amount
+        numeric deposit_amount
+        string payment_method_type
+        string last_four
+        string external_reference
+        datetime created_at
+    }
+
+    refund_intent {
+        uuid id PK
+        uuid reservation_id FK
+        string trigger
+        string scope
+        numeric amount
+        uuid charge_intent_id FK
+        string idempotency_key
+        string status
+        string external_reference
+    }
+
+    refund_record {
+        uuid id PK
+        uuid refund_intent_id FK
+        uuid reservation_id FK
+        uuid owner_id
+        uuid boat_id
+        string dispute_id
+        numeric amount
+        numeric released_amount
+        string detail
+        numeric transaction_cost
+        string external_reference
+        datetime created_at
+    }
+
+    settlement_intent {
+        uuid id PK
+        uuid reservation_id FK
+        string trigger
+        string scope
+        numeric amount
+        numeric commission_amount
+        numeric deposit_amount
+        uuid charge_intent_id FK
+        string idempotency_key
+        string status
+    }
+
+    settlement_record {
+        uuid id PK
+        uuid settlement_intent_id FK
+        uuid reservation_id FK
+        uuid owner_id
+        uuid boat_id
+        numeric amount
+        string detail
+        numeric rental_gross_amount
+        numeric insurance_amount
+        numeric deposit_amount
+        string external_reference
+        datetime created_at
+    }
+
+    commission_record {
+        uuid id PK
+        uuid settlement_record_id FK
+        uuid settlement_intent_id FK
+        uuid reservation_id FK
+        uuid owner_id
+        uuid boat_id
+        numeric amount
+        datetime created_at
+    }
+
+    outbox_message {
+        uuid id PK
+        string exchange
+        string routing_key
+        string payload
+        datetime created_at
+        datetime published_at
+    }
+
+    shedlock {
+        string name PK
+    }
+
+    financial_parameters ||--o{ reservation_information : "tarifa dinámica (UC03)"
+    financial_parameters ||--o{ reservation_information : "versión de parámetros usada (UC04)"
+    reservation_information ||--o{ charge_intent : has
+    reservation_information ||--o| deposit_disposition : resolves
+    reservation_information ||--o{ dispute_event_log : records
+    reservation_information ||--o{ reservation_status_log : tracks
+    reservation_information ||--o{ operational_failure : reports
+
+    charge_intent ||--o| charge_record : records
+    charge_intent ||--o{ refund_intent : originates
+    charge_intent ||--o{ settlement_intent : originates
+
+    refund_intent ||--o| refund_record : records
+    settlement_intent ||--o| settlement_record : records
+    settlement_intent ||--o| commission_record : determines
+    settlement_record ||--o| commission_record : contains
+```
+
+### 4.2 Política de migraciones
+
+1. **Migración inicial única**: `V1__initial_schema.sql` (Flyway, en `src/main/resources/db/migration`) contiene **todo** el esquema de §4 y §4.1 en una sola migración: las 15 tablas, sus `CHECK`/`UNIQUE`/FK, índices, la vista `v_financial_records` y los triggers anti-mutación (`UPDATE`, `DELETE` y `TRUNCATE`). Los privilegios por rol son específicos del entorno y no forman parte de la migración. Su fuente de autoría es §4/§4.1; ningún otro documento define esquema.
+2. **Sin migraciones por caso de uso**: ningún UC, fase o plan define, posee, numera ni ordena migraciones propias; los planes específicos solo referencian la migración única y las tablas/columnas que consumen.
+3. **Cambios posteriores**: los cambios de esquema que surjan en las implementaciones separadas se añaden como versiones nuevas (`V2__…`, `V3__…`) en orden estrictamente cronológico, *append-only*; una versión ya aplicada no se edita nunca. Una versión puede anotar en su encabezado el origen (p. ej. "implementación UC05"), pero la numeración es global y serial.
+   - **Excepción de desarrollo**: mientras el proyecto no tenga una base desplegada, se puede ajustar `V1` y recrear la base local (`docker compose down -v`); una vez desplegada, `V1` es inmutable y los cambios van en `V2+`.
+4. **Canonicidad**: el historial de migraciones aplicado es la fuente canónica del esquema; §4 es su especificación de autoría. Ningún SPEC, contrato o plan puede contradecir la migración vigente.
+5. **Convención de nombres**: `V<n>__<descripcion_snake_case>.sql` (D-31).
+
+---
+
+## 5. Conexiones con otros módulos y mensajería (RabbitMQ)
+
+### 5.1 Matriz de conexiones
+
+| # | Origen → Destino | UC | Estilo | Transporte | ¿Cola? | Contrato |
+|---|---|---|---|---|---|---|
+| C1 | Reservas → sistema | UC01 | Request/response | REST `POST` | No (necesita respuesta) | [lote](contracts/rest/UC01-estimacion-lote.md), [individual](contracts/rest/UC01-estimacion-individual.md) |
+| C2 | Reservas → sistema | UC03 | Notificación unidireccional | **RabbitMQ** | **Sí** | [UC03](contracts/events/UC03-informacion-reserva.md) |
+| C3 | Reservas → sistema | UC04 | Request/response | REST `POST` | No | [UC04](contracts/rest/UC04-valor-calculado-reserva.md) |
+| C4 | Reservas → sistema | UC06 | Consulta | REST `GET` | No | [UC06](contracts/rest/UC06-confirmacion-pago.md) |
+| C5 | Reservas → sistema | UC07 | Notificación unidireccional | **RabbitMQ** | **Sí** | [UC07](contracts/events/UC07-estado-reserva.md) |
+| C6 | Reservas → sistema | UC08 | Notificación unidireccional | **RabbitMQ** | **Sí** | [UC08](contracts/events/UC08-disputa-garantia.md) |
+| C7 | Sistema → Flota | UC01/02/03 | Request/response | REST `POST` (consulta por lote) | No | [Flota](contracts/external/flota-consulta-tarifas-base.md) |
+| C8 | Sistema → Pasarela | UC05/09 | Comando asíncrono (clave idempotente por intento) | Outbox → **RabbitMQ interna** → worker → cliente de la pasarela | **Sí** | [cobro](contracts/external/pasarela-comando-cobro.md), [reembolso](contracts/external/pasarela-comando-reembolso.md) |
+| C8b | Sistema → libro interno de liquidaciones | UC10 | Registro interno de la liquidación (sin canal externo) | Puerto de salida `SettlementGatewayPort` invocado por el worker | No | [liquidación](contracts/external/pasarela-comando-liquidacion.md) |
+| C9 | Pasarela → sistema | UC05/09 | Resultado | Webhook REST (acuse inmediato) → **cola interna** `finance.gateway-notification.v1` → worker que consulta el pago y actualiza la intención | No | [webhook](contracts/external/pasarela-webhook-resultados.md) |
+| C10 | Administrador Financiero → sistema | UC11 | Request/response | REST | No | [obtener](contracts/rest/UC11-obtener-parametros-financieros.md), [guardar](contracts/rest/UC11-guardar-parametros-financieros.md) |
+| C11 | Propietario / Administrador → sistema | UC12, UC13 | Request/response | REST | No | [UC12](contracts/rest/UC12-consultar-registros-financieros.md), [consultar](contracts/rest/UC13-consultar-informe-financiero.md), [exportar](contracts/rest/UC13-exportar-informe-financiero.md) |
+| C12 | Sistema → sistema | UC05 | Eventos por tiempo | Scheduler | No (ver D-10) | §5.2 |
+
+El sistema **no publica eventos hacia Reservas**: Reservas consulta mediante UC04 y UC06 (modelo *pull* definido por los SPEC).
+
+### 5.2 Jobs internos programados
+
+| Job | Origen en los SPEC | Regla |
+|---|---|---|
+| `GatewayReconciliationJob` | UC05/09/10 RNF-003 | Reintenta o consulta intenciones sin resultado definitivo, **con la misma clave idempotente de la intención** (un reintento técnico no crea otra intención; un nuevo intento de negocio sí, UC05 RF-004A) |
+| `OutboxRelayJob` | Infra | Publica `outbox_message` pendientes |
+
+Estos son **los únicos jobs programados del sistema y son internos** (conciliación con la pasarela y entrega de la mensajería). La ventana de 24 h, la vigencia de las disputas y cualquier otro temporizador relacionado con una reserva o con la garantía **no son responsabilidad del sistema**: los administra el Sistema de Reservas y Operaciones, que notifica `REJECTED` (ausencia de reclamo) o `COMPLETED`/`PENDING` mediante UC08 [SPEC 008 RF-009, RF-009A; SPEC 007 caso extremo].
+
+La topología de exchanges y colas se documenta en [`contracts/README.md`](contracts/README.md) (tabla de colas del §2 y propiedades AMQP del §3.5) **[TÉC; colas `finance.<nombre>.v1` con DLQ `<cola>.dlq`; los nombres exactos están fijados en `contracts/README.md` §3.5]**.
+
+### 5.3 ShedLock (bloqueo de jobs programados) **[TÉC]**
+
+Si el servicio corre con varias réplicas, cada job de §5.2 se protege con **ShedLock** sobre la tabla `shedlock` (§4) para que solo una réplica lo ejecute por periodo. Es un mecanismo de despliegue, no un temporizador de negocio: no crea ni sustituye ninguna tarea programada fuera de la lista de §5.2.
+
+### 5.4 Flujo de referencia: reserva → cobro
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant M2 as Reservas y Operaciones
+  participant MQ as RabbitMQ
+  participant F as El sistema
+  participant M1 as Gestión de Flota
+  participant PG as Pasarela de Pago (Mercado Pago)
+
+  M2->>MQ: reservation.info.provided (UC03)
+  MQ->>F: consumo
+  F->>M1: consulta de tarifa base de la embarcación (lote de un elemento)
+  M1-->>F: tarifas base
+  F->>F: UC02 tarifa dinámica y registro de InformaciónDeReserva (invalida montos previos si es reenvío)
+  M2->>F: POST calculated-value (UC04)
+  F->>F: registra la versión de parámetros usada, calcula y registra el desglose
+  F-->>M2: desglose y total
+  M2->>MQ: reservation.status.changed PENDING + payment_token_ref (UC07)
+  MQ->>F: consumo
+  F->>F: UC05 nueva IntenciónDeCobro (clave idempotente propia) + outbox
+  Note over F: comando publicado a la cola interna (outbox → RabbitMQ) y consumido por el worker
+  F->>PG: cobrar (worker, clave idempotente de la intención)
+  PG-->>F: webhook de resultado (acuse inmediato; persistido en el outbox)
+  Note over F: paso 2 asíncrono en la cola interna finance.gateway-notification.v1
+  F->>F: actualizar intención; con el cobro confirmado, crear RegistroDeCobro con charge_intent_id
+  M2->>F: GET payment-confirmation (UC06)
+  F-->>M2: estado del cobro
+```
+## 6. Contratos
+
+Cada contrato vive en su propio archivo en [`contracts/`](contracts/README.md). Allí se encuentran la leyenda `[SPEC]/[CONV]`, las convenciones comunes (headers, formato de error, catálogo de códigos) y el detalle de cada petición y respuesta.
+
+| Tipo | Archivo | Detalle |
+|---|---|---|
+| REST | [`rest/UC01-estimacion-lote.md`](contracts/rest/UC01-estimacion-lote.md) | Reservas → sistema |
+| REST | [`rest/UC01-estimacion-individual.md`](contracts/rest/UC01-estimacion-individual.md) | Reservas → sistema |
+| REST | [`rest/UC04-valor-calculado-reserva.md`](contracts/rest/UC04-valor-calculado-reserva.md) | Reservas → sistema |
+| REST | [`rest/UC06-confirmacion-pago.md`](contracts/rest/UC06-confirmacion-pago.md) | Reservas → sistema |
+| REST | [`rest/UC11-obtener-parametros-financieros.md`](contracts/rest/UC11-obtener-parametros-financieros.md) | Administrador Financiero → sistema |
+| REST | [`rest/UC11-guardar-parametros-financieros.md`](contracts/rest/UC11-guardar-parametros-financieros.md) | Administrador Financiero → sistema |
+| REST | [`rest/UC12-consultar-registros-financieros.md`](contracts/rest/UC12-consultar-registros-financieros.md) | Propietario / Administrador → sistema |
+| REST | [`rest/UC13-consultar-informe-financiero.md`](contracts/rest/UC13-consultar-informe-financiero.md) | Propietario / Administrador → sistema |
+| REST | [`rest/UC13-exportar-informe-financiero.md`](contracts/rest/UC13-exportar-informe-financiero.md) | Propietario / Administrador → sistema |
+| Cola | [`events/UC03-informacion-reserva.md`](contracts/events/UC03-informacion-reserva.md) | Reservas → sistema, unidireccional |
+| Cola | [`events/UC07-estado-reserva.md`](contracts/events/UC07-estado-reserva.md) | Reservas → sistema, unidireccional |
+| Cola | [`events/UC08-disputa-garantia.md`](contracts/events/UC08-disputa-garantia.md) | Reservas → sistema, unidireccional |
+| Externo | [`external/flota-consulta-tarifas-base.md`](contracts/external/flota-consulta-tarifas-base.md) | Sistema → Flota (contrato requerido) |
+| Externo | [`external/pasarela-comando-cobro.md`](contracts/external/pasarela-comando-cobro.md) | Sistema → Pasarela |
+| Externo | [`external/pasarela-comando-reembolso.md`](contracts/external/pasarela-comando-reembolso.md) | Sistema → Pasarela |
+| Externo | [`external/pasarela-comando-liquidacion.md`](contracts/external/pasarela-comando-liquidacion.md) | Sistema → libro interno de liquidaciones (sin canal externo) |
+| Externo | [`external/pasarela-webhook-resultados.md`](contracts/external/pasarela-webhook-resultados.md) | Pasarela → sistema |
+
+### Entrega y verificación
+
+| Destinatario | Contratos | Qué debe hacer |
+|---|---|---|
+| Reservas y Operaciones | UC01, UC04, UC06 (REST); UC03, UC07, UC08 (colas) | Implementar cliente REST y productor AMQP |
+| Gestión de Flota | `flota-consulta-tarifas-base` | Exponer la consulta por lote con el SLA del SPEC |
+| Mercado Pago (pasarela, adaptador) | comandos de cobro y reembolso + webhook (la liquidación es interna) | Adaptar Mercado Pago al modelo canónico |
+| Administrador Financiero / Propietario | UC11, UC12, UC13 | Consumir los endpoints respetando paginación y períodos fijos |
+
+**Verificación**: pruebas de contrato en el sistema que usan los ejemplos de cada `.md` (REST con MockMvc; mensajes AMQP contra el cuerpo documentado) y *stubs* WireMock para Flota. La pasarela se cubre con WireMock embebido en las pruebas JUnit (`MercadoPagoChargeAdapterTest`, `MercadoPagoRefundAdapterTest`), no con un stub desplegado.
+
+---
+
+## 7. Aspectos transversales
+
+### 7.1 Seguridad — fuera de alcance
+- **El sistema NO implementa autenticación, autorización, tokens ni identidades verificadas: la seguridad está fuera del alcance del proyecto** (D-21). Los SPEC fijan **quién se espera que use cada caso de uso** (UC11: Administrador Financiero, RF-008; UC12/UC13: Propietario y Administrador Financiero; UC03/UC07/UC08: Reservas, UC03 RF-008), pero el sistema **no valida el llamador**; las tareas de seguridad (`SecurityConfig`, OAuth2) se retiran de los planes.
+- **Datos planos**: cuando un caso de uso necesita identidad o rol (p. ej. `owner_id` y el alcance declarado en UC12/UC13), llegan como datos de la petición o del mensaje y se procesan tal cual, sin validar pertenencia ni permisos. Los módulos externos (Reservas, Flota) tampoco implementan seguridad para integrarse.
+- Datos de pago (**se conserva**): solo token, tipo y últimos cuatro dígitos; sin PAN, CVV ni vencimiento; el token no se escribe en logs (UC05 RNF-004, CE-005). Es protección de datos del medio de pago, no control de acceso.
+- Integración con Mercado Pago (**no es seguridad del proyecto; se conserva**): verificación de firma `x-signature` del webhook y `Authorization: Bearer <ACCESS_TOKEN>` de los comandos salientes, por ser requisitos de la pasarela.
+
+### 7.2 Resiliencia (valores iniciales **[TÉC]** a calibrar)
+| Dependencia | Timeout | Reintentos | Otros |
+|---|---|---|---|
+| Flota (REST) | 1 s lectura (SLA del SPEC: < 500 ms para 50 embarcaciones) | 1 con *backoff* corto | *Circuit breaker*; falla ⇒ error controlado, **sin estimaciones parciales** (UC01 RNF-003) |
+| Pasarela (worker) | 10 s | Por reintento del mensaje, **misma clave idempotente de la intención** (un reintento técnico nunca genera otra intención; un nuevo intento de negocio crea una intención con clave nueva, UC05 RF-004A) | Timeout ⇒ estado `COMMUNICATION_ERROR` / en conciliación, nunca "fallido" (UC05 RNF-003) |
+| Listeners AMQP | — | 5 con *backoff* exponencial (base 1 s), solo en fallas transitorias → DLQ | [`contracts/README.md`](contracts/README.md) §4.4 |
+
+### 7.3 Observabilidad
+Actuator (`/health`, `/metrics`), Micrometer + Prometheus, logs JSON con `reservation_id`. Métricas: profundidad de DLQ, intenciones por estado, antigüedad de la intención más vieja sin resultado, intenciones de cobro por reserva (reintentos), filas en `operational_failure`, latencia de Flota. Alertas sobre DLQ > 0 y conciliaciones atascadas, porque los casos unidireccionales no pueden avisar a Reservas.
+
+### 7.4 Configuración **[TÉC]** (sobreescribible por entorno)
+`seashare.timezone=America/Bogota`, `seashare.estimates.max-batch-size=50`, `seashare.reporting.max-page-size=100`, `seashare.fleet.*`, `seashare.gateway.*` (`base-url`, `access-token`, `webhook-secret`, `settlement-mode` —solo `simulated`, D-UC10-18—, `credentials-required`, `connect-timeout`, `read-timeout`, `reconciliation-interval` y `circuit-breaker.*`). No hay configuración de ventanas ni de disputas (24 h, vigencias): la administra Reservas [SPEC 008 RF-009].
+Perfiles de Spring: `dev` (por defecto; defaults locales alineados con `docker-compose.yml`; la pasarela apunta a Mercado Pago y el access token de prueba `TEST-…` y el secreto del webhook salen del entorno) y `prod` (activo con `SPRING_PROFILES_ACTIVE=prod`; `application-prod.properties` no define defaults para credenciales ni secretos —llegan por variables de entorno o Docker secrets— y Actuator expone solo `health,info`). En `prod`, `seashare.gateway.credentials-required=true` hace que la aplicación no arranque si falta una variable o si el token o el secreto están vacíos: Spring Boot enlaza un `${VARIABLE}` sin resolver como texto literal, por lo que `GatewayProperties` lo rechaza expresamente (verificado en `GatewayProfilesTest`). UC10 es un libro interno simulado en todos los perfiles, incluido `prod`.
+
+---
+
+
+## 8. Estados internos de las intenciones
+
+| Intención | Estados internos | Mapeo hacia UC06 (solo cobro) |
+|---|---|---|
+| `ChargeIntent` | `PENDING_SEND`, `IN_PROCESS`, `CAPTURED`, `REJECTED`, `CANCELLED`, `EXPIRED`, `COMMUNICATION_ERROR` | `PENDING_SEND`/`IN_PROCESS` → `IN_PROCESS`; `CAPTURED` → `APPROVED`; `REJECTED` → `REJECTED`; `CANCELLED` → `CANCELLED`; `EXPIRED` → `EXPIRED`; `COMMUNICATION_ERROR` → `UNKNOWN` |
+| `RefundIntent`, `SettlementIntent` | `PENDING_SEND`, `IN_PROCESS`, `COMPLETED`, `REJECTED`, `CANCELLED`, `EXPIRED`, `COMMUNICATION_ERROR` (`FAILED` solo como resultado de una solicitud no registrada; no se persiste) | No se exponen |
+
+El registro inmutable correspondiente se crea **solo** al pasar a un estado exitoso confirmado externamente (UC05 RF-006/RF-008, UC09 RF-007/RF-009, UC10 RF-010/RF-012) y siempre referencia a la intención que lo originó; los demás estados únicamente actualizan la intención. Una reserva puede acumular varias `ChargeIntent` (por ejemplo, una `REJECTED` seguida de un nuevo intento); solo la que alcanza el cobro confirmado origina un `ChargeRecord`.
+
+---
+
+## 9. Decisiones de diseño y justificación
+
+| ID | Decisión | Alternativas descartadas | Justificación | SPEC |
+|---|---|---|---|---|
+| D-01 | **Un solo servicio desplegable** | Un microservicio por caso de uso | 13 casos de uso acoplados por datos (intenciones, registros, depósito); la consistencia transaccional es más simple en una sola BD | Todos |
+| D-02 | **Un `domain`, un `application` y un `infrastructure`** en un único módulo Maven, con reglas verificadas por ArchUnit (§3.2) | Un módulo/paquete por feature; dos módulos de dominio; multi-módulo Maven por capa | El acoplamiento de datos de §3.2 hace artificial cualquier frontera por SPEC; ArchUnit da el mismo control de capas que el multi-módulo con menos ceremonia | Todos |
+| D-03 | Subpaquetes temáticos dentro de cada capa **sin reglas entre ellos** | Fronteras duras por tema | Legibilidad sin reintroducir modularidad innecesaria | Todos |
+| D-04 | Dominio puro + **modelos JPA separados** con MapStruct | Anotar el dominio con JPA | Dominio libre de framework y registros realmente inmutables; MapStruct ya está en el `pom.xml` | RNF de inmutabilidad |
+| D-05 | **Contratos en Markdown, uno por archivo**, derivados solo de los SPEC y etiquetados `[SPEC]/[CONV]` | Un único documento; OpenAPI/AsyncAPI generados antes del código | Pedido explícito; la etiqueta hace visible qué es spec y qué es convención | Todos |
+| D-06 | **REST** para request/response; **RabbitMQ** para los casos unidireccionales y los comandos a la pasarela | Todo REST; todo mensajería | UC01/04/06 y la consulta a Flota necesitan respuesta inmediata. UC03/07/08 no devuelven nada (RF-006/RF-009) y se benefician de desacople, durabilidad y reintentos | 001, 003, 004, 006, 007, 008 |
+| D-07 | Entrega **al-menos-una-vez** + **idempotencia por claves de negocio de los SPEC** (clave idempotente de cada intención en UC05/UC09/UC10; identidad de operación de UC07 RF-009A; reserva + disputa + clave del evento en UC08) + outbox para comandos | "Exactly-once"; tabla *inbox* por `message_id` | Exactly-once no es alcanzable entre BD y broker. Los SPEC ya definen las claves de deduplicación; un `message_id` no está en ningún SPEC | 005, 007, 008, 009, 010 |
+| D-08 | **Persistir intención → outbox → worker llama a la pasarela**; conciliación posterior | Llamar a la pasarela dentro de la transacción o del listener | No bloquea consumidores con una llamada lenta; un timeout no se interpreta como fallo (UC05 RNF-003) | 005, 009, 010 |
+| D-09 | UC05 **sin endpoint público**; se invoca desde UC07 `PENDING` con el token | Endpoint de cobro para Reservas/Arrendatario | UC07 RF-002A define que `PENDING` dispara el cobro con el token recibido junto al estado; un segundo canal duplicaría el disparador | 005, 007 |
+| D-10 | **Scheduler** solo para jobs internos (conciliación y outbox) | Mensajes diferidos (TTL + DLX) por reserva | El sondeo sobre BD es simple, auditable e idempotente; la ventana de 24 h y la vigencia de la disputa las administra Reservas (SPEC 008 RF-009) | 005, Infra |
+| D-11 | `Money` (VO) sobre `BigDecimal`, `NUMERIC(18,4)` en BD y *string* decimal en JSON | `double`/`float`; número JSON | Evita errores de redondeo (UC01 CE-001, UC04 CE-001) | 001, 004, 005, 009, 010 |
+| D-12 | Fechas de negocio y períodos en una zona horaria única (`America/Bogota`, configurable por `seashare.timezone`); instantes en UTC | UTC para todo | "Fecha actual", "inicio en el pasado" y los períodos de UC13 deben ser inequívocos | 001, 013 |
+| D-13 | Inmutabilidad también en BD (triggers de `UPDATE`, `DELETE` y `TRUNCATE`) | Solo convención en código | Los registros son base de auditoría e informes | 005, 009, 010, 011 |
+| D-14 | **CQRS ligero** para UC12/UC13: vista `UNION ALL` + SQL de agregación | Pasar por el dominio | Son solo lectura (UC12 RF-010, UC13 RF-013) | 012, 013 |
+| D-15 | **Bloqueo asesor por reserva** + `@Version` en intenciones | Bloqueo global; serializable | Serializa operaciones de dinero de una reserva sin frenar al resto | 007, 008, 009, 010 |
+| D-16 | `deposit_disposition` con *compare-and-set* | Validar solo en cada caso de uso | Un depósito solo puede reembolsarse **o** liquidarse una vez (UC08 CE-005; UC07 RF-009B) | 007, 008, 009, 010 |
+| D-17 | UC04 **recalcula siempre a partir de la información registrada y de la versión de parámetros referenciada en la reserva** (`frozen_parameters_id`; si no hay referencia, la vigente), por lo que cada solicitud devuelve el mismo desglose (determinista); el *upsert* de UC03 invalida los montos y la referencia, y UC04 debe recalcular antes de un nuevo cobro (reemplaza la propuesta anterior de devolver el desglose ya registrado) | Recalcular con los parámetros vigentes en cada solicitud; devolver el desglose registrado sin recalcular | UC04 define el resultado como determinístico (edge case de solicitud repetida) y RF-008 congela la versión de parámetros usada; así se reconcilia con UC11 RF-007 (los parámetros nuevos no afectan valores ya registrados) | 003, 004, 011 |
+| D-18 | Enumeraciones en inglés (fuente canónica Módulo 2); campos JSON en `snake_case` | Usar enumeraciones en español | Traducción obligatoria para código/contratos | 001, 007, 008 |
+| D-19 | **No cachear** tarifas de Flota | Caché con TTL | Flota es la fuente autoritativa (UC02 RF-004) | 002 |
+| D-20 | Resilience4j (timeout, reintento, *circuit breaker*) configurable | Reintentos manuales | Evita estados de carga infinita (UC01 CE-004) | 001, 002, 005 |
+| D-21 | **Sin autenticación ni autorización**: la identidad y el rol llegan como **datos planos** (p. ej. `owner_id` y el alcance declarado en UC12/UC13) y el sistema aplica exactamente lo declarado | OAuth2/JWT con roles e identidad desde el token | La seguridad (autenticación, autorización, tokens) está fuera del alcance del proyecto; los módulos externos tampoco la implementan | 011, 012, 013 |
+| D-22 | Límite de lote = **50**; tamaño máximo de página = **100** | 100 como lote; sin máximo | UC01 RF-006 deja abierto "50 o 100"; 50 coincide con la prueba de carga de Flota. El máximo de página protege el tamaño de respuesta | 001, 012 |
+| D-23 | Código y API en **inglés**; documentación en español con la tabla de §11 | Identificadores en español con tildes | Evita problemas de herramientas; §11 mantiene el lenguaje ubicuo | Todos |
+| D-24 | `financial_parameters` **versionada (append-only)**: cada guardado inserta una versión nueva; la **vigente** es la de mayor `version_number`; ninguna versión se modifica | Singleton sin historial (último guardado gana); *optimistic locking* | El versionado conserva el historial inmutable y hace auditable el congelamiento; el guardado atómico sigue dando una única versión coherente (RNF-003) | 011 |
+| D-25 | Tablas técnicas `deposit_disposition`, `dispute_event_log`, `reservation_status_log` | Persistir el estado operativo de la reserva | UC07 prohíbe persistir el estado operativo; solo se guarda lo necesario para idempotencia y para decidir la operación monetaria | 007, 008 |
+| D-26 | **Cada registro inmutable referencia a su intención con una FK obligatoria** (`charge_intent_id`, `refund_intent_id`, `settlement_intent_id`); `commission_record` referencia a su intención y a su `settlement_record` | Registros sin vínculo; vínculo por `reservation_id` + referencia externa | Los SPEC exigen trazabilidad directa del registro inmutable a la operación operativa (UC05 RF-004B, UC09 RF-006A, UC10 RF-009A/RF-014) y lo verifican en CE-002, CE-003 y CE-003/CE-006 | 005, 009, 010 |
+| D-27 | **Congelar la referencia a la versión de parámetros usada** en `reservation_information` (`frozen_parameters_id`, FK) al calcular el valor (UC04): los valores aplicados (comisión % y seguro por pasajero) **no se copian**, se resuelven de esa versión; UC03 registra además la referencia de la tarifa dinámica (`base_rate_parameters_id`); los cálculos posteriores (valor repetido, liquidación) usan la versión referenciada y UC11 no la altera | Copiar los valores aplicados en la reserva; leer siempre la versión vigente sin conservar referencia | UC04 RF-008 y UC11 RF-007 exigen que los parámetros no sean retroactivos; el versionado append-only (D-24) permite resolver los valores por FK sin duplicarlos y sin riesgo de divergencia; el FK impide purgar versiones referenciadas | 004, 010, 011 |
+| D-28 | **Varias `ChargeIntent` por reserva; la unicidad la da `UNIQUE(idempotency_key)`**, no `UNIQUE(reservation_id)`; reintentos técnicos reutilizan la clave y nuevos intentos de negocio generan una nueva | `UNIQUE(reservation_id)` en `charge_intent` (decisión anterior) | UC05 RF-004A permite múltiples intenciones por reserva (reintentos tras rechazo o expiración) y delega la prevención de cobro doble en la clave idempotente de cada intento | 005, 006, 007 |
+| D-29 | **Base del depósito de garantía = 10 % de la tarifa diaria vigente registrada** (la misma tarifa que se aplicó al alquiler, con la dinámica ya resuelta) | 10 % de la tarifa base sin dinámica; monto fijo | El SPEC 04 fija el porcentaje (10 %) pero no la base; usar la tarifa vigente registrada mantiene una única fuente entre alquiler y depósito | 004 |
+| D-30 | ~~**Liquidación estándar = alquiler bruto − comisión** (comisión = % de la versión referenciada × alquiler bruto); el seguro náutico no interviene en el neto del Propietario~~ **Reemplazada por D-35** | `alquiler − comisión − seguro` (modelo anterior); descontar el seguro del alquiler | SPEC 10 RF-004/RF-014: la comisión se calcula y se conserva en la intención; el seguro cubre un riesgo de la plataforma y no es ingreso del Propietario | 010, 011 |
+| D-31 | **Migración inicial única**: `V1__initial_schema.sql` contiene todo el esquema de §4/§4.1 en una sola migración; los cambios que surjan en las implementaciones se añaden como versiones cronológicas `V2__…` (*append-only*) (§4.2). Mientras V1 no se haya desplegado, las correcciones de la revisión previa a la implementación se incorporan a V1 (D-36, D-37) | Una carpeta de migraciones por plan; versiones independientes por caso de uso | Las migraciones son una división cronológica, no lógica ni modular por feature: un solo punto de partida evita colisiones de versión y propiedad artificial por caso de uso; el historial aplicado es la fuente canónica del esquema | Todos |
+| D-32 | **Cobro directo con captura automática**: no hay autorización retenida ni job de expiración; `AUTHORIZED` no ocurre, `authorization_expires_at` no existe y el reembolso (total o parcial) se hace con `/refunds` | Autorización + captura diferida con job de expiración y liberación (`RELEASE`) | El cobro ocurre al reservar con el token recibido (UC07 `PENDING`); un cobro directo elimina estados, jobs y un tipo de operación que los SPEC no exigen | 005, 009 |
+| D-33 | **Identidad de operación por intento**: `reservation_id` + `status` + `status_changed_at` (UC07 RF-009A); los estados terminales deduplican por (reserva, estado, tipo de operación) y solo `PENDING` admite intentos nuevos: un `status_changed_at` nuevo es un intento nuevo | Clave = reserva + estado (un reenvío legítimo se perdería); clave aleatoria por mensaje | El mensaje de estado trae `status_changed_at`; distingue reenvíos (se deduplican) de intentos nuevos legítimos tras un rechazo | 007, 005, 009, 010 |
+| D-34 | **`deposit_disposition` registra todos los desenlaces del depósito** (reembolso por cancelación, `REJECTED` = reembolso del depósito y `COMPLETED` = liquidación) mediante un único *compare-and-set*; UC08 es dueño del registro y UC07/UC09/UC10 lo invocan por `OpenDepositTrackingUseCase` entregando la disposición destino (`HELD`, `REFUND_REQUESTED` o `SETTLEMENT_REQUESTED`) | Registrar solo disputas; desenlace por caso de uso | UC07 RF-009B exige exclusión mutua: un único registro con CAS garantiza un solo desenlace aunque concurran cancelación y disputa | 007, 008, 009, 010 |
+| D-35 | **Liquidación estándar = alquiler bruto − comisión − seguro náutico** (comisión = % de la versión referenciada × alquiler bruto); reemplaza a D-30 | D-30 (sin descontar el seguro); SPEC 10 HU2, RF-005 y caso extremo | SPEC 10 define expresamente el pago al Propietario como «monto de alquiler − comisión de la plataforma − monto de seguro náutico» y CE-002 exige que se use «el seguro correspondiente»; el seguro se registra en `settlement_record.insurance_amount` | 010, 011 |
+| D-36 | **Correcciones previas al despliegue de V1**: `refund_record.released_amount` se añade a `V1__initial_schema.sql` en la misma revisión, sin crear V2 | D-31 (cambios posteriores como V2) vs decisión de la revisión UC09/UC10 | V1 es la migración inicial de la rama y aún no se ha desplegado; incorporar la columna antes del despliegue evita una migración artificial. Una vez desplegada V1, cualquier cambio sigue la regla general (V2+) | 009, 010 |
+| D-37 | **Deduplicación por identidad de negocio (`operation_key`) y una sola intención por desenlace del depósito**: `charge_intent`, `refund_intent` y `settlement_intent` persisten `operation_key` (la clave de operación del comando: `reservationId:status[:statusChangedAt]` en UC07, `event_key` en UC08) con `UNIQUE(reservation_id, operation_key)`; `idempotency_key` (UUID v4 por intento, D-33) deja de ser la clave de deduplicación y solo viaja como cabecera `X-Idempotency-Key` hacia la pasarela. Como UC07 y UC08 pueden reclamar el mismo desenlace del depósito con `operation_key` distintos, UC09/UC10 solo crean la intención cuando su solicitud aplicó la transición `HELD -> REFUND_REQUESTED/SETTLEMENT_REQUESTED` (`DepositTrackingResult.transitioned`); si otra operación ya la aplicó, devuelven la intención existente y registran `duplicate_deposit_outcome` en `operational_failure`, salvo que esa intención haya terminado sin mover el dinero (`REJECTED`, `CANCELLED` o `EXPIRED`): entonces la solicitud es un reintento legítimo y crea una intención nueva | Deduplicar solo por `UNIQUE(idempotency_key)` (UUID aleatorio, no deduplica); `UNIQUE(reservation_id, scope)` (impide reintentar tras un rechazo); capturar `DataIntegrityViolationException` dentro de la transacción (la deja en *rollback-only*) | La constraint cubre las reentregas de la misma operación y es red de seguridad ante una carrera: el reintento del mensaje encuentra la intención por la consulta previa y converge. No cubre el doble camino UC07/UC08, que cierra la condición de transición del depósito (D-34). Se edita V1 bajo la excepción de desarrollo de §4.2.3 (D-36) | 005, 007, 008, 009, 010 |
+
+---
+
+
+## 10. Dependencias y orden de ejecución
+
+### Dependencias entre fases
+- **Setup (1)** → sin dependencias. **Foundational (2)** → depende de 1 y **bloquea** todo lo demás.
+- **UC11 (3)** → antes de 4, 5, 6 y 7 (UC01, UC02 y UC04 leen parámetros; UC04 registra la referencia a la versión usada).
+- **UC02/UC01 (4)** → depende de 3 y 2. **UC03/UC04 (5)** → depende de 4 (UC03 incluye UC02) y 3.
+- **UC05/UC06 (6)** → depende de 5. **UC09/UC10 (7)** → dependen de 6 (cobro original) y 5 (valores y referencia de parámetros); pueden desarrollarse en paralelo.
+- **UC08 (8)** → depende de 7. **UC07 (9)** → depende de 6, 7 y 8 (orquesta todo). **UC12/UC13 (10)** → pueden iniciar tras definirse las tablas inmutables (6 y 7) y completarse al final.
+- **Polish (N)** → después de las fases deseadas.
+
+```text
+1 Setup → 2 Foundational → 3 UC11 → 4 UC02/UC01 → 5 UC03/UC04 → 6 UC05/UC06 → 7 UC09/UC10 → 8 UC08 → 9 UC07
+                                                                     └──────────────► 10 UC12/UC13 (tras 6 y 7) ───────► N Polish
+```
+
+
+### Qué debe contener cada plan específico por SPEC (`docs/features/NNN-…/plan.md`)
+1. Resumen y trazabilidad a los RF/RNF/CE del SPEC.
+2. Clases concretas (dominio, puertos, servicios, adaptadores) con rutas reales bajo `com.seashare.seasharem3`.
+3. Esquema y migración: referencia a la migración inicial única (`V1__initial_schema.sql`) y a las tablas/columnas propias del UC en §4; prohibido definir o numerar migraciones por caso de uso — los cambios detectados se registran como versión posterior (D-31); referencia al contrato `.md` correspondiente.
+4. Reglas de negocio con ejemplos numéricos y manejo de errores por escenario.
+5. Estrategia de pruebas con una prueba por cada criterio de éxito (`CE-xxx`).
+6. Tareas granulares con dependencias entre sí.
+
+---
+
+## 11. Lenguaje ubicuo (SPEC → código)
+
+| Término del SPEC | Identificador en código |
+|---|---|
+| InformaciónDeReserva | `ReservationInformation` |
+| IntenciónDeCobro / RegistroDeCobro | `ChargeIntent` / `ChargeRecord` (`intencionDeCobroId` → `chargeIntentId`) |
+| IntenciónDeReembolso / RegistroDeReembolso | `RefundIntent` / `RefundRecord` (`intencionDeReembolsoId` → `refundIntentId`) |
+| IntenciónDeDispersión / RegistroDeDispersión | `SettlementIntent` / `SettlementRecord` (`intencionDeDispersiónId` → `settlementIntentId`) |
+| RegistroDeComisión | `CommissionRecord` |
+| ParámetrosFinancierosGlobales | `FinancialParameters` (versionada; `version_number` identifica la versión) |
+| Parámetros congelados (referencia a la versión usada; los valores aplicados se resuelven de esa versión) | `FrozenParameters` |
+| Clave idempotente | `IdempotencyKey` |
+| Tarifa base / tarifa dinámica | `BaseRate` / `DynamicRatePolicy` |
+| Depósito de garantía | `GuaranteeDeposit` |
+| Seguro náutico | `NauticalInsurance` |
+| Arrendatario / Propietario | `Renter` / `Owner` |
+| Sistema de Reservas y Operaciones / Gestión de Flota | `reservations` / `fleet` (sistemas externos) |
+
+---
+
+## Notes
+
+- `[UCxx]` mapea cada tarea a su SPEC; `[P]` indica tareas paralelizables (archivos distintos, sin dependencia).
+- Cada fase debe poder validarse de forma independiente antes de pasar a la siguiente.
+- Todas las decisiones están cerradas y registradas en §9 y en las tablas `D-UCxx` de los planes.
+- Evitar: tareas vagas, conflictos en un mismo archivo, llamadas entre casos de uso que no pasen por `port.in`.
+- Los valores numéricos de los ejemplos en los contratos son ilustrativos.
