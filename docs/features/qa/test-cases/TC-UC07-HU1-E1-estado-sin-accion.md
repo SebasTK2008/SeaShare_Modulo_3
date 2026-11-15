@@ -1,5 +1,5 @@
 ### Test Case Specification: Estado de la reserva · HU1 · E1 Estado operativo sin acción financiera (disponible/reservado/en navegación)
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/007-brindar-estado-de-la-reserva/spec.md](../../007-brindar-estado-de-la-reserva/spec.md)  **Status** : Approved  **Execution** : 2026-11-02 Â· release/0.1.0 Â· PASS (`docs/features/qa/matriz-qa.md`)
+**Created** : 2026-11-02  **Spec/Plan Link** : [spec.md](../../007-brindar-estado-de-la-reserva/spec.md)  **Status** : Approved  **Execution** : 2026-11-13 Â· release/0.1.0 Â· PASS (docs/features/qa/matriz-qa.md)
 
 #### Test Overview *(mandatory)*
 
@@ -14,63 +14,71 @@
 #### Objectives & Context *(mandatory)*
 
 ##### Test Objectives
-Este caso de prueba verifica que, ante las notificaciones de estado `AVAILABLE`, `RESERVED` e `IN_NAVIGATION` de una reserva con información financiera registrada, el sistema reconoce el estado y **no** dispara reembolso, liquidación ni cobro, y no devuelve respuesta al Sistema de Reservas y Operaciones.
+Verificar que `AVAILABLE`, `RESERVED` e `IN_NAVIGATION` se reconocen sin cobro, reembolso, liquidación, seguimiento de depósito ni respuesta a Reservas. No se registra identidad de operación ni estado operativo persistido para estos estados.
 
 ##### Document References
 | Reference Name | Type of Reference | Document Location / Link |
 | ------ | ------ | ------ |
 | Feature Spec UC07 | Specification Document | [spec.md](../../007-brindar-estado-de-la-reserva/spec.md) |
 | Plan UC07 | Plan Document | [plan.md](../../007-brindar-estado-de-la-reserva/plan.md) |
-| Contrato evento UC07 | Events contract | [UC07-estado-reserva.md](../../../technical-plan/contracts/events/UC07-estado-reserva.md) |
-| Catálogo de errores y política de colas | Conventions | [contracts/README.md](../../../technical-plan/contracts/README.md) |
+| Evento UC07 | Events contract | [UC07-estado-reserva.md](../../../technical-plan/contracts/events/UC07-estado-reserva.md) |
+| Errores y política de colas | Conventions | [README.md](../../../technical-plan/contracts/README.md) |
+| Política de preparación propia y modos | QA procedure | [pagos-api-real.md](../pagos-api-real.md) |
 
 --------------------------------------------------------------------------------
 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* No hay endpoint REST para UC07: la entrada es el evento AMQP. La Pasarela de pago no interviene en este escenario.
+* **Sin operación de pasarela**. Recorrido manual por AMQP; modo A para contrato y errores controlados. Los estados operativos no consultan información financiera ni requieren un cobro previo.
 
 ##### Dependencies & Assumptions
-* **TC-UC03-HU1-E1 debe haber pasado** (existe `reservation_information`) y **TC-UC04-HU1-E1** (montos calculados).
-* RabbitMQ arriba y cola `finance.reservation-status.v1` sin mensajes pendientes.
+* Seed QA v7 y stub de Flota con tarifa regular `350000.00`, seguro por pasajero `15000.0000` y comisión `15.0000`.
+* RabbitMQ, listener de `finance.reservation-status.v1` y relay del outbox activos. No se requiere token ni invocar Mercado Pago.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` con montos calculados (ilustrativos, ajustar a la versión vigente del entorno): alquiler `900000.00`, seguro `60000.00`, depósito `30000.00`, total `990000.00`. Sin `reservation_status_log`, `charge_intent`, `refund_intent`, `settlement_intent` ni `deposit_disposition`.
-* **Environment** : staging local (`docker compose --profile app up --build -d`); health en `http://localhost:8080/actuator/health`; consola RabbitMQ `http://localhost:15672`; PostgreSQL en `localhost:5433`, base `seashare`. Publicación: `POST /api/exchanges/%2F/seashare.reservations/publish` con `routing_key=reservation.status.changed`, `content_type=application/json`, `message_id=<uuid v4>` y `delivery_mode=2`.
-* **Test Accounts** : N/A (seguridad fuera de alcance).
+* **Initial State**. Reserva `c0a80100-0000-4000-8000-000000070101` ausente; este caso prepara sus datos y no depende de otros TC. Si el UUID existe, detenerse y acordar cómo repetir sin borrar datos ni volúmenes sin autorización.
+* **Environment**. Compose `dev,qa`; app `http://localhost:8080`, health `/actuator/health`, RabbitMQ `http://localhost:15672`, Flota `http://localhost:8081`, BD `host=localhost port=5433 dbname=seashare user=seashare`.
+* **Test Accounts**. N/A; sin tarjeta ni tokenización en este caso.
+* **Mensajes AMQP**. Exchange `seashare.reservations`, `Content-Type: application/json` y `Message-Id` único por entrega. Confirmar consumo por trazas y ausencia del mensaje en DLQ, no solo por cola vacía. No guardar credenciales.
+
+##### Preparación de los datos de este caso
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Registrar reserva | RabbitMQ → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070101","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070101';` → una fila, tarifa `350000.0000`. | [X] | Message-Id `qa-070101-info-01`; tarifa y fechas verificadas. |
+| 2 | Calcular valor sin cobrar | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000070101/calculated-value` | Sin cuerpo; no enviar PENDING | HTTP 200; alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [X] | HTTP 200 y desglose esperado. |
 
 --------------------------------------------------------------------------------
 
 #### Test Execution Flow *(mandatory)*
 
 ##### Section 1: Estados operativos sin acción financiera
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar la línea base | `psql -h localhost -p 5433 -U seashare -d seashare -c "SELECT ..."` sobre `reservation_status_log` y las tablas de intenciones | `reservation_id = b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` | Cero filas de log y de intenciones para la reserva. | [x] | |
-| 2 | Notificar `AVAILABLE` | Publicar `reservation.status.changed` en `seashare.reservations` | `{"reservation_id":"b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10","status":"AVAILABLE","status_changed_at":"2026-12-05T14:00:00Z"}` | Mensaje confirmado (`ack`): la cola vuelve a 0 y no aparece nada en `finance.reservation-status.v1.dlq` (RF-001). | [x] | |
-| 3 | Verificar que no se registra operación | `SELECT` sobre `reservation_status_log` | `status = 'AVAILABLE'` | Cero filas: solo los estados que disparan operaciones monetarias se registran (plan §Reglas 8). | [x] | |
-| 4 | Notificar `RESERVED` | Publicar el mismo evento con el nuevo estado y una marca posterior | `status=RESERVED`, `status_changed_at=2026-12-05T14:05:00Z` | `ack`; cero operaciones, cero filas de log (RF-002). | [x] | |
-| 5 | Notificar `IN_NAVIGATION` | Publicar el mismo evento con el nuevo estado | `status=IN_NAVIGATION`, `status_changed_at=2026-12-05T14:10:00Z` | `ack`; cero operaciones, cero filas de log (RF-002). | [x] | |
-| 6 | Verificar ausencia de operaciones financieras | `SELECT count(*)` sobre `charge_intent`, `refund_intent`, `settlement_intent` y `deposit_disposition` | misma reserva | Conteos sin cambios: no hay cobro, reembolso, liquidación ni desenlace del depósito (RF-008, CE-001, CE-003). | [x] | |
-| 7 | Verificar el outbox | `SELECT routing_key, payload FROM outbox_message WHERE created_at >= <inicio>` | N/A | No hay mensajes nuevos con `charge.command`, `refund.command` ni `settlement.command` atribuibles a estos eventos. | [x] | |
-| 8 | Verificar la unidireccionalidad | Consola RabbitMQ: revisar que no exista respuesta ni publicación de retorno hacia Reservas | N/A | UC07 no devuelve respuesta al Sistema de Reservas y Operaciones (RF-009). | [x] | |
+| 1 | Confirmar estado de partida | Consultar `reservation_information`, `reservation_status_log`, `charge_intent`, `refund_intent`, `settlement_intent` y `deposit_disposition` filtrando `reservation_id = 'c0a80100-0000-4000-8000-000000070101'`; `SELECT reason, payload_ref FROM operational_failure WHERE reservation_id = 'c0a80100-0000-4000-8000-000000070101';` | Reserva calculada sin cobro | Montos de preparación; cero logs, intenciones y depósito. Conservar también los fallos previos para comparación. | [X] | Desglose esperado; 0 logs, intenciones, depósitos y fallos. |
+| 2 | Notificar AVAILABLE | RabbitMQ → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070101","status":"AVAILABLE","status_changed_at":"2026-12-05T14:00:00Z"}` | Evento consumido por Message-Id, ausente de DLQ; recuentos y comandos siguen en cero. | [X] | `qa-070101-status-01`; recibido, DLQ vacía y sin efectos al finalizar la secuencia. |
+| 3 | Notificar RESERVED | RabbitMQ → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070101","status":"RESERVED","status_changed_at":"2026-12-05T14:05:00Z"}` | Mismo resultado: ningún log de operación ni intención. | [X] | `qa-070101-status-02`; recibido y sin efectos al finalizar la secuencia. |
+| 4 | Notificar IN_NAVIGATION | RabbitMQ → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070101","status":"IN_NAVIGATION","status_changed_at":"2026-12-05T14:10:00Z"}` | Mismo resultado: cero operaciones y sin modificación de montos. | [X] | `qa-070101-status-03`; recibido y sin efectos al finalizar la secuencia. |
+| 5 | Verificar ausencia de efectos | Repetir consultas del paso 1 tras cada estado y revisar publicaciones del outbox durante cada entrega | Misma reserva y Message-Id | Montos idénticos, sin nuevas filas ni fallos. Sin comandos financieros atribuibles al evento; no inferirlo únicamente de un JOIN con intenciones inexistentes. | [X] | |
+| 6 | Unidireccionalidad | Trazas por Message-Id/reserva de los tres eventos | Sin `reply_to` | No hay respuesta de negocio hacia Reservas; ack AMQP/HTTP de publicación no es respuesta de negocio. | [X] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Cuerpo JSON inválido | Publicar un cuerpo que no sea JSON parseable | `{ "status": ` | `ack` y registro en `operational_failure`; sin operación (equivale a E2 del catálogo, README §4.4). | [x] | |
-| 2 | Faltan propiedades AMQP obligatorias | Publicar sin `Message-Id` o con `Content-Type: text/plain` | N/A | `ack` y registro en `operational_failure` (contrato §2; equivale a E1 del catálogo). | [x] | |
-| 3 | Estado no reconocido | Publicar `status=CONFIRMED` | `CONFIRMED` | `ack`, inconsistencia en `operational_failure` y ninguna operación (RF-001; contrato §3.1). | [x] | |
-| 4 | Estado en minúsculas | Publicar `status=available` | `available` | `ack` y fallo lógico: el catálogo usa MAYÚSCULAS (RNF-001). | [x] | |
-| 5 | Entrega repetida del mismo estado | Republicar `AVAILABLE` con la misma marca | mismo payload | `ack`; sin operación ni fila de log (notificación repetida sin efecto). | [x] | |
-| 6 | Falta `reservation_id` | Publicar el evento sin identificador de reserva | payload sin `reservation_id` | `ack` y registro en `operational_failure`; sin operación (RF-001, RNF-001). | [x] | |
+| 1 | Reenvío sin efectos | Republicar cuerpo del paso 2 principal con Message-Id nuevo y luego este cuerpo con otro Message-Id | `{"reservation_id":"c0a80100-0000-4000-8000-000000070101","status":"AVAILABLE","status_changed_at":"2026-12-05T14:20:00Z"}` | Eventos consumidos; mismo baseline, sin log ni identidad que reclamar. | [X] | `qa-070101-repeat-01/02`; sin efectos financieros. |
+| 2 | JSON ilegible | RabbitMQ → `reservation.status.changed`, conservando propiedades AMQP válidas | Cuerpo literal incompleto: `{"status":` | Evento confirmado con fallo lógico en operational_failure, sin operaciones. Correlacionar por Message-Id, porque no puede extraerse reservation_id. | [X] | |
+| 3 | Propiedades AMQP inválidas | Publicar este cuerpo dos veces: primero omitiendo Message-Id y después con Message-Id nuevo pero Content-Type `text/plain` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070101","status":"AVAILABLE","status_changed_at":"2026-12-05T14:30:00Z"}` | Ambos mensajes confirmados con fallo lógico, sin delegación. Cuando falta Message-Id, correlacionar por instante acotado de publicación y payload_ref de la cola, no por reserva (se rechaza antes del parseo). | [X] | |
+| 4 | Estado desconocido | RabbitMQ → `reservation.status.changed`, propiedades válidas | `{"reservation_id":"c0a80100-0000-4000-8000-000000070101","status":"CONFIRMED","status_changed_at":"2026-12-05T14:30:00Z"}` | Fallo lógico por estado inválido, sin operaciones. | [X] | |
+| 5 | Estado en minúsculas | RabbitMQ → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000070101","status":"available","status_changed_at":"2026-12-05T14:30:00Z"}` | Fallo lógico: enumeración sensible a mayúsculas, sin operaciones. | [X] | |
+| 6 | Falta reserva | RabbitMQ → `reservation.status.changed` | `{"status":"AVAILABLE","status_changed_at":"2026-12-05T14:30:00Z"}` | Fallo lógico, sin operaciones; correlacionar por Message-Id, sin exigir un reservation_id que no se recibió. | [X] | |
+| 7 | Contrato y errores controlados (modo A) | `.\mvnw.cmd "-Dtest=ReservationStatusPolicyTest,ReservationStatusListenerTest,ReservationStatusMessageMapperTest,HandleReservationStatusServiceTest,AmqpListenerFailurePolicyTest,OperationalFailureMessageRecovererTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas; evidencia separada del recorrido manual, sin contar pruebas omitidas como aprobadas. | [X] | 49 pruebas, 0 fallos, 0 errores y 0 omitidas; 2026-11-13. |
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : Repetir los tres estados con marcas de tiempo distintas no crea operaciones ni filas de log: no existe identidad de operación que reclamar.
-* **EC-002** : `reservation_information` es de solo lectura aquí; estos estados no persisten estado operativo ni modifican montos.
-* **EC-003** : Una sucesión imposible (`RESERVED` → `AVAILABLE`) no se valida en UC07; las sucesiones pertenecen al Sistema de Reservas (casos extremos del spec).
-* **EC-004** : El bloqueo temporal (TTL) no se inicia en estos estados y UC07 no lo administra (plan §Reglas 2).
+* **EC-001**. Los negativos deben registrar fallo sin efectos financieros. Consultar `operational_failure` por Message-Id en `payload_ref` cuando no se pueda extraer la reserva; sin Message-Id, acotar por instante y cola.
+* **EC-002**. Repetir estados no crea identidades. El TTL y las sucesiones operativas pertenecen a Reservas; modo A verifica las interacciones del servicio.
 
 --------------------------------------------------------------------------------
 

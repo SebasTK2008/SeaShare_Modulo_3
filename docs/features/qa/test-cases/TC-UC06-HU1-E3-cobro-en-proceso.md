@@ -1,5 +1,5 @@
 ### Test Case Specification: Solicitar confirmación de pago · HU1 · E3 Consulta de un cobro aún en proceso
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/006-solicitar-confirmacion-de-pago/spec.md](../../006-solicitar-confirmacion-de-pago/spec.md)  **Status** : Approved  **Execution** : 2026-11-02 Â· release/0.1.0 Â· PASS (`docs/features/qa/matriz-qa.md`)
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/006-solicitar-confirmacion-de-pago/spec.md](../../006-solicitar-confirmacion-de-pago/spec.md)  **Status** : Approved  **Execution** : 2026-11-14 · release/0.1.0 · PASS (docs/features/qa/matriz-qa.md)
 
 #### Test Overview *(mandatory)*
 
@@ -29,48 +29,51 @@ Este caso de prueba verifica que, ante una `IntenciónDeCobro` todavía en curso
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* No hay autenticación: la seguridad está fuera del alcance del proyecto y el contrato no valida al llamador (README §3.2).
-* La comprobación de "la Pasarela aún no reportó" se hace con el worker pausado (o con `GATEWAY_BASE_URL` apuntando a un puerto cerrado), para que no llegue el resultado durante la consulta.
+* **Preparación en modo B**. UC06 consulta el resultado persistido. La cobertura de estados controlados usa modo A, indicada en la segunda sección.
 
 ##### Dependencies & Assumptions
-* **TC-UC05-HU1-E1 debe haber pasado** y la intención debe seguir sin resultado definitivo (`PENDING_SEND` o `IN_PROCESS`).
-* UC05 crea la intención de forma asíncrona tras el estado `PENDING` de UC07.
+* Seed de QA con versión vigente 7, seguro por pasajero `15000.0000` y comisión `15.0000`; stub de Flota con tarifa `350000.00` para la embarcación indicada.
+* Credenciales de prueba de Mercado Pago y secreto de webhook configurados; tokenización con la Public Key de la misma aplicación. Callback HTTPS registrado para `payment` cuando se comprueben entregas reales.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva con `reservation_id = b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` (UUID de ejemplo del contrato; sustituir por el de la reserva de prueba). `charge_intent` en `IN_PROCESS` con `amount = 572.00` (ajustar a la versión vigente del entorno) y `external_reference = "1234567890"`; ninguna fila en `charge_record`.
-* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`; credenciales de prueba de Mercado Pago en `.env` (runbook).
-* **Test Accounts** : N/A (seguridad fuera de alcance).
+* **Initial State**. Reserva `c0a80100-0000-4000-8000-000000060103` ausente. Este caso prepara todos sus datos. Puede ejecutarse sobre volúmenes de QA recreados antes de repetirlo (`docker compose --profile app down -v`).
+* **Environment**. Compose con `dev,qa`; app `http://localhost:8080`, RabbitMQ `http://localhost:15672`, stub de Flota `http://localhost:8081` y BD `host=localhost port=5433 dbname=seashare user=seashare`.
+* **Test Accounts**. Comprador y vendedor de prueba MCO; vendedor con saldo disponible para reembolsos. Para este caso tokeniza la Visa crédito de prueba con titular `CONT`. Sustituye `<TOKEN_CONT>` por ese token nuevo y `<EMAIL_COMPRADOR>` por el email de prueba. Metadata de la Visa de ejemplo `VISA / 6260`.
+* **Mensajes AMQP**. Exchange `seashare.reservations`, `Content-Type: application/json` y `Message-Id` único en cada entrega. Los cuerpos completos figuran en las tablas.
+
+##### Preparación de los datos de este caso
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000060103","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000060103';` | [X] |  |
+| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000060103/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [X] |  |
+| 3 | Preparar el cobro de esta reserva | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000060103","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_CONT>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | Intención en `IN_PROCESS`, sin filas en `charge_record`. Verificar con `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000060103';` y `SELECT id, charge_intent_id, amount, rental_amount, insurance_amount, deposit_amount FROM charge_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000060103';`. | [X] |  |
 
 --------------------------------------------------------------------------------
 
 #### Test Execution Flow *(mandatory)*
 
-##### Section 1: Consulta de un cobro en proceso
+##### Section 1: Consulta del cobro en proceso
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar la intención en curso | `psql -c "SELECT status, amount, external_reference FROM charge_intent WHERE reservation_id = 'b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10' ORDER BY created_at DESC, id DESC LIMIT 1;"` | N/A | La intención más reciente está en `PENDING_SEND` o `IN_PROCESS`, sin resultado definitivo (RF-002). | [ ] | |
-| 2 | Solicitar la confirmación de pago | `curl -s -H "Accept: application/json" http://localhost:8080/api/v1/reservations/b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10/payment-confirmation` | N/A | `200 OK` con `Content-Type: application/json` (RF-001; contrato §4). | [ ] | |
-| 3 | Verificar el estado devuelto | Leer `status` del cuerpo | N/A | `status = IN_PROCESS` (tanto `PENDING_SEND` como `IN_PROCESS` se exponen así) (RF-003, CE-001). | [ ] | |
-| 4 | Verificar la ausencia de resultado inventado | Leer `charged_amount` y el resto de montos | N/A | `charged_amount`, `authorized_amount`, `captured_amount` y `released_amount` en `null`; no hay importe cobrado (RF-003, RF-004). | [ ] | |
-| 5 | Verificar la referencia y el detalle disponibles | Leer `external_reference` y `detail` | N/A | `external_reference = "1234567890"` si la Pasarela ya la asignó; `null` si aún no existe. `detail` = `status_detail` vigente o `null` (RF-004). | [ ] | |
-| 6 | Verificar que la consulta es de solo lectura | Comparar `charge_intent` y `charge_record` antes y después de dos consultas | N/A | Sin cambios de estado ni de montos y sin filas nuevas; la intención no pasa a un estado terminal (RF-002; caso extremo del SPEC). | [ ] | |
-| 7 | Verificar que no se contacta a la Pasarela | Logs de la app (`docker logs seashare-app`) durante los pasos 2 a 6 | N/A | Cero llamadas nuevas a la Pasarela: la consulta se resuelve con la intención ya existente (RF-006, CE-002). | [ ] | |
-| 8 | Consultar de nuevo tras el resultado | Registrar el resultado en la Pasarela (TC-UC05-HU2-E1/E2) y repetir el `GET` | N/A | La misma consulta devuelve el estado vigente actualizado (`APPROVED` o `REJECTED`) sin caché ni reinicio (RF-003; contrato UC06 §3 regla 6). | [ ] | |
+| 1 | Confirmar el estado de partida | `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000060103';` y `SELECT id, charge_intent_id, amount, rental_amount, insurance_amount, deposit_amount FROM charge_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000060103';` | Titular `CONT` | Intención en `IN_PROCESS` y cero filas de cobro. | [X] |  |
+| 2 | Consultar confirmación | `GET http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000060103/payment-confirmation` | Header `Accept: application/json` | HTTP 200, `Content-Type: application/json`, `status = IN_PROCESS`, `charged_amount = null`. `authorized_amount`, `captured_amount` y `released_amount` en `null` para este escenario sin reembolsos. | [X] |  |
+| 3 | Comparar detalle y referencia | Comparar respuesta REST con la intención de esta reserva | `detail` y `external_reference` | Coinciden con `status_detail` y `charge_intent.external_reference`; si BD muestra NULL, el JSON contiene `null`. | [X] |  |
+| 4 | Comprobar lectura sin cambios | Repetir el GET y comparar las consultas anteriores | Dos consultas consecutivas | Mismos IDs, montos y número de registros. La ruta UC06 resuelve desde BD. | [X] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Todavía no existe `IntenciónDeCobro` | Consultar inmediatamente tras publicar `PENDING`, antes de que UC05 cree la intención | UUID sin intención | `404 CHARGE_INTENT_NOT_FOUND`, `retryable: true`, sin estado asumido; el llamador puede reintentar (RF-005, RNF-003, CE-003). | [x] | |
-| 2 | Intención en `COMMUNICATION_ERROR` | Consultar una reserva cuya intención quedó en falla de comunicación | N/A | `status = UNKNOWN` (nunca `IN_PROCESS`, `APPROVED` ni `REJECTED`); un timeout no es un veredicto (contrato §4; RNF-003 del UC05). | [x] | |
-| 3 | `reservation_id` con formato inválido | `GET /api/v1/reservations/R-100/payment-confirmation` | `R-100` (no UUID) | `400 VALIDATION_ERROR`, `retryable: false`; validación antes de consultar la BD (E2; README §4.3). | [x] | |
-| 4 | `PENDING_SEND` sin referencia externa | Consultar la intención antes de que el worker reciba el id de pago | N/A | `status = IN_PROCESS` y `external_reference = null`; el resto del cuerpo se informa igual (RF-004). | [x] | |
-| 5 | Varias intenciones para la misma reserva | Crear un segundo intento y consultar sin esperar su resultado | dos intenciones | Se devuelve la **más reciente** por `created_at`, desempatando por `id` descendente (D-UC06-05). | [x] | |
-| 6 | BD no disponible | Detener PostgreSQL y repetir la consulta | N/A | `500 INTERNAL_ERROR`, `retryable: true`, con `detail` genérico sin detalles internos (README §4.3). | [x] | |
+| 1 | UUID inválido | `GET http://localhost:8080/api/v1/reservations/R-100/payment-confirmation` | `R-100` | HTTP 400 `VALIDATION_ERROR`, `retryable: false`. | [X] |  |
+| 2 | Reserva sin intención | `GET http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000999999/payment-confirmation` | UUID reservado para ausencia de cobro | HTTP 404 `CHARGE_INTENT_NOT_FOUND`, `retryable: true`. Confirmar previamente que ese UUID no tiene intención. | [X] |  |
+| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=GetPaymentConfirmationServiceTest,PaymentConfirmationLatestIntentIntegrationTest,UC06PaymentConfirmationContractTest,PaymentConfirmationStatusTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [X] |  |
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : `IN_PROCESS` siempre viaja con `charged_amount = null`; no se publica un monto cobrado antes de que exista captura (D-UC06-04).
-* **EC-002** : La consulta no adelanta estado aunque el pago ya esté aprobado en la Pasarela: mientras UC05 no registre el resultado, la respuesta sigue siendo `IN_PROCESS` (RF-003, fidelidad al registro).
-* **EC-003** : Repetir la consulta no crea intenciones, no altera `created_at` y no genera registros financieros (RF-002; caso extremo del SPEC).
+
+* **EC-001**. Si el sandbox no devuelve `pending` o `in_process`, o el resultado cambia antes de consultar, registra el recorrido B como bloqueado o repítelo en un escenario limpio. Las pruebas A indicadas cubren el mapeo a `IN_PROCESS`.
+* **EC-002**. La respuesta del worker es asíncrona. Consultar hasta alcanzar el resultado esperado y registrar el estado observado si no converge. PENDING_SEND puede resolverse antes de la primera consulta.
 
 --------------------------------------------------------------------------------
 

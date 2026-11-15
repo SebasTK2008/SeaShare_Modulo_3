@@ -1,5 +1,5 @@
 ### Test Case Specification: Procesar cobro · HU2 · E2 La Pasarela reporta el rechazo del cobro
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/005-procesar-cobro/spec.md](../../005-procesar-cobro/spec.md)  **Status** : Approved  **Execution** : 2026-11-02 Â· release/0.1.0 Â· PASS (`docs/features/qa/matriz-qa.md`)
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/005-procesar-cobro/spec.md](../../005-procesar-cobro/spec.md)  **Status** : Approved  **Execution** : 2026-11-12 Â· release/0.1.0 Â· PASS (docs/features/qa/matriz-qa.md)
 
 #### Test Overview *(mandatory)*
 
@@ -30,50 +30,49 @@ Este caso de prueba verifica que, ante el rechazo reportado por la Pasarela para
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* **Modo A (suite automática):** el cuerpo y las cabeceras que el sistema envía a la Pasarela los verifican `MercadoPagoChargeAdapterTest` y `MercadoPagoRefundAdapterTest` (WireMock embebido); este TC verifica el efecto en la BD, las colas y la consulta real del pago.
-* **Modo B (release):** debe provocarse un rechazo real con tarjeta/caso de prueba de Mercado Pago sandbox y verificar la ausencia de `charge_record`, según [`pagos-api-real.md`](../pagos-api-real.md). Sin esa evidencia el TC no se aprueba.
+* **Modo B** para cobro y reembolso. Las comprobaciones controladas de modo A se identifican en la segunda sección.
 
 ##### Dependencies & Assumptions
-* **TC-UC05-HU1-E1 debe haber pasado** (existe la intención de la reserva, sin resultado definitivo).
-* El rechazo se provoca tokenizando la tarjeta de prueba con el titular `OTHE` (runbook §4).
+* Seed de QA con versión vigente 7, seguro por pasajero `15000.0000` y comisión `15.0000`; stub de Flota con tarifa `350000.00` para la embarcación indicada.
+* Credenciales de prueba de Mercado Pago y secreto de webhook configurados; tokenización con la Public Key de la misma aplicación. Callback HTTPS registrado para `payment` cuando se comprueben entregas reales.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva de prueba con valor total registrado (alquiler `360.00`, seguro `200.00`, depósito `12.00`, total `572.00`; ajustar a la versión vigente del entorno). Intención en `PENDING_SEND`/`IN_PROCESS` con `external_reference = 1234567890`, `payer_email` y `payment_method_type = CREDIT_CARD`; ninguna fila en `charge_record`. La reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10`.
-* **Environment** : staging local (`docker compose --profile app`), health en `http://localhost:8080/actuator/health`, consola RabbitMQ en `http://localhost:15672`.
-* **Test Accounts** : N/A (seguridad fuera de alcance).
+* **Initial State**. Reserva `c0a80100-0000-4000-8000-000000050202` ausente. Este caso prepara todos sus datos. Puede ejecutarse sobre volúmenes de QA recreados antes de repetirlo (`docker compose --profile app down -v`).
+* **Environment**. Compose con `dev,qa`; app `http://localhost:8080`, RabbitMQ `http://localhost:15672`, stub de Flota `http://localhost:8081` y BD `host=localhost port=5433 dbname=seashare user=seashare`.
+* **Test Accounts**. Comprador y vendedor de prueba MCO; vendedor con saldo disponible para reembolsos. Para este caso tokeniza la Visa crédito de prueba con titular `OTHE`. Sustituye `<TOKEN_OTHE>` por ese token nuevo y `<EMAIL_COMPRADOR>` por el email de prueba. Para la variante de nuevo intento, tokeniza otra tarjeta con titular `APRO`. Metadata de la Visa de ejemplo `VISA / 6260`.
+* **Mensajes AMQP**. Exchange `seashare.reservations`, `Content-Type: application/json` y `Message-Id` único en cada entrega. Los cuerpos completos figuran en las tablas.
+
+##### Preparación de los datos de este caso
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000050202","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050202';` | [X] |  |
+| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000050202/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [X] |  |
 
 --------------------------------------------------------------------------------
 
 #### Test Execution Flow *(mandatory)*
 
-##### Section 1: Rechazo reportado por la Pasarela
+##### Section 1: Registro del cobro rechazado
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar el punto de partida | `psql -c "SELECT status, amount, external_reference FROM charge_intent WHERE external_reference = '1234567890';"` | N/A | Intención sin resultado definitivo y sin `charge_record` (RF-004). | [ ] | |
-| 2 | Provocar el rechazo en la Pasarela | Tokenizar la tarjeta de prueba con titular `OTHE` y publicar el estado `PENDING` | `status=rejected`, `status_detail` informado por Mercado Pago (por ejemplo `cc_rejected_other_reason`) | La Pasarela devuelve `rejected` al consultar el pago. | [ ] | |
-| 3 | Notificar el resultado | `POST http://localhost:8080/api/v1/webhook/gateway?data.id=1234567890&type=payment` con firma válida | body `{"action":"payment.updated","type":"payment"}`; `x-signature` del contrato; `x-request-id: <uuid>` | `200 OK` con `{"status":"received"}`; notificación persistida en `outbox_message` (RF-005). | [ ] | |
-| 4 | Verificar la consulta del worker y el mensaje interno | Logs de la app y consola RabbitMQ → `finance.gateway-notification.v1` | N/A | `GET /v1/payments/1234567890` y mensaje `{"type":"payment","action":"payment.updated","data_id":"1234567890"}`. | [ ] | |
-| 5 | Verificar el estado fallido registrado | `psql -c "SELECT status, status_detail, amount, external_reference FROM charge_intent WHERE external_reference = '1234567890';"` | N/A | Intención en `REJECTED` con el `status_detail` de la Pasarela; el monto solicitado y la referencia externa se conservan (RF-006). | [ ] | |
-| 6 | Verificar que no se genera registro de cobro | `psql -c "SELECT count(*) FROM charge_record WHERE charge_intent_id = '<id de la intención>';"` | N/A | `count = 0`: ninguna transacción rechazada genera `RegistroDeCobro` (RF-008, CE-004). | [ ] | |
-| 7 | Verificar la disponibilidad para UC06 | `curl -s http://localhost:8080/api/v1/reservations/<UUID>/payment-confirmation` | N/A | `200 OK`: `status = REJECTED`, `detail` con el detalle de la Pasarela, `charged_amount = null` y `external_reference` informada (RF-007; contrato UC06 §4). | [ ] | |
-| 8 | Confirmar que la reserva no queda cobrada | Revisar `charge_record` y la respuesta del paso 7 | N/A | No existe registro financiero del cobro y la respuesta nunca es `APPROVED` (RF-008, CE-004). | [ ] | |
+| 1 | Solicitar el cobro con resultado de rechazo | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000050202","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_OTHE>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | UC07 delega a UC05. Intención en `REJECTED`, sin filas en `charge_record`. | [X] |  |
+| 2 | Verificar rechazo de negocio | `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050202';` y `SELECT id, charge_intent_id, amount, rental_amount, insurance_amount, deposit_amount FROM charge_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000050202';` | Titular `OTHE` | Intención `REJECTED`, detalle observado y cero registros. Si el proveedor creó un pago, su ID debe coincidir con la referencia persistida. | [X] |  |
+| 3 | Consultar confirmación | `GET http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000050202/payment-confirmation` | Misma reserva | HTTP 200, `status = REJECTED`, `charged_amount = null`, detalle y referencia iguales a la intención. | [X] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | La Pasarela rechaza el token con `400` | Simular `400` de validación en `POST /v1/payments` | token inválido | Fallo **no reintentable**: intención `REJECTED` con detalle técnico, sin `charge_record` y sin marcar la reserva como cobrada (RF-013; contrato §5). | [x] | No es un veredicto financiero. |
-| 2 | Caída, `502`/`503` o timeout (10 s) al enviar | Simular `503` / timeout | N/A | Intención `COMMUNICATION_ERROR` (no `REJECTED`); 5 intentos con la misma `X-Idempotency-Key` y, al agotarlos, DLQ + `operational_failure`; UC06 devuelve `UNKNOWN` (RNF-003). | [x] | |
-| 3 | Notificación con `data.id` desconocido | Webhook con un id sin intención asociada | `data.id=9999999999` | `200 OK` y evento en `operational_failure`, sin `charge_record` (caso extremo del SPEC). | [x] | |
-| 4 | Notificación repetida del mismo rechazo | Reenviar el webhook dos veces | mismos datos | `200 OK`; el resultado ya registrado no se altera ni crea registros adicionales (idempotencia). | [x] | |
-| 5 | Resultado distinto posterior sobre una intención terminal | Enviar `approved` después de `REJECTED` | `status=approved` | No se crea `charge_record` ni se reporta cobro exitoso; el nuevo intento de cobro exige una intención nueva (nueva `PENDING` con nueva `status_changed_at`) (RF-004A, RF-008). | [x] | |
-| 6 | La Pasarela informa `cancelled` | Repetir el flujo con estado `cancelled` | `status=cancelled` | Intención `CANCELLED` con su detalle, sin `charge_record` y nunca `APPROVED` en UC06 (CE-004). | [x] | |
-| 7 | BD no disponible al persistir la notificación | Detener PostgreSQL y reenviar el webhook | N/A | `500 INTERNAL_ERROR` para que la Pasarela reintente (contrato de webhook, §3 regla 7). | [x] | |
+| 1 | Repetir el rechazo | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | Mismo PENDING y marca temporal | Una intención rechazada y cero registros de cobro. | [X] |  |
+| 2 | Nuevo intento legítimo | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000050202","status":"PENDING","status_changed_at":"2026-12-05T14:45:00Z","payment_token_ref":"<TOKEN_APRO>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | Dos intenciones con claves diferentes. La anterior conserva `REJECTED`, la nueva pasa a `CAPTURED` y tiene el único registro financiero. | [X] |  |
+| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=RegisterChargeResultServiceTest,SendChargeToGatewayServiceTest,MercadoPagoChargeAdapterTest,GatewayWebhookControllerTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [X] |  |
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : Un cobro rechazado deja `charge_record` en cero filas para su intención: la integridad del cobro se mide sobre el registro inmutable, no sobre el estado de la intención (CE-004).
-* **EC-002** : Rechazo financiero (`status=rejected`) y fallo técnico (`REJECTED` por `400` del token, o `COMMUNICATION_ERROR`) son condiciones distintas y no deben confundirse (README §4.4).
-* **EC-003** : `charged_amount` viaja en `null` aunque la intención conserve `amount`; solo se informa en `APPROVED` (D-UC06-04).
-* **EC-004** : El SPEC no define la deduplicación de dos resultados **distintos** para la misma transacción; solo se exige que ninguno produzca un cobro exitoso sin captura ni un registro sin captura.
+
+* **EC-001**. Un HTTP 400 por token inventado valida un error técnico de la solicitud. Para este escenario usa un token real generado con titular `OTHE` y registra el resultado de negocio.
+* **EC-002**. La respuesta del worker es asíncrona. Consultar hasta alcanzar el resultado esperado y registrar el estado observado si no converge. PENDING_SEND puede resolverse antes de la primera consulta.
 
 --------------------------------------------------------------------------------
 

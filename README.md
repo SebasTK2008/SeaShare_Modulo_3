@@ -49,7 +49,7 @@ curl -fsS http://localhost:8080/actuator/health
 
 Los tests de integración usan Testcontainers: sin Docker se omiten automáticamente (los unitarios y ArchUnit siempre corren).
 
-**Pagos — dos modos obligatorios**: la suite automática (WireMock embebido en JUnit, MockMvc y Testcontainers) es el **modo A**, gate de CI y no necesita credenciales. La aprobación de `release/0.1.0` exige además probar cobro, webhook `payment` y reembolso contra **Mercado Pago sandbox** con credenciales `TEST-*` (**modo B**); el checklist y la evidencia están en [`docs/qa/pagos-api-real.md`](docs/qa/pagos-api-real.md). El modo B no corre en `mvn verify` y no se sustituye por el simulador. Procedimiento paso a paso: [`docs/qa/runbook-sandbox-mercadopago.md`](docs/qa/runbook-sandbox-mercadopago.md). Vista de la integración: [`docs/technical-plan/mercadopago-integration.md`](docs/technical-plan/mercadopago-integration.md).
+**QA de pagos.** La suite automática (**A**) es el gate de CI. El recorrido manual de cobro, webhook y reembolso usa Mercado Pago con credenciales de prueba (**B**) y es obligatorio para aprobar `release/0.1.0`. A y B describen cómo se prueba el módulo. El despliegue selecciona perfiles y credenciales por entorno. Cada [caso de QA](docs/features/qa/test-cases/) incluye sus propios datos y preparación. El [checklist de release](docs/features/qa/pagos-api-real.md) define la evidencia y el [runbook](docs/features/qa/runbook-sandbox-mercadopago.md) describe la configuración de sandbox.
 
 **UC10 (liquidación) es un libro interno simulado en todos los entornos, incluido producción**: no existe una dispersión real en Mercado Pago (D-UC10-18). `GATEWAY_SETTLEMENT_MODE` solo admite `simulated` y la liquidación nunca hace HTTP.
 

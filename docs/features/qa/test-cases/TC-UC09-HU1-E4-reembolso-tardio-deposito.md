@@ -1,5 +1,5 @@
 ### Test Case Specification: Reembolsos · HU1 · E4 Reembolso del depósito por cancelación tardía (<24 h)
-**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/009-reembolsar-dinero-arrendatario/spec.md](../../009-reembolsar-dinero-arrendatario/spec.md)  **Status** : Approved  **Execution** : 2026-11-02 Â· release/0.1.0 Â· PASS (`docs/features/qa/matriz-qa.md`)
+**Created** : 2026-11-02  **Spec/Plan Link** : [docs/features/009-reembolsar-dinero-arrendatario/spec.md](../../009-reembolsar-dinero-arrendatario/spec.md)  **Status** : Approved  **Execution** : 2026-11-14 · release/0.1.0 · PASS (docs/features/qa/matriz-qa.md)
 
 #### Test Overview *(mandatory)*
 
@@ -30,50 +30,53 @@ Este caso de prueba verifica que, ante una cancelación tardía, el sistema soli
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* **Modo A (suite automática):** el cuerpo y las cabeceras que el sistema envía a la Pasarela los verifican `MercadoPagoChargeAdapterTest` y `MercadoPagoRefundAdapterTest` (WireMock embebido); este TC verifica el efecto en la BD, las colas y la consulta real del reembolso.
-* El resultado externo del reembolso se cubre en UC09 HU3; aquí la operación queda pendiente.
+* **Modo B** para cobro y reembolso. Las comprobaciones controladas de modo A se identifican en la segunda sección.
 
 ##### Dependencies & Assumptions
-* **TC-UC05-HU1-E1 y TC-UC05-HU2-E1 deben haber pasado** (cobro capturado con desglose).
-* **TC-UC09-HU1-E2 debe haber pasado** (cálculo parcial sobre el depósito operativo).
-* Worker de reembolso activo sobre `finance.refund-command.v1`.
+* Seed de QA con versión vigente 7, seguro por pasajero `15000.0000` y comisión `15.0000`; stub de Flota con tarifa `350000.00` para la embarcación indicada.
+* Credenciales de prueba de Mercado Pago y secreto de webhook configurados; tokenización con la Public Key de la misma aplicación. Callback HTTPS registrado para `payment` cuando se comprueben entregas reales.
 
 ##### Preconditions & Default Setup
-* **Initial State** : reserva `R-100` = `b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10` con `rental_amount = 900000.00`, `insurance_amount = 60000.00`, `deposit_amount = 30000.00`, `amount = 990000.00` y depósito en `HELD` (ilustrativos; ajustar a la versión vigente del entorno).
-* **Environment** : staging local (`docker compose --profile app`), `http://localhost:8080/actuator/health`.
-* **Test Accounts** : N/A (seguridad fuera de alcance).
+* **Initial State**. Reserva `c0a80100-0000-4000-8000-000000090104` ausente. Este caso prepara todos sus datos. Puede ejecutarse sobre volúmenes de QA recreados antes de repetirlo (`docker compose --profile app down -v`).
+* **Environment**. Compose con `dev,qa`; app `http://localhost:8080`, RabbitMQ `http://localhost:15672`, stub de Flota `http://localhost:8081` y BD `host=localhost port=5433 dbname=seashare user=seashare`.
+* **Test Accounts**. Comprador y vendedor de prueba MCO; vendedor con saldo disponible para reembolsos. Para este caso tokeniza la Visa crédito de prueba con titular `APRO`. Sustituye `<TOKEN_APRO>` por ese token nuevo y `<EMAIL_COMPRADOR>` por el email de prueba. Metadata de la Visa de ejemplo `VISA / 6260`.
+* **Mensajes AMQP**. Exchange `seashare.reservations`, `Content-Type: application/json` y `Message-Id` único en cada entrega. Los cuerpos completos figuran en las tablas.
+
+##### Preparación de los datos de este caso
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Registrar la reserva | RabbitMQ → `seashare.reservations` → `reservation.info.provided` | `{"reservation_id":"c0a80100-0000-4000-8000-000000090104","boat_id":"3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01","start_date":"2027-02-10","end_date":"2027-02-10","passengers":1,"owner_id":"a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d","max_capacity":6}` | Una fila con tarifa regular `350000.0000`. `SELECT base_rate, start_date, end_date, passengers FROM reservation_information WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090104';` | [X] |  |
+| 2 | Calcular el valor de la reserva | `POST http://localhost:8080/api/v1/reservations/c0a80100-0000-4000-8000-000000090104/calculated-value` | Sin cuerpo | HTTP 200. Alquiler `350000.00`, seguro `15000.00`, depósito `35000.00`, total `400000.00 COP`. | [X] |  |
+| 3 | Preparar el cobro de esta reserva | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000090104","status":"PENDING","status_changed_at":"2026-12-05T14:30:00Z","payment_token_ref":"<TOKEN_APRO>","payment_method_type":"VISA","payment_metadata":{"last_four":"6260","payer_email":"<EMAIL_COMPRADOR>"}}` | Intención en `CAPTURED` y una fila de cobro por `400000.00`. Verificar con `SELECT id, status, status_detail, amount, external_reference, idempotency_key FROM charge_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090104';` y `SELECT id, charge_intent_id, amount, rental_amount, insurance_amount, deposit_amount FROM charge_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090104';`. | [X] |  |
 
 --------------------------------------------------------------------------------
 
 #### Test Execution Flow *(mandatory)*
 
-##### Section 1: Devolución exclusiva del depósito
+##### Section 1: Reembolso del depósito por cancelación tardía
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar el depósito registrado | `SELECT deposit_amount FROM charge_record WHERE reservation_id = 'b7d0e2a1-…';` y `SELECT disposition FROM deposit_disposition;` | `30000.00`, `HELD` | El depósito está cobrado y registrado, único importe reembolsable del escenario (RF-003A). | [ ] | |
-| 2 | Publicar la cancelación tardía | Publicar en `seashare.reservations` / `reservation.status.changed` | `{"reservation_id":"b7d0e2a1-…","status":"CANCELLED_STRICT","status_changed_at":"2026-12-23T09:00:00Z"}` | `ack`; UC07 delega el reembolso del depósito en UC09 (RF-001). | [ ] | |
-| 3 | Verificar la intención de reembolso | `SELECT trigger, scope, amount, status, idempotency_key FROM refund_intent;` | `trigger = 'CANCELLED_STRICT'` | `scope = 'DEPOSIT_ONLY'`, `amount = 30000.00`, clave UUID v4 (D-UC09-12) (RF-003A, RF-006). | [ ] | |
-| 4 | Verificar que alquiler y seguro quedan fuera | Contrastar el `amount` con el valor total y con el alquiler | `30000.00` ≠ `990000.00` ≠ `900000.00` | Solo se solicita el depósito; el alquiler y el seguro no forman parte del reembolso (RF-003A, CE-002). | [ ] | |
-| 5 | Verificar el desenlace del depósito | `SELECT disposition FROM deposit_disposition;` | N/A | `disposition = 'REFUND_REQUESTED'`; el depósito se devuelve al 100 % (RF-003A, RF-005). | [ ] | |
-| 6 | Verificar la llamada a la Pasarela | Consultar el reembolso real: `GET /v1/payments/{id}/refunds` en Mercado Pago (o su panel) | `amount = 30000.00` | Reembolso parcial explícito sobre el cobro original, con `X-Idempotency-Key` de la intención (contrato §2). | [ ] | El header `X-Idempotency-Key` lo verifica `MercadoPagoRefundAdapterTest`; en la BD, `refund_intent.idempotency_key` es el UUID v4 que se envía. |
-| 7 | Verificar estado pendiente | `SELECT status FROM refund_intent;` y `SELECT count(*) FROM refund_record;` | N/A | Intención en curso, sin `refund_record` hasta la confirmación externa (RF-006, RF-007). | [ ] | |
+| 1 | Notificar la cancelación | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | `{"reservation_id":"c0a80100-0000-4000-8000-000000090104","status":"CANCELLED_STRICT","status_changed_at":"2026-12-05T15:00:00Z"}` | El evento se consume y UC07 delega en UC09. | [X] |  |
+| 2 | Verificar intención y depósito | `SELECT id, trigger, scope, status, status_detail, amount, charge_intent_id, dispute_id, external_reference, idempotency_key FROM refund_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090104';` y `SELECT disposition, dispute_id FROM deposit_disposition WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090104';` | Trigger `CANCELLED_STRICT`, scope `DEPOSIT_ONLY` | Una intención de `35000.00`, clave UUID v4, referencia al cobro original y depósito en `REFUND_REQUESTED`. | [X] |  |
+| 3 | Verificar el comando interno | `SELECT o.payload, o.published_at FROM outbox_message o JOIN refund_intent ri ON o.payload::jsonb->>'refund_intent_id' = ri.id::text WHERE ri.reservation_id = 'c0a80100-0000-4000-8000-000000090104' AND o.routing_key = 'refund.command';` | ID de la intención de reembolso | Un comando `refund.command` publicado con `refund_intent_id`. El monto se obtiene de los registros internos. | [X] |  |
+| 4 | Verificar el reembolso del proveedor | Panel de Mercado Pago o `GET https://api.mercadopago.com/v1/payments/{payment_id}/refunds` | `payment_id = charge_intent.external_reference`; `refund_id = refund_intent.external_reference` | Un reembolso de `35000.00 COP` cuyo ID coincide con la intención. El POST saliente usa `{"amount":35000.00}` y la clave de la intención. | [X] |  |
+| 5 | Verificar el resultado y el registro | `SELECT id, trigger, scope, status, status_detail, amount, charge_intent_id, dispute_id, external_reference, idempotency_key FROM refund_intent WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090104';` y `SELECT id, refund_intent_id, amount, released_amount, transaction_cost, external_reference FROM refund_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090104';` | Importe `35000.00` | Tras `approved` del proveedor, intención `COMPLETED` y exactamente un `refund_record`. Si la respuesta inicial sigue en curso, esperar el resultado externo y volver a consultar. | [X] |  |
+| 6 | Verificar el neto liberado | `SELECT id, refund_intent_id, amount, released_amount, transaction_cost, external_reference FROM refund_record WHERE reservation_id = 'c0a80100-0000-4000-8000-000000090104';` | `amount`, `transaction_cost`, `released_amount` | `released_amount = amount - transaction_cost`. Si el costo es NULL, el neto coincide con amount. | [X] |  |
 
 ##### Section 2: Errores y casos extremos de este escenario
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Reserva sin depósito registrado | Publicar `CANCELLED_STRICT` sin depósito cobrado | reserva sin depósito | `operational_failure` y `FAILED`; sin llamada a la Pasarela ni monto asumido (RF-010, caso extremo del SPEC). | [x] | |
-| 2 | Cobro original no aprobado | Publicar la cancelación con cobro en `REJECTED`/`EXPIRED` | `charge_intent.status = 'REJECTED'` | No se solicita reembolso del depósito (RF-006 "según el estado del cobro original"). | [x] | |
-| 3 | Monto mayor al depósito en la intención | Inspeccionar que no se sume alquiler o seguro | N/A | El `amount` es exactamente el depósito; no se admite retención ni devolución parcial (RF-005, CE-002). | [x] | |
-| 4 | Cancelación repetida | Publicar dos veces el mismo estado | mismo `status_changed_at` | Una sola intención y un solo comando (idempotencia, RF-006). | [x] | |
-| 5 | `400` de validación de la Pasarela | Simular `400` no reintentable | N/A | Intención en `REJECTED` para revisión manual, sin `refund_record` (contrato §5). | [x] | |
-| 6 | `503` o timeout | Simular `503`/timeout en el worker | N/A | `COMMUNICATION_ERROR`, reintentos con la misma clave y DLQ tras 5 intentos (RNF-003). | [x] | |
-| 7 | Evento con monto explícito | Agregar `amount` al mensaje de UC07 | `amount = 990000.00` | Se ignora; rige el depósito registrado (`30000.00`) (RF-001, CE-002). | [x] | |
+| 1 | Evento repetido | RabbitMQ → `seashare.reservations` → `reservation.status.changed` | Republicar el mismo cuerpo, misma marca y misma event_key cuando aplique; Message-Id diferente | Misma intención, mismo refund_id, un registro de reembolso y desenlace único del depósito. | [X] |  |
+| 2 | Idempotencia HTTP del reembolso (B-07) | Reenviar `POST https://api.mercadopago.com/v1/payments/{payment_id}/refunds` inmediatamente después del original | Body `{"amount":35000.00}`, misma `X-Idempotency-Key` de refund_intent y credencial TEST | El proveedor devuelve el mismo refund_id. BD conserva la misma intención y el mismo registro. | [X] |  |
+| 3 | Contrato y fallos controlados de pasarela (modo A) | `.\mvnw.cmd "-Dtest=RefundCalculatorTest,RequestRefundServiceTest,SendRefundToGatewayServiceTest,MercadoPagoRefundAdapterTest" test` | Fixtures de las clases indicadas | Pruebas aprobadas. La evidencia de contrato y errores controlados se registra por separado del recorrido funcional. | [X] |  |
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : El mismo importe de depósito puede devolverse por `CANCELLED_STRICT` o por `DISPUTE_REJECTED`, pero con `trigger` y clave idempotente distintos (RF-006).
-* **EC-002** : La liquidación del 100 % del alquiler al Propietario corresponde a UC10; UC09 solo devuelve el depósito (RF-003A, CE-002).
-* **EC-003** : El depósito se reembolsa al 100 %; no existe retención parcial por cancelación tardía (RF-005).
-* **EC-004** : El monto enviado es un reembolso parcial explícito; no se omite el `amount` para no convertir la operación en un reembolso total (contrato §2).
+
+* **EC-001**. Se devuelve el depósito completo de `35000.00`. El mismo evento crea una liquidación interna de `350000.00` a favor del propietario.
+* **EC-002**. La respuesta del worker es asíncrona. Consultar hasta alcanzar el resultado esperado y registrar el estado observado si no converge. PENDING_SEND puede resolverse antes de la primera consulta.
 
 --------------------------------------------------------------------------------
 

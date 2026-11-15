@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -129,6 +130,111 @@ class MercadoPagoRefundAdapterTest {
         for (int call = 0; call < 8; call++) {
             assertThatThrownBy(() -> adapter.fetchRefunds("unknown"))
                     .isInstanceOf(GatewayResourceNotFoundException.class);
+        }
+
+        assertThat(adapter.send(request()).status()).isEqualTo("approved");
+    }
+
+    @Test
+    void fetchRefundsFallsBackToThePaymentDetailWhenTheListEndpointIsNotAllowed() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1/refunds"))
+                .willReturn(aResponse().withStatus(405).withHeader("Allow", "POST")));
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1"))
+                .willReturn(okJson("""
+                        {
+                          "id": 1355357033,
+                          "status": "refunded",
+                          "refunds": [
+                            {"id": 1355334253, "status": "approved", "amount": 400000.00}
+                          ]
+                        }
+                        """)));
+
+        List<RefundGatewayResult> refunds = adapter.fetchRefunds("mp-payment-1");
+
+        assertThat(refunds).hasSize(1);
+        assertThat(refunds.get(0).externalId()).isEqualTo("1355334253");
+        assertThat(refunds.get(0).status()).isEqualTo("approved");
+        assertThat(refunds.get(0).amount().amount()).isEqualByComparingTo("400000.00");
+        wireMock.verify(getRequestedFor(urlEqualTo("/v1/payments/mp-payment-1/refunds")));
+        wireMock.verify(getRequestedFor(urlEqualTo("/v1/payments/mp-payment-1")));
+    }
+
+    @Test
+    void fetchRefundFallsBackToThePaymentDetailWhenTheDetailEndpointIsNotAllowed() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1/refunds/556"))
+                .willReturn(aResponse().withStatus(405).withHeader("Allow", "POST")));
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1"))
+                .willReturn(okJson("""
+                        {
+                          "id": 1355357033,
+                          "refunds": [
+                            {"id": 555, "status": "approved", "amount": 30000.00},
+                            {"id": 556, "status": "approved", "amount": 400000.00}
+                          ]
+                        }
+                        """)));
+
+        Optional<RefundGatewayResult> result = adapter.fetchRefund("mp-payment-1", "556");
+
+        assertThat(result).isPresent();
+        assertThat(result.orElseThrow().externalId()).isEqualTo("556");
+        assertThat(result.orElseThrow().amount().amount()).isEqualByComparingTo("400000.00");
+    }
+
+    @Test
+    void fetchRefundFallbackReturnsEmptyWhenTheRefundIsNotInThePayment() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1/refunds/999"))
+                .willReturn(aResponse().withStatus(405).withHeader("Allow", "POST")));
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1"))
+                .willReturn(okJson("""
+                        {"id": 1355357033, "refunds": [{"id": 555, "status": "approved", "amount": 30000.00}]}
+                        """)));
+
+        assertThat(adapter.fetchRefund("mp-payment-1", "999")).isEmpty();
+    }
+
+    @Test
+    void fetchRefundFallbackReturnsEmptyWhenThePaymentDoesNotExist() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/unknown/refunds/999"))
+                .willReturn(aResponse().withStatus(405).withHeader("Allow", "POST")));
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/unknown")).willReturn(aResponse().withStatus(404)));
+
+        assertThat(adapter.fetchRefund("unknown", "999")).isEmpty();
+    }
+
+    @Test
+    void fetchRefundsFallbackFailsWhenThePaymentDoesNotExist() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/unknown/refunds"))
+                .willReturn(aResponse().withStatus(405).withHeader("Allow", "POST")));
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/unknown"))
+                .willReturn(aResponse().withStatus(404)));
+
+        assertThatThrownBy(() -> adapter.fetchRefunds("unknown"))
+                .isInstanceOf(GatewayResourceNotFoundException.class);
+    }
+
+    @Test
+    void fetchRefundsFallbackServerErrorIsACommunicationFailure() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1/refunds"))
+                .willReturn(aResponse().withStatus(405).withHeader("Allow", "POST")));
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1")).willReturn(serverError()));
+
+        assertThatThrownBy(() -> adapter.fetchRefunds("mp-payment-1"))
+                .isInstanceOf(GatewayCommunicationException.class);
+    }
+
+    @Test
+    void methodNotAllowedWithSuccessfulFallbackDoesNotOpenTheCircuitBreaker() {
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1/refunds"))
+                .willReturn(aResponse().withStatus(405).withHeader("Allow", "POST")));
+        wireMock.stubFor(get(urlEqualTo("/v1/payments/mp-payment-1"))
+                .willReturn(okJson("{\"id\": 1355357033, \"refunds\": []}")));
+        wireMock.stubFor(post(urlEqualTo("/v1/payments/mp-payment-1/refunds"))
+                .willReturn(okJson("{\"status\":\"approved\",\"id\":555,\"amount\":30000.00}")));
+
+        for (int call = 0; call < 8; call++) {
+            assertThat(adapter.fetchRefunds("mp-payment-1")).isEmpty();
         }
 
         assertThat(adapter.send(request()).status()).isEqualTo("approved");

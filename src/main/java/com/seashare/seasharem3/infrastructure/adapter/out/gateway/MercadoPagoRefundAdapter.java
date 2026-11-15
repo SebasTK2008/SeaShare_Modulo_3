@@ -11,6 +11,8 @@ import com.seashare.seasharem3.infrastructure.config.GatewayProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -35,6 +37,7 @@ import java.util.function.Supplier;
  */
 public class MercadoPagoRefundAdapter implements RefundGatewayPort {
 
+    private static final Logger log = LoggerFactory.getLogger(MercadoPagoRefundAdapter.class);
     private static final String PAYMENTS_PATH = "/v1/payments";
     private static final String IDEMPOTENCY_HEADER = "X-Idempotency-Key";
     private static final int BAD_REQUEST = 400;
@@ -111,6 +114,10 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
                     .retrieve()
                     .body(String.class);
             return Optional.of(toResult(mapper.readValue(response, MercadoPagoRefundResponse.class)));
+        } catch (HttpClientErrorException.MethodNotAllowed exception) {
+            log.warn("Mercado Pago rejected the refund detail GET with 405; falling back to payment detail for {}",
+                    chargeReference);
+            return fetchRefundFromPayment(chargeReference, refundReference);
         } catch (JacksonException exception) {
             throw communicationFailure("The payment gateway returned an invalid refund detail", exception);
         } catch (HttpClientErrorException.NotFound exception) {
@@ -145,6 +152,10 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
                     new TypeReference<List<MercadoPagoRefundResponse>>() {
                     });
             return refunds == null ? List.of() : refunds.stream().map(MercadoPagoRefundAdapter::toResult).toList();
+        } catch (HttpClientErrorException.MethodNotAllowed exception) {
+            log.warn("Mercado Pago rejected the refund list GET with 405; falling back to payment detail for {}",
+                    chargeReference);
+            return fetchRefundsFromPayment(chargeReference);
         } catch (JacksonException exception) {
             throw communicationFailure("The payment gateway returned an invalid refund list", exception);
         } catch (HttpClientErrorException.NotFound exception) {
@@ -154,6 +165,47 @@ public class MercadoPagoRefundAdapter implements RefundGatewayPort {
             throw communicationFailure("The payment gateway did not answer the refund list query", exception);
         } catch (RestClientException exception) {
             throw communicationFailure("The payment gateway did not answer the refund list query", exception);
+        }
+    }
+
+    /**
+     * Fallback para el 405 que Mercado Pago devuelve en los GET de reembolsos del sandbox: el detalle
+     * del pago ({@code GET /v1/payments/{id}}) sigue exponiendo el arreglo {@code refunds}. Ese arreglo
+     * no trae {@code fee_details} ni {@code status_detail}, por lo que el costo transaccional queda nulo
+     * (el dominio lo interpreta como cero) y no se sobrescribe el detalle existente.
+     */
+    private List<RefundGatewayResult> fetchRefundsFromPayment(String chargeReference) {
+        try {
+            String response = restClient.get()
+                    .uri(PAYMENTS_PATH + "/" + chargeReference)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                    .retrieve()
+                    .body(String.class);
+            MercadoPagoPaymentRefundsResponse payment = mapper.readValue(response,
+                    MercadoPagoPaymentRefundsResponse.class);
+            return payment.refunds() == null ? List.of()
+                    : payment.refunds().stream().map(MercadoPagoRefundAdapter::toResult).toList();
+        } catch (JacksonException exception) {
+            throw communicationFailure("The payment gateway returned an invalid payment detail", exception);
+        } catch (HttpClientErrorException.NotFound exception) {
+            throw new GatewayResourceNotFoundException(
+                    "The payment gateway does not know the payment " + chargeReference, exception);
+        } catch (RestClientResponseException exception) {
+            throw communicationFailure("The payment gateway did not answer the payment detail query", exception);
+        } catch (RestClientException exception) {
+            throw communicationFailure("The payment gateway did not answer the payment detail query", exception);
+        }
+    }
+
+    /** Variante de {@link #fetchRefundsFromPayment} que filtra por el id del reembolso solicitado. */
+    private Optional<RefundGatewayResult> fetchRefundFromPayment(String chargeReference, String refundReference) {
+        try {
+            return fetchRefundsFromPayment(chargeReference).stream()
+                    .filter(refund -> refundReference.equals(refund.externalId()))
+                    .findFirst();
+        } catch (GatewayResourceNotFoundException exception) {
+            return Optional.empty();
         }
     }
 

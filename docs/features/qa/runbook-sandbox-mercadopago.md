@@ -1,7 +1,7 @@
 # Runbook: integración real con Mercado Pago en sandbox
 
 Este documento es el **procedimiento operativo** para ejecutar la integración real de Mercado Pago
-(modo B de `docs/qa/pagos-api-real.md`). No sustituye al checklist de escenarios: lo pone en orden.
+(modo B de `docs/features/qa/pagos-api-real.md`). No sustituye al checklist de escenarios: lo pone en orden.
 
 **Objetivo:** cobrar y reembolsar de verdad contra el sandbox de Mercado Pago (dinero de prueba),
 recibiendo webhooks reales. **No** se usan credenciales de producción.
@@ -47,25 +47,24 @@ recibiendo webhooks reales. **No** se usan credenciales de producción.
 
 ## 2. Configurar el entorno local
 
-Copia `.env.example` a `.env` y completa:
+Usa `.env.example` como referencia y completa el `.env` local con los valores de prueba.
 
 ```dotenv
 # Pasarela (sandbox)
+SPRING_PROFILES_ACTIVE=dev,qa
+FLEET_BASE_URL=http://fleet-stub:8080
 GATEWAY_BASE_URL=https://api.mercadopago.com
 GATEWAY_ACCESS_TOKEN=TEST-...
 GATEWAY_WEBHOOK_SECRET=...
 GATEWAY_SETTLEMENT_MODE=simulated
 ```
 
-Comprueba que NO quede `GATEWAY_BASE_URL=http://fleet-stub:8080`: esa URL es del stub de Flota y
-desviaría todos los cobros. El perfil `dev` (por defecto) ya apunta a Mercado Pago; solo el access token
-de prueba y el secreto del webhook salen del `.env`. (El perfil `prod` no arranca si esas variables
-faltan o están vacías.)
+El Compose usa `dev,qa` por defecto. `qa` carga el seed financiero usado por los TC y el stub de Flota proporciona la tarifa base. Si hay variables del mismo nombre en la sesión de PowerShell, Compose puede tomar esas variables antes que el archivo `.env`. Comprueba que los valores efectivos correspondan al stack de prueba.
 
 Levanta el stack:
 
 ```powershell
-docker compose --profile app up --build -d
+docker compose --profile app up --build -d --wait
 curl.exe -fsS http://localhost:8080/actuator/health
 ```
 
@@ -75,11 +74,11 @@ curl.exe -fsS http://localhost:8080/actuator/health
 
 ## 3. Exponer el webhook por HTTPS
 
-Mercado Pago exige una URL **HTTPS pública**; `localhost` no sirve.
+Mercado Pago necesita un callback **HTTPS público**.
 
-1. Levanta tu túnel preferido apuntando al puerto `8080`. Este documento no impone proveedor.
+1. Levanta tu túnel HTTPS hacia el puerto `8080`. Si tu proveedor permite filtrar rutas, publica solo `POST /api/v1/webhook/gateway`; el módulo carece de autenticación general.
 2. La URL pública debe terminar en `/api/v1/webhook/gateway`.
-3. Regístrala en el panel (paso 1.5) y verifica que responde:
+3. Regístrala en el panel (paso 1.3) y verifica que responde:
    - Sin firma válida debe devolver `401 UNAUTHENTICATED` (es la señal de que el endpoint está vivo).
 4. Si el túnel cambia de host, **actualiza la URL en el panel antes de ejecutar** los escenarios.
 
@@ -88,27 +87,32 @@ configuración de la aplicación (`pasarela-webhook-resultados.md` §2).
 
 ### 3.1 Enviar un webhook firmado a mano
 
-Para ejercitar el endpoint sin esperar a Mercado Pago (por ejemplo en los TC de firma inválida o de
-reembolsos), se firma la notificación con el secreto del webhook, con el mismo esquema que valida la
-aplicación (`MercadoPagoSignatureVerifier`): HMAC-SHA256 de `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`.
+Para diagnosticar el callback de tu propio stack local, firma la notificación con el secreto de prueba. Esta petición sirve para diagnóstico y queda separada de la evidencia de entrega real de B-03 y B-06.
 
-```bash
-ID=1234567890; REQ=$(openssl rand -hex 16); TS=$(date +%s)
-SIG=$(printf 'id:%s;request-id:%s;ts:%s;' "$ID" "$REQ" "$TS" | openssl dgst -sha256 -hmac "$GATEWAY_WEBHOOK_SECRET" | sed 's/^.* //')
-curl -i -X POST "http://localhost:8080/api/v1/webhook/gateway?data.id=$ID&type=payment" \
-  -H 'Content-Type: application/json' -H "x-request-id: $REQ" -H "x-signature: ts=$TS,v1=$SIG" \
-  -d '{"action":"payment.updated","type":"payment","data":{"id":"'"$ID"'"}}'
+```powershell
+$paymentId = Read-Host 'payment_id del cobro de prueba'
+$requestId = [guid]::NewGuid().ToString()
+$ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$secret = Read-Host 'Secreto del webhook de prueba' -AsSecureString
+$key = [Text.Encoding]::UTF8.GetBytes([System.Net.NetworkCredential]::new('', $secret).Password)
+$hmac = [System.Security.Cryptography.HMACSHA256]::new($key)
+$manifest = [Text.Encoding]::UTF8.GetBytes("id:${paymentId};request-id:${requestId};ts:${ts};")
+$signature = [BitConverter]::ToString($hmac.ComputeHash($manifest)).Replace('-', '').ToLowerInvariant()
+$hmac.Dispose()
+Remove-Variable secret,key
+$uri = "http://localhost:8080/api/v1/webhook/gateway?data.id=$paymentId&type=payment"
+$headers = @{ 'x-request-id' = $requestId; 'x-signature' = "ts=$ts,v1=$signature" }
+Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType 'application/json' -Body '{"action":"payment.updated","type":"payment"}'
 ```
 
-Responde `200` con la firma correcta y `401 UNAUTHENTICATED` con una incorrecta. Usa un `data.id` real
-(el `payment_id` del cobro) si quieres que el worker lo procese.
+La respuesta esperada es HTTP 200 con `{"status":"received"}`. Para comprobar firma ausente, repite el mismo comando de envío sin `-Headers $headers` y espera HTTP 401.
 
 ---
 
 ## 4. Obtener un `card_token`
 
 El sistema no tokeniza: recibe el token ya generado. El contrato con el repositorio de frontend está
-en [`contracts/external/frontend-tokenizacion.md`](../technical-plan/contracts/external/frontend-tokenizacion.md).
+en [`contracts/external/frontend-tokenizacion.md`](../../technical-plan/contracts/external/frontend-tokenizacion.md).
 
 Para ejecutar el modo B necesitas:
 
@@ -119,8 +123,7 @@ Para ejecutar el modo B necesitas:
 | `payment_metadata.payer_email` | Correo del comprador de prueba |
 | `payment_metadata.last_four` | Últimos 4 dígitos de la tarjeta de prueba |
 
-Selecciona **una tarjeta de prueba aprobada** y **una de rechazo** según la documentación de
-Mercado Pago para MCO. No versiones números de tarjeta ni tokens.
+Usa la Visa crédito de prueba de la [guía de tarjetas de Mercado Pago para MCO](https://www.mercadopago.com.co/developers/es/docs/checkout-api-payments/additional-content/your-integrations/test/cards). Conserva los datos de tarjeta y token fuera del repositorio y de la evidencia.
 
 El resultado del pago lo decide el **nombre del titular** que se escribe al tokenizar la tarjeta de
 prueba (documento `123456789` para `APRO` y `OTHE`), no la tarjeta:
@@ -149,23 +152,13 @@ reembolso es de 180 días desde la aprobación del pago.
 
 ## 5. Sembrar el escenario
 
-1. Registra la información de la reserva y calcula su valor total (UC03/UC04) siguiendo el TC
-   correspondiente de `docs/qa/test-cases/`.
-2. Publica el estado `PENDING` de UC07 con el token y los metadatos del paso 4.
-3. Verifica que se creó la intención:
-
-```sql
-SELECT id, status, amount, payment_token_ref IS NOT NULL AS tiene_token,
-       payer_email, idempotency_key, external_reference
-FROM charge_intent
-WHERE reservation_id = '<reservation_id>';
-```
+Cada [TC de pagos](test-cases/) incluye su propia preparación de reserva, cálculo y cobro cuando corresponde. Ejecuta esa preparación dentro del caso elegido y usa el UUID, titular, payloads y consultas de ese archivo. Para repetir sobre el mismo UUID se pueden recrear los volúmenes locales de QA.
 
 ---
 
 ## 6. Ejecutar los escenarios
 
-Ejecuta en orden los escenarios **B-01…B-10** de `docs/qa/pagos-api-real.md` §2.2. Para cada uno:
+El checklist **B-01…B-10** de `docs/features/qa/pagos-api-real.md` §2.2 identifica la evidencia de release. Ejecuta los TC en el orden que necesites, preparando los datos de cada archivo. Para cada caso:
 
 1. Realiza la acción.
 2. Registra la respuesta de Mercado Pago.
@@ -183,30 +176,7 @@ Ejecuta en orden los escenarios **B-01…B-10** de `docs/qa/pagos-api-real.md` �
 
 ## 7. Verificar el resultado
 
-```sql
--- Cobro
-SELECT status, status_detail, external_reference FROM charge_intent WHERE id = '<charge_intent_id>';
-SELECT * FROM charge_record WHERE charge_intent_id = '<charge_intent_id>';
-
--- Reembolso
-SELECT status, status_detail, external_reference FROM refund_intent WHERE id = '<refund_intent_id>';
-SELECT amount, released_amount, transaction_cost FROM refund_record WHERE refund_intent_id = '<refund_intent_id>';
-
--- Webhook y fallos
-SELECT * FROM outbox_message ORDER BY created_at DESC LIMIT 20;
-SELECT * FROM operational_failure ORDER BY created_at DESC LIMIT 20;
-```
-
-Criterios de salud:
-
-- `charge_intent.status = CAPTURED` y **una sola** fila en `charge_record`.
-- `refund_intent.status = COMPLETED` y **una sola** fila en `refund_record`.
-- `outbox_message` con el mensaje `gateway.notification` por cada webhook.
-- `operational_failure` **vacía** en el camino feliz. Un `INTERNAL_ERROR` con un estado `pending` o
-  `refunded` indicaría una regresión: esos estados no se registran como fallo. `charged_back` e
-  `in_mediation` sí dejan una fila (es una disputa y requiere revisión), pero no ocurren en el camino
-  feliz (G-02 y G-03 en
-  [`docs/technical-plan/mercadopago-integration.md`](../technical-plan/mercadopago-integration.md)).
+Usa las consultas del TC ejecutado y conserva evidencia para su propio UUID. `charge_intent.external_reference` contiene el `payment_id`; `refund_intent.external_reference` contiene el `refund_id`. Comprueba los estados, importes y número de registros que indique ese caso, y las entregas reales del webhook cuando formen parte de su alcance.
 
 ---
 
@@ -256,17 +226,6 @@ complementario.
 
 ---
 
-## 11. Modo A y casos que el sandbox no reproduce
+## 11. Modo A y casos con resultados controlados
 
-El modo A **no** usa Mercado Pago ni un simulador: es la suite automática (`.\mvnw.cmd clean verify`), que
-levanta WireMock **embebido en JUnit** (`MercadoPagoChargeAdapterTest`, `MercadoPagoRefundAdapterTest`) y
-MockMvc para el webhook. Los casos de prueba de `docs/qa/test-cases/` se ejecutan contra el sandbox real
-(esta guía); lo que el sandbox no puede producir se cubre con la suite automática:
-
-| Caso | Cómo se provoca | Cobertura |
-|---|---|---|
-| Pago rechazado | Titular `OTHE` al tokenizar (§4) | Sandbox |
-| Token inválido (`400`) | Un `payment_token_ref` falso | Sandbox |
-| Pasarela caída (`COMMUNICATION_ERROR`) | `GATEWAY_BASE_URL` apuntando a un puerto cerrado (por ejemplo `http://localhost:9`) y reinicio de la aplicación | Sandbox + app |
-| Pago `expired`, `404` de consulta, `503` | No se reproducen en el sandbox | Suite automática (`MercadoPago*AdapterTest`, `RegisterChargeResultServiceTest`) |
-| Liquidación (UC10) | No hay HTTP: es un libro interno simulado (D-UC10-18) | Suite automática y TC de UC10 |
+La suite automática ejecuta WireMock embebido en JUnit y MockMvc. Usa `.\mvnw.cmd clean verify` para el gate completo o los comandos de cada TC. Las pruebas automáticas incluyen expiración, rechazo de reembolso, HTTP 404/5xx, timeout y firma inválida. Los recorridos con respuestas reales del proveedor usan B. UC10 se comprueba en el libro interno del mismo entorno, con cobertura adicional en la suite.
