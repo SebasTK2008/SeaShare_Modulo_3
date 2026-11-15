@@ -28,7 +28,7 @@ class ArchitectureTest {
         noClasses().that().resideInAPackage("..domain..")
                 .should().dependOnClassesThat().resideInAnyPackage(
                         "org.springframework..", "jakarta..", "tools.jackson..", "com.fasterxml.jackson..",
-                        "org.hibernate..", "com.seashare.seasharem3.application..",
+                        "org.hibernate..", "io.swagger..", "com.seashare.seasharem3.application..",
                         "com.seashare.seasharem3.infrastructure..")
                 .because("general-plan §3.4-1: domain is plain Java")
                 .check(MAIN_CLASSES);
@@ -85,6 +85,17 @@ class ArchitectureTest {
         noClasses().that().resideInAPackage("..application..")
                 .should().dependOnClassesThat().resideInAPackage("..infrastructure..")
                 .because("general-plan §3.4-7: HTTP/AMQP DTOs live in adapter.in; application uses command/result")
+                .check(MAIN_CLASSES);
+    }
+
+    @Test
+    void swaggerDependenciesRemainInWebInfrastructure() {
+        noClasses().that().resideOutsideOfPackages(
+                        "..infrastructure.adapter.in.web..",
+                        "..infrastructure.adapter.in.webhook..",
+                        "..infrastructure.config.web..")
+                .should().dependOnClassesThat().resideInAPackage("io.swagger..")
+                .because("OpenAPI is documentation of the web adapter, not domain or application logic")
                 .check(MAIN_CLASSES);
     }
 
