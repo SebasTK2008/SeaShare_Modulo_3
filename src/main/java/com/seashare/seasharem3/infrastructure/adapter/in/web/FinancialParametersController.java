@@ -9,6 +9,12 @@ import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.FinancialParame
 import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.FinancialParametersResponse;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.SaveFinancialParametersResponse;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -34,6 +40,7 @@ import java.math.RoundingMode;
  * <p>Fuente: UC11 plan T018/T032; contratos {@code rest/UC11-obtener-parametros-financieros.md}
  * y {@code rest/UC11-guardar-parametros-financieros.md} [CONV].
  */
+@Tag(name = "UC11 · Parámetros financieros", description = "Consulta y configuración versionada de comisión, seguro e incrementos")
 @RestController
 @RequestMapping("/api/v1/financial-parameters")
 public class FinancialParametersController {
@@ -57,6 +64,17 @@ public class FinancialParametersController {
      *   <li>{@code 500 INTERNAL_ERROR} — error no controlado [CONV].</li>
      * </ul>
      */
+    @Operation(operationId = "getFinancialParameters", summary = "Consultar parámetros financieros vigentes",
+            description = "Devuelve la versión de mayor número, sus cuatro parámetros con 4 decimales y la regla de depósito "
+                    + "y ventanas de temporada alta de solo lectura. No inventa valores si no hay configuración.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Configuración vigente",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = FinancialParametersResponse.class))),
+            @ApiResponse(responseCode = "404", description = "PARAMETERS_NOT_CONFIGURED: todavía no existe una versión",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+    })
     @GetMapping
     public ResponseEntity<FinancialParametersResponse> getFinancialParameters() {
         FinancialParametersResult result = loadUseCase.load();
@@ -74,6 +92,19 @@ public class FinancialParametersController {
      *   <li>{@code 500 PARAMETERS_SAVE_FAILED} — fallo de persistencia [SPEC HU4 esc. 3].</li>
      * </ul>
      */
+    @Operation(operationId = "saveFinancialParameters", summary = "Guardar parámetros financieros globales",
+            description = "Reemplazo completo y atómico de los cuatro valores. Si son iguales a los vigentes, devuelve la misma "
+                    + "versión; si cambian, crea una versión nueva sin alterar el historial ni reservas previamente calculadas. "
+                    + "Reenviar los 4 decimales del GET conserva la precisión y la idempotencia. "
+                    + "No configura depósito ni calendario. Operación con efectos de escritura; el servicio no valida identidad.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Número de la versión nueva o vigente si no hubo cambios",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = SaveFinancialParametersResponse.class))),
+            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: campos ausentes, no decimales, porcentajes fuera de 0–100 o seguro negativo",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "500", description = "PARAMETERS_SAVE_FAILED o INTERNAL_ERROR; la configuración anterior se conserva",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+    })
     @PutMapping
     public ResponseEntity<SaveFinancialParametersResponse> saveFinancialParameters(
             @Valid @RequestBody FinancialParametersRequest request) {

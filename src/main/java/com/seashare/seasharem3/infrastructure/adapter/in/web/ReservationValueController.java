@@ -5,6 +5,13 @@ import com.seashare.seasharem3.application.dto.ReservationValueResult;
 import com.seashare.seasharem3.application.port.in.CalculateReservationValueUseCase;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.ReservationValueResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,6 +33,7 @@ import java.util.UUID;
  *
  * Fuente: UC04 plan T012; contrato {@code rest/UC04-valor-calculado-reserva.md} [CONV].
  */
+@Tag(name = "UC04 · Valor calculado de reserva", description = "Cálculo y registro del desglose financiero de la reserva")
 @RestController
 @RequestMapping("/api/v1/reservations")
 public class ReservationValueController {
@@ -48,8 +56,29 @@ public class ReservationValueController {
      *   <li>{@code 500 INTERNAL_ERROR} — error no previsto [CONV].</li>
      * </ul>
      */
+    @Operation(operationId = "calculateReservationValue", summary = "Calcular y registrar el valor de una reserva",
+            description = "Sin cuerpo. Usa la información de reserva registrada previamente por UC03. "
+                    + "Calcula alquiler, seguro y depósito; registra los montos para el cobro posterior. "
+                    + "No realiza el cobro. La versión de parámetros referenciada se conserva para los recálculos.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Desglose completo calculado y registrado",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReservationValueResponse.class))),
+            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: identificador inválido",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "404", description = "RESERVATION_INFO_NOT_FOUND: UC03 aún no registró información de la reserva",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "422", description = "RESERVATION_INFO_INCOMPLETE: información insuficiente para calcular",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "503", description = "FINANCIAL_PARAMETERS_NOT_CONFIGURED: faltan los parámetros necesarios para el primer cálculo",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+    })
     @PostMapping("/{reservationId}/calculated-value")
-    public ResponseEntity<ReservationValueResponse> calculate(@PathVariable UUID reservationId) {
+    public ResponseEntity<ReservationValueResponse> calculate(
+            @Parameter(description = "Identificador UUID de la reserva", required = true,
+                    schema = @Schema(type = "string", format = "uuid"), example = "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10")
+            @PathVariable UUID reservationId) {
         ReservationValueResult result = calculateReservationValueUseCase.calculate(
                 new CalculateReservationValueCommand(new ReservationId(reservationId)));
 

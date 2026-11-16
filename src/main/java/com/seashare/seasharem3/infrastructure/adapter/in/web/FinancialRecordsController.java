@@ -12,6 +12,13 @@ import com.seashare.seasharem3.domain.valueobject.OwnerId;
 import com.seashare.seasharem3.domain.valueobject.ReportScope;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.FinancialRecordsResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +30,7 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "UC12 · Registros financieros", description = "Histórico paginado de operaciones financieras confirmadas")
 @RestController
 @RequestMapping("/api/v1/financial-records")
 public class FinancialRecordsController {
@@ -33,16 +41,47 @@ public class FinancialRecordsController {
         this.useCase = useCase;
     }
 
+    @Operation(operationId = "queryFinancialRecords", summary = "Consultar registros financieros",
+            description = "Solo lectura de registros confirmados, no de intenciones pendientes o fallidas. "
+                    + "Orden estable: created_at DESC y record_id DESC. Si no hay resultados, page=1 devuelve una página vacía. "
+                    + "scope y owner_id son datos declarados: no hay autenticación ni verificación de pertenencia. "
+                    + "Los filtros se aplican dentro del alcance declarado y no lo amplían.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Página de registros, posiblemente vacía",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = FinancialRecordsResponse.class))),
+            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: parámetros inválidos, page < 1, size fuera de 1–100, "
+                    + "owner_id ausente para OWNER o date_from posterior a date_to",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "404", description = "PAGE_OUT_OF_RANGE: page > max(total_pages, 1)",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+    })
     @GetMapping
     public ResponseEntity<FinancialRecordsResponse> get(
+            @Parameter(description = "Alcance declarado, no autenticado", required = true,
+                    schema = @Schema(allowableValues = {"OWNER", "PLATFORM"}), example = "PLATFORM")
             @RequestParam String scope,
+            @Parameter(description = "Número de página, desde 1", required = true, schema = @Schema(minimum = "1"), example = "1")
             @RequestParam int page,
+            @Parameter(description = "Tamaño de página (10 si se omite)", schema = @Schema(minimum = "1", maximum = "100", defaultValue = "10"))
             @RequestParam(required = false) Integer size,
+            @Parameter(description = "Filtro por tipo de registro confirmado",
+                    schema = @Schema(allowableValues = {"CHARGE", "REFUND", "SETTLEMENT", "COMMISSION"}))
             @RequestParam(name = "transaction_type", required = false) String transactionType,
+            @Parameter(description = "Obligatorio si scope=OWNER; filtro opcional si scope=PLATFORM. No valida identidad",
+                    schema = @Schema(type = "string", format = "uuid"), example = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d")
             @RequestParam(name = "owner_id", required = false) String ownerId,
+            @Parameter(description = "Filtro por embarcación", schema = @Schema(type = "string", format = "uuid"),
+                    example = "3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01")
             @RequestParam(name = "boat_id", required = false) String boatId,
+            @Parameter(description = "Filtro por reserva", schema = @Schema(type = "string", format = "uuid"),
+                    example = "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10")
             @RequestParam(name = "reservation_id", required = false) String reservationId,
+            @Parameter(description = "Inicio del rango de fechas; no posterior a date_to",
+                    schema = @Schema(type = "string", format = "date"), example = "2026-12-01")
             @RequestParam(name = "date_from", required = false) String dateFrom,
+            @Parameter(description = "Fin del rango de fechas", schema = @Schema(type = "string", format = "date"), example = "2026-12-31")
             @RequestParam(name = "date_to", required = false) String dateTo) {
         QueryFinancialRecordsCommand command = new QueryFinancialRecordsCommand(
                 parseEnum(scope, ReportScope.class, "scope"),

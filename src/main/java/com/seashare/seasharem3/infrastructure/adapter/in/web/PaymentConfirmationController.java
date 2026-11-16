@@ -5,6 +5,13 @@ import com.seashare.seasharem3.application.dto.PaymentConfirmationResult;
 import com.seashare.seasharem3.application.port.in.GetPaymentConfirmationUseCase;
 import com.seashare.seasharem3.domain.valueobject.ReservationId;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.PaymentConfirmationResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,6 +34,7 @@ import java.util.UUID;
  *
  * <p>Fuente: UC06 plan T006; contrato {@code rest/UC06-confirmacion-pago.md} §§2–5.</p>
  */
+@Tag(name = "UC06 · Confirmación de pago", description = "Consulta del estado persistido del cobro de una reserva")
 @RestController
 @RequestMapping("/api/v1/reservations")
 public class PaymentConfirmationController {
@@ -48,8 +56,24 @@ public class PaymentConfirmationController {
      *   <li>{@code 500 INTERNAL_ERROR} — error no previsto [CONV].</li>
      * </ul>
      */
+    @Operation(operationId = "getPaymentConfirmation", summary = "Consultar confirmación de pago",
+            description = "Sin cuerpo y de solo lectura. Consulta la intención vigente persistida, sin llamar a Mercado Pago. "
+                    + "Los montos no disponibles se devuelven como null, no como cero. Un reembolso confirmado puede aportar released_amount.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estado actual y datos disponibles del cobro",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = PaymentConfirmationResponse.class))),
+            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: identificador inválido",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "404", description = "CHARGE_INTENT_NOT_FOUND: no existe intención de cobro para la reserva",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+    })
     @GetMapping("/{reservationId}/payment-confirmation")
-    public ResponseEntity<PaymentConfirmationResponse> get(@PathVariable UUID reservationId) {
+    public ResponseEntity<PaymentConfirmationResponse> get(
+            @Parameter(description = "Identificador UUID de la reserva", required = true,
+                    schema = @Schema(type = "string", format = "uuid"), example = "b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10")
+            @PathVariable UUID reservationId) {
         PaymentConfirmationResult result = getPaymentConfirmationUseCase.get(
                 new PaymentConfirmationQuery(new ReservationId(reservationId)));
 

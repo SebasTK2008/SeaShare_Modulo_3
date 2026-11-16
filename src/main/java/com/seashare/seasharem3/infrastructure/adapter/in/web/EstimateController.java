@@ -11,12 +11,19 @@ import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.BatchEstimateRe
 import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.SingleEstimateRequest;
 import com.seashare.seasharem3.infrastructure.adapter.in.web.dto.SingleEstimateResponse;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "UC01 · Estimaciones", description = "Estimaciones informativas para Reservas; no persisten ni bloquean activos")
 @RestController
 @RequestMapping("/api/v1/estimates")
 public class EstimateController {
@@ -30,6 +37,22 @@ public class EstimateController {
         this.singleUseCase = singleUseCase;
     }
 
+    @Operation(operationId = "estimateBatch", summary = "Estimar alquiler de un lote de embarcaciones",
+            description = "Solo acepta boat_ids; lista vacía devuelve 200 con arreglos vacíos. Deduplica IDs y usa "
+                    + "la fecha actual, 1 día y 1 pasajero. Incluye seguro, no depósito de garantía. "
+                    + "Los IDs sin tarifa se devuelven en unavailable con NO_BASE_RATE, no como error 422. "
+                    + "Máximo configurable (seashare.estimates.max-batch-size, por defecto 50). Solo lectura.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estimaciones y embarcaciones no disponibles",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = BatchEstimateResponse.class))),
+            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: cuerpo inválido, IDs nulos/no UUID o campos extra; "
+                    + "BATCH_SIZE_EXCEEDED: excede el máximo, sin procesar ningún ID",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "503", description = "FLEET_UNAVAILABLE o FINANCIAL_PARAMETERS_NOT_CONFIGURED; sin estimaciones parciales",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+    })
     @PostMapping("/batch")
     public ResponseEntity<BatchEstimateResponse> estimateBatch(
             @Valid @RequestBody BatchEstimateRequest request) {
@@ -38,6 +61,23 @@ public class EstimateController {
         return ResponseEntity.ok(toBatchResponse(result));
     }
 
+    @Operation(operationId = "estimateIndividual", summary = "Estimar alquiler para fechas y pasajeros",
+            description = "La tarifa dinámica de start_date se aplica a todos los días inclusivos. "
+                    + "Inicio y fin iguales equivalen a 1 día. Incluye seguro, no depósito ni ajustes posteriores. "
+                    + "warning es obligatorio y debe mostrarse tal como lo devuelve el sistema. Solo lectura.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estimación con advertencia obligatoria",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = SingleEstimateResponse.class))),
+            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: cuerpo o pasajeros inválidos; "
+                    + "INVALID_DATE_RANGE: fechas inválidas, inicio pasado o fin anterior al inicio",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "422", description = "BASE_RATE_NOT_AVAILABLE: embarcación sin tarifa o desconocida por Flota",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "503", description = "FLEET_UNAVAILABLE o FINANCIAL_PARAMETERS_NOT_CONFIGURED; sin importes asumidos",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
+            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
+                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+    })
     @PostMapping("/individual")
     public ResponseEntity<SingleEstimateResponse> estimateIndividual(
             @Valid @RequestBody SingleEstimateRequest request) {
