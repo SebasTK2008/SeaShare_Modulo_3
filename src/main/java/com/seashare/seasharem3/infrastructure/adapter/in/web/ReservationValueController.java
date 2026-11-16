@@ -63,16 +63,11 @@ public class ReservationValueController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Desglose completo calculado y registrado",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ReservationValueResponse.class))),
-            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: identificador inválido",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "404", description = "RESERVATION_INFO_NOT_FOUND: UC03 aún no registró información de la reserva",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "422", description = "RESERVATION_INFO_INCOMPLETE: información insuficiente para calcular",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "503", description = "FINANCIAL_PARAMETERS_NOT_CONFIGURED: faltan los parámetros necesarios para el primer cálculo",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/InvalidReservationId"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/ReservationInfoNotFound"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/ReservationInfoIncomplete"),
+            @ApiResponse(responseCode = "503", ref = "#/components/responses/FinancialParametersNotConfigured"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/InternalError")
     })
     @PostMapping("/{reservationId}/calculated-value")
     public ResponseEntity<ReservationValueResponse> calculate(

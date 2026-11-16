@@ -49,22 +49,20 @@ public class FinancialRecordsController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Página de registros, posiblemente vacía",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = FinancialRecordsResponse.class))),
-            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: parámetros inválidos, page < 1, size fuera de 1–100, "
-                    + "owner_id ausente para OWNER o date_from posterior a date_to",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "404", description = "PAGE_OUT_OF_RANGE: page > max(total_pages, 1)",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/FinancialRecordsBadRequest"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/PageOutOfRange"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/InternalError")
     })
     @GetMapping
     public ResponseEntity<FinancialRecordsResponse> get(
             @Parameter(description = "Alcance declarado, no autenticado", required = true,
                     schema = @Schema(allowableValues = {"OWNER", "PLATFORM"}), example = "PLATFORM")
             @RequestParam String scope,
-            @Parameter(description = "Número de página, desde 1", required = true, schema = @Schema(minimum = "1"), example = "1")
+            @Parameter(description = "Número de página, desde 1", required = true,
+                    schema = @Schema(type = "integer", format = "int32", minimum = "1"), example = "1")
             @RequestParam int page,
-            @Parameter(description = "Tamaño de página (10 si se omite)", schema = @Schema(minimum = "1", maximum = "100", defaultValue = "10"))
+            @Parameter(description = "Tamaño de página (10 si se omite)",
+                    schema = @Schema(type = "integer", format = "int32", minimum = "1", maximum = "100", defaultValue = "10"))
             @RequestParam(required = false) Integer size,
             @Parameter(description = "Filtro por tipo de registro confirmado",
                     schema = @Schema(allowableValues = {"CHARGE", "REFUND", "SETTLEMENT", "COMMISSION"}))

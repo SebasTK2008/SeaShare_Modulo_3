@@ -70,10 +70,8 @@ public class FinancialParametersController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Configuración vigente",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = FinancialParametersResponse.class))),
-            @ApiResponse(responseCode = "404", description = "PARAMETERS_NOT_CONFIGURED: todavía no existe una versión",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/ParametersNotConfigured"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/InternalError")
     })
     @GetMapping
     public ResponseEntity<FinancialParametersResponse> getFinancialParameters() {
@@ -100,10 +98,8 @@ public class FinancialParametersController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Número de la versión nueva o vigente si no hubo cambios",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = SaveFinancialParametersResponse.class))),
-            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: campos ausentes, no decimales, porcentajes fuera de 0–100 o seguro negativo",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "PARAMETERS_SAVE_FAILED o INTERNAL_ERROR; la configuración anterior se conserva",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/FinancialParametersBadRequest"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/ParametersSaveFailed")
     })
     @PutMapping
     public ResponseEntity<SaveFinancialParametersResponse> saveFinancialParameters(

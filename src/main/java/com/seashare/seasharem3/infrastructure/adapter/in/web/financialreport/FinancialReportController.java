@@ -60,11 +60,8 @@ public class FinancialReportController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Informe y comparación temporal",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = FinancialReportResponse.class))),
-            @ApiResponse(responseCode = "400", description = "INVALID_PERIOD: periodicidad o período inválido; "
-                    + "VALIDATION_ERROR: parámetros ausentes/incorrectos u owner_id requerido para OWNER",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/FinancialReportBadRequest"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/InternalError")
     })
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<FinancialReportResponse> get(
@@ -101,11 +98,8 @@ public class FinancialReportController {
                                     Fecha de Generacion,Alcance,Periodicidad,Periodo,Neto Generado,Total Cobros,Total Reembolsos,Total Dispersiones,Total Comisiones,Count Charge,Count Refund,Count Settlement,Count Commission,Periodo Anterior,Variacion Absoluta,Variacion Porcentual
                                     2026-11-01T10:00:00Z,PLATFORM,MONTHLY,2026-10,150000.00,1150000.00,100000.00,900000.00,135000.00,1,1,1,1,2026-09,20000.00,15.38
                                     """))),
-            @ApiResponse(responseCode = "400", description = "INVALID_PERIOD: periodicidad o período inválido; "
-                    + "VALIDATION_ERROR: parámetros ausentes/incorrectos u owner_id requerido para OWNER",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo al generar el CSV",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/FinancialReportBadRequest"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/FinancialReportExportFailed")
     })
     @GetMapping(path = "/export", produces = "text/csv")
     public ResponseEntity<String> export(

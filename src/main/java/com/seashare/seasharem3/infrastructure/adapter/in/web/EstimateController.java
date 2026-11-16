@@ -45,13 +45,9 @@ public class EstimateController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Estimaciones y embarcaciones no disponibles",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = BatchEstimateResponse.class))),
-            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: cuerpo inválido, IDs nulos/no UUID o campos extra; "
-                    + "BATCH_SIZE_EXCEEDED: excede el máximo, sin procesar ningún ID",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "503", description = "FLEET_UNAVAILABLE o FINANCIAL_PARAMETERS_NOT_CONFIGURED; sin estimaciones parciales",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BatchEstimateBadRequest"),
+            @ApiResponse(responseCode = "503", ref = "#/components/responses/BatchEstimateUnavailable"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/InternalError")
     })
     @PostMapping("/batch")
     public ResponseEntity<BatchEstimateResponse> estimateBatch(
@@ -68,15 +64,10 @@ public class EstimateController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Estimación con advertencia obligatoria",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = SingleEstimateResponse.class))),
-            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: cuerpo o pasajeros inválidos; "
-                    + "INVALID_DATE_RANGE: fechas inválidas, inicio pasado o fin anterior al inicio",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "422", description = "BASE_RATE_NOT_AVAILABLE: embarcación sin tarifa o desconocida por Flota",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "503", description = "FLEET_UNAVAILABLE o FINANCIAL_PARAMETERS_NOT_CONFIGURED; sin importes asumidos",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/IndividualEstimateBadRequest"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/BaseRateNotAvailable"),
+            @ApiResponse(responseCode = "503", ref = "#/components/responses/IndividualEstimateUnavailable"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/InternalError")
     })
     @PostMapping("/individual")
     public ResponseEntity<SingleEstimateResponse> estimateIndividual(

@@ -75,13 +75,9 @@ public class GatewayWebhookController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Notificación recibida para procesamiento asíncrono",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = GatewayWebhookAcknowledgement.class))),
-            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: Content-Type no JSON, cuerpo inválido, action ausente/vacío "
-                    + "o data.id/type ausentes en la query (después de validar la firma)",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "401", description = "UNAUTHENTICATED: firma ausente/inválida, x-request-id ausente o secreto no configurado",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo antes del acuse, por ejemplo al persistir en outbox; Mercado Pago reintenta",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/GatewayWebhookBadRequest"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/InvalidGatewaySignature"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/GatewayNotificationFailed")
     })
     @PostMapping(path = "/api/v1/webhook/gateway", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, String>> onNotification(

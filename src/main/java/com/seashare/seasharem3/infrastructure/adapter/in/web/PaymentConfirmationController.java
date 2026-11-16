@@ -62,12 +62,9 @@ public class PaymentConfirmationController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Estado actual y datos disponibles del cobro",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = PaymentConfirmationResponse.class))),
-            @ApiResponse(responseCode = "400", description = "VALIDATION_ERROR: identificador inválido",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "404", description = "CHARGE_INTENT_NOT_FOUND: no existe intención de cobro para la reserva",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails"))),
-            @ApiResponse(responseCode = "500", description = "INTERNAL_ERROR: fallo no previsto",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetails")))
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/InvalidReservationId"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/ChargeIntentNotFound"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/InternalError")
     })
     @GetMapping("/{reservationId}/payment-confirmation")
     public ResponseEntity<PaymentConfirmationResponse> get(
