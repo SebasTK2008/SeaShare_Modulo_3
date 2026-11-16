@@ -41,6 +41,19 @@ docker compose --profile app up --build -d
 curl -fsS http://localhost:8080/actuator/health
 ```
 
+### Documentación visual de la API (Swagger UI)
+
+Con la aplicación arrancada en `dev` o `dev,qa`:
+
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- OpenAPI JSON que alimenta la UI: http://localhost:8080/v3/api-docs
+
+Si usas otro host o puerto (`APP_PORT` en Docker Compose), adapta los enlaces. En `prod`, Swagger UI y los endpoints de OpenAPI están desactivados.
+
+Swagger es una **ayuda visual e interactiva**, no una fuente de verdad ni un sustituto de los SPEC, planes o contratos Markdown. Las referencias del apartado [Documentación](#documentación-orden-de-lectura) conservan su autoridad.
+
+> **“Try it out” no simula peticiones.** Al pulsar **Execute** se envía una petición HTTP real al servidor seleccionado. Las operaciones de escritura pueden modificar la base de datos y generar trabajo asíncrono; los ejemplos mostrados no se ejecutan por sí solos. Úsalo únicamente contra una instancia y datos de prueba, revisando antes el servidor y la operación.
+
 **Pruebas**
 
 ```bash

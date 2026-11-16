@@ -7,6 +7,8 @@ Un archivo `.md` por contrato. Todo el contenido se deriva de los SPEC de `docs/
 - **Rutas**: prevalece el contrato específico. El índice de la §2 solo las replica; si difieren, se corrige el índice.
 - **Códigos de error**: prevalece la [tabla de decisión de la §4](#4-tabla-de-decisión-de-errores). Cada contrato debe usar el `code` y el HTTP del catálogo de la §3.4, que se deriva de esa tabla.
 
+**Swagger UI es auxiliar**: presenta los endpoints REST implementados para facilitar su consulta y prueba, pero no define requisitos ni sustituye estos contratos Markdown, los SPEC o los planes. El OpenAPI generado no cambia la precedencia documental anterior; una discrepancia debe revisarse contra esas referencias, no resolverse tomando Swagger como autoridad. Acceso y precauciones de “Try it out”: [README del proyecto](../../../README.md#documentación-visual-de-la-api-swagger-ui).
+
 ## 1. Leyenda
 
 | Etiqueta | Significado |
