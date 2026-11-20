@@ -78,8 +78,6 @@ Los tests de integración usan Testcontainers: sin Docker se omiten automáticam
 
 **CORS del frontend.** `CORS_ALLOWED_ORIGINS` configura `seashare.cors.allowed-origins` para `/api/v1/**`. Cada origen incluye esquema, host y puerto si aplica, sin ruta ni barra final. En `dev` el default es `http://localhost:5173`; en otros perfiles, sin configurar la variable no se autoriza ningún origen. Compose pasa la variable al contenedor (vacía si no está definida).
 
-**Integración con el módulo 1.** El cliente usa `POST /api/v1/boat/base-rates`, propiedades `seashare.boat.*` y error `503 BOAT_UNAVAILABLE`. Al actualizar un entorno existente, configura `BOAT_BASE_URL` y `BOAT_STUB_PORT`; en Compose la URL interna es `http://boat-stub:8080`. No cambian el JSON de tarifas ni los contratos, eventos o colas del módulo 2 (Reservas).
-
 Actuator: en `dev` expone `health,info,metrics,prometheus`; en `prod` solo `health,info`. Como la seguridad está fuera de alcance (D‑21), en producción conviene restringir el acceso por red (firewall/reverse proxy).
 
 ## Arquitectura (resumen)
