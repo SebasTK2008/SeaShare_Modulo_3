@@ -3,6 +3,7 @@ package com.seashare.seasharem3.infrastructure.adapter.in.web.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.seashare.seasharem3.domain.valueobject.Money;
 import com.seashare.seasharem3.domain.valueobject.Percentage;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 
 /**
@@ -21,20 +22,32 @@ import jakarta.validation.constraints.NotNull;
  *
  * <p>Fuente: UC11 plan T018; contrato {@code rest/UC11-guardar-parametros-financieros.md} §2–§3 [CONV].
  */
+@Schema(description = "Reemplazo completo de los cuatro parámetros. No configura depósito ni calendario de temporada alta",
+        requiredProperties = {"platform_commission_percentage", "insurance_fee_per_passenger",
+                "weekend_increase_percentage", "high_season_increase_percentage"},
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record FinancialParametersRequest(
 
+        @Schema(description = "Comisión de plataforma entre 0 y 100, como string decimal (hasta 4 decimales)",
+                implementation = String.class, type = "string", example = "15.00")
         @NotNull(message = "platform_commission_percentage is required")
         @JsonProperty("platform_commission_percentage")
         Percentage platformCommissionPercentage,
 
+        @Schema(description = "Seguro por pasajero en COP, no negativo; string decimal (hasta 4 decimales)",
+                implementation = String.class, type = "string", example = "15000.00")
         @NotNull(message = "insurance_fee_per_passenger is required")
         @JsonProperty("insurance_fee_per_passenger")
         Money insuranceFeePerPassenger,
 
+        @Schema(description = "Incremento de fin de semana entre 0 y 100; string decimal (hasta 4 decimales)",
+                implementation = String.class, type = "string", example = "10.00")
         @NotNull(message = "weekend_increase_percentage is required")
         @JsonProperty("weekend_increase_percentage")
         Percentage weekendIncreasePercentage,
 
+        @Schema(description = "Incremento de temporada alta entre 0 y 100; string decimal (hasta 4 decimales)",
+                implementation = String.class, type = "string", example = "25.00")
         @NotNull(message = "high_season_increase_percentage is required")
         @JsonProperty("high_season_increase_percentage")
         Percentage highSeasonIncreasePercentage) {

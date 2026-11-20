@@ -4,6 +4,16 @@ import com.seashare.seasharem3.application.dto.GatewayWebhookNotification;
 import com.seashare.seasharem3.application.exception.ContractException;
 import com.seashare.seasharem3.application.exception.ErrorCode;
 import com.seashare.seasharem3.application.port.in.DispatchGatewayNotificationUseCase;
+import com.seashare.seasharem3.infrastructure.adapter.in.webhook.dto.doc.GatewayWebhookAcknowledgement;
+import com.seashare.seasharem3.infrastructure.adapter.in.webhook.dto.doc.GatewayWebhookBody;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -41,6 +51,7 @@ import java.util.Objects;
  *
  * <p>Fuente: UC05 plan T019; contrato {@code pasarela-webhook-resultados.md} §2, §3 y §5.</p>
  */
+@Tag(name = "Integración · Mercado Pago", description = "Webhook de la pasarela compartido por cobros y reembolsos; requiere firma HMAC")
 @RestController
 public class GatewayWebhookController {
 
@@ -55,13 +66,44 @@ public class GatewayWebhookController {
         this.jsonMapper = Objects.requireNonNull(jsonMapper, "jsonMapper");
     }
 
+    @Operation(operationId = "receiveGatewayNotification", summary = "Recibir notificación de Mercado Pago",
+            description = "URL registrada en Mercado Pago a nivel de aplicación, topic payment. Verifica la firma antes de validar "
+                    + "el payload; persiste la notificación en outbox y responde sin esperar el procesamiento financiero asíncrono. "
+                    + "Un ID desconocido, un tipo sin manejador o una notificación duplicada se confirman con 200; "
+                    + "no son prueba de aprobación del pago. No hay autenticación general: la firma es propia de esta integración. "
+                    + "Try it out exige una firma calculada para los valores enviados; los ejemplos no son credenciales válidas.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Notificación recibida para procesamiento asíncrono",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = GatewayWebhookAcknowledgement.class))),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/GatewayWebhookBadRequest"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/InvalidGatewaySignature"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/GatewayNotificationFailed")
+    })
     @PostMapping(path = "/api/v1/webhook/gateway", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, String>> onNotification(
+            @Parameter(description = "ID del pago en Mercado Pago, usado para la firma y la consulta asíncrona; no es un UUID de reserva",
+                    required = true, example = "1234567890")
             @RequestParam(name = "data.id", required = false) String dataId,
+            @Parameter(description = "Tipo de evento de la query. La integración usa payment; otros tipos se confirman sin manejador",
+                    required = true, example = "payment")
             @RequestParam(name = "type", required = false) String type,
+            @Parameter(description = "Identificador de la petición de Mercado Pago usado en el manifiesto de firma", required = true,
+                    example = "c78c0a7c-f1ba-4e89-8c4b-66dad4d10101")
             @RequestHeader(name = "x-request-id", required = false) String requestId,
+            @Parameter(description = "Formato ts=<timestamp>,v1=<hash>. HMAC-SHA256 del manifiesto "
+                    + "id:<data.id en minúsculas>;request-id:<x-request-id>;ts:<ts>; usando el secreto del webhook. "
+                    + "Debe calcularse para esta petición; no se publica un secreto ni una firma reutilizable", required = true)
             @RequestHeader(name = "x-signature", required = false) String signature,
+            @Parameter(hidden = true)
             @RequestHeader(name = HttpHeaders.CONTENT_TYPE, required = false) String contentType,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
+                    description = "Objeto JSON con action. No se toman data.id ni type del cuerpo",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = GatewayWebhookBody.class),
+                            examples = @ExampleObject(name = "Notificación payment", value = """
+                                    {"action":"payment.updated","api_version":"v1","data":{"id":"1234567890"},
+                                     "date_created":"2026-10-08T15:30:00Z","id":987654321,"live_mode":false,
+                                     "type":"payment","user_id":"987654"}
+                                    """)))
             @RequestBody(required = false) String body) {
 
         if (!signatureVerifier.isValid(dataId, requestId, signature)) {
