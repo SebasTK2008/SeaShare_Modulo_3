@@ -61,7 +61,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class ReservationValueAcceptanceTest {
 
-    private static final String BASE_RATES_PATH = "/api/v1/fleet/base-rates";
+    private static final String BASE_RATES_PATH = "/api/v1/boats/base-rates";
     private static final UUID RESERVATION_UUID = UUID.fromString("b7d0e2a1-6c44-4f1b-8a9d-3e5f7a1c9b10");
     private static final UUID BOAT_UUID = UUID.fromString("3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01");
     private static final UUID OWNER_UUID = UUID.fromString("a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d");

@@ -29,7 +29,7 @@ import java.util.function.Supplier;
  */
 public class FleetRateRestClient implements FleetRatePort {
 
-    private static final String BASE_RATES_PATH = "/api/v1/fleet/base-rates";
+    private static final String BASE_RATES_PATH = "/api/v1/boats/base-rates";
     private static final String DEPENDENCY_NAME = "fleetRate";
 
     private final RestClient restClient;

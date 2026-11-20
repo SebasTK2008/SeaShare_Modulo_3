@@ -48,13 +48,13 @@ Este caso de prueba verifica que, al recibir **únicamente** la lista de identif
 ##### Section 1: Cálculo delegado exitoso de las 10 estimaciones
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar las tarifas que provee Flota | `POST http://localhost:8081/api/v1/fleet/base-rates` con los 10 IDs (o revisar el mapping cargado) | 10 UUID + `base_rate` por embarcación | Flota devuelve las 10 tarifas; es la única fuente del valor (RF-005, RF-004 de UC02). | [x] | |
+| 1 | Confirmar las tarifas que provee Flota | `POST http://localhost:8081/api/v1/boats/base-rates` con los 10 IDs (o revisar el mapping cargado) | 10 UUID + `base_rate` por embarcación | Flota devuelve las 10 tarifas; es la única fuente del valor (RF-005, RF-004 de UC02). | [x] | |
 | 2 | Enviar la solicitud en lote | `POST http://localhost:8080/api/v1/estimates/batch` con cuerpo que solo lleva `boat_ids` | `{"boat_ids":[10 UUID]}` | `200 OK`; `evaluation_date` = fecha actual en `America/Bogota`, `duration_days = 1`, `passengers = 1` (RF-002, regla 6 del contrato). | [x] | |
 | 3 | Verificar la cobertura del lote | Revisar el cuerpo de la respuesta | N/A | `estimates` con 10 entradas y `unavailable` vacío; la unión de ambos es el conjunto de IDs solicitados (RF-001, invariante §3 regla 5). | [x] | |
 | 4 | Verificar la fórmula en una muestra | Comparar `estimated_total` con `(tarifa base final del día × 1) + (15000.00 × 1)` | `3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01`, tarifa `350000.00` | Coincide exacto; si el día es regular, `365000.00` (RF-002). | [x] | |
 | 5 | Verificar que no se cobra depósito ni penalidades | Recalcular sin el 10 % de depósito ni ajustes posteriores | N/A | El total no incorpora depósito de garantía, penalidades ni ajustes de reserva (RF-002). | [x] | |
 | 6 | Verificar la delegación del cálculo | Revisar que cada entrada solo trae `boat_id` y `estimated_total` (sin tarifa ni desglose) | N/A | Reservas solo renderiza el valor devuelto; no hay operaciones de precio en el llamador (RNF-001, CE-002). | [x] | |
-| 7 | Verificar la consulta única a Flota | Journal del stub en `http://localhost:8081/__admin/requests` (o logs de la app) | N/A | Una sola `POST /api/v1/fleet/base-rates` con la lista completa de IDs (RF-005). | [x] | |
+| 7 | Verificar la consulta única a Flota | Journal del stub en `http://localhost:8081/__admin/requests` (o logs de la app) | N/A | Una sola `POST /api/v1/boats/base-rates` con la lista completa de IDs (RF-005). | [x] | |
 
 ##### Section 2: Errores y casos extremos de este escenario
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
