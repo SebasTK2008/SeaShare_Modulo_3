@@ -69,11 +69,14 @@ Los tests de integración usan Testcontainers: sin Docker se omiten automáticam
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` / `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | RabbitMQ | `localhost` / `5672` / `seashare` |
 | `SEASHARE_TIMEZONE` | Zona horaria de negocio | `America/Bogota` |
 | `FLEET_BASE_URL` | Sistema de Gestión de Flota | `http://localhost:8081` |
+| `CORS_ALLOWED_ORIGINS` | Orígenes exactos del frontend, separados por comas; sin credenciales | `http://localhost:5173` |
 | `GATEWAY_BASE_URL` | Pasarela de pago | `https://api.mercadopago.com` |
 | `GATEWAY_ACCESS_TOKEN` / `GATEWAY_WEBHOOK_SECRET` | Pasarela (secretos) | vacío en dev; obligatorio en prod |
 | `GATEWAY_SETTLEMENT_MODE` | Modo del libro interno de liquidaciones (UC10); solo `simulated` está implementado | `simulated`; obligatorio en prod |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Credenciales del contenedor PostgreSQL | `seashare` |
 | `APP_PORT` | Puerto publicado de la aplicación | `8080` |
+
+**CORS del frontend.** `CORS_ALLOWED_ORIGINS` configura `seashare.cors.allowed-origins` para `/api/v1/**`. Cada origen incluye esquema, host y puerto si aplica, sin ruta ni barra final. En `dev` el default es `http://localhost:5173`; en otros perfiles, sin configurar la variable no se autoriza ningún origen. Compose pasa la variable al contenedor (vacía si no está definida).
 
 Actuator: en `dev` expone `health,info,metrics,prometheus`; en `prod` solo `health,info`. Como la seguridad está fuera de alcance (D‑21), en producción conviene restringir el acceso por red (firewall/reverse proxy).
 

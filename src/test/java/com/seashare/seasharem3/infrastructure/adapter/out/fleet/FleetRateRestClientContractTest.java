@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class FleetRateRestClientContractTest {
 
-    private static final String BASE_RATES_PATH = "/api/v1/fleet/base-rates";
+    private static final String BASE_RATES_PATH = "/api/v1/boats/base-rates";
     private static final BoatId BOAT_A = new BoatId(
             UUID.fromString("3f2c1a54-8b3e-4d7a-9c10-5a2b7e6f1d01"));
     private static final BoatId BOAT_B = new BoatId(

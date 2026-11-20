@@ -222,7 +222,7 @@ Todas las reglas provienen del SPEC 02 (`spec.md`) salvo indicación. Ejemplos c
 
 UC02 **no expone contratos REST** (RF-003): su entrada es el puerto interno `ProvideBaseRateUseCase` y su única conexión externa es la consulta a Flota. Fuente: `contracts/external/flota-consulta-tarifas-base.md` [SPEC; general-plan §5.1 C7, §6].
 
-### Integración saliente: `POST /api/v1/fleet/base-rates` (Sistema → Flota)
+### Integración saliente: `POST /api/v1/boats/base-rates` (Sistema → Flota)
 
 - **Petición**: `{ "boat_ids": [UUID…] }` — un lote por invocación (contrato: la ruta es `[CONV]`; POST para enviar lista).
 - **Respuesta 200**: `{ "rates": [ { "boat_id": UUID, "base_rate": "350000.00" } ] }` — `base_rate` string decimal; la ausencia de una embarcación o un valor nulo equivale a «sin tarifa» [contrato Flota regla 3].

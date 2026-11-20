@@ -48,7 +48,7 @@ Este caso de prueba verifica que, al recibir el identificador de una embarcació
 ##### Section 1: Estimación individual con advertencia obligatoria
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar la tarifa base de la embarcación | `POST http://localhost:8081/api/v1/fleet/base-rates` | `boat_id = 3f2c…1d01` | Flota devuelve `base_rate = "350000.00"`; es la única fuente (RF-005, UC02 RF-004). | [x] | |
+| 1 | Confirmar la tarifa base de la embarcación | `POST http://localhost:8081/api/v1/boats/base-rates` | `boat_id = 3f2c…1d01` | Flota devuelve `base_rate = "350000.00"`; es la única fuente (RF-005, UC02 RF-004). | [x] | |
 | 2 | Solicitar la estimación individual | `POST http://localhost:8080/api/v1/estimates/individual` | `boat_id`, `start_date = 2026-12-20`, `end_date = 2026-12-22`, `passengers = 4` | `200 OK` con eco de `boat_id`, fechas y pasajeros (RF-003, RF-004). | [x] | |
 | 3 | Verificar los días inclusivos informados | Revisar `duration_days` | inicio 20, fin 22 | `duration_days = 3` (20, 21 y 22) (RF-003). | [x] | |
 | 4 | Verificar el aviso legal obligatorio | Comparar el campo `warning` con el texto del contrato | N/A | Texto exacto: `Valor estimado. El valor incluye el seguro náutico, pero no incluye el depósito de garantía ni penalidades o ajustes derivados de cambios posteriores de la reserva` (HU2 esc. 1). | [x] | |

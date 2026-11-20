@@ -17,7 +17,7 @@ El sistema consulta al Sistema de Gestión de Flota la tarifa base vigente para 
 
 ## 2. Petición
 
-`POST /api/v1/fleet/base-rates` **[CONV]** (Se usa POST para enviar una lista de IDs, evitando límites de URL y simplificando UC01 en lote).
+`POST /api/v1/boats/base-rates` **[CONV]** (Se usa POST para enviar una lista de IDs, evitando límites de URL y simplificando UC01 en lote).
 
 ### Headers
 

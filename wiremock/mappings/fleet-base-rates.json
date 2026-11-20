@@ -2,7 +2,7 @@
   "name": "UC02 - Consulta de tarifas base a Flota (contrato flota-consulta-tarifas-base.md)",
   "request": {
     "method": "POST",
-    "urlPath": "/api/v1/fleet/base-rates",
+    "urlPath": "/api/v1/boats/base-rates",
     "bodyPatterns": [
       {
         "matchesJsonPath": "$.boat_ids"
