@@ -44,7 +44,7 @@ Los ejemplos usan **valores ilustrativos**.
 
 | Archivo | Operación | Quién → quién | UC |
 |---|---|---|---|
-| [`external/flota-consulta-tarifas-base.md`](external/flota-consulta-tarifas-base.md) | `POST /api/v1/fleet/base-rates` (contrato **requerido** a Flota) | Sistema → Flota | UC01, UC02, UC03 |
+| [`external/flota-consulta-tarifas-base.md`](external/flota-consulta-tarifas-base.md) | `POST /api/v1/boats/base-rates` (contrato **requerido** a Flota) | Sistema → Flota | UC01, UC02, UC03 |
 | [`external/pasarela-comando-cobro.md`](external/pasarela-comando-cobro.md) | Comando de cobro | Sistema → Pasarela (Mercado Pago) | UC05 |
 | [`external/pasarela-comando-reembolso.md`](external/pasarela-comando-reembolso.md) | Comando de reembolso | Sistema → Pasarela (Mercado Pago) | UC09 |
 | [`external/pasarela-comando-liquidacion.md`](external/pasarela-comando-liquidacion.md) | Comando de liquidación | Sistema → libro interno de liquidaciones | UC10 |

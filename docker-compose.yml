@@ -64,6 +64,7 @@ services:
       # URL de Flota vista desde la app: nombre del servicio y puerto INTERNO del contenedor
       # (el puerto publicado en el host, FLEET_STUB_PORT, no aplica dentro de la red de Docker).
       FLEET_BASE_URL: ${FLEET_BASE_URL:-http://fleet-stub:8080}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS-}
       GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-https://api.mercadopago.com}
       GATEWAY_ACCESS_TOKEN: ${GATEWAY_ACCESS_TOKEN:-}
       GATEWAY_WEBHOOK_SECRET: ${GATEWAY_WEBHOOK_SECRET:-}

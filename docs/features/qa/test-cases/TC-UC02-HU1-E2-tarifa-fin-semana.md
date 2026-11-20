@@ -46,7 +46,7 @@ Este caso de prueba verifica que, cuando la fecha evaluada es sábado o domingo,
 ##### Section 1: Ajuste de fin de semana aplicado a la tarifa de Flota
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar la tarifa provista por Flota | `POST http://localhost:8081/api/v1/fleet/base-rates` | `boat_id = 3f2c…1d01` | `base_rate = "350000.00"` (RF-004). | [x] | |
+| 1 | Confirmar la tarifa provista por Flota | `POST http://localhost:8081/api/v1/boats/base-rates` | `boat_id = 3f2c…1d01` | `base_rate = "350000.00"` (RF-004). | [x] | |
 | 2 | Confirmar que la fecha evaluada es fin de semana | Verificar el día de la semana en `America/Bogota` | `2026-11-07` | Sábado: aplica la condición de fin de semana (D-UC02-05, RF-002). | [x] | |
 | 3 | Registrar la reserva con fecha de sábado | Publicar en `seashare.reservations` → `reservation.info.provided` | `reservation_id = c0a80101-1111-4a2b-9c3d-00000000e102`, `boat_id`, `owner_id`, `start_date = 2026-11-07`, `end_date = 2026-11-08`, `passengers = 2`, `max_capacity = 6` | Mensaje confirmado; UC03 incluye UC02 con esa fecha de inicio (UC03 RF-002). | [x] | |
 | 4 | Verificar la tarifa ajustada | `SELECT base_rate, base_rate_parameters_id FROM reservation_information WHERE reservation_id = 'c0a80101-1111-4a2b-9c3d-00000000e102'` | N/A | `base_rate = 385000.0000` = `350000.00 × 1.10` (RF-002). | [x] | Con otro porcentaje, recalcular con la fórmula. |

@@ -96,6 +96,11 @@
       "defaultValue": 1
     },
     {
+      "name": "seashare.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Orígenes HTTP(S) exactos para /api/v1/**, separados por comas en CORS_ALLOWED_ORIGINS. Dev usa http://localhost:5173; sin configurar en otros perfiles no autoriza orígenes. Sin credenciales."
+    },
+    {
       "name": "seashare.gateway.base-url",
       "type": "java.lang.String",
       "description": "URL base de la pasarela de pago (Mercado Pago).",

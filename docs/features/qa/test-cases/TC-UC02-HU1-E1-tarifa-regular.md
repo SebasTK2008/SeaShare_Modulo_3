@@ -48,7 +48,7 @@ Este caso de prueba verifica que, cuando la fecha evaluada no es fin de semana n
 ##### Section 1: Tarifa regular sin ajuste dinámico
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Confirmar la tarifa provista por Flota | `POST http://localhost:8081/api/v1/fleet/base-rates` | `boat_id = 3f2c…1d01` | `base_rate = "350000.00"`; Flota es la única fuente autoritativa (RF-004). | [x] | |
+| 1 | Confirmar la tarifa provista por Flota | `POST http://localhost:8081/api/v1/boats/base-rates` | `boat_id = 3f2c…1d01` | `base_rate = "350000.00"`; Flota es la única fuente autoritativa (RF-004). | [x] | |
 | 2 | Registrar una reserva con fecha regular | Publicar en RabbitMQ (`seashare.reservations` → `reservation.info.provided`) el payload de UC03 | `reservation_id = c0a80101-1111-4a2b-9c3d-00000000e101`, `boat_id`, `owner_id`, `start_date = 2027-02-10`, `end_date = 2027-02-12`, `passengers = 3`, `max_capacity = 6` | El mensaje se confirma (ack) y UC03 incluye UC02 con `boat_id` y `start_date` (UC03 RF-002). | [x] | |
 | 3 | Verificar la tarifa final registrada | `SELECT base_rate, base_rate_parameters_id FROM reservation_information WHERE reservation_id = 'c0a80101-1111-4a2b-9c3d-00000000e101'` | N/A | `base_rate = 350000.0000`, idéntica a la de Flota (RF-001, RF-002 condición regular). | [x] | |
 | 4 | Verificar que no se aplicó ninguna versión de parámetros | Revisar `base_rate_parameters_id` de la misma fila | N/A | `NULL`: una fecha regular no requiere porcentajes y no se lee versión (regla 14 y D-UC02-08). | [x] | |

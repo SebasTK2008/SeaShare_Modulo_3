@@ -62,7 +62,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class EstimateResilienceIntegrationTest {
 
-    private static final String BASE_RATES_PATH = "/api/v1/fleet/base-rates";
+    private static final String BASE_RATES_PATH = "/api/v1/boats/base-rates";
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 25);
     private static final int MAX_BATCH_SIZE = 50;
     private static final FinancialParameters PARAMETERS = FinancialParameters.create(
